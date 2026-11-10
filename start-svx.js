@@ -23,53 +23,101 @@ const formatSize = (n) => {
   return `${(n / 1024 ** 3).toFixed(2)} GB`;
 };
 
+const makeHref = (segments, isDir = false) =>
+  "/" + segments.map(encodeURIComponent).join("/") + (isDir && segments.length ? "/" : "");
+
+function resolveSafe(segments) {
+  let current = root;
+
+  for (let i = 0; i < segments.length; i++) {
+    current = path.join(current, segments[i]);
+    const stat = fs.lstatSync(current);
+
+    // Don't follow symlinks outside the shared folder.
+    if (stat.isSymbolicLink()) throw new Error("Symlinks are not served");
+    if (i < segments.length - 1 && !stat.isDirectory()) {
+      throw new Error("Not a directory");
+    }
+  }
+
+  return current;
+}
+
 http.createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  let segments;
 
-  if (url.pathname === "/download") {
-    const name = url.searchParams.get("file");
-    if (!name || name !== path.basename(name)) {
-      res.writeHead(400).end("Invalid filename");
-      return;
-    }
+  try {
+    segments = new URL(req.url, "http://localhost").pathname
+      .split("/")
+      .filter(Boolean)
+      .map(decodeURIComponent);
 
-    const file = path.join(root, name);
-    try {
-      const stat = fs.lstatSync(file);
-      if (!stat.isFile()) throw new Error();
-      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
-      res.setHeader("Content-Length", stat.size);
-      fs.createReadStream(file).pipe(res);
-    } catch {
-      res.writeHead(404).end("File not found");
+    if (segments.some((s) => !s || s === "." || s === ".." || s.includes("/") || s.includes("\\"))) {
+      throw new Error("Invalid path");
     }
+  } catch {
+    res.writeHead(400).end("Invalid path");
     return;
   }
 
-  if (url.pathname !== "/") {
+  let target;
+  try {
+    target = resolveSafe(segments);
+  } catch {
     res.writeHead(404).end("Not found");
     return;
   }
 
-  let files;
+  let stat;
   try {
-    files = fs.readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isFile())
+    stat = fs.lstatSync(target);
+  } catch {
+    res.writeHead(404).end("Not found");
+    return;
+  }
+
+  if (stat.isFile()) {
+    res.writeHead(200, {
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(target))}`,
+      "Content-Length": stat.size,
+      "X-Content-Type-Options": "nosniff"
+    });
+    fs.createReadStream(target).pipe(res);
+    return;
+  }
+
+  if (!stat.isDirectory()) {
+    res.writeHead(404).end("Not found");
+    return;
+  }
+
+  let entries;
+  try {
+    entries = fs.readdirSync(target, { withFileTypes: true })
+      .filter((entry) => !entry.isSymbolicLink())
       .map((entry) => {
-        const stat = fs.statSync(path.join(root, entry.name));
-        return { name: entry.name, size: stat.size };
+        const childSegments = [...segments, entry.name];
+        const childPath = path.join(target, entry.name);
+        const childStat = fs.lstatSync(childPath);
+        return {
+          name: entry.name,
+          isDir: childStat.isDirectory(),
+          size: childStat.isFile() ? childStat.size : null,
+          href: makeHref(childSegments, childStat.isDirectory())
+        };
       })
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name));
   } catch {
     res.writeHead(500).end("Could not read folder");
     return;
   }
 
-  const rows = files.map((file) => `
-    <a class="file" href="/download?file=${encodeURIComponent(file.name)}">
-      <span class="icon">↓</span>
-      <span class="name">${escapeHtml(file.name)}</span>
-      <span class="size">${formatSize(file.size)}</span>
+  const parentHref = makeHref(segments.slice(0, -1), true);
+  const rows = entries.map((entry) => `
+    <a class="file" href="${escapeHtml(entry.href)}">
+      <span class="icon">${entry.isDir ? "📁" : "↓"}</span>
+      <span class="name">${escapeHtml(entry.name)}${entry.isDir ? "/" : ""}</span>
+      <span class="size">${entry.isDir ? "Folder" : formatSize(entry.size)}</span>
     </a>`).join("");
 
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -85,13 +133,12 @@ http.createServer((req, res) => {
          font: 16px system-ui, sans-serif; }
   main { max-width: 760px; margin: auto; }
   h1 { margin-bottom: 8px; font-size: 2rem; }
-  .sub { color: #9aa8c7; margin: 0 0 24px; }
+  .sub { color: #9aa8c7; margin: 0 0 24px; overflow-wrap: anywhere; }
   .file { display: flex; align-items: center; gap: 14px; padding: 16px;
           margin: 10px 0; border: 1px solid #26324e; border-radius: 12px;
           background: #131b30; color: inherit; text-decoration: none; }
   .file:hover { border-color: #7c9cff; background: #192440; }
-  .icon { display: grid; place-items: center; width: 38px; height: 38px;
-          border-radius: 10px; background: #263b70; color: #a9c0ff; font-size: 22px; }
+  .icon { width: 38px; text-align: center; font-size: 22px; }
   .name { flex: 1; overflow-wrap: anywhere; }
   .size { color: #9aa8c7; font-size: 14px; white-space: nowrap; }
   .empty { color: #9aa8c7; padding: 20px 0; }
@@ -99,8 +146,9 @@ http.createServer((req, res) => {
 </head>
 <body><main>
   <h1>File downloads</h1>
-  <p class="sub">${files.length} file${files.length === 1 ? "" : "s"}</p>
-  ${rows || '<p class="empty">No files in this folder.</p>'}
+  <p class="sub">/${escapeHtml(segments.join("/")) || ""}</p>
+  ${segments.length ? `<a class="file" href="${escapeHtml(parentHref)}">⬆ <span class="name">Up one folder</span></a>` : ""}
+  ${rows || '<p class="empty">This folder is empty.</p>'}
 </main></body></html>`);
 }).listen(port, "0.0.0.0", () => {
   console.log(`Serving ${root} on port ${port}`);
