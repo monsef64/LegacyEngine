@@ -45,7 +45,7 @@ def census(width, height, rows):
                     b[2] = x
                 b[3] = y
     lines = [f"{width}x{height} distinct={len(count)}"]
-    for colour, n in count.most_common(12):
+    for colour, n in count.most_common(8):
         b = box[colour]
         lines.append(f"{tuple(colour)} n={n} box={b[0]},{b[1]}-{b[2]},{b[3]}")
     return "\n".join(lines)

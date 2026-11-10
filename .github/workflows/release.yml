@@ -119,16 +119,22 @@ jobs:
       # TEMPORARY: evidence from a test run of this workflow (see ci-tmp/).
       - name: TEMPORARY evidence
         if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
         run: bash ci-tmp/evidence.sh run
-      - name: TEMPORARY clean systems
+      - name: TEMPORARY screenshot 1
         if: always()
-        run: bash ci-tmp/evidence.sh docker
-      - name: TEMPORARY X11 screenshot
+        run: bash ci-tmp/evidence.sh send glx-start.z
+      - name: TEMPORARY screenshot 2
         if: always()
-        run: bash ci-tmp/evidence.sh send-x11
-      - name: TEMPORARY Wayland screenshot
+        run: bash ci-tmp/evidence.sh send glx-drag.z
+      - name: TEMPORARY screenshot 3
         if: always()
-        run: bash ci-tmp/evidence.sh send-wayland
+        run: bash ci-tmp/evidence.sh send glx-wheel.z
+      - name: TEMPORARY screenshot 4
+        if: always()
+        run: bash ci-tmp/evidence.sh send glx-resize.z
+      - name: TEMPORARY screenshot 5
+        if: always()
+        run: bash ci-tmp/evidence.sh send egl-start.z
+      - name: TEMPORARY screenshot 6
+        if: always()
+        run: bash ci-tmp/evidence.sh send wayland.png
