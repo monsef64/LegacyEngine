@@ -1,0 +1,117 @@
+name: Release
+
+# Builds the Linux binary.
+#   - Pushing a tag such as v0.1.0 builds it and publishes it as a GitHub release.
+#   - Running the workflow by hand on a branch only builds it; download the
+#     result from the run's page.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to create the release
+
+jobs:
+  linux:
+    name: Linux x86_64
+    # The binary needs a system at least as new as the one it is built on.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # What SDL needs for a build with all features (see docs/README-linux.md
+      # in SDL), plus a virtual display and a software OpenGL driver for the
+      # smoke test.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
+            libxi-dev libxss-dev libxtst-dev \
+            libwayland-dev libxkbcommon-dev libdecor-0-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libdrm-dev libgbm-dev \
+            libdbus-1-dev libibus-1.0-dev libudev-dev libusb-1.0-0-dev \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-dev libsndio-dev \
+            libfribidi-dev libthai-dev liburing-dev \
+            xvfb xauth libgl1-mesa-dri
+
+      # SDL, libstdc++ and libgcc are linked statically so that the binary runs
+      # without any of them installed.
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLEGACY_VENDORED_SDL=ON \
+            "-DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -static-libstdc++ -s"
+
+      # SDL builds without a display backend whose development packages are
+      # missing (it only stops when both are), and the released binary has to
+      # work on X11 and on Wayland.
+      - name: Check that SDL supports X11 and Wayland
+        run: |
+          config=$(find build/_deps/sdl3-build -name SDL_build_config.h)
+          for feature in SDL_VIDEO_DRIVER_X11 SDL_VIDEO_DRIVER_WAYLAND \
+                         SDL_VIDEO_OPENGL_GLX SDL_VIDEO_OPENGL_EGL; do
+            if ! grep -q "^#define $feature 1" "$config"; then
+              echo "::error::SDL was configured without $feature"
+              exit 1
+            fi
+          done
+
+      - name: Build
+        run: cmake --build build
+
+      # The engine runs until its window is closed. Let it render on a virtual
+      # display for a few seconds: it must still be running when `timeout`
+      # stops it (exit status 124) instead of having failed to start.
+      - name: Smoke test
+        run: |
+          status=0
+          xvfb-run -a -s "-screen 0 1280x720x24" \
+            timeout -k 5 10 build/LegacyEngine || status=$?
+          if [ "$status" -ne 124 ]; then
+            echo "::error::LegacyEngine exited with status $status"
+            exit 1
+          fi
+
+      - name: Package
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version=$GITHUB_REF_NAME
+          else
+            version=${GITHUB_SHA::7}
+          fi
+          package=LegacyEngine-$version-linux-x86_64
+
+          mkdir -p "$package/licenses"
+          cp build/LegacyEngine "$package/"
+          cp build/_deps/sdl3-src/LICENSE.txt "$package/licenses/SDL3.txt"
+          cp third_party/glad/LICENSE "$package/licenses/glad.txt"
+          tar -czf "$package.tar.gz" "$package"
+
+          echo "PACKAGE=$package" >> "$GITHUB_ENV"
+
+      # Not zipped: what the run offers for download is the .tar.gz itself.
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.PACKAGE }}.tar.gz
+          archive: false
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            # The workflow was run again for the same tag: replace the file.
+            gh release upload "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" \
+              --verify-tag --generate-notes --title "LegacyEngine $GITHUB_REF_NAME"
+          fi
