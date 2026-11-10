@@ -13,6 +13,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+include(FetchContent)
+
 # --- SDL3 (window, input, OpenGL context) -----------------------------------
 #
 # An installed SDL3 is used when there is one. Otherwise, or when
@@ -34,7 +36,6 @@ else()
   set(SDL_STATIC ON CACHE BOOL "" FORCE)
   set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
 
-  include(FetchContent)
   FetchContent_Declare(
     SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -43,6 +44,33 @@ else()
   )
   FetchContent_MakeAvailable(SDL3)
 endif()
+
+# --- ReactPhysics3D (physics) -----------------------------------------------
+#
+# Always downloaded and linked statically. It is fetched as an archive rather
+# than with git: the archive is a fraction of the size, and it leaves out the
+# git submodules, which only the demo program of ReactPhysics3D needs.
+
+set(LEGACY_REACTPHYSICS3D_TAG "v0.10.2" CACHE STRING "ReactPhysics3D git tag to download")
+
+message(STATUS "LegacyEngine: downloading ReactPhysics3D ${LEGACY_REACTPHYSICS3D_TAG}")
+FetchContent_Declare(
+  ReactPhysics3D
+  URL https://github.com/DanielChappuis/reactphysics3d/archive/refs/tags/${LEGACY_REACTPHYSICS3D_TAG}.tar.gz
+)
+set(BUILD_SHARED_LIBS OFF) # ReactPhysics3D follows this variable
+FetchContent_MakeAvailable(ReactPhysics3D)
+
+# The warnings of its code are not ours to fix: none while it is compiled, and
+# none from its headers when our code includes them.
+if(MSVC)
+  target_compile_options(reactphysics3d PRIVATE /w)
+else()
+  target_compile_options(reactphysics3d PRIVATE -w)
+endif()
+get_target_property(reactphysics3d_includes reactphysics3d INTERFACE_INCLUDE_DIRECTORIES)
+set_target_properties(reactphysics3d PROPERTIES
+  INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${reactphysics3d_includes}")
 
 # --- GLAD (OpenGL function loader) ------------------------------------------
 #
@@ -53,11 +81,19 @@ target_include_directories(glad SYSTEM PUBLIC third_party/glad/include)
 
 # --- LegacyEngine -----------------------------------------------------------
 
-add_executable(LegacyEngine src/main.cpp)
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 glad)
+add_executable(LegacyEngine
+  src/main.cpp
+  src/mesh.cpp
+  src/physics.cpp
+  src/renderer.cpp
+)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
 else()
-  target_compile_options(LegacyEngine PRIVATE -Wall -Wextra -Wpedantic)
+  # Components are structs whose members have default values. Leaving the last
+  # ones out, as in Transform{position}, is intended.
+  target_compile_options(LegacyEngine PRIVATE
+    -Wall -Wextra -Wpedantic -Wno-missing-field-initializers)
 endif()

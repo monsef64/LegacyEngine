@@ -39,8 +39,8 @@ jobs:
             libfribidi-dev libthai-dev liburing-dev \
             xvfb xauth libgl1-mesa-dri
 
-      # SDL, libstdc++ and libgcc are linked statically so that the binary runs
-      # without any of them installed.
+      # SDL, ReactPhysics3D, libstdc++ and libgcc are linked statically so that
+      # the binary runs without any of them installed.
       - name: Configure
         run: |
           cmake -S . -B build -G Ninja \
@@ -78,6 +78,13 @@ jobs:
             exit 1
           fi
 
+      # README.md says which glibc the binary needs. The number depends on what
+      # is linked into the binary, so show it on the page of the run.
+      - name: Report the glibc version the binary needs
+        run: |
+          needed=$(objdump -T build/LegacyEngine | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
+          echo "::notice::The binary needs glibc ${needed#GLIBC_} or newer"
+
       - name: Package
         run: |
           if [ "$GITHUB_REF_TYPE" = tag ]; then
@@ -90,6 +97,7 @@ jobs:
           mkdir -p "$package/licenses"
           cp build/LegacyEngine "$package/"
           cp build/_deps/sdl3-src/LICENSE.txt "$package/licenses/SDL3.txt"
+          cp build/_deps/reactphysics3d-src/LICENSE "$package/licenses/ReactPhysics3D.txt"
           cp third_party/glad/LICENSE "$package/licenses/glad.txt"
           tar -czf "$package.tar.gz" "$package"
 
