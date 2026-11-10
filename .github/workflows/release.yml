@@ -7,7 +7,6 @@ name: Release
 on:
   push:
     tags: ["v*"]
-    branches: ["arena/204201e2-legacyengine"] # TEMPORARY: test run of this workflow
   workflow_dispatch:
 
 permissions:
@@ -116,14 +115,3 @@ jobs:
             gh release create "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" \
               --verify-tag --generate-notes --title "LegacyEngine $GITHUB_REF_NAME"
           fi
-
-      # TEMPORARY: evidence from a test run of this workflow (see ci-tmp/).
-      - name: TEMPORARY the README's build instructions on a clean Ubuntu 24.04
-        if: always()
-        run: bash ci-tmp/evidence.sh ubuntu:24.04 readme
-      - name: TEMPORARY the README's build instructions on a clean Debian 13
-        if: always()
-        run: bash ci-tmp/evidence.sh debian:13 readme
-      - name: TEMPORARY a build against the SDL3 package of Debian 13
-        if: always()
-        run: bash ci-tmp/evidence.sh debian:13 sdl3
