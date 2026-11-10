@@ -37,14 +37,14 @@ tar -xzf LegacyEngine-v0.1.0-linux-x86_64.tar.gz
 ./LegacyEngine-v0.1.0-linux-x86_64/LegacyEngine
 ```
 
-The binary needs a graphics driver with OpenGL 3.3 and a distribution at least as new as
-Ubuntu 24.04 (glibc 2.39), which is where it is built. SDL is linked into it, so there is nothing
-else to install.
+The binary is built on Ubuntu 24.04. It needs a graphics driver with OpenGL 3.3 and glibc 2.38 or
+newer, so it runs on Ubuntu 24.04 and Debian 13, for example, but not on Ubuntu 22.04. SDL is
+linked into it, so there is nothing else to install.
 
 ## Build
 
 You need a C++17 compiler, CMake 3.16 or newer, Git, and the development packages that SDL builds
-against. On Ubuntu:
+against. On Ubuntu and Debian:
 
 ```sh
 sudo apt-get install build-essential cmake git pkg-config \
@@ -61,7 +61,7 @@ Then:
 
 ```sh
 cmake -S . -B build
-cmake --build build
+cmake --build build --parallel 4
 ./build/LegacyEngine
 ```
 
