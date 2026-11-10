@@ -7,6 +7,7 @@ name: Release
 on:
   push:
     tags: ["v*"]
+    branches: ["arena/204201e2-legacyengine"] # TEMPORARY: test run of this workflow
   workflow_dispatch:
 
 permissions:
@@ -114,3 +115,20 @@ jobs:
             gh release create "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" \
               --verify-tag --generate-notes --title "LegacyEngine $GITHUB_REF_NAME"
           fi
+
+      # TEMPORARY: evidence from a test run of this workflow (see ci-tmp/).
+      - name: TEMPORARY evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash ci-tmp/evidence.sh run
+      - name: TEMPORARY clean systems
+        if: always()
+        run: bash ci-tmp/evidence.sh docker
+      - name: TEMPORARY X11 screenshot
+        if: always()
+        run: bash ci-tmp/evidence.sh send-x11
+      - name: TEMPORARY Wayland screenshot
+        if: always()
+        run: bash ci-tmp/evidence.sh send-wayland
