@@ -128,6 +128,14 @@ add_executable(LegacyEngine
   src/transform_editor.cpp
   src/script_editor.cpp
 )
+# Embed the UI font so release binaries need no external asset directory.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/third_party/roboto/Roboto-Regular.ttf")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/roboto/Roboto-Regular.ttf" LEGACY_FONT_HEX HEX)
+string(REGEX REPLACE "(..)" "0x\\1," LEGACY_FONT_BYTES "${LEGACY_FONT_HEX}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_font.hpp"
+  "#pragma once\ninline const unsigned char editorFontData[] = {${LEGACY_FONT_BYTES}};\n")
+target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui imguizmo lua_console)
 
 if(MSVC)
@@ -193,4 +201,17 @@ if(BUILD_TESTING)
   target_include_directories(editor_layout_tests PRIVATE src)
   target_link_libraries(editor_layout_tests PRIVATE imguizmo ReactPhysics3D::reactphysics3d)
   add_test(NAME editor_layout COMMAND editor_layout_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(editor_theme_tests tests/editor_theme.cpp)
+  target_include_directories(editor_theme_tests PRIVATE src "${CMAKE_CURRENT_BINARY_DIR}/generated")
+  target_link_libraries(editor_theme_tests PRIVATE legacy_imgui)
+  # Keep assertions active in Release builds, as with the other test targets.
+  if(MSVC)
+    target_compile_options(editor_theme_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(editor_theme_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME editor_theme COMMAND editor_theme_tests)
 endif()
