@@ -17,6 +17,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <imgui.h>
+#include <imgui_impl_sdl3.h>
+#include <imgui_impl_opengl3.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -101,13 +105,13 @@ static bool mouseRay(SDL_Window* window, const OrbitCamera& camera, float x, flo
 // nothing is in the way there. If something is, the nearest place where
 // nothing is: beside `center`, no further away than a cube is wide, or above
 // it.
-static Vec3 findRoom(const Physics& physics, Vec3 center)
+static Vec3 findRoom(const Physics& physics, Vec3 center, ColliderShape shape = ColliderShape::Box)
 {
     // Things that rest on each other touch, and reach into each other by up to
     // a centimetre. Neither is in the way, so room is looked for with a cube
     // that is that much smaller on every side.
     const float inner = kCubeSize - 2.0f * 0.01f;
-    const Vec3  size  = {inner, inner, inner};
+    const Vec3  size  = {inner, shape == ColliderShape::Capsule ? inner + 1.0f : inner, inner};
     if (!physics.checkBox(center, size)) {
         return center;
     }
@@ -134,7 +138,8 @@ static Vec3 findRoom(const Physics& physics, Vec3 center)
 // Where the centre of a new cube goes, given the ray from the camera through
 // the mouse pointer: the cube rests against the spot under the pointer if it
 // has room there, and as near to it as it has room if not.
-static Vec3 placeForCube(const Physics& physics, const OrbitCamera& camera, const Ray& ray)
+static Vec3 placeForCube(const Physics& physics, const OrbitCamera& camera, const Ray& ray,
+                         ColliderShape shape = ColliderShape::Box)
 {
     // The spot under the pointer. With nothing else under it, it is the point
     // of the ray that is as far from the camera as the point the camera looks
@@ -163,21 +168,13 @@ static Vec3 placeForCube(const Physics& physics, const OrbitCamera& camera, cons
     // surface that faces `normal`. With its centre that far out, it touches
     // the surface without reaching into it.
     const float half      = kCubeSize * 0.5f;
-    const float toSurface = (std::abs(normal.x) + std::abs(normal.y) + std::abs(normal.z)) * half;
+    const float toSurface = shape == ColliderShape::Box
+        ? (std::abs(normal.x) + std::abs(normal.y) + std::abs(normal.z)) * half
+        : half + (shape == ColliderShape::Capsule ? 0.5f * std::abs(normal.y) : 0.0f);
     Vec3        center    = ray.origin + ray.direction * distance + normal * toSurface;
-    center.y              = std::max(center.y, half); // on the ground, not in it
+    center.y              = std::max(center.y, shape == ColliderShape::Capsule ? 1.0f : half); // on the ground, not in it
 
-    return findRoom(physics, center);
-}
-
-// Adds a cube that falls and that collisions push around.
-static void spawnCube(World& world, MeshHandle mesh, Vec3 center, Vec3 color)
-{
-    const Entity cube = world.create();
-    world.add(cube, Transform{center});
-    world.add(cube, MeshRenderer{mesh, color});
-    world.add(cube, BoxCollider{{kCubeSize, kCubeSize, kCubeSize}});
-    world.add(cube, RigidBody{});
+    return findRoom(physics, center, shape);
 }
 
 // Removes the cubes that fell off the plane and out of the scene. The first
@@ -258,13 +255,19 @@ static void run(SDL_Window* window, Renderer& renderer)
     world.add(cube, MeshRenderer{cubeMesh, {0.90f, 0.47f, 0.13f}});
     world.add(cube, BoxCollider{{kCubeSize, kCubeSize, kCubeSize}});
 
+    const MeshHandle sphereMesh = renderer.createMesh(makeSphere(0.5f));
+    const MeshHandle capsuleMesh = renderer.createMesh(makeCapsule(0.5f, 1.0f));
+    ColliderShape selected = ColliderShape::Box;
+    bool spawnMode = true;
+    bool freeCamera = true;
+    Entity selectedEntity;
     OrbitCamera camera;
     Uint64 lastTicks = SDL_GetTicksNS();
     bool   running   = true;
 
     // The left mouse button does two things. Pressed and released in one
-    // place, it is a click, which creates a cube. Once the pointer has moved
-    // away from where the button went down, it is a drag, which orbits.
+    // place, it is a click, which spawns or selects. Moving away cancels
+    // the click; camera navigation uses the right button and keyboard.
     bool        clicking   = false; // the button is down and this may still be a click
     float       pressX     = 0.0f;  // where the button went down
     float       pressY     = 0.0f;
@@ -273,7 +276,20 @@ static void run(SDL_Window* window, Renderer& renderer)
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            ImGui_ImplSDL3_ProcessEvent(&event);
+            const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                event.type == SDL_EVENT_MOUSE_BUTTON_UP || event.type == SDL_EVENT_MOUSE_MOTION ||
+                event.type == SDL_EVENT_MOUSE_WHEEL;
+            if (mouseEvent && ImGui::GetIO().WantCaptureMouse) {
+                clicking = false;
+                continue;
+            }
+            if (event.type == SDL_EVENT_KEY_DOWN && ImGui::GetIO().WantCaptureKeyboard &&
+                event.key.key != SDLK_ESCAPE) continue;
             switch (event.type) {
+            case SDL_EVENT_WINDOW_FOCUS_LOST:
+                clicking = false;
+                break;
             case SDL_EVENT_QUIT:
                 running = false;
                 break;
@@ -296,35 +312,75 @@ static void run(SDL_Window* window, Renderer& renderer)
                     std::hypot(event.motion.x - pressX, event.motion.y - pressY) > kClickRadius) {
                     clicking = false; // too far for a click: a drag from here on
                 }
-                // Drag with the left button to orbit, as if grabbing the world.
-                if ((event.motion.state & SDL_BUTTON_LMASK) && !clicking) {
-                    camera.yaw -= event.motion.xrel * 0.005f;
-                    camera.pitch = std::clamp(camera.pitch + event.motion.yrel * 0.005f,
-                                              radians(2.0f), radians(89.0f));
+                // Right-drag looks around from the camera's position. Left-drag
+                // cancels a click but never moves the camera or selects/spawns.
+                if (event.motion.state & SDL_BUTTON_RMASK) {
+                    clicking = false;
+                    if (freeCamera) camera.look(event.motion.xrel, event.motion.yrel);
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
                 if (event.button.button == SDL_BUTTON_LEFT && clicking) {
                     clicking = false;
 
-                    // A click: put a cube on the spot under the pointer.
+                    // A scene click either spawns or selects, never both.
                     Ray ray;
                     if (mouseRay(window, camera, event.button.x, event.button.y, ray)) {
-                        spawnCube(world, cubeMesh, placeForCube(physics, camera, ray),
-                                  kClickColors[clickCubes % std::size(kClickColors)]);
+                        if (!spawnMode) {
+                            RayHit hit;
+                            selectedEntity = physics.raycast(ray, kClickReach, hit) ? hit.entity : Entity{};
+                            break;
+                        }
+                        const MeshHandle mesh = selected == ColliderShape::Box ? cubeMesh :
+                            (selected == ColliderShape::Sphere ? sphereMesh : capsuleMesh);
+                        Vec3 center = placeForCube(physics, camera, ray, selected);
+                        const Entity object = world.create();
+                        world.add(object, Transform{center});
+                        world.add(object, MeshRenderer{mesh, kClickColors[clickCubes % std::size(kClickColors)]});
+                        Collider collider;
+                        collider.shape = selected;
+                        world.add(object, collider);
+                        world.add(object, RigidBody{});
                         ++clickCubes;
                     }
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL:
-                // Scroll to zoom in and out.
-                camera.distance = std::clamp(camera.distance * std::pow(0.9f, event.wheel.y),
-                                             2.0f, 50.0f);
+                // Dolly in freecam; the static view ignores all navigation input.
+                if (freeCamera) camera.move(event.wheel.y, 0, 0, std::abs(event.wheel.y));
                 break;
             default:
                 break;
             }
         }
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(16, 16), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(230, 0), ImGuiCond_FirstUseEver);
+        ImGui::Begin("Spawn shapes", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+        if (ImGui::Checkbox("Spawn Shapes Mode", &spawnMode)) {
+            selectedEntity = {}; // spawning and selection are mutually exclusive
+            clicking = false;
+        }
+        if (ImGui::Checkbox("Freecam", &freeCamera)) clicking = false;
+        ImGui::TextUnformatted(freeCamera ? "Camera: free" : "Camera: static (locked)");
+        ImGui::BeginDisabled(!spawnMode);
+        ImGui::TextUnformatted("Select a shape");
+        const char* names[] = {"Cube", "Sphere", "Capsule"};
+        for (int i = 0; i < 3; ++i) {
+            if (ImGui::Selectable(names[i], static_cast<int>(selected) == i))
+                selected = static_cast<ColliderShape>(i);
+        }
+        ImGui::EndDisabled();
+        ImGui::Separator();
+        ImGui::TextUnformatted(spawnMode ? "Left click: spawn" : "Left click: select (empty space clears)");
+        if (freeCamera)
+            ImGui::TextUnformatted("WASD: move | Q/E: down/up\nRight drag: look | Shift: faster\nWheel: move forward/back");
+        ImGui::TextUnformatted("F: drop cube | Esc: quit");
+        ImGui::End();
+        ImGui::Render();
 
         removeFallenCubes(world, cube);
 
@@ -333,6 +389,15 @@ static void run(SDL_Window* window, Renderer& renderer)
         const float  seconds = static_cast<float>(ticks - lastTicks) * 1e-9f;
         lastTicks            = ticks;
 
+        if (freeCamera && !ImGui::GetIO().WantCaptureKeyboard &&
+            (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
+            const bool* keys = SDL_GetKeyboardState(nullptr);
+            const float speed = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT] ? 15.0f : 5.0f;
+            camera.move(static_cast<float>(keys[SDL_SCANCODE_W]) - keys[SDL_SCANCODE_S],
+                        static_cast<float>(keys[SDL_SCANCODE_D]) - keys[SDL_SCANCODE_A],
+                        static_cast<float>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],
+                        speed * std::min(seconds, 0.1f));
+        }
         physics.update(world, seconds);
 
         int width = 0;
@@ -340,7 +405,16 @@ static void run(SDL_Window* window, Renderer& renderer)
         SDL_GetWindowSizeInPixels(window, &width, &height);
         if (width > 0 && height > 0) {
             const float aspect = static_cast<float>(width) / static_cast<float>(height);
-            renderer.draw(world, camera.viewProjection(aspect), width, height);
+            const Mat4 viewProjection = camera.viewProjection(aspect);
+            renderer.draw(world, viewProjection, width, height);
+            if (!spawnMode && world.alive(selectedEntity)) {
+                const auto* transform = world.tryGet<Transform>(selectedEntity);
+                const auto* collider = world.tryGet<Collider>(selectedEntity);
+                if (transform && collider) renderer.drawCollider(*transform, *collider, viewProjection);
+            } else {
+                selectedEntity = {};
+            }
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         }
 
         SDL_GL_SwapWindow(window);
@@ -376,7 +450,24 @@ int main(int, char**)
     Renderer   renderer;
     const bool rendererReady = renderer.init();
     if (rendererReady) {
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGui::GetIO().IniFilename = nullptr;
+        ImGui::StyleColorsDark();
+        if (!ImGui_ImplSDL3_InitForOpenGL(window, context) ||
+            !ImGui_ImplOpenGL3_Init("#version 330 core")) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not initialise Dear ImGui");
+            ImGui::DestroyContext();
+            renderer.shutdown();
+            SDL_GL_DestroyContext(context);
+            SDL_DestroyWindow(window);
+            SDL_Quit();
+            return 1;
+        }
         run(window, renderer);
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplSDL3_Shutdown();
+        ImGui::DestroyContext();
         renderer.shutdown();
     }
 

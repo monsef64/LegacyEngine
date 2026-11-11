@@ -65,6 +65,9 @@ jobs:
       - name: Build
         run: cmake --build build
 
+      - name: Shape regression tests
+        run: ctest --test-dir build --output-on-failure
+
       # The engine runs until its window is closed. Let it render on a virtual
       # display for a few seconds: it must still be running when `timeout`
       # stops it (exit status 124) instead of having failed to start.
@@ -98,6 +101,7 @@ jobs:
           cp build/LegacyEngine "$package/"
           cp build/_deps/sdl3-src/LICENSE.txt "$package/licenses/SDL3.txt"
           cp build/_deps/reactphysics3d-src/LICENSE "$package/licenses/ReactPhysics3D.txt"
+          cp build/_deps/imgui-src/LICENSE.txt "$package/licenses/DearImGui.txt"
           cp third_party/glad/LICENSE "$package/licenses/glad.txt"
           tar -czf "$package.tar.gz" "$package"
 

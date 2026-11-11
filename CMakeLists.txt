@@ -79,6 +79,20 @@ set_target_properties(reactphysics3d PROPERTIES
 add_library(glad STATIC third_party/glad/src/gl.c)
 target_include_directories(glad SYSTEM PUBLIC third_party/glad/include)
 
+# --- Dear ImGui (SDL3 + OpenGL3 backends) -----------------------------------
+FetchContent_Declare(imgui
+  GIT_REPOSITORY https://github.com/ocornut/imgui.git
+  GIT_TAG v1.92.5
+  GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(imgui)
+add_library(legacy_imgui STATIC
+  ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
+  ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
+target_include_directories(legacy_imgui SYSTEM PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+target_link_libraries(legacy_imgui PUBLIC SDL3::SDL3 ${CMAKE_DL_LIBS})
+
 # --- LegacyEngine -----------------------------------------------------------
 
 add_executable(LegacyEngine
@@ -87,7 +101,7 @@ add_executable(LegacyEngine
   src/physics.cpp
   src/renderer.cpp
 )
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
@@ -96,4 +110,12 @@ else()
   # ones out, as in Transform{position}, is intended.
   target_compile_options(LegacyEngine PRIVATE
     -Wall -Wextra -Wpedantic -Wno-missing-field-initializers)
+endif()
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(shape_tests tests/shapes.cpp src/mesh.cpp src/physics.cpp)
+  target_include_directories(shape_tests PRIVATE src)
+  target_link_libraries(shape_tests PRIVATE ReactPhysics3D::reactphysics3d)
+  add_test(NAME shapes COMMAND shape_tests)
 endif()

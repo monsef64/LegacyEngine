@@ -42,3 +42,7 @@ MeshData makeGrid(int cells, float cellSize);
 struct MeshHandle {
     std::uint32_t id = UINT32_MAX;
 };
+
+// Round shapes centred at the origin. Capsule's cylindrical section runs along Y.
+MeshData makeSphere(float radius);
+MeshData makeCapsule(float radius, float height);

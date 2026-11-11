@@ -3,6 +3,7 @@
 #pragma once
 
 #include "ecs.hpp"
+#include "components.hpp"
 #include "math.hpp"
 #include "mesh.hpp"
 
@@ -26,7 +27,12 @@ public:
     // entity that has a Transform and a MeshRenderer.
     void draw(World& world, const Mat4& viewProjection, int width, int height);
 
+    // Green collider overlay for a selected object, drawn over the scene.
+    void drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection);
+
 private:
+    unsigned int colliderVertexArray_ = 0;
+    unsigned int colliderVertexBuffer_ = 0;
     struct GpuMesh {
         unsigned int vertexArray  = 0;
         unsigned int vertexBuffer = 0;

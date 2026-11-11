@@ -2,6 +2,8 @@
 
 Trying to make a custom game engine with AI
 
+The screenshot below shows the initial scene (before the shape picker was added).
+
 ![An orange 1 m cube floating above a 5 × 5 m plane that lies on a 7 × 7 grid](docs/screenshot.png)
 
 ## What it does so far
@@ -12,25 +14,53 @@ LegacyEngine opens a window onto a small 3D world:
 - a solid 5 × 5 m plane lying on the grid, centred on the origin
 - a 1 m cube floating above the plane, with its centre at (0, 1, 0)
 
-Press `F` and the cube falls onto the plane. Left-click to create a coloured 1 m cube at
-the spot under the pointer; new cubes have gravity and collide with the scene.
+Press `F` and the cube falls onto the plane. Choose **Cube**, **Sphere** or **Capsule** in the
+Dear ImGui **Spawn shapes** list, then left-click the scene to spawn that shape. The selection
+stays active for subsequent clicks. Every spawned object has gravity and a matching native
+ReactPhysics3D collider: box, sphere or capsule (not a bounding-box approximation).
+
+Cubes have 1 m edges, spheres have a 0.5 m radius, and capsules have a 0.5 m radius plus a
+1 m cylindrical section (2 m total height). UI interactions do not spawn objects or move the camera.
+
+The **Spawn Shapes Mode** checkbox starts checked. Uncheck it to select instead of spawn:
+left-click any solid object (including the original cube or plane) to see its actual collider
+in **green lines**. Box edges, sphere curves and capsule curves follow the selected object's
+position and rotation as it moves. The overlay is visible through surfaces, including the
+plane's hidden collider thickness. Click empty space to clear selection. Checking spawn mode
+clears the outline and disables scene selection; unchecking it prevents spawning.
+The shape list is disabled while selecting, and your last spawn shape is remembered.
+Green outlines are deliberately sparse: 12 box edges, three great circles for a sphere,
+and two end rings with four curved meridians for a capsule.
+
+The **Freecam** checkbox switches between free flight (checked by default) and a static camera
+(unchecked, locks the current view). In freecam, use **WASD** to fly forward/back/sideways,
+**Q/E** to move down/up, **Shift** for faster movement and **right-drag** to look around in place.
+The wheel moves forward/back. Static mode ignores all navigation input; spawning and selection
+still work. Switching modes preserves your view.
 
 One unit is one metre, +Y points up and the ground is the XZ plane.
 
 | Input | Action |
 | --- | --- |
 | `F` | Drop the cube. Pressing it again puts the cube back and drops it once more |
-| Left click | Spawn a cube under the pointer |
-| Drag with the left mouse button | Orbit around the scene (movement beyond 5 window units) |
-| Mouse wheel | Zoom in and out |
+| Spawn Shapes Mode checkbox | Checked: spawn; unchecked: select objects |
+| Shape list (spawn mode) | Select Cube, Sphere or Capsule |
+| Left click in the scene | Spawn the chosen shape, or select an object in selection mode |
+| Freecam checkbox | Checked: fly camera; unchecked: lock current view |
+| Right drag (freecam) | Look around in place |
+| WASD, Q/E (freecam) | Fly forward/back/sideways, down/up |
+| Shift (freecam) | Move faster |
+| Mouse wheel (freecam) | Move forward/back |
 | `Esc`, or closing the window | Quit |
 
 Clicks hit the nearest solid surface, or the ground at y = 0 when nothing solid is under the
-pointer (up to 100 m away). A sky click places a cube at the camera target's distance.
-Cubes are offset to touch the surface and moved nearby if space is blocked. Colours cycle
+pointer (up to 100 m away). A sky click places an object at the camera target's distance.
+Objects are offset to touch the surface and moved nearby if space is blocked.
+The room search uses a conservative bounding box, so round objects may be placed slightly
+further away in tight gaps. Colours cycle
 through blue, green, yellow, red, purple and turquoise.
 
-Only the plane is solid ground: cubes outside it fall and are removed below y = −200 m.
+Only the plane is solid ground: spawned objects outside it fall and are removed below y = −200 m.
 The original orange cube stays fixed until `F`; if it later falls out of the scene, it is
 kept there without a `RigidBody` so `F` can bring it back. Tall stacks may wobble or collapse.
 
@@ -39,6 +69,7 @@ It is written in C++17 with:
 - [SDL3](https://www.libsdl.org/) for the window, the input and the OpenGL context
 - OpenGL 3.3 (core profile) for the rendering
 - [GLAD](https://github.com/Dav1dde/glad) for loading the OpenGL functions (generated code in `third_party/glad`)
+- [Dear ImGui](https://github.com/ocornut/imgui) for the shape picker (MIT licence)
 - [ReactPhysics3D](https://www.reactphysics3d.com/) for the physics: gravity and collisions
 
 Only Linux has been built and tested so far.
@@ -52,7 +83,7 @@ The scene is put together in `run()` in [`src/main.cpp`](src/main.cpp). Every ob
 | --- | --- |
 | `Transform` | A position, a rotation and a scale |
 | `MeshRenderer` | A mesh and a colour: the entity is drawn |
-| `BoxCollider` | A solid box around it: other solid entities cannot pass through |
+| `Collider` (`BoxCollider` is a backward-compatible alias) | A solid box, sphere or capsule |
 | `RigidBody` | Physics: the entity falls, and collisions push it around |
 
 For example, this adds a blue crate that falls onto the plane beside the cube:
@@ -122,7 +153,11 @@ world.add(roof, MeshRenderer{pyramidMesh, {0.80f, 0.20f, 0.20f}});
 ```
 
 There is no loader for model files such as `.obj` yet; one would fill a `MeshData` in the same way.
-Colliders are boxes only, so far.
+Set `Collider::shape` to `ColliderShape::Box`, `Sphere` or `Capsule`. Boxes use `size`;
+spheres use `radius`; capsules use `radius` and `height` (distance between hemisphere centres,
+along local Y). All use `center`, `friction` and `bounciness`. Attach only one `Collider` per entity.
+Use uniform scale for round meshes: native round colliders cannot become ellipsoids; non-uniform
+scale uses the largest radial scale for the collider, and Y scale for capsule section height.
 
 The code is in `src`:
 
@@ -130,7 +165,7 @@ The code is in `src`:
 | --- | --- |
 | `main.cpp` | The scene, the input and the main loop |
 | `ecs.hpp` | `World`, which holds the entities and their components |
-| `components.hpp` | The four components above |
+| `components.hpp` | The components above |
 | `mesh.hpp` | What a mesh is made of, and the box, the plane and the grid |
 | `renderer.hpp` | Drawing with OpenGL. `createMesh()` takes the triangles of any shape |
 | `physics.hpp` | The ReactPhysics3D simulation, plus `raycast()` and `checkBox()` queries |
@@ -174,7 +209,7 @@ cmake --build build --parallel 4
 ./build/LegacyEngine
 ```
 
-The first command downloads SDL 3.4.20 and ReactPhysics3D 0.10.2, and the second one builds them
+The first command downloads SDL 3.4.20, ReactPhysics3D 0.10.2 and Dear ImGui 1.92.5, and the second one builds them
 into the executable. If SDL3 is already installed on your system, that one is used instead; add
 `-DLEGACY_VENDORED_SDL=ON` to the first command to download it anyway.
 
@@ -190,3 +225,14 @@ git push origin v0.1.0
 
 The workflow can also be started by hand from the Actions tab. On a branch, that only builds the
 binary and attaches it to the workflow run.
+
+## Tests
+
+After building, run the CPU-only shape regression tests (no display required):
+
+```sh
+ctest --test-dir build --output-on-failure
+```
+
+These cover mesh dimensions and winding, native collider raycasts and overlaps, capsule rotation,
+resting heights, collider replacement/removal, and selection wireframe geometry. UI interaction still needs a graphical session.
