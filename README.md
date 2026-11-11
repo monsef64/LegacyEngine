@@ -89,6 +89,7 @@ It is written in C++17 with:
 - OpenGL 3.3 (core profile) for the rendering
 - [GLAD](https://github.com/Dav1dde/glad) for loading the OpenGL functions (generated code in `third_party/glad`)
 - [Dear ImGui](https://github.com/ocornut/imgui) for the editor UI (MIT licence)
+- [Lua](https://github.com/lua/lua) for the embedded snippet runtime (MIT licence)
 - [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) for draggable transform axes (MIT licence)
 - [ReactPhysics3D](https://www.reactphysics3d.com/) for the physics: gravity and collisions
 
@@ -96,6 +97,34 @@ Only Linux has been built and tested so far.
 
 The checkerboard texture is generated at startup and mipmapped; no image asset is needed.
 It follows the plane when transformed. Its collider spans the full 16 × 16 m surface.
+
+## Lua editor and console
+
+The **Lua Editor** opens on the right with an example snippet. Edit the multiline text (Tab inserts
+indentation), then click **Execute**. `print(...)` output appears in the **Lua Console**, with arguments
+separated by tabs. Syntax errors and runtime tracebacks appear in red. Successful executions show a
+completion message. Both windows can be moved, resized and collapsed.
+
+```lua
+counter = (counter or 0) + 1
+print("Execution", counter)
+for i = 1, 5 do
+    print(i, math.sqrt(i))
+end
+```
+
+Variables persist between executions. **Reset Runtime** clears Lua variables and restores the
+built-in functions; it does not erase the editor text or existing console messages. **Clear** only
+clears the console. The console has an auto-scroll toggle and keeps the last 1,000 messages,
+with long messages truncated at about 8 KiB. Scripts are held in memory, not saved to disk.
+
+Lua 5.4.8 is embedded, so no Lua installation is needed. This is a snippet editor, not yet an engine
+scripting API: scripts cannot spawn or transform scene objects. Available libraries are base,
+`math`, `string`, `table` and `utf8`. File/process access, native modules, debug APIs, coroutines,
+metatable access, dynamic loading and script-side `pcall`/`xpcall` are omitted. Execution is synchronous
+with a 1,000,000 VM-instruction budget, a 32 MiB Lua allocation limit and a 64 KiB source limit.
+The instruction guard covers Lua loops, not time spent inside native library calls; these limits
+are guardrails for local snippets, **not a security boundary for untrusted code**.
 
 ## Adding objects
 
@@ -232,7 +261,7 @@ cmake --build build --parallel 4
 ./build/LegacyEngine
 ```
 
-The first command downloads SDL 3.4.20, ReactPhysics3D 0.10.2 and Dear ImGui 1.92.5, and the second one builds them
+The first command downloads SDL 3.4.20, ReactPhysics3D 0.10.2, Dear ImGui 1.92.5 and Lua 5.4.8, and the second one builds them
 into the executable. If SDL3 is already installed on your system, that one is used instead; add
 `-DLEGACY_VENDORED_SDL=ON` to the first command to download it anyway.
 
@@ -262,3 +291,7 @@ resting heights, collider replacement/removal, and selection wireframe geometry.
 also exercise matrix-to-quaternion conversion, scale limits, icon toolbar clicks, actual move/rotate/scale
 gizmo drags through ImGui input, and physics-body hold/release. A real graphical session is still needed
 to verify the rendered editor and physical mouse interaction.
+
+Lua tests cover console output, errors/tracebacks, persistent state, reset/clear, execution and
+memory limits, bounded output, and recovery. CPU ImGui integration tests click Execute and Clear
+to verify the editor-to-console flow without needing a display.
