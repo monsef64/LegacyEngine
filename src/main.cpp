@@ -13,6 +13,7 @@
 #include "mesh.hpp"
 #include "physics.hpp"
 #include "renderer.hpp"
+#include "transform_editor.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -261,6 +262,7 @@ static void run(SDL_Window* window, Renderer& renderer)
     bool spawnMode = true;
     bool freeCamera = true;
     Entity selectedEntity;
+    TransformEditor editor;
     OrbitCamera camera;
     Uint64 lastTicks = SDL_GetTicksNS();
     bool   running   = true;
@@ -280,7 +282,8 @@ static void run(SDL_Window* window, Renderer& renderer)
             const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                 event.type == SDL_EVENT_MOUSE_BUTTON_UP || event.type == SDL_EVENT_MOUSE_MOTION ||
                 event.type == SDL_EVENT_MOUSE_WHEEL;
-            if (mouseEvent && ImGui::GetIO().WantCaptureMouse) {
+            if (mouseEvent && (ImGui::GetIO().WantCaptureMouse ||
+                (!spawnMode && editor.capturesMouse()))) {
                 clicking = false;
                 continue;
             }
@@ -288,6 +291,7 @@ static void run(SDL_Window* window, Renderer& renderer)
                 event.key.key != SDLK_ESCAPE) continue;
             switch (event.type) {
             case SDL_EVENT_WINDOW_FOCUS_LOST:
+                editor.finish(world);
                 clicking = false;
                 break;
             case SDL_EVENT_QUIT:
@@ -296,7 +300,7 @@ static void run(SDL_Window* window, Renderer& renderer)
             case SDL_EVENT_KEY_DOWN:
                 if (event.key.key == SDLK_ESCAPE) {
                     running = false;
-                } else if (event.key.key == SDLK_F && !event.key.repeat) {
+                } else if (event.key.key == SDLK_F && !event.key.repeat && !editor.dragging()) {
                     dropCube(world, cube);
                 }
                 break;
@@ -357,10 +361,12 @@ static void run(SDL_Window* window, Renderer& renderer)
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
+        ImGuizmo::BeginFrame();
         ImGui::SetNextWindowPos(ImVec2(16, 16), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(230, 0), ImGuiCond_FirstUseEver);
         ImGui::Begin("Spawn shapes", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
         if (ImGui::Checkbox("Spawn Shapes Mode", &spawnMode)) {
+            editor.finish(world);
             selectedEntity = {}; // spawning and selection are mutually exclusive
             clicking = false;
         }
@@ -380,6 +386,13 @@ static void run(SDL_Window* window, Renderer& renderer)
             ImGui::TextUnformatted("WASD: move | Q/E: down/up\nRight drag: look | Shift: faster\nWheel: move forward/back");
         ImGui::TextUnformatted("F: drop cube | Esc: quit");
         ImGui::End();
+        int drawableWidth=0, drawableHeight=0;
+        SDL_GetWindowSizeInPixels(window,&drawableWidth,&drawableHeight);
+        if (drawableWidth>0 && drawableHeight>0) {
+            editor.draw(world,selectedEntity,!spawnMode,camera,
+                        static_cast<float>(drawableWidth)/drawableHeight);
+            if (editor.capturesMouse()) clicking=false;
+        } else editor.finish(world);
         ImGui::Render();
 
         removeFallenCubes(world, cube);
@@ -389,7 +402,7 @@ static void run(SDL_Window* window, Renderer& renderer)
         const float  seconds = static_cast<float>(ticks - lastTicks) * 1e-9f;
         lastTicks            = ticks;
 
-        if (freeCamera && !ImGui::GetIO().WantCaptureKeyboard &&
+        if (freeCamera && !editor.dragging() && !ImGui::GetIO().WantCaptureKeyboard &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             const float speed = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT] ? 15.0f : 5.0f;
@@ -419,6 +432,7 @@ static void run(SDL_Window* window, Renderer& renderer)
 
         SDL_GL_SwapWindow(window);
     }
+    editor.finish(world);
 }
 
 int main(int, char**)

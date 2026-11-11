@@ -93,6 +93,14 @@ add_library(legacy_imgui STATIC
 target_include_directories(legacy_imgui SYSTEM PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
 target_link_libraries(legacy_imgui PUBLIC SDL3::SDL3 ${CMAKE_DL_LIBS})
 
+# --- ImGuizmo (transform handles, pinned for reproducible builds) -----------
+FetchContent_Declare(imguizmo
+  GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
+  GIT_TAG 105e4fde45e4e74aae8973d98750820ef7aca7e2)
+set(IMGUIZMO_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(imguizmo)
+target_link_libraries(imguizmo PUBLIC legacy_imgui)
+
 # --- LegacyEngine -----------------------------------------------------------
 
 add_executable(LegacyEngine
@@ -100,8 +108,9 @@ add_executable(LegacyEngine
   src/mesh.cpp
   src/physics.cpp
   src/renderer.cpp
+  src/transform_editor.cpp
 )
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui imguizmo)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
@@ -118,4 +127,11 @@ if(BUILD_TESTING)
   target_include_directories(shape_tests PRIVATE src)
   target_link_libraries(shape_tests PRIVATE ReactPhysics3D::reactphysics3d)
   add_test(NAME shapes COMMAND shape_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(transform_editor_tests tests/transform_editor.cpp src/transform_editor.cpp)
+  target_include_directories(transform_editor_tests PRIVATE src)
+  target_link_libraries(transform_editor_tests PRIVATE imguizmo)
+  add_test(NAME transform_editor COMMAND transform_editor_tests)
 endif()

@@ -102,6 +102,7 @@ jobs:
           cp build/_deps/sdl3-src/LICENSE.txt "$package/licenses/SDL3.txt"
           cp build/_deps/reactphysics3d-src/LICENSE "$package/licenses/ReactPhysics3D.txt"
           cp build/_deps/imgui-src/LICENSE.txt "$package/licenses/DearImGui.txt"
+          cp build/_deps/imguizmo-src/LICENSE "$package/licenses/ImGuizmo.txt"
           cp third_party/glad/LICENSE "$package/licenses/glad.txt"
           tar -czf "$package.tar.gz" "$package"
 
