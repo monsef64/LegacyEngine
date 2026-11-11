@@ -1,3 +1,4 @@
+#include "collider_debug.hpp"
 #include "renderer.hpp"
 
 #include "components.hpp"
@@ -154,6 +155,9 @@ void Renderer::shutdown()
         glDeleteVertexArrays(1, &mesh.vertexArray);
     }
     meshes_.clear();
+    glDeleteBuffers(1, &colliderVertexBuffer_);
+    glDeleteVertexArrays(1, &colliderVertexArray_);
+    colliderVertexBuffer_ = colliderVertexArray_ = 0;
 
     glDeleteProgram(litProgram_);
     glDeleteProgram(unlitProgram_);
@@ -233,4 +237,32 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
             glBindVertexArray(mesh.vertexArray);
             glDrawArrays(mesh.lines ? GL_LINES : GL_TRIANGLES, 0, mesh.vertexCount);
         });
+}
+
+void Renderer::drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection)
+{
+    const MeshData wire = colliderWireframe(collider, transform.scale);
+    if (!colliderVertexArray_) {
+        glGenVertexArrays(1, &colliderVertexArray_);
+        glGenBuffers(1, &colliderVertexBuffer_);
+        glBindVertexArray(colliderVertexArray_);
+        glBindBuffer(GL_ARRAY_BUFFER, colliderVertexBuffer_);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                              reinterpret_cast<const void*>(offsetof(Vertex, position)));
+    }
+    glBindVertexArray(colliderVertexArray_);
+    glBindBuffer(GL_ARRAY_BUFFER, colliderVertexBuffer_);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(wire.vertices.size() * sizeof(Vertex)),
+                 wire.vertices.data(), GL_STREAM_DRAW);
+    const Mat4 mvp = multiply(viewProjection, transformMatrix(transform.position, transform.rotation, {1, 1, 1}));
+    glUseProgram(unlitProgram_);
+    glUniformMatrix4fv(unlitModelViewProjection_, 1, GL_FALSE, mvp.m);
+    glUniform3f(unlitColor_, 0.0f, 1.0f, 0.0f);
+    // Show the entire collider, including the back and the plane's hidden slab.
+    const bool depthTest = glIsEnabled(GL_DEPTH_TEST);
+    glDisable(GL_DEPTH_TEST);
+    glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(wire.vertices.size()));
+    if (depthTest) glEnable(GL_DEPTH_TEST);
+    glBindVertexArray(0);
 }

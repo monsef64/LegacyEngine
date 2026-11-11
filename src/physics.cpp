@@ -70,6 +70,8 @@ Pose toPose(const Transform& transform) { return {transform.position, normalize(
 // A BoxCollider as the simulation sees it: with the entity's scale applied and
 // with values it can work with.
 struct Box {
+    ColliderShape shape = ColliderShape::Box;
+    float radius = 0.5f, height = 1.0f;
     Vec3  halfSize;
     Vec3  center;
     float friction   = 0.0f;
@@ -85,6 +87,12 @@ Box toBox(const BoxCollider& collider, Vec3 scale)
     box.halfSize   = {std::max(std::abs(size.x) * 0.5f, smallest),
                       std::max(std::abs(size.y) * 0.5f, smallest),
                       std::max(std::abs(size.z) * 0.5f, smallest)};
+    box.shape = collider.shape;
+    const float radialScale = collider.shape == ColliderShape::Sphere
+        ? std::max({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z)})
+        : std::max(std::abs(scale.x), std::abs(scale.z));
+    box.radius = std::max(std::abs(collider.radius) * radialScale, smallest);
+    box.height = std::max(std::abs(collider.height * scale.y), kSmallestBoxSize);
     box.center     = collider.center * scale;
     box.friction   = std::max(collider.friction, 0.0f);
     box.bounciness = std::clamp(collider.bounciness, 0.0f, 1.0f);
@@ -110,7 +118,10 @@ bool isUsable(const Transform& transform, const BoxCollider* collider, const Rig
     if (collider && (!isUsable(collider->size) || !isUsable(collider->center) ||
                      !isUsable(collider->size * transform.scale) ||
                      !isUsable(collider->center * transform.scale) ||
-                     !isUsable(collider->friction) || !isUsable(collider->bounciness))) {
+                     !isUsable(collider->friction) || !isUsable(collider->bounciness) ||
+                     !isUsable(collider->radius) || !isUsable(collider->height) ||
+                     !isUsable(transform.scale * collider->radius) ||
+                     !isUsable(collider->height * transform.scale.y))) {
         return false;
     }
     if (rigidBody && (!isUsable(rigidBody->mass) || !isUsable(rigidBody->linearVelocity) ||
@@ -229,7 +240,7 @@ struct Physics::Impl {
         Entity           entity;
         rp3d::RigidBody* body     = nullptr; // null while the entity is left out (see update())
         rp3d::Collider*  collider = nullptr; // null while the entity has no BoxCollider
-        rp3d::BoxShape*  shape    = nullptr; // the shape of `collider`
+        rp3d::CollisionShape* shape    = nullptr; // the shape of `collider`
 
         // The values of the entity's components that the simulation is in step
         // with. A component that differs from them was changed by game code
@@ -296,7 +307,11 @@ struct Physics::Impl {
         }
         world->destroyRigidBody(body.body); // takes the collider with it
         if (body.shape) {
-            common.destroyBoxShape(body.shape);
+            switch (body.box.shape) {
+            case ColliderShape::Box: common.destroyBoxShape(static_cast<rp3d::BoxShape*>(body.shape)); break;
+            case ColliderShape::Sphere: common.destroySphereShape(static_cast<rp3d::SphereShape*>(body.shape)); break;
+            case ColliderShape::Capsule: common.destroyCapsuleShape(static_cast<rp3d::CapsuleShape*>(body.shape)); break;
+            }
         }
         body.body     = nullptr;
         body.collider = nullptr;
@@ -314,7 +329,11 @@ struct Physics::Impl {
         body.box    = box ? *box : Box{};
         if (box) {
             const rp3d::Transform place(toRp3d(box->center), rp3d::Quaternion::identity());
-            body.shape    = common.createBoxShape(toRp3d(box->halfSize));
+            switch (box->shape) {
+            case ColliderShape::Box: body.shape = common.createBoxShape(toRp3d(box->halfSize)); break;
+            case ColliderShape::Sphere: body.shape = common.createSphereShape(box->radius); break;
+            case ColliderShape::Capsule: body.shape = common.createCapsuleShape(box->radius, box->height); break;
+            }
             body.collider = body.body->addCollider(body.shape, place);
             body.collider->getMaterial().setFrictionCoefficient(box->friction);
             body.collider->getMaterial().setBounciness(box->bounciness);
@@ -344,7 +363,7 @@ struct Physics::Impl {
             // ReactPhysics3D works out the mass, the centre of mass and the
             // resistance to spinning from the shape of the collider and its
             // density.
-            body.collider->getMaterial().setMassDensity(mass / body.shape->getVolume());
+            body.collider->getMaterial().setMassDensity(mass / static_cast<rp3d::ConvexShape*>(body.shape)->getVolume());
             body.body->updateMassPropertiesFromColliders();
         } else {
             body.body->setMass(mass);
@@ -408,6 +427,7 @@ struct Physics::Impl {
         // and for a change of shape, the body is made again. They are rare.
         if (!body.body || dynamic != body.dynamic || hasBox != body.hasBox ||
             box.halfSize != body.box.halfSize || box.center != body.box.center ||
+            box.shape != body.box.shape || box.radius != body.box.radius || box.height != body.box.height ||
             (moved && !dynamic)) {
             build(body, hasBox ? &box : nullptr, rigidBody);
             return;
@@ -573,6 +593,18 @@ bool Physics::raycast(const Ray& ray, float maxDistance, RayHit& hit) const
         if (!body.body || !body.hasBox) {
             continue; // left out of the simulation, or nothing solid about it
         }
+        if (body.box.shape != ColliderShape::Box) {
+            const float reach = std::min(maxDistance, kLargestNumber);
+            rp3d::RaycastInfo info;
+            if (body.collider->raycast(rp3d::Ray(toRp3d(ray.origin), toRp3d(ray.origin + direction * reach)), info)) {
+                const float distance = static_cast<float>(info.hitFraction) * reach;
+                if (!found || distance <= hit.distance) {
+                    hit = {body.entity, toVec3(info.worldPoint), toVec3(info.worldNormal), distance};
+                    found = true;
+                }
+            }
+            continue;
+        }
         float distance = 0.0f;
         Vec3  normal;
         if (rayEnters(ray.origin, direction, toOrientedBox(body.current, body.box), distance,
@@ -595,6 +627,19 @@ bool Physics::checkBox(Vec3 center, Vec3 size) const
 
     for (const auto& entry : impl_->bodies) {
         const Impl::Body& body = entry.second;
+        if (body.body && body.hasBox && body.box.shape != ColliderShape::Box) {
+            // Use the actual curved collider, not its bounding box.
+            auto* shape = impl_->common.createBoxShape(toRp3d(Vec3{std::max(halfSize.x, 0.0005f),
+                std::max(halfSize.y, 0.0005f), std::max(halfSize.z, 0.0005f)}));
+            auto* probe = impl_->world->createRigidBody(toRp3d(Pose{center, {}}));
+            probe->setType(rp3d::BodyType::STATIC);
+            probe->addCollider(shape, rp3d::Transform::identity());
+            const bool overlaps = impl_->world->testOverlap(probe, body.body);
+            impl_->world->destroyRigidBody(probe);
+            impl_->common.destroyBoxShape(shape);
+            if (overlaps) return true;
+            continue;
+        }
         if (body.body && body.hasBox &&
             boxesMeet(center, halfSize, toOrientedBox(body.current, body.box))) {
             return true;

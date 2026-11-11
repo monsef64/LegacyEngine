@@ -20,17 +20,27 @@ struct MeshRenderer {
     Vec3       color = {1.0f, 1.0f, 1.0f}; // red, green and blue, each from 0 to 1
 };
 
-// A solid box around the entity that other colliders cannot pass through. It
+enum class ColliderShape { Box, Sphere, Capsule };
+
+// A solid shape around the entity that other colliders cannot pass through. It
 // follows the entity's Transform, scale included.
 //
 // On its own, a collider makes an obstacle that never moves by itself (a floor,
 // a wall). Add a RigidBody as well for an object that falls and gets pushed.
-struct BoxCollider {
+struct Collider {
     Vec3  size = {1.0f, 1.0f, 1.0f}; // metres, before the Transform's scale
     Vec3  center;                    // of the box, measured from the entity's origin
     float friction   = 0.5f;         // 0 slides like ice, 1 grips
     float bounciness = 0.0f;         // 0 does not bounce, 1 bounces back all the way
+    ColliderShape shape = ColliderShape::Box;
+    // Sphere: radius. Capsule: radius and distance between hemisphere centres, along Y.
+    // Use uniform Transform scale for round shapes (non-uniform scales use the largest radial scale).
+    float radius = 0.5f;
+    float height = 1.0f;
 };
+
+// Backward-compatible name: existing box scene code remains valid.
+using BoxCollider = Collider;
 
 // Hands the entity over to the physics simulation, which then moves its
 // Transform: it falls, and colliders stop it and push it around.

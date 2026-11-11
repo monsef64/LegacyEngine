@@ -61,3 +61,31 @@ MeshData makeGrid(int cells, float cellSize)
     }
     return mesh;
 }
+
+MeshData makeCapsule(float radius, float height)
+{
+    MeshData mesh;
+    constexpr int slices = 32, rings = 24;
+    // Duplicate the equator so the cylinder has straight sides and radial normals.
+    auto vertex = [&](int ring, int slice) {
+        const int latitude = ring <= rings / 2 ? ring : ring - 1;
+        const float angle = -kPi * 0.5f + kPi * static_cast<float>(latitude) / rings;
+        const float longitude = 2.0f * kPi * static_cast<float>(slice) / slices;
+        const Vec3 normal{std::cos(angle) * std::cos(longitude), std::sin(angle),
+                          std::cos(angle) * std::sin(longitude)};
+        Vec3 position = normal * radius;
+        position.y += ring <= rings / 2 ? -height * 0.5f : height * 0.5f;
+        return Vertex{position, normal};
+    };
+    for (int r = 0; r <= rings; ++r) {
+        for (int i = 0; i < slices; ++i) {
+            const Vertex a = vertex(r, i), b = vertex(r + 1, i);
+            const Vertex c = vertex(r + 1, i + 1), d = vertex(r, i + 1);
+            // Outside winding: latitude edge crossed with longitude edge.
+            for (const Vertex& v : {a, b, c, a, c, d}) mesh.vertices.push_back(v);
+        }
+    }
+    return mesh;
+}
+
+MeshData makeSphere(float radius) { return makeCapsule(radius, 0.0f); }
