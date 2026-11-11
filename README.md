@@ -420,3 +420,40 @@ input controls, and flat panel borders. Bundled Roboto Regular at 16 px replaces
 the small bitmap default; oversampled glyphs and anti-aliased UI geometry improve
 legibility. The font is embedded in the executable (no external font installation
 or asset folder required). Its Apache 2.0 license is in `third_party/roboto/LICENSE`.
+
+### Play mode and Hierarchy actions
+
+The editor starts in **Edit** mode: physics and Lua lifecycle updates do not run.
+Select **Play** to snapshot the scene, execute the Lua Editor source in a fresh
+runtime, and start physics and script updates. **Pause** freezes simulation and
+script callbacks; **Resume** continues without taking a new snapshot. **Stop**
+restores the pre-Play entities, components, names, parenting, transforms, and
+velocities, removes runtime-created objects, and clears the Lua runtime and
+physics solver state. Changes made in the Inspector or Hierarchy during Play
+are temporary. Lua Execute/Reset controls are enabled only while playing;
+source text remains editable and is not discarded on Stop.
+
+Right-click a GameObject in the Hierarchy to select it and open its actions:
+**Duplicate** copies its standard components (not its children), **Unparent**
+keeps its world-space pose, and **Delete** removes the object while keeping its
+children detached at their current world-space poses. Selection mode is enabled
+by default; turn off Spawn Mode to use Hierarchy actions if spawning is active.
+
+### Component access from Lua GameObjects
+
+Component type tokens avoid string names; both dot and colon calls work:
+
+```lua
+local gameObject = createGameObject("Player")
+gameObject.getComponent(Transform).position.y = 3
+gameObject:addComponent(RigidBody).mass = 2
+gameObject.getComponent(ObjectName).value = "Hero"
+```
+
+Available tokens: `Transform`, `RigidBody`, `Collider` (`BoxCollider` alias),
+`MeshRenderer`, and `ObjectName`. `getComponent` returns `nil` when the object
+lacks that component. Fields depend on the component: `.value` belongs to
+`ObjectName`, while `Transform` exposes `.position`, `.rotation`, and `.scale`.
+The existing `getComponent(gameObject, Transform)` global function and string
+forms such as `gameObject.getComponent("Transform")` remain supported. Tokens
+also work with add/remove and `findGameObjectsByComponent`.

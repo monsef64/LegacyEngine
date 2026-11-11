@@ -6,10 +6,14 @@
 ---@field z number
 ---@class Quaternion: Vec3
 ---@field w number
----@alias ComponentType 'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'
+---@class ComponentToken
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
+---@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName
+---@field removeComponent fun(componentType:ComponentType)
 ---@field onStart fun()|nil
 ---@field onUpdate fun(deltaTime:number)|nil
 ---@field onFixedUpdate fun(deltaTime:number)|nil
@@ -84,3 +88,17 @@ function setParent(child,parent) end
 ---@param child GameObject
 ---@return GameObject|nil
 function getParent(child) end
+
+-- Runtime-provided opaque component type tokens (strings remain supported).
+---@type ComponentToken
+Transform = nil
+---@type ComponentToken
+RigidBody = nil
+---@type ComponentToken
+Collider = nil
+---@type ComponentToken
+BoxCollider = nil
+---@type ComponentToken
+MeshRenderer = nil
+---@type ComponentToken
+ObjectName = nil

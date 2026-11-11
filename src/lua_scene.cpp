@@ -13,6 +13,7 @@ struct Component { Handle object; int type; };
 struct Vector { Component component; char field[32]; };
 const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName"};
 int componentType(lua_State* L,int index) {
+    if (auto* type=static_cast<int*>(luaL_testudata(L,index,"ComponentType"))) return *type;
     const char* name=luaL_checkstring(L,index);
     if (!std::strcmp(name,"BoxCollider")) return 2;
     for (int i=0;i<5;++i) if (!std::strcmp(name,types[i])) return i;
@@ -86,6 +87,15 @@ LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,M
         lua_pushcfunction(L,reads[i]);lua_setfield(L,-2,"__index");
         lua_pushcfunction(L,writes[i]);lua_setfield(L,-2,"__newindex");
         lua_pushliteral(L,"locked");lua_setfield(L,-2,"__metatable");lua_pop(L,1);
+    }
+    // Opaque type tokens cannot be forged by passing a number or a table.
+    luaL_newmetatable(L,"ComponentType");
+    lua_pushliteral(L,"locked");lua_setfield(L,-2,"__metatable");lua_pop(L,1);
+    for (int i=0;i<5;++i) {
+        auto* type=static_cast<int*>(lua_newuserdatauv(L,sizeof(int),0));
+        *type=i;luaL_setmetatable(L,"ComponentType");
+        if(i==2) { lua_pushvalue(L,-1);lua_setglobal(L,"BoxCollider"); }
+        lua_setglobal(L,types[i]);
     }
     const char* names[]{"createGameObject","destroyGameObject","getComponent","addComponent","removeComponent","findGameObjectByName","findGameObjectsByComponent","setParent","getParent"};
     for(int i=0;i<9;++i) {
@@ -166,8 +176,25 @@ int LuaScene::api(lua_State* L) {
     }
     component(L,h,type);return 1;
 }
+// A bound closure supports both obj.getComponent(Type) and obj:getComponent(Type).
+int LuaScene::objectMethod(lua_State* L) {
+    const Handle bound=handle(L,lua_upvalueindex(3));
+    if (luaL_testudata(L,1,"GameObject")) {
+        const Handle explicitSelf=handle(L,1);
+        if(explicitSelf.entity!=bound.entity || explicitSelf.scene!=bound.scene)
+            return luaL_error(L,"Method called with a different GameObject");
+        lua_remove(L,1);
+    }
+    lua_pushvalue(L,lua_upvalueindex(3));lua_insert(L,1);
+    return api(L);
+}
 int LuaScene::objectIndex(lua_State* L) {
     auto& h=handle(L,1);const char* key=luaL_checkstring(L,2);
+    const char* methods[]{"getComponent","addComponent","removeComponent"};
+    for(int i=0;i<3;++i) if(!std::strcmp(key,methods[i])) {
+        lua_pushlightuserdata(L,h.scene);lua_pushinteger(L,i+2);lua_pushvalue(L,1);
+        lua_pushcclosure(L,objectMethod,3);return 1;
+    }
     if(!std::strcmp(key,"parent")){const Entity p=getParent(*h.world,h.entity);if(p==Entity{})lua_pushnil(L);else h.scene->pushObject(p);return 1;}
     if(!std::strcmp(key,"name")) {auto* n=h.world->tryGet<ObjectName>(h.entity);lua_pushstring(L,n?n->value.c_str():"");return 1;}
     lua_getiuservalue(L,1,1);lua_pushvalue(L,2);lua_rawget(L,-2);return 1;

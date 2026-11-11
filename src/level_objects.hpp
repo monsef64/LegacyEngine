@@ -28,6 +28,27 @@ inline std::vector<LevelObject> levelObjects(World& world)
     return objects;
 }
 
+// Copy values before adding components: pool growth can invalidate references.
+inline Entity duplicateLevelObject(World& world, Entity source) {
+    if (!world.alive(source)) return {};
+    const Entity copy = world.create();
+    auto component = [&](auto value) {
+        using T = decltype(value);
+        if (auto* original = world.tryGet<T>(source)) { T data = *original; world.add(copy, data); }
+    };
+    component(Transform{}); component(MeshRenderer{}); component(Collider{});
+    component(RigidBody{}); component(Parent{}); component(ObjectName{});
+    if (auto* name = world.tryGet<ObjectName>(copy)) name->value += " (Copy)";
+    return copy;
+}
+inline void deleteLevelObject(World& world, Entity object) {
+    // Detach direct children, preserving their world-space poses.
+    world.each<Parent>([&](Entity child, Parent& link) {
+        if (link.entity == object) world.remove<Parent>(child);
+    });
+    world.destroy(object);
+}
+
 // Returns true when selection changes. The caller can end any active gizmo gesture.
 inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr)
 {
@@ -58,12 +79,28 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
         ImGui::Separator();
         ImGui::BeginChild("Objects",ImVec2(0,0));
         auto row=[&](auto&& self,const LevelObject& object,int depth)->void {
+            if (!world.alive(object.entity)) return;
             ImGui::PushID(static_cast<int>(object.entity.index));
             ImGui::PushID(static_cast<int>(object.entity.generation));
             if(depth)ImGui::Indent(static_cast<float>(depth)*12);
             if (ImGui::Selectable(object.name.c_str(),selected==object.entity)) {
                 changed=selected!=object.entity;
                 selected=object.entity;
+            }
+            if (ImGui::BeginPopupContextItem("Object actions")) {
+                if (selected != object.entity) { selected = object.entity; changed = true; }
+                ImGui::TextUnformatted(object.name.c_str());
+                ImGui::Separator();
+                if (ImGui::MenuItem("Duplicate")) {
+                    selected = duplicateLevelObject(world, object.entity); changed = true;
+                }
+                if (ImGui::MenuItem("Unparent", nullptr, false, getParent(world,object.entity)!=Entity{})) {
+                    setParent(world, object.entity, {}); changed = true;
+                }
+                if (ImGui::MenuItem("Delete")) {
+                    deleteLevelObject(world, object.entity); selected = {}; changed = true;
+                }
+                ImGui::EndPopup();
             }
             if(ImGui::BeginDragDropSource()) {
                 ImGui::SetDragDropPayload("LEVEL_OBJECT",&object.entity,sizeof(Entity));

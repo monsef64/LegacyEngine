@@ -660,3 +660,5 @@ bool Physics::checkBox(Vec3 center, Vec3 size) const
     }
     return false;
 }
+
+void Physics::reset() { impl_ = std::make_unique<Impl>(); }

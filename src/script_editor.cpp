@@ -10,7 +10,7 @@ ScriptEditor::ScriptEditor()
     std::memcpy(source_.data(),example,std::strlen(example)+1);
 }
 
-void ScriptEditor::draw(const EditorLayout* layout)
+void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
 {
     const auto* viewport=ImGui::GetMainViewport();
     if(layout)placeEditorPanel(layout->lua);
@@ -20,12 +20,14 @@ void ScriptEditor::draw(const EditorLayout* layout)
     ImGui::SetNextWindowSize(ImVec2(450,320),ImGuiCond_FirstUseEver);
     }
     if (ImGui::Begin("Lua Editor",nullptr,layout?fixedPanelFlags:0)) {
+        ImGui::BeginDisabled(!executionEnabled);
         if (ImGui::Button("Execute")) {
             console_.execute(source_.data());
             scrollToBottom_=true;
         }
         ImGui::SameLine();
         if (ImGui::Button("Reset Runtime")) { console_.reset(); scrollToBottom_=true; }
+        ImGui::EndDisabled();
         ImGui::TextDisabled("Lua 5.4 | Tab: complete API names | output below");
         ImGui::InputTextMultiline("##source",source_.data(),source_.size(),ImVec2(-1,-1),
                                  ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackAlways,

@@ -41,6 +41,7 @@ class Physics {
 public:
     Physics();
     ~Physics();
+    void reset(); // Discard solver bodies, contacts and accumulated time.
     Physics(const Physics&) = delete;
     Physics& operator=(const Physics&) = delete;
 
