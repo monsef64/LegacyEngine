@@ -4,6 +4,10 @@
 #include <deque>
 #include <string>
 #include <string_view>
+#include <memory>
+#include "components.hpp"
+#include "ecs.hpp"
+class LuaScene;
 
 struct lua_State;
 struct lua_Debug;
@@ -24,12 +28,22 @@ public:
     LuaConsole& operator=(const LuaConsole&) = delete;
     bool execute(std::string_view source);
     void reset();
+    void bindWorld(World& world, MeshHandle cube={}, MeshHandle sphere={}, MeshHandle capsule={});
+    void update(float deltaTime);
+    void fixedUpdate(float deltaTime);
+    void shutdown();
     void clear() { lines_.clear(); }
     const std::deque<Line>& lines() const { return lines_; }
     bool ready() const { return state_ != nullptr; }
 
 private:
     lua_State* state_ = nullptr;
+    World* world_ = nullptr;
+    MeshHandle meshes_[3];
+    std::unique_ptr<LuaScene> scene_;
+    void installScene();
+    void beginBudget();
+    void endBudget();
     std::size_t allocated_ = 0;
     int remainingInstructions_ = 0;
     std::deque<Line> lines_;

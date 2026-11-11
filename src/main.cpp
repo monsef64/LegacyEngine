@@ -215,7 +215,7 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, multisamples);
 
     window = SDL_CreateWindow("LegacyEngine", 1280, 720,
-                              SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE |
+                              SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED |
                                   SDL_WINDOW_HIGH_PIXEL_DENSITY);
     context = window ? SDL_GL_CreateContext(window) : nullptr;
     if (!context && window) {
@@ -268,6 +268,7 @@ static void run(SDL_Window* window, Renderer& renderer)
     bool freeCamera = true;
     Entity selectedEntity;
     ScriptEditor scripts;
+    scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh);
     TransformEditor editor;
     OrbitCamera camera;
     Uint64 lastTicks = SDL_GetTicksNS();
@@ -307,7 +308,7 @@ static void run(SDL_Window* window, Renderer& renderer)
                 if (event.key.key == SDLK_ESCAPE) {
                     running = false;
                 } else if (event.key.key == SDLK_F && !event.key.repeat && !editor.dragging()) {
-                    dropCube(world, cube);
+                    if (world.alive(cube) && world.has<Transform>(cube)) dropCube(world, cube);
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -425,7 +426,8 @@ static void run(SDL_Window* window, Renderer& renderer)
                         static_cast<float>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],
                         speed * std::min(seconds, 0.1f));
         }
-        physics.update(world, seconds);
+        scripts.update(std::min(seconds,0.25f));
+        physics.update(world, seconds, [&](float dt){ scripts.fixedUpdate(dt); });
 
         int width = 0;
         int height = 0;
@@ -447,6 +449,7 @@ static void run(SDL_Window* window, Renderer& renderer)
         SDL_GL_SwapWindow(window);
     }
     editor.finish(world);
+    scripts.shutdown();
 }
 
 int main(int, char**)

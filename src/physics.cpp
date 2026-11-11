@@ -469,10 +469,11 @@ Physics::Physics() : impl_(std::make_unique<Impl>()) {}
 
 Physics::~Physics() = default;
 
-void Physics::update(World& world, float seconds)
+void Physics::update(World& world, float seconds, const std::function<void(float)>& beforeStep)
 {
     Impl& impl = *impl_;
 
+    const auto synchronize = [&]() {
     // 1. Pick up what game code did since the last update: new, changed and
     //    removed components, and destroyed entities.
     for (auto& entry : impl.bodies) {
@@ -519,6 +520,9 @@ void Physics::update(World& world, float seconds)
         impl.wakeAll = false;
     }
 
+    };
+    synchronize();
+
     // 2. Simulate the time that has passed, one fixed step at a time. What is
     //    left over, less than a step, waits for the next update.
     if (seconds > 0.0f) { // also false for NaN
@@ -526,6 +530,7 @@ void Physics::update(World& world, float seconds)
     }
     while (impl.pendingSeconds >= kStepSeconds) {
         impl.pendingSeconds -= kStepSeconds;
+        if (beforeStep) { beforeStep(kStepSeconds); synchronize(); }
         impl.world->update(kStepSeconds);
         for (auto& entry : impl.bodies) {
             Impl::Body& body = entry.second;

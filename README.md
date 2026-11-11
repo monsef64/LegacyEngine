@@ -8,7 +8,7 @@ The screenshot below shows the older scene, before the larger checkerboard floor
 
 ## What it does so far
 
-LegacyEngine opens a window onto a small 3D world:
+LegacyEngine opens a maximized, resizable window onto a small 3D world:
 
 - a 32 × 32 m grid on the ground, 1 m per grid block
 - a solid 16 × 16 m plane lying on the grid, centred on the origin
@@ -126,13 +126,63 @@ built-in functions; it does not erase the editor text or existing console messag
 clears the console. The console has an auto-scroll toggle and keeps the last 1,000 messages,
 with long messages truncated at about 8 KiB. Scripts are held in memory, not saved to disk.
 
-Lua 5.4.8 is embedded, so no Lua installation is needed. This is a snippet editor, not yet an engine
-scripting API: scripts cannot spawn or transform scene objects. Available libraries are base,
+Lua 5.4.8 is embedded, so no Lua installation is needed. Scripts can manipulate the live scene
+using the game-object and component API below. Available libraries are base,
 `math`, `string`, `table` and `utf8`. File/process access, native modules, debug APIs, coroutines,
 metatable access, dynamic loading and script-side `pcall`/`xpcall` are omitted. Execution is synchronous
 with a 1,000,000 VM-instruction budget, a 32 MiB Lua allocation limit and a 64 KiB source limit.
 The instruction guard covers Lua loops, not time spent inside native library calls; these limits
 are guardrails for local snippets, **not a security boundary for untrusted code**.
+
+### Lua game and object lifecycle
+
+Define global `onStart()`, `onUpdate(deltaTime)`, `onFixedUpdate(deltaTime)` and `onDestroy()`
+functions in the editor. `onStart()` runs after **each successful Execute**. Frame callbacks start
+on the next frame; `onUpdate` receives seconds capped at 0.25, and `onFixedUpdate` receives 1/60
+seconds immediately before each actual physics step (zero or multiple times per frame).
+`onDestroy()` runs on Reset Runtime or engine shutdown. Callback errors go to the Lua console
+and pause lifecycle updates until the next successful Execute or Reset Runtime.
+
+The same callbacks can be assigned to individual GameObject handles, e.g.
+`ball.onUpdate = function(dt) ... end`. Object `onStart` runs once before that object's first
+update/fixed update. Callbacks receive only the documented arguments, **not an implicit self**;
+close over the object handle when needed. Objects created during a callback start on a subsequent
+tick. Explicit destruction calls the object's `onDestroy` before removing components. Destruction
+by the engine is detected on the next tick, when the handle is already invalid; such a callback
+should not try to read the destroyed object's components. Each object destruction callback runs
+at most once. Reset/shutdown destroys objects created by Lua, but preserves pre-existing objects.
+
+| Lua function | Result |
+| --- | --- |
+| `createGameObject(name)` | New object with Transform and ObjectName, initially invisible |
+| `destroyGameObject(object)` | Calls object onDestroy, then removes it from the scene |
+| `getComponent(object, type)` | Live component proxy, or nil if absent |
+| `addComponent(object, type)` | Existing component or newly added default component |
+| `removeComponent(object, type)` | Removes the named component; harmless if absent |
+| `findGameObjectByName(name)` | First matching named object, or nil |
+| `findGameObjectsByComponent(type)` | Array of matching objects, including pre-existing scene objects |
+
+Types are strings: `Transform`, `RigidBody`, `Collider` (`BoxCollider` alias), `MeshRenderer`, and
+`ObjectName`. Vector properties support both whole assignments (`position = {x=0,y=3,z=0}`) and
+live coordinate edits (`position.y = 4`). Rotation is a quaternion `{x,y,z,w}`. MeshRenderer `mesh`
+is `"Cube"`, `"Sphere"` or `"Capsule"`; Collider `shape` is `"Box"`, `"Sphere"` or `"Capsule"`.
+Set both to matching shapes. Other fields match the C++ component names below. Names are limited
+to 256 bytes, and the runtime tracks at most 4,096 simultaneous object handles. Stale handles and
+removed component accesses report Lua errors instead of accessing recycled ECS storage.
+
+See [`scripts/lifecycle_example.lua`](scripts/lifecycle_example.lua) for a runnable example.
+Use uniform scale for spheres/capsules, as with C++ component edits. Reset clears callbacks and
+globals; Execute otherwise retains existing objects/globals and re-runs the current onStart.
+
+### Autocomplete definitions
+
+The multiline editor shows API/field signatures while typing. **Tab** completes an unambiguous
+identifier (or extends a shared prefix); type more characters to disambiguate. Tab with an empty
+prefix inserts indentation. This is built-in API completion, not a full Lua language server.
+
+[`scripts/definitions/legacyengine.lua`](scripts/definitions/legacyengine.lua) supplies LuaLS/EmmyLua
+types, lifecycle signatures and component overloads. The repository's `.luarc.json` includes that
+folder for external editors. Definitions are editor-only metadata; do **not** Execute them.
 
 ## Adding objects
 

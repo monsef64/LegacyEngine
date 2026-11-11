@@ -1,6 +1,8 @@
 #include "script_editor.hpp"
 #include <imgui.h>
 #include <cstring>
+#include <cctype>
+#include "lua_definitions.hpp"
 
 ScriptEditor::ScriptEditor()
 {
@@ -21,9 +23,19 @@ void ScriptEditor::draw()
         }
         ImGui::SameLine();
         if (ImGui::Button("Reset Runtime")) { console_.reset(); scrollToBottom_=true; }
-        ImGui::TextDisabled("Lua 5.4 | 64 KiB source | output below");
+        ImGui::TextDisabled("Lua 5.4 | Tab: complete API names | output below");
         ImGui::InputTextMultiline("##source",source_.data(),source_.size(),ImVec2(-1,-1),
-                                 ImGuiInputTextFlags_AllowTabInput);
+                                 ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackAlways,
+                                 completion,this);
+        if (ImGui::IsItemActive() && !completionPrefix_.empty()) {
+            bool opened=false;
+            for (const auto& def:luaDefinitions) {
+                if(std::string_view(def.name).substr(0,completionPrefix_.size())!=completionPrefix_)continue;
+                if(!opened){ImGui::BeginTooltip();opened=true;}
+                ImGui::TextUnformatted(def.signature);
+            }
+            if(opened)ImGui::EndTooltip();
+        }
     }
     ImGui::End();
 
@@ -49,4 +61,19 @@ void ScriptEditor::draw()
         ImGui::EndChild();
     }
     ImGui::End();
+}
+
+int ScriptEditor::completion(ImGuiInputTextCallbackData* data) {
+    auto& self=*static_cast<ScriptEditor*>(data->UserData);
+    int start=data->CursorPos;
+    while(start>0 && (std::isalnum(static_cast<unsigned char>(data->Buf[start-1])) || data->Buf[start-1]=='_'))--start;
+    self.completionPrefix_.assign(data->Buf+start,static_cast<std::size_t>(data->CursorPos-start));
+    if(data->EventFlag==ImGuiInputTextFlags_CallbackCompletion) {
+        const std::string result=luaCompletion(self.completionPrefix_);
+        if(result.size()>self.completionPrefix_.size()) {
+            data->DeleteChars(start,data->CursorPos-start);
+            data->InsertChars(start,result.c_str());
+        } else if(self.completionPrefix_.empty())data->InsertChars(data->CursorPos,"\t");
+    }
+    return 0;
 }
