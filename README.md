@@ -457,3 +457,10 @@ lacks that component. Fields depend on the component: `.value` belongs to
 The existing `getComponent(gameObject, Transform)` global function and string
 forms such as `gameObject.getComponent("Transform")` remain supported. Tokens
 also work with add/remove and `findGameObjectsByComponent`.
+
+### Startup smoke test
+
+`LegacyEngine --smoke-test` renders 120 frames and exits through normal engine
+shutdown. It returns nonzero if the window closes before those frames complete.
+CI runs it under Xvfb with software OpenGL and a 60-second watchdog; a timeout,
+crash, or forced kill fails the check rather than being accepted as success.

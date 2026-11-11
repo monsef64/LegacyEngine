@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <iterator>
 
 // ---------------------------------------------------------------------------
@@ -203,7 +204,7 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
 // The scene and the main loop
 // ---------------------------------------------------------------------------
 
-static void run(SDL_Window* window, Renderer& renderer)
+static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
 {
     World   world;
     Physics physics;
@@ -260,6 +261,8 @@ static void run(SDL_Window* window, Renderer& renderer)
     float       pressY     = 0.0f;
     std::size_t clickCubes  = 0;     // how many cubes clicks have created
 
+    unsigned renderedFrames = 0;
+    constexpr unsigned smokeFrames = 120;
     while (running) {
         int windowWidth=1,windowHeight=1;
         SDL_GetWindowSize(window,&windowWidth,&windowHeight);
@@ -456,13 +459,23 @@ static void run(SDL_Window* window, Renderer& renderer)
         }
 
         SDL_GL_SwapWindow(window);
+        if (width > 0 && height > 0) {
+            ++renderedFrames;
+            if (smokeTest && renderedFrames >= smokeFrames) running = false;
+        }
     }
     editor.finish(world);
     scripts.shutdown();
+    return !smokeTest || renderedFrames >= smokeFrames;
 }
 
-int main(int, char**)
+int main(int argc, char** argv)
 {
+    bool smokeTest = false;
+    for (int i=1; i<argc; ++i) {
+        if (std::strcmp(argv[i], "--smoke-test") == 0) smokeTest = true;
+        else { SDL_Log("Unknown argument: %s", argv[i]); return 1; }
+    }
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not start SDL: %s", SDL_GetError());
         return 1;
@@ -489,6 +502,7 @@ int main(int, char**)
     // loop and exit with an error.
     Renderer   renderer;
     const bool rendererReady = renderer.init();
+    bool runSucceeded = false;
     if (rendererReady) {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -504,7 +518,7 @@ int main(int, char**)
             SDL_Quit();
             return 1;
         }
-        run(window, renderer);
+        runSucceeded = run(window, renderer, smokeTest);
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplSDL3_Shutdown();
         ImGui::DestroyContext();
@@ -514,5 +528,6 @@ int main(int, char**)
     SDL_GL_DestroyContext(context);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    return rendererReady ? 0 : 1;
+    if (smokeTest && runSucceeded) SDL_Log("Smoke test passed: rendered 120 frames and shut down cleanly");
+    return rendererReady && runSucceeded ? 0 : 1;
 }

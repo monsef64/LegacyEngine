@@ -105,18 +105,15 @@ jobs:
         timeout-minutes: 5
         run: ctest --test-dir build --output-on-failure --timeout 60
 
-      # The engine runs until its window is closed. Let it render on a virtual
-      # display for a few seconds: it must still be running when `timeout`
-      # stops it (exit status 124) instead of having failed to start.
+      # Render a bounded number of real frames, then exercise normal teardown.
+      # Timeout is only a watchdog: crashes, hangs and forced kills all fail.
       - name: Smoke test
+        timeout-minutes: 2
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
-          status=0
           xvfb-run -a -s "-screen 0 1280x720x24" \
-            timeout -k 5 10 build/LegacyEngine || status=$?
-          if [ "$status" -ne 124 ]; then
-            echo "::error::LegacyEngine exited with status $status"
-            exit 1
-          fi
+            timeout -k 5s 60s build/LegacyEngine --smoke-test
 
       # README.md says which glibc the binary needs. The number depends on what
       # is linked into the binary, so show it on the page of the run.
