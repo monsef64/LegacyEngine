@@ -259,14 +259,15 @@ static void run(SDL_Window* window, Renderer& renderer)
     const MeshHandle capsuleMesh = renderer.createMesh(makeCapsule(0.5f, 1.0f));
     ColliderShape selected = ColliderShape::Box;
     bool spawnMode = true;
+    bool freeCamera = true;
     Entity selectedEntity;
     OrbitCamera camera;
     Uint64 lastTicks = SDL_GetTicksNS();
     bool   running   = true;
 
     // The left mouse button does two things. Pressed and released in one
-    // place, it is a click, which creates a cube. Once the pointer has moved
-    // away from where the button went down, it is a drag, which orbits.
+    // place, it is a click, which spawns or selects. Moving away cancels
+    // the click; camera navigation uses the right button and keyboard.
     bool        clicking   = false; // the button is down and this may still be a click
     float       pressX     = 0.0f;  // where the button went down
     float       pressY     = 0.0f;
@@ -311,11 +312,11 @@ static void run(SDL_Window* window, Renderer& renderer)
                     std::hypot(event.motion.x - pressX, event.motion.y - pressY) > kClickRadius) {
                     clicking = false; // too far for a click: a drag from here on
                 }
-                // Drag with the left button to orbit, as if grabbing the world.
-                if ((event.motion.state & SDL_BUTTON_LMASK) && !clicking) {
-                    camera.yaw -= event.motion.xrel * 0.005f;
-                    camera.pitch = std::clamp(camera.pitch + event.motion.yrel * 0.005f,
-                                              radians(2.0f), radians(89.0f));
+                // Right-drag looks around from the camera's position. Left-drag
+                // cancels a click but never moves the camera or selects/spawns.
+                if (event.motion.state & SDL_BUTTON_RMASK) {
+                    clicking = false;
+                    if (freeCamera) camera.look(event.motion.xrel, event.motion.yrel);
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
@@ -345,9 +346,8 @@ static void run(SDL_Window* window, Renderer& renderer)
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL:
-                // Scroll to zoom in and out.
-                camera.distance = std::clamp(camera.distance * std::pow(0.9f, event.wheel.y),
-                                             2.0f, 50.0f);
+                // Dolly in freecam; the static view ignores all navigation input.
+                if (freeCamera) camera.move(event.wheel.y, 0, 0, std::abs(event.wheel.y));
                 break;
             default:
                 break;
@@ -364,6 +364,8 @@ static void run(SDL_Window* window, Renderer& renderer)
             selectedEntity = {}; // spawning and selection are mutually exclusive
             clicking = false;
         }
+        if (ImGui::Checkbox("Freecam", &freeCamera)) clicking = false;
+        ImGui::TextUnformatted(freeCamera ? "Camera: free" : "Camera: static (locked)");
         ImGui::BeginDisabled(!spawnMode);
         ImGui::TextUnformatted("Select a shape");
         const char* names[] = {"Cube", "Sphere", "Capsule"};
@@ -374,7 +376,9 @@ static void run(SDL_Window* window, Renderer& renderer)
         ImGui::EndDisabled();
         ImGui::Separator();
         ImGui::TextUnformatted(spawnMode ? "Left click: spawn" : "Left click: select (empty space clears)");
-        ImGui::TextUnformatted("Left drag: orbit\nWheel: zoom | F: drop cube");
+        if (freeCamera)
+            ImGui::TextUnformatted("WASD: move | Q/E: down/up\nRight drag: look | Shift: faster\nWheel: move forward/back");
+        ImGui::TextUnformatted("F: drop cube | Esc: quit");
         ImGui::End();
         ImGui::Render();
 
@@ -385,6 +389,15 @@ static void run(SDL_Window* window, Renderer& renderer)
         const float  seconds = static_cast<float>(ticks - lastTicks) * 1e-9f;
         lastTicks            = ticks;
 
+        if (freeCamera && !ImGui::GetIO().WantCaptureKeyboard &&
+            (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
+            const bool* keys = SDL_GetKeyboardState(nullptr);
+            const float speed = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT] ? 15.0f : 5.0f;
+            camera.move(static_cast<float>(keys[SDL_SCANCODE_W]) - keys[SDL_SCANCODE_S],
+                        static_cast<float>(keys[SDL_SCANCODE_D]) - keys[SDL_SCANCODE_A],
+                        static_cast<float>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],
+                        speed * std::min(seconds, 0.1f));
+        }
         physics.update(world, seconds);
 
         int width = 0;

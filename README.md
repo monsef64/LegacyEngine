@@ -20,7 +20,7 @@ stays active for subsequent clicks. Every spawned object has gravity and a match
 ReactPhysics3D collider: box, sphere or capsule (not a bounding-box approximation).
 
 Cubes have 1 m edges, spheres have a 0.5 m radius, and capsules have a 0.5 m radius plus a
-1 m cylindrical section (2 m total height). UI interactions do not spawn objects or orbit the camera.
+1 m cylindrical section (2 m total height). UI interactions do not spawn objects or move the camera.
 
 The **Spawn Shapes Mode** checkbox starts checked. Uncheck it to select instead of spawn:
 left-click any solid object (including the original cube or plane) to see its actual collider
@@ -29,6 +29,14 @@ position and rotation as it moves. The overlay is visible through surfaces, incl
 plane's hidden collider thickness. Click empty space to clear selection. Checking spawn mode
 clears the outline and disables scene selection; unchecking it prevents spawning.
 The shape list is disabled while selecting, and your last spawn shape is remembered.
+Green outlines are deliberately sparse: 12 box edges, three great circles for a sphere,
+and two end rings with four curved meridians for a capsule.
+
+The **Freecam** checkbox switches between free flight (checked by default) and a static camera
+(unchecked, locks the current view). In freecam, use **WASD** to fly forward/back/sideways,
+**Q/E** to move down/up, **Shift** for faster movement and **right-drag** to look around in place.
+The wheel moves forward/back. Static mode ignores all navigation input; spawning and selection
+still work. Switching modes preserves your view.
 
 One unit is one metre, +Y points up and the ground is the XZ plane.
 
@@ -38,8 +46,11 @@ One unit is one metre, +Y points up and the ground is the XZ plane.
 | Spawn Shapes Mode checkbox | Checked: spawn; unchecked: select objects |
 | Shape list (spawn mode) | Select Cube, Sphere or Capsule |
 | Left click in the scene | Spawn the chosen shape, or select an object in selection mode |
-| Drag with the left mouse button | Orbit around the scene (movement beyond 5 window units) |
-| Mouse wheel | Zoom in and out |
+| Freecam checkbox | Checked: fly camera; unchecked: lock current view |
+| Right drag (freecam) | Look around in place |
+| WASD, Q/E (freecam) | Fly forward/back/sideways, down/up |
+| Shift (freecam) | Move faster |
+| Mouse wheel (freecam) | Move forward/back |
 | `Esc`, or closing the window | Quit |
 
 Clicks hit the nearest solid surface, or the ground at y = 0 when nothing solid is under the

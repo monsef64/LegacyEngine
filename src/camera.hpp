@@ -1,6 +1,7 @@
 #pragma once
 
 #include "math.hpp"
+#include <algorithm>
 
 // A camera that looks at a target point and circles around it.
 struct OrbitCamera {
@@ -15,6 +16,26 @@ struct OrbitCamera {
         const Vec3 direction = {std::cos(pitch) * std::sin(yaw), std::sin(pitch),
                                 std::cos(pitch) * std::cos(yaw)};
         return target + direction * distance;
+    }
+
+    // Free-look rotates about the eye, unlike orbiting about the target.
+    void look(float dx, float dy)
+    {
+        const Vec3 eye = position();
+        yaw -= dx * 0.005f;
+        pitch = std::clamp(pitch + dy * 0.005f, radians(-89.0f), radians(89.0f));
+        const Vec3 offset{std::cos(pitch) * std::sin(yaw), std::sin(pitch),
+                          std::cos(pitch) * std::cos(yaw)};
+        target = eye - offset * distance;
+    }
+
+    // Local forward/right and world-up movement, normalized to avoid faster diagonals.
+    void move(float forwardInput, float rightInput, float upInput, float metres)
+    {
+        const Vec3 forward = normalize(target - position());
+        const Vec3 right = normalize(cross(forward, {0, 1, 0}));
+        const Vec3 direction = forward * forwardInput + right * rightInput + Vec3{0, upInput, 0};
+        if (dot(direction, direction) > 0) target = target + normalize(direction) * metres;
     }
 
     // Takes a point of the world to its place on the screen. `aspect` is the

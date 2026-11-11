@@ -1,6 +1,7 @@
 #include "components.hpp"
 #include "physics.hpp"
 #include "collider_debug.hpp"
+#include "camera.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -23,6 +24,32 @@ static Entity object(World& world, Vec3 position, ColliderShape shape)
 
 int main()
 {
+    // Freecam turns in place and moves at a frame-rate-independent speed.
+    {
+        OrbitCamera camera;
+        const Vec3 eye = camera.position();
+        camera.look(100, 50);
+        const Vec3 afterLook = camera.position();
+        require(dot(afterLook-eye, afterLook-eye) < 1e-8f, "free look preserves eye position");
+        const Ray center = camera.rayThrough(0.5f, 0.5f, 16.0f/9.0f);
+        const Vec3 expected = normalize(camera.target-camera.position());
+        require(dot(center.direction, expected) > 0.99999f, "picking follows free look");
+        camera.move(1, 1, 1, 5);
+        const Vec3 moved = camera.position()-afterLook;
+        require(std::abs(dot(moved,moved)-25) < 1e-4f, "diagonal speed is normalized");
+        const Vec3 stopped = camera.position();
+        camera.move(0, 0, 0, 5);
+        require(dot(camera.position()-stopped,camera.position()-stopped) < 1e-8f, "no input leaves camera static");
+        OrbitCamera whole, split;
+        whole.move(1, 0, 0, 5);
+        for (int i=0; i<60; ++i) split.move(1, 0, 0, 5.0f/60);
+        require(dot(whole.position()-split.position(),whole.position()-split.position()) < 1e-7f,
+                "translation does not depend on frame rate");
+        camera.look(0, 1e6f);
+        require(camera.pitch <= radians(89.0f), "look pitch clamps at upper limit");
+        camera.look(0, -1e6f);
+        require(camera.pitch >= radians(-89.0f), "look pitch clamps at lower limit");
+    }
     // Selection outlines use collider dimensions, scaled offsets and curved geometry.
     for (const auto shape : {ColliderShape::Box, ColliderShape::Sphere, ColliderShape::Capsule}) {
         Collider c;
@@ -33,6 +60,8 @@ int main()
         require(wire.topology == MeshData::Topology::Lines, "debug outline uses lines");
         require(!wire.vertices.empty() && wire.vertices.size() % 2 == 0, "complete line segments");
         if (shape == ColliderShape::Box) require(wire.vertices.size() == 24, "box has twelve edges");
+        if (shape == ColliderShape::Sphere) require(wire.vertices.size() == 144, "sphere is three sparse circles");
+        if (shape == ColliderShape::Capsule) require(wire.vertices.size() == 200, "capsule is two rings and four meridians");
         Vec3 lo{1e6f, 1e6f, 1e6f}, hi{-1e6f, -1e6f, -1e6f};
         const Vec3 center = c.center * scale;
         for (const auto& v : wire.vertices) {

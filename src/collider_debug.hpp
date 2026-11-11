@@ -34,7 +34,19 @@ inline MeshData colliderWireframe(const Collider& collider, Vec3 scale)
         : std::max({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z)});
     const float radius = std::max(std::abs(collider.radius) * radialScale, 0.0005f);
     const float halfHeight = capsule ? std::max(std::abs(collider.height * scale.y), 0.001f) * 0.5f : 0;
-    constexpr int slices = 32, rings = 16;
+    constexpr int slices = 24, rings = 12;
+    if (!capsule) {
+        // Three great circles convey the sphere without a dense latitude grid.
+        for (int axis = 0; axis < 3; ++axis) {
+            auto circle = [&](int i) {
+                const float angle = 2 * kPi * i / slices;
+                const float a = radius * std::cos(angle), b = radius * std::sin(angle);
+                return axis == 0 ? Vec3{0, a, b} : (axis == 1 ? Vec3{a, 0, b} : Vec3{a, b, 0});
+            };
+            for (int i = 0; i < slices; ++i) line(circle(i), circle(i+1));
+        }
+        return mesh;
+    }
     auto point = [&](int ring, int slice) {
         // Two equators for a capsule: join them with straight cylinder edges.
         const int latitude = ring <= rings / 2 ? ring : ring - 1;
@@ -46,8 +58,8 @@ inline MeshData colliderWireframe(const Collider& collider, Vec3 scale)
     };
     for (int r = 0; r <= rings + 1; ++r) {
         for (int i = 0; i < slices; ++i) {
-            if (r > 0 && r < rings + 1) line(point(r, i), point(r, i+1));
-            if (r < rings + 1 && i % 4 == 0) line(point(r, i), point(r+1, i));
+            if (r == rings / 2 || r == rings / 2 + 1) line(point(r, i), point(r, i+1));
+            if (r < rings + 1 && i % (slices / 4) == 0) line(point(r, i), point(r+1, i));
         }
     }
     return mesh;
