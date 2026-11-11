@@ -125,6 +125,102 @@ std::uint64_t keyOf(Entity entity)
     return (static_cast<std::uint64_t>(entity.generation) << 32) | entity.index;
 }
 
+// A box anywhere in the world, turned any way.
+struct OrientedBox {
+    Vec3  center;
+    Vec3  axes[3];     // unit vectors along its edges
+    float halfSize[3]; // half its length along each of them
+};
+
+OrientedBox toOrientedBox(const Pose& pose, const Box& box)
+{
+    const Mat3  rotation = rotationMatrix(pose.rotation);
+    OrientedBox result;
+    for (int i = 0; i < 3; ++i) {
+        result.axes[i] = {rotation.m[i * 3], rotation.m[i * 3 + 1], rotation.m[i * 3 + 2]};
+    }
+    result.center = pose.position + result.axes[0] * box.center.x + result.axes[1] * box.center.y +
+                    result.axes[2] * box.center.z;
+    result.halfSize[0] = box.halfSize.x;
+    result.halfSize[1] = box.halfSize.y;
+    result.halfSize[2] = box.halfSize.z;
+    return result;
+}
+
+// Where a ray enters a box: how far along the ray, and through a side that
+// faces which way. `direction` is a unit vector. Returns false if the ray
+// misses the box or starts inside it.
+bool rayEnters(Vec3 origin, Vec3 direction, const OrientedBox& box, float& distance, Vec3& normal)
+{
+    // A box is what three slabs have in common, each one the space between
+    // two opposite sides. The ray is inside the box where it is inside all
+    // three slabs: from the last slab it enters to the first one it leaves.
+    const Vec3 offset = origin - box.center;
+    float      enters = -INFINITY;
+    float      leaves = INFINITY;
+    for (int i = 0; i < 3; ++i) {
+        const float position = dot(offset, box.axes[i]);
+        const float speed    = dot(direction, box.axes[i]);
+        if (speed == 0.0f) {
+            if (std::abs(position) > box.halfSize[i]) {
+                return false; // it runs alongside this slab, outside it
+            }
+            continue;
+        }
+        const float one = (-box.halfSize[i] - position) / speed;
+        const float two = (box.halfSize[i] - position) / speed;
+        if (std::min(one, two) > enters) {
+            enters = std::min(one, two);
+            normal = box.axes[i] * (speed > 0.0f ? -1.0f : 1.0f);
+        }
+        leaves = std::min(leaves, std::max(one, two));
+    }
+    if (!(enters > 0.0f) || enters > leaves) {
+        return false;
+    }
+    distance = enters;
+    return true;
+}
+
+// Whether two boxes reach into each other or touch. The edges of the first one
+// lie along the world's axes.
+bool boxesMeet(Vec3 center, Vec3 halfSize, const OrientedBox& box)
+{
+    // Two boxes are apart exactly when they are apart as seen along one of 15
+    // lines: the three edge directions of each box, and the nine directions
+    // at right angles to an edge of each (the separating axis theorem).
+    static const Vec3 kWorldAxes[3] = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+
+    const Vec3 offset     = box.center - center;
+    const auto apartAlong = [&](Vec3 line) {
+        // How far the two boxes reach along the line, each from its centre,
+        // against how far apart their centres are along it.
+        const float reach = halfSize.x * std::abs(line.x) + halfSize.y * std::abs(line.y) +
+                            halfSize.z * std::abs(line.z) +
+                            box.halfSize[0] * std::abs(dot(box.axes[0], line)) +
+                            box.halfSize[1] * std::abs(dot(box.axes[1], line)) +
+                            box.halfSize[2] * std::abs(dot(box.axes[2], line));
+        return std::abs(dot(offset, line)) > reach;
+    };
+
+    for (int i = 0; i < 3; ++i) {
+        if (apartAlong(kWorldAxes[i]) || apartAlong(box.axes[i])) {
+            return false;
+        }
+    }
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            // Two edges that are as good as parallel have no direction at
+            // right angles to both that the lines above do not cover.
+            const Vec3 line = cross(kWorldAxes[i], box.axes[j]);
+            if (dot(line, line) > 1.0e-6f && apartAlong(line)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 struct Physics::Impl {
@@ -461,4 +557,48 @@ void Physics::update(World& world, float seconds)
         rigidBody.linearVelocity  = body.rigidBody.linearVelocity;
         rigidBody.angularVelocity = body.rigidBody.angularVelocity;
     }
+}
+
+bool Physics::raycast(const Ray& ray, float maxDistance, RayHit& hit) const
+{
+    const Vec3 direction = normalize(ray.direction);
+    if (!isUsable(ray.origin) || !isUsable(direction) || direction == Vec3{} ||
+        !(maxDistance > 0.0f)) { // also false for NaN
+        return false;
+    }
+
+    bool found = false;
+    for (const auto& entry : impl_->bodies) {
+        const Impl::Body& body = entry.second;
+        if (!body.body || !body.hasBox) {
+            continue; // left out of the simulation, or nothing solid about it
+        }
+        float distance = 0.0f;
+        Vec3  normal;
+        if (rayEnters(ray.origin, direction, toOrientedBox(body.current, body.box), distance,
+                      normal) &&
+            distance <= (found ? hit.distance : maxDistance)) {
+            hit   = {body.entity, ray.origin + direction * distance, normal, distance};
+            found = true;
+        }
+    }
+    return found;
+}
+
+bool Physics::checkBox(Vec3 center, Vec3 size) const
+{
+    if (!isUsable(center) || !isUsable(size)) {
+        return false;
+    }
+    const Vec3 halfSize = {std::abs(size.x) * 0.5f, std::abs(size.y) * 0.5f,
+                           std::abs(size.z) * 0.5f};
+
+    for (const auto& entry : impl_->bodies) {
+        const Impl::Body& body = entry.second;
+        if (body.body && body.hasBox &&
+            boxesMeet(center, halfSize, toOrientedBox(body.current, body.box))) {
+            return true;
+        }
+    }
+    return false;
 }
