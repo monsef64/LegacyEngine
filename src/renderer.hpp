@@ -25,7 +25,7 @@ public:
 
     // Clears the picture, which is `width` x `height` pixels, and draws every
     // entity that has a Transform and a MeshRenderer.
-    void draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition);
+    void draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition, int x=0, int y=0);
 
     // Green collider overlay for a selected object, drawn over the scene.
     void drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection);

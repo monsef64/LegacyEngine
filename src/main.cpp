@@ -1,6 +1,6 @@
-// LegacyEngine - a small 3D scene: an orange 1 m cube floating above a
-// 16 x 16 m plane, on a 32 x 32 m grid. Pressing F drops the cube onto the plane,
-// and a click puts a new cube under the mouse pointer.
+// LegacyEngine - a small 3D editor with an ordinary 1 m cube above a
+// 16 x 16 m plane, on a 32 x 32 m grid.
+// A click in spawn mode puts a new shape under the mouse pointer.
 //
 // World conventions:
 //   * 1 unit = 1 metre
@@ -17,6 +17,8 @@
 #include "script_editor.hpp"
 #include "level_objects.hpp"
 #include "create_menu.hpp"
+#include "editor_layout.hpp"
+#include "inspector.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -65,27 +67,13 @@ constexpr float kClickReach = 100.0f;
 constexpr float kRoomStep  = 0.02f;
 constexpr int   kRoomSteps = 250;
 
-// A cube that has fallen this far is out of the scene: nothing below the
-// ground will ever stop it, and it is too far away to be drawn.
-constexpr float kLowestY = -200.0f;
-
-// Lets the first cube fall from where it started. The RigidBody is what makes
-// the physics move it, and a new one is at rest.
-static void dropCube(World& world, Entity cube)
-{
-    Transform& transform = world.get<Transform>(cube);
-    transform.position   = kCubeStart;
-    transform.rotation   = {};
-    world.add(cube, RigidBody{});
-}
-
 // ---------------------------------------------------------------------------
 // The cubes that clicks create
 // ---------------------------------------------------------------------------
 
 // The ray from the camera through a mouse position. Returns false while the
 // window has no size (it is minimised, say).
-static bool mouseRay(SDL_Window* window, const OrbitCamera& camera, float x, float y, Ray& ray)
+static bool mouseRay(SDL_Window* window, const OrbitCamera& camera, float x, float y, Ray& ray,const EditorRect& scene)
 {
     // Mouse positions are counted in the units of the window's size, which are
     // not pixels on a high-density display. The shape of the picture comes
@@ -99,9 +87,10 @@ static bool mouseRay(SDL_Window* window, const OrbitCamera& camera, float x, flo
     if (windowWidth <= 0 || windowHeight <= 0 || width <= 0 || height <= 0) {
         return false;
     }
-    const float aspect = static_cast<float>(width) / static_cast<float>(height);
-    ray = camera.rayThrough(x / static_cast<float>(windowWidth),
-                            y / static_cast<float>(windowHeight), aspect);
+    if(!scene.contains(x,y) || scene.width<=0 || scene.height<=0)return false;
+    const auto pixels=scenePixels(scene,windowWidth,windowHeight,width,height);
+    ray = camera.rayThrough((x*width/windowWidth-pixels.x)/pixels.width,
+                           (y*height/windowHeight-pixels.top)/pixels.height,pixels.aspect());
     return true;
 }
 
@@ -181,23 +170,6 @@ static Vec3 placeForCube(const Physics& physics, const OrbitCamera& camera, cons
     return findRoom(physics, center, shape);
 }
 
-// Removes the cubes that fell off the plane and out of the scene. The first
-// cube is kept, because F brings it back. Until then it stays where it is:
-// without its RigidBody it is an obstacle again.
-static void removeFallenCubes(World& world, Entity firstCube)
-{
-    world.each<Transform, RigidBody>([&](Entity entity, Transform& transform, RigidBody&) {
-        if (transform.position.y >= kLowestY) {
-            return;
-        }
-        if (entity == firstCube) {
-            world.remove<RigidBody>(entity);
-        } else {
-            world.destroy(entity);
-        }
-    });
-}
-
 // ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
@@ -254,13 +226,13 @@ static void run(SDL_Window* window, Renderer& renderer)
     world.add(plane, MeshRenderer{planeMesh, {1.0f, 1.0f, 1.0f}, true, 0.65f});
     world.add(plane, BoxCollider{{kPlaneSize, 1.0f, kPlaneSize}, {0.0f, -0.5f, 0.0f}});
 
-    // The first cube is drawn and is solid. Without a RigidBody it is an
-    // obstacle, which nothing moves: it floats until F is pressed.
+    // An ordinary initial cube, with the same physics as other spawned shapes.
     const Entity cube = world.create();
-    world.add(cube, ObjectName{"Cube (original)"});
+    world.add(cube, ObjectName{"Cube"});
     world.add(cube, Transform{kCubeStart});
     world.add(cube, MeshRenderer{cubeMesh, {0.90f, 0.47f, 0.13f}});
     world.add(cube, BoxCollider{{kCubeSize, kCubeSize, kCubeSize}});
+    world.add(cube,RigidBody{});
 
     const MeshHandle sphereMesh = renderer.createMesh(makeSphere(0.5f));
     const MeshHandle capsuleMesh = renderer.createMesh(makeCapsule(0.5f, 1.0f));
@@ -285,6 +257,9 @@ static void run(SDL_Window* window, Renderer& renderer)
     std::size_t clickCubes  = 0;     // how many cubes clicks have created
 
     while (running) {
+        int windowWidth=1,windowHeight=1;
+        SDL_GetWindowSize(window,&windowWidth,&windowHeight);
+        const EditorLayout layout=EditorLayout::calculate(static_cast<float>(windowWidth),static_cast<float>(windowHeight),std::max(20.0f,ImGui::GetFrameHeight()));
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL3_ProcessEvent(&event);
@@ -309,8 +284,6 @@ static void run(SDL_Window* window, Renderer& renderer)
             case SDL_EVENT_KEY_DOWN:
                 if (event.key.key == SDLK_ESCAPE) {
                     running = false;
-                } else if (event.key.key == SDLK_F && !event.key.repeat && !editor.dragging()) {
-                    if (world.alive(cube) && world.has<Transform>(cube)) dropCube(world, cube);
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -329,7 +302,7 @@ static void run(SDL_Window* window, Renderer& renderer)
                 // cancels a click but never moves the camera or selects/spawns.
                 if (event.motion.state & SDL_BUTTON_RMASK) {
                     clicking = false;
-                    if (freeCamera) camera.look(event.motion.xrel, event.motion.yrel);
+                    if (freeCamera && layout.scene.contains(event.motion.x,event.motion.y)) camera.look(event.motion.xrel, event.motion.yrel);
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
@@ -338,7 +311,7 @@ static void run(SDL_Window* window, Renderer& renderer)
 
                     // A scene click either spawns or selects, never both.
                     Ray ray;
-                    if (mouseRay(window, camera, event.button.x, event.button.y, ray)) {
+                    if (mouseRay(window, camera, event.button.x, event.button.y, ray,layout.scene)) {
                         if (!spawnMode) {
                             RayHit hit;
                             selectedEntity = physics.raycast(ray, kClickReach, hit) ? hit.entity : Entity{};
@@ -361,10 +334,12 @@ static void run(SDL_Window* window, Renderer& renderer)
                     }
                 }
                 break;
-            case SDL_EVENT_MOUSE_WHEEL:
+            case SDL_EVENT_MOUSE_WHEEL: {
                 // Dolly in freecam; the static view ignores all navigation input.
-                if (freeCamera) camera.move(event.wheel.y, 0, 0, std::abs(event.wheel.y));
+                float mx=0,my=0;SDL_GetMouseState(&mx,&my);
+                if (freeCamera && layout.scene.contains(mx,my)) camera.move(event.wheel.y, 0, 0, std::abs(event.wheel.y));
                 break;
+            }
             default:
                 break;
             }
@@ -385,52 +360,44 @@ static void run(SDL_Window* window, Renderer& renderer)
             if(created!=0)position=findRoom(physics,position,shapes[created]);
             selectedEntity=createLevelObject(world,labels[created],position,meshes[created],shapes[created],created==0);
         }
-        ImGui::SetNextWindowPos(ImVec2(16, ImGui::GetMainViewport()->WorkPos.y+16), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(230, 0), ImGuiCond_FirstUseEver);
-        ImGui::Begin("Spawn shapes", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-        if (ImGui::Checkbox("Spawn Shapes Mode", &spawnMode)) {
-            editor.finish(world);
-            selectedEntity = {}; // spawning and selection are mutually exclusive
-            clicking = false;
-        }
-        if (ImGui::Checkbox("Freecam", &freeCamera)) clicking = false;
-        ImGui::TextUnformatted(freeCamera ? "Camera: free" : "Camera: static (locked)");
-        ImGui::BeginDisabled(!spawnMode);
-        ImGui::TextUnformatted("Select a shape");
-        const char* names[] = {"Cube", "Sphere", "Capsule", "Cone"};
-        for (int i = 0; i < 4; ++i) {
-            if (ImGui::Selectable(names[i], static_cast<int>(selected) == i))
-                selected = static_cast<ColliderShape>(i);
-        }
-        ImGui::EndDisabled();
-        ImGui::Separator();
-        ImGui::TextUnformatted(spawnMode ? "Left click: spawn" : "Left click: select (empty space clears)");
-        if (freeCamera)
-            ImGui::TextUnformatted("WASD: move | Q/E: down/up\nRight drag: look | Shift: faster\nWheel: move forward/back");
-        ImGui::TextUnformatted("F: drop cube | Esc: quit");
+        placeEditorPanel(layout.toolbar);
+        ImGui::Begin("Scene controls",nullptr,fixedPanelFlags | ImGuiWindowFlags_NoTitleBar);
+        if(ImGui::Checkbox("Spawn Mode",&spawnMode)){editor.finish(world);selectedEntity={};clicking=false;}
+        ImGui::SameLine();
+        if(ImGui::Checkbox("Freecam",&freeCamera))clicking=false;
+        ImGui::SameLine();
+        const char* names[]{"Cube","Sphere","Capsule","Cone"};int shape=static_cast<int>(selected);
+        ImGui::SetNextItemWidth(100);ImGui::BeginDisabled(!spawnMode);
+        if(ImGui::Combo("Shape",&shape,names,4))selected=static_cast<ColliderShape>(shape);
+        ImGui::EndDisabled();ImGui::SameLine();
+        ImGui::TextDisabled("WASD/QE: move | RMB: look | Shift: faster");
         ImGui::End();
-        if (drawLevelObjects(world,selectedEntity,!spawnMode)) {
-            editor.finish(world);
-            clicking=false;
-        }
-        scripts.draw();
+        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy)) {editor.finish(world);clicking=false;}
+        const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
+        drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging());
+        scripts.draw(&layout);
+        // A non-interactive Scene title is drawn over the actual GL viewport.
+        ImGui::GetBackgroundDrawList()->AddText(ImVec2(layout.scene.x+8,layout.scene.y+6),IM_COL32(170,180,190,255),"Scene");
         int drawableWidth=0, drawableHeight=0;
         SDL_GetWindowSizeInPixels(window,&drawableWidth,&drawableHeight);
         if (drawableWidth>0 && drawableHeight>0) {
-            editor.draw(world,selectedEntity,!spawnMode,camera,
-                        static_cast<float>(drawableWidth)/drawableHeight);
+            const auto pixels=scenePixels(layout.scene,windowWidth,windowHeight,drawableWidth,drawableHeight);
+            const EditorRect gizmoRect{static_cast<float>(pixels.x)*windowWidth/drawableWidth,
+                static_cast<float>(pixels.top)*windowHeight/drawableHeight,
+                static_cast<float>(pixels.width)*windowWidth/drawableWidth,
+                static_cast<float>(pixels.height)*windowHeight/drawableHeight};
+            editor.draw(world,selectedEntity,!spawnMode,camera,pixels.aspect(),&gizmoRect);
             if (editor.capturesMouse()) clicking=false;
         } else editor.finish(world);
         ImGui::Render();
-
-        removeFallenCubes(world, cube);
 
         // The time that has passed since the previous frame.
         const Uint64 ticks   = SDL_GetTicksNS();
         const float  seconds = static_cast<float>(ticks - lastTicks) * 1e-9f;
         lastTicks            = ticks;
 
-        if (freeCamera && !editor.dragging() && !ImGui::GetIO().WantCaptureKeyboard &&
+        float mouseX=0,mouseY=0;SDL_GetMouseState(&mouseX,&mouseY);
+        if (freeCamera && layout.scene.contains(mouseX,mouseY) && !editor.dragging() && !ImGui::GetIO().WantCaptureKeyboard &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             const float speed = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT] ? 15.0f : 5.0f;
@@ -449,9 +416,10 @@ static void run(SDL_Window* window, Renderer& renderer)
         int height = 0;
         SDL_GetWindowSizeInPixels(window, &width, &height);
         if (width > 0 && height > 0) {
-            const float aspect = static_cast<float>(width) / static_cast<float>(height);
+            const auto pixels=scenePixels(layout.scene,windowWidth,windowHeight,width,height);
+            const float aspect=pixels.aspect();
             const Mat4 viewProjection = camera.viewProjection(aspect);
-            renderer.draw(world, viewProjection, width, height, camera.position());
+            renderer.draw(world, viewProjection, pixels.width, pixels.height, camera.position(),pixels.x,pixels.bottom(height));
             if (!spawnMode && world.alive(selectedEntity)) {
                 const auto* transform = world.tryGet<Transform>(selectedEntity);
                 const auto* collider = world.tryGet<Collider>(selectedEntity);

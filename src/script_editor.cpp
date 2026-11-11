@@ -10,13 +10,16 @@ ScriptEditor::ScriptEditor()
     std::memcpy(source_.data(),example,std::strlen(example)+1);
 }
 
-void ScriptEditor::draw()
+void ScriptEditor::draw(const EditorLayout* layout)
 {
     const auto* viewport=ImGui::GetMainViewport();
+    if(layout)placeEditorPanel(layout->lua);
+    else {
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x+viewport->WorkSize.x-16,viewport->WorkPos.y+16),
                             ImGuiCond_FirstUseEver,ImVec2(1,0));
     ImGui::SetNextWindowSize(ImVec2(450,320),ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("Lua Editor")) {
+    }
+    if (ImGui::Begin("Lua Editor",nullptr,layout?fixedPanelFlags:0)) {
         if (ImGui::Button("Execute")) {
             console_.execute(source_.data());
             scrollToBottom_=true;
@@ -39,10 +42,13 @@ void ScriptEditor::draw()
     }
     ImGui::End();
 
+    if(layout)placeEditorPanel(layout->console);
+    else {
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x+viewport->WorkSize.x-16,
                             viewport->WorkPos.y+viewport->WorkSize.y-16),ImGuiCond_FirstUseEver,ImVec2(1,1));
     ImGui::SetNextWindowSize(ImVec2(450,250),ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("Lua Console")) {
+    }
+    if (ImGui::Begin("Lua Console",nullptr,layout?fixedPanelFlags:0)) {
         if (ImGui::Button("Clear")) console_.clear();
         ImGui::SameLine();
         ImGui::Checkbox("Auto-scroll",&autoScroll_);
