@@ -9,6 +9,28 @@ static bool contains(const LuaConsole& c,const char* text){for(const auto& l:c.l
 int main(){
     World world;LuaConsole console;console.bindWorld(world,MeshHandle{1},MeshHandle{2},MeshHandle{3});
     require(console.execute(R"(
+        local obj=createGameObject('typed')
+        assert(obj.getComponent(Transform)~=nil)
+        obj:getComponent(Transform).position.x=12
+        assert(getComponent(obj,'Transform').position.x==12)
+        assert(obj.getComponent('RigidBody')==nil)
+        obj.addComponent(RigidBody).mass=7
+        assert(obj:getComponent(RigidBody).mass==7)
+        obj.getComponent(ObjectName).value='typed renamed'
+        assert(obj.name=='typed renamed')
+        assert(#findGameObjectsByComponent(Transform)==1)
+        assert(BoxCollider==Collider)
+        obj:addComponent(BoxCollider).friction=0.75
+        assert(getComponent(obj,Collider).friction==0.75)
+        obj.removeComponent(RigidBody)
+        assert(obj:getComponent(RigidBody)==nil)
+        staleRead=obj.getComponent
+        destroyGameObject(obj)
+    )"),"typed component tokens and bound dot/colon methods");
+    require(!console.execute("staleRead(Transform)"),"stale bound method rejected");
+    require(!console.execute("getComponent(createGameObject('bad'), {})"),"invalid token rejected");
+    console.reset();
+    require(console.execute(R"(
         starts=0; updates=0; fixed=0; destroyed=0
         function onStart() starts=starts+1 end
         function onUpdate(dt) updates=updates+1; assert(dt==0.125) end

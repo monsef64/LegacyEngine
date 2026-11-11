@@ -8,7 +8,9 @@ struct ImGuiInputTextCallbackData;
 class ScriptEditor {
 public:
     ScriptEditor();
-    void draw(const EditorLayout* layout=nullptr);
+    void draw(const EditorLayout* layout=nullptr, bool executionEnabled=true);
+    void startPlay() { console_.reset(); console_.execute(source_.data()); }
+    void resetRuntime() { console_.reset(); }
     void bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone={}) { console_.bindWorld(world,cube,sphere,capsule,cone); }
     void update(float dt) { console_.update(dt); }
     void fixedUpdate(float dt) { console_.fixedUpdate(dt); }

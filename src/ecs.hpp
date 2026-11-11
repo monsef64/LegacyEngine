@@ -57,6 +57,22 @@ public:
     World(const World&) = delete;
     World& operator=(const World&) = delete;
 
+    // Explicit deep snapshots include every registered component pool and IDs.
+    std::unique_ptr<World> snapshot() const {
+        auto result = std::make_unique<World>();
+        result->restore(*this);
+        return result;
+    }
+    void restore(const World& source) {
+        if (&source == this) return;
+        std::vector<std::unique_ptr<PoolBase>> pools;
+        for (const auto& pool : source.pools_)
+            pools.push_back(pool ? pool->clone() : nullptr);
+        generations_ = source.generations_;
+        freeSlots_ = source.freeSlots_;
+        pools_ = std::move(pools);
+    }
+
     // --- Entities -----------------------------------------------------------
 
     Entity create()
@@ -185,6 +201,7 @@ private:
     struct PoolBase {
         virtual ~PoolBase() = default;
         virtual void remove(std::uint32_t entityIndex) = 0;
+        virtual std::unique_ptr<PoolBase> clone() const = 0;
     };
 
     template <typename T>
@@ -194,6 +211,8 @@ private:
         std::vector<std::uint32_t> slots;      // entity index -> position in the arrays below
         std::vector<std::uint32_t> owners;     // entity index of each component
         std::vector<T>             components; // same order as `owners`
+
+        std::unique_ptr<PoolBase> clone() const override { return std::make_unique<Pool<T>>(*this); }
 
         bool has(std::uint32_t entityIndex) const
         {

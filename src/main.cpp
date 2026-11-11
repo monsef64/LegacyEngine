@@ -19,6 +19,7 @@
 #include "create_menu.hpp"
 #include "editor_layout.hpp"
 #include "inspector.hpp"
+#include "play_mode.hpp"
 #include "editor_theme.hpp"
 
 #include <SDL3/SDL.h>
@@ -239,11 +240,13 @@ static void run(SDL_Window* window, Renderer& renderer)
     const MeshHandle capsuleMesh = renderer.createMesh(makeCapsule(0.5f, 1.0f));
     const MeshHandle coneMesh = renderer.createMesh(makeCone(0.5f,1.0f));
     ColliderShape selected = ColliderShape::Box;
-    bool spawnMode = true;
+    bool spawnMode = false;
     bool freeCamera = true;
     Entity selectedEntity;
     ScriptEditor scripts;
     scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh);
+    PlayMode playMode;
+    Entity editSelection;
     TransformEditor editor;
     OrbitCamera camera;
     Uint64 lastTicks = SDL_GetTicksNS();
@@ -363,6 +366,27 @@ static void run(SDL_Window* window, Renderer& renderer)
         }
         placeEditorPanel(layout.toolbar);
         ImGui::Begin("Scene controls",nullptr,fixedPanelFlags | ImGuiWindowFlags_NoTitleBar);
+        ImGui::BeginDisabled(playMode.active());
+        if (ImGui::Button("Play")) {
+            editor.finish(world); clicking=false;
+            editSelection=selectedEntity;
+            if (playMode.play(world)) { physics.reset(); scripts.startPlay(); }
+        }
+        ImGui::EndDisabled(); ImGui::SameLine();
+        ImGui::BeginDisabled(!playMode.active());
+        if (ImGui::Button(playMode.state()==PlayMode::State::Paused?"Resume":"Pause")) {
+            editor.finish(world); clicking=false; playMode.pause();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Stop")) {
+            editor.finish(world); clicking=false;
+            // Run stop callbacks before restoring, so their edits are discarded too.
+            scripts.shutdown();
+            playMode.stop(world);
+            physics.reset(); scripts.resetRuntime();
+            selectedEntity=world.alive(editSelection)?editSelection:Entity{};
+        }
+        ImGui::EndDisabled(); ImGui::SameLine();
         if(ImGui::Checkbox("Spawn Mode",&spawnMode)){editor.finish(world);selectedEntity={};clicking=false;}
         ImGui::SameLine();
         if(ImGui::Checkbox("Freecam",&freeCamera))clicking=false;
@@ -376,7 +400,7 @@ static void run(SDL_Window* window, Renderer& renderer)
         if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy)) {editor.finish(world);clicking=false;}
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
         drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging());
-        scripts.draw(&layout);
+        scripts.draw(&layout,playMode.playing());
         // A non-interactive Scene title is drawn over the actual GL viewport.
         ImGui::GetBackgroundDrawList()->AddText(ImVec2(layout.scene.x+8,layout.scene.y+6),IM_COL32(170,180,190,255),"Scene");
         int drawableWidth=0, drawableHeight=0;
@@ -407,9 +431,9 @@ static void run(SDL_Window* window, Renderer& renderer)
                         static_cast<float>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],
                         speed * std::min(seconds, 0.1f));
         }
-        scripts.update(std::min(seconds,0.25f));
+        if (playMode.playing()) scripts.update(std::min(seconds,0.25f));
         updateHierarchy(world);
-        physics.update(world, seconds, [&](float dt){ scripts.fixedUpdate(dt);updateHierarchy(world); });
+        physics.update(world, playMode.playing()?seconds:0.0f, [&](float dt){ scripts.fixedUpdate(dt);updateHierarchy(world); });
         updateHierarchy(world);
         physics.update(world,0); // collider poses follow parent motion before picking next frame
 
