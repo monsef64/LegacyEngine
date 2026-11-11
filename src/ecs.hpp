@@ -73,6 +73,15 @@ public:
         pools_ = std::move(pools);
     }
 
+    std::vector<Entity> entities() const {
+        std::vector<bool> free(generations_.size(), false);
+        for (auto index : freeSlots_) free[index] = true;
+        std::vector<Entity> result;
+        for (std::size_t i=0; i<generations_.size(); ++i)
+            if (!free[i]) result.push_back({static_cast<std::uint32_t>(i), generations_[i]});
+        return result;
+    }
+
     // --- Entities -----------------------------------------------------------
 
     Entity create()

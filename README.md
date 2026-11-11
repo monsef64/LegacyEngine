@@ -343,11 +343,11 @@ The code is in `src`:
 ## Download
 
 Linux x86_64 binaries are published on the
-[releases page](https://github.com/monsef64/LegacyEngine/releases). For example, for version `v0.1.0`:
+[releases page](https://github.com/monsef64/LegacyEngine/releases). New build archives use a UTC timestamp, for example:
 
 ```sh
-tar -xzf LegacyEngine-v0.1.0-linux-x86_64.tar.gz
-./LegacyEngine-v0.1.0-linux-x86_64/LegacyEngine
+tar -xzf LegacyEngine-20261112-143025-linux-x86_64.tar.gz
+./LegacyEngine-20261112-143025-linux-x86_64/LegacyEngine
 ```
 
 The binary is built on Ubuntu 24.04. It needs a graphics driver with OpenGL 3.3 and glibc 2.38 or
@@ -457,3 +457,28 @@ lacks that component. Fields depend on the component: `.value` belongs to
 The existing `getComponent(gameObject, Transform)` global function and string
 forms such as `gameObject.getComponent("Transform")` remain supported. Tokens
 also work with add/remove and `findGameObjectsByComponent`.
+
+### Startup smoke test
+
+`LegacyEngine --smoke-test` renders 120 frames and exits through normal engine
+shutdown. It returns nonzero if the window closes before those frames complete.
+CI runs it under Xvfb with software OpenGL and a 60-second watchdog; a timeout,
+crash, or forced kill fails the check rather than being accepted as success.
+
+### Undo and redo
+
+In Edit mode, use **Undo / Redo** in the toolbar, **Ctrl+Z** to undo, or
+**Ctrl+Y / Ctrl+Shift+Z** to redo. History covers scene creation/deletion,
+duplication, reparenting, Inspector component/property edits, and gizmo changes.
+Continuous drags and active text-field edits are grouped until the gesture ends.
+Text fields retain their own text undo shortcuts while typing. Up to 64 scene
+undo steps are retained; new edits discard the redo branch. Camera navigation,
+selection-only changes, and Lua source text are not scene undo steps. History is
+disabled during Play/Pause and preserved when Stop restores the edit scene.
+
+Playback controls are icon-only and centered in the top toolbar, with tooltips
+for Play, Pause/Resume, and Stop. On narrower windows, secondary Scene controls
+are available through **Scene options** to avoid overlapping playback buttons.
+
+New release and workflow build packages are named
+`LegacyEngine-YYYYMMDD-HHMMSS-linux-x86_64.tar.gz` using packaging time in UTC.

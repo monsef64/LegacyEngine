@@ -1,0 +1,69 @@
+#pragma once
+#include "hierarchy.hpp"
+#include <deque>
+#include <string>
+#include <utility>
+
+// Value-only signature: never compare struct padding or pointers into pools.
+inline std::string sceneSignature(World& world) {
+    std::string result;
+    auto scalar=[&](auto value) { result.append(reinterpret_cast<const char*>(&value),sizeof(value)); };
+    auto vec=[&](Vec3 v) { scalar(v.x);scalar(v.y);scalar(v.z); };
+    auto transform=[&](const Transform& t) {
+        vec(t.position);scalar(t.rotation.x);scalar(t.rotation.y);scalar(t.rotation.z);scalar(t.rotation.w);vec(t.scale);
+    };
+    auto component=[&](Entity e, auto value, auto write) {
+        using T=decltype(value);
+        const auto* c=world.tryGet<T>(e);scalar(c!=nullptr);if(c)write(*c);
+    };
+    for(Entity e:world.entities()) {
+        scalar(e.index);scalar(e.generation);
+        component(e,ObjectName{},[&](const ObjectName& n){scalar(n.value.size());result+=n.value;});
+        component(e,Transform{},transform);
+        component(e,MeshRenderer{},[&](const MeshRenderer& m){scalar(m.mesh.id);vec(m.color);scalar(m.checkerboard);scalar(m.specular);});
+        component(e,Collider{},[&](const Collider& c){vec(c.size);vec(c.center);scalar(c.friction);scalar(c.bounciness);scalar(c.shape);scalar(c.radius);scalar(c.height);});
+        component(e,RigidBody{},[&](const RigidBody& b){scalar(b.mass);scalar(b.useGravity);vec(b.linearVelocity);vec(b.angularVelocity);});
+        component(e,Parent{},[&](const Parent& p){scalar(p.entity.index);scalar(p.entity.generation);transform(p.previous);});
+    }
+    return result;
+}
+
+class EditorHistory {
+public:
+    explicit EditorHistory(World& world, Entity selection={}) { baseline_=capture(world,selection); }
+    // Call after scene UI, but only in Edit mode. Active gestures are committed
+    // together when the pointer/text widget is released, not once per frame.
+    void observe(World& world, Entity selection, bool gestureActive) {
+        if (!gestureActive) commit(world,selection);
+    }
+    bool canUndo() const { return !undo_.empty(); }
+    bool canRedo() const { return !redo_.empty(); }
+    void commit(World& world, Entity selection) {
+        auto signature=sceneSignature(world);
+        if(signature==baseline_.signature) { baseline_.selection=selection;return; }
+        push(undo_,std::move(baseline_));redo_.clear();
+        baseline_=capture(world,selection,std::move(signature));
+    }
+    bool undo(World& world, Entity& selection) { return restore(world,selection,undo_,redo_); }
+    bool redo(World& world, Entity& selection) { return restore(world,selection,redo_,undo_); }
+private:
+    struct Entry { std::unique_ptr<World> scene; Entity selection; std::string signature; };
+    Entry baseline_;
+    std::deque<Entry> undo_,redo_;
+    static constexpr std::size_t limit=64;
+    static Entry capture(World& world,Entity selection,std::string signature={}) {
+        if(signature.empty())signature=sceneSignature(world);
+        return {world.snapshot(),selection,std::move(signature)};
+    }
+    static void push(std::deque<Entry>& stack,Entry entry) {
+        if(stack.size()==limit)stack.pop_front();
+        stack.push_back(std::move(entry));
+    }
+    bool restore(World& world,Entity& selection,std::deque<Entry>& from,std::deque<Entry>& to) {
+        if(from.empty())return false;
+        push(to,std::move(baseline_));baseline_=std::move(from.back());from.pop_back();
+        world.restore(*baseline_.scene);selection=baseline_.selection;
+        if(!world.alive(selection))selection={};
+        return true;
+    }
+};

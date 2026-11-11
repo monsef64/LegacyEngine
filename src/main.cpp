@@ -20,6 +20,8 @@
 #include "editor_layout.hpp"
 #include "inspector.hpp"
 #include "play_mode.hpp"
+#include "editor_history.hpp"
+#include "playback_controls.hpp"
 #include "editor_theme.hpp"
 
 #include <SDL3/SDL.h>
@@ -32,6 +34,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <iterator>
 
 // ---------------------------------------------------------------------------
@@ -203,7 +206,7 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
 // The scene and the main loop
 // ---------------------------------------------------------------------------
 
-static void run(SDL_Window* window, Renderer& renderer)
+static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
 {
     World   world;
     Physics physics;
@@ -245,6 +248,7 @@ static void run(SDL_Window* window, Renderer& renderer)
     Entity selectedEntity;
     ScriptEditor scripts;
     scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh);
+    EditorHistory history(world);
     PlayMode playMode;
     Entity editSelection;
     TransformEditor editor;
@@ -260,6 +264,8 @@ static void run(SDL_Window* window, Renderer& renderer)
     float       pressY     = 0.0f;
     std::size_t clickCubes  = 0;     // how many cubes clicks have created
 
+    unsigned renderedFrames = 0;
+    constexpr unsigned smokeFrames = 120;
     while (running) {
         int windowWidth=1,windowHeight=1;
         SDL_GetWindowSize(window,&windowWidth,&windowHeight);
@@ -366,19 +372,42 @@ static void run(SDL_Window* window, Renderer& renderer)
         }
         placeEditorPanel(layout.toolbar);
         ImGui::Begin("Scene controls",nullptr,fixedPanelFlags | ImGuiWindowFlags_NoTitleBar);
+        // Scene undo must not intercept Ctrl+Z while editing text.
+        bool undoRequested=false,redoRequested=false;
+        if (!playMode.active() && !ImGui::GetIO().WantTextInput && !editor.dragging()) {
+            undoRequested=ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z);
+            redoRequested=ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y) ||
+                ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z);
+        }
+        ImGui::BeginDisabled(playMode.active() || editor.dragging());
+        ImGui::BeginDisabled(!history.canUndo());
+        undoRequested |= ImGui::Button("Undo");
+        ImGui::EndDisabled();ImGui::SameLine();
+        ImGui::BeginDisabled(!history.canRedo());
+        redoRequested |= ImGui::Button("Redo");
+        ImGui::EndDisabled();ImGui::EndDisabled();
+        if ((undoRequested || redoRequested) && !playMode.active()) {
+            editor.finish(world);clicking=false;
+            history.commit(world,selectedEntity);
+            const bool restored=undoRequested?history.undo(world,selectedEntity):history.redo(world,selectedEntity);
+            if(restored)physics.reset();
+        }
+        const float playbackWidth=90+2*ImGui::GetStyle().ItemSpacing.x;
+        ImGui::SameLine();ImGui::SetCursorPosX((layout.toolbar.width-playbackWidth)*0.5f);
         ImGui::BeginDisabled(playMode.active());
-        if (ImGui::Button("Play")) {
+        if (playbackButton("##Play","Play",PlaybackIcon::Play,playMode.active())) {
             editor.finish(world); clicking=false;
             editSelection=selectedEntity;
+            history.commit(world,selectedEntity);
             if (playMode.play(world)) { physics.reset(); scripts.startPlay(); }
         }
         ImGui::EndDisabled(); ImGui::SameLine();
         ImGui::BeginDisabled(!playMode.active());
-        if (ImGui::Button(playMode.state()==PlayMode::State::Paused?"Resume":"Pause")) {
+        if (playbackButton("##Pause",playMode.state()==PlayMode::State::Paused?"Resume":"Pause",playMode.state()==PlayMode::State::Paused?PlaybackIcon::Play:PlaybackIcon::Pause,playMode.state()==PlayMode::State::Paused)) {
             editor.finish(world); clicking=false; playMode.pause();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Stop")) {
+        if (playbackButton("##Stop","Stop",PlaybackIcon::Stop)) {
             editor.finish(world); clicking=false;
             // Run stop callbacks before restoring, so their edits are discarded too.
             scripts.shutdown();
@@ -387,6 +416,10 @@ static void run(SDL_Window* window, Renderer& renderer)
             selectedEntity=world.alive(editSelection)?editSelection:Entity{};
         }
         ImGui::EndDisabled(); ImGui::SameLine();
+        const bool compactToolbar=layout.toolbar.width<1000;
+        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),layout.toolbar.width-(compactToolbar?125.0f:370.0f)));
+        if(compactToolbar && ImGui::Button("Scene options")) ImGui::OpenPopup("Scene options popup");
+        if(!compactToolbar || ImGui::BeginPopup("Scene options popup")) {
         if(ImGui::Checkbox("Spawn Mode",&spawnMode)){editor.finish(world);selectedEntity={};clicking=false;}
         ImGui::SameLine();
         if(ImGui::Checkbox("Freecam",&freeCamera))clicking=false;
@@ -394,8 +427,9 @@ static void run(SDL_Window* window, Renderer& renderer)
         const char* names[]{"Cube","Sphere","Capsule","Cone"};int shape=static_cast<int>(selected);
         ImGui::SetNextItemWidth(100);ImGui::BeginDisabled(!spawnMode);
         if(ImGui::Combo("Shape",&shape,names,4))selected=static_cast<ColliderShape>(shape);
-        ImGui::EndDisabled();ImGui::SameLine();
-        ImGui::TextDisabled("WASD/QE: move | RMB: look | Shift: faster");
+        ImGui::EndDisabled();
+            if(compactToolbar)ImGui::EndPopup();
+        }
         ImGui::End();
         if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy)) {editor.finish(world);clicking=false;}
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
@@ -414,6 +448,11 @@ static void run(SDL_Window* window, Renderer& renderer)
             editor.draw(world,selectedEntity,!spawnMode,camera,pixels.aspect(),&gizmoRect);
             if (editor.capturesMouse()) clicking=false;
         } else editor.finish(world);
+        if (!playMode.active()) {
+            updateHierarchy(world);
+            history.observe(world,selectedEntity,editor.dragging() || ImGui::IsAnyItemActive() ||
+                ImGui::IsMouseDown(ImGuiMouseButton_Left));
+        }
         ImGui::Render();
 
         // The time that has passed since the previous frame.
@@ -456,13 +495,23 @@ static void run(SDL_Window* window, Renderer& renderer)
         }
 
         SDL_GL_SwapWindow(window);
+        if (width > 0 && height > 0) {
+            ++renderedFrames;
+            if (smokeTest && renderedFrames >= smokeFrames) running = false;
+        }
     }
     editor.finish(world);
     scripts.shutdown();
+    return !smokeTest || renderedFrames >= smokeFrames;
 }
 
-int main(int, char**)
+int main(int argc, char** argv)
 {
+    bool smokeTest = false;
+    for (int i=1; i<argc; ++i) {
+        if (std::strcmp(argv[i], "--smoke-test") == 0) smokeTest = true;
+        else { SDL_Log("Unknown argument: %s", argv[i]); return 1; }
+    }
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not start SDL: %s", SDL_GetError());
         return 1;
@@ -489,6 +538,7 @@ int main(int, char**)
     // loop and exit with an error.
     Renderer   renderer;
     const bool rendererReady = renderer.init();
+    bool runSucceeded = false;
     if (rendererReady) {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -504,7 +554,7 @@ int main(int, char**)
             SDL_Quit();
             return 1;
         }
-        run(window, renderer);
+        runSucceeded = run(window, renderer, smokeTest);
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplSDL3_Shutdown();
         ImGui::DestroyContext();
@@ -514,5 +564,6 @@ int main(int, char**)
     SDL_GL_DestroyContext(context);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    return rendererReady ? 0 : 1;
+    if (smokeTest && runSucceeded) SDL_Log("Smoke test passed: rendered 120 frames and shut down cleanly");
+    return rendererReady && runSucceeded ? 0 : 1;
 }
