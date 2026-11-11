@@ -27,7 +27,7 @@ int main()
     click(845,54); // Execute in the default top-right Lua Editor.
     bool hello=false;
     for (const auto& line:editor.console().lines())
-        if (line.kind==LuaConsole::Kind::Output && line.text=="Hello from Lua!") hello=true;
+        if (line.kind==LuaConsole::Kind::Output && line.text=="lua > Hello from Lua!") hello=true;
     require(hello,"Execute button sends script output to console");
     click(840,492); // Clear in the default bottom-right Lua Console.
     require(editor.console().lines().empty(),"console Clear button empties transcript");

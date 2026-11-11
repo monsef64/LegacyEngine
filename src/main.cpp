@@ -15,6 +15,7 @@
 #include "renderer.hpp"
 #include "transform_editor.hpp"
 #include "script_editor.hpp"
+#include "level_objects.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -239,6 +240,7 @@ static void run(SDL_Window* window, Renderer& renderer)
 
     // The grid is only drawn.
     const Entity grid = world.create();
+    world.add(grid, ObjectName{"Grid"});
     world.add(grid, Transform{});
     world.add(grid, MeshRenderer{gridMesh, {0.55f, 0.58f, 0.62f}});
 
@@ -246,6 +248,7 @@ static void run(SDL_Window* window, Renderer& renderer)
     // that thin would let fast objects slip through between two simulation
     // steps, so its collider is a 1 m thick slab whose top is the plane.
     const Entity plane = world.create();
+    world.add(plane, ObjectName{"Plane"});
     world.add(plane, Transform{});
     world.add(plane, MeshRenderer{planeMesh, {1.0f, 1.0f, 1.0f}, true, 0.65f});
     world.add(plane, BoxCollider{{kPlaneSize, 1.0f, kPlaneSize}, {0.0f, -0.5f, 0.0f}});
@@ -253,6 +256,7 @@ static void run(SDL_Window* window, Renderer& renderer)
     // The first cube is drawn and is solid. Without a RigidBody it is an
     // obstacle, which nothing moves: it floats until F is pressed.
     const Entity cube = world.create();
+    world.add(cube, ObjectName{"Cube (original)"});
     world.add(cube, Transform{kCubeStart});
     world.add(cube, MeshRenderer{cubeMesh, {0.90f, 0.47f, 0.13f}});
     world.add(cube, BoxCollider{{kCubeSize, kCubeSize, kCubeSize}});
@@ -341,6 +345,9 @@ static void run(SDL_Window* window, Renderer& renderer)
                             (selected == ColliderShape::Sphere ? sphereMesh : capsuleMesh);
                         Vec3 center = placeForCube(physics, camera, ray, selected);
                         const Entity object = world.create();
+                        const char* shapeName=selected==ColliderShape::Box ? "Cube" :
+                            (selected==ColliderShape::Sphere ? "Sphere" : "Capsule");
+                        world.add(object,ObjectName{std::string(shapeName)+" "+std::to_string(clickCubes+1)});
                         world.add(object, Transform{center});
                         world.add(object, MeshRenderer{mesh, kClickColors[clickCubes % std::size(kClickColors)]});
                         Collider collider;
@@ -388,6 +395,10 @@ static void run(SDL_Window* window, Renderer& renderer)
             ImGui::TextUnformatted("WASD: move | Q/E: down/up\nRight drag: look | Shift: faster\nWheel: move forward/back");
         ImGui::TextUnformatted("F: drop cube | Esc: quit");
         ImGui::End();
+        if (drawLevelObjects(world,selectedEntity,!spawnMode)) {
+            editor.finish(world);
+            clicking=false;
+        }
         scripts.draw();
         int drawableWidth=0, drawableHeight=0;
         SDL_GetWindowSizeInPixels(window,&drawableWidth,&drawableHeight);

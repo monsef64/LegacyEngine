@@ -39,6 +39,14 @@ The **Freecam** checkbox switches between free flight (checked by default) and a
 The wheel moves forward/back. Static mode ignores all navigation input; spawning and selection
 still work. Switching modes preserves your view.
 
+### Level Objects
+
+The **Level Objects** window lists the grid, plane, original cube and all spawned shapes by name.
+Turn off **Spawn Shapes Mode**, then click a row to select it. List selection and scene selection
+share the same highlight and transform tools; **Clear selection** clears both. Spawned objects
+appear automatically and destroyed objects disappear. The grid can be selected in the list but is
+a visual helper with no collider outline or transform gizmo.
+
 ### Transform tools
 
 The bottom-left toolbar has three **icon-only buttons** with hover tooltips: **Move** (arrows),
@@ -102,8 +110,8 @@ It follows the plane when transformed. Its collider spans the full 16 × 16 m su
 
 The **Lua Editor** opens on the right with an example snippet. Edit the multiline text (Tab inserts
 indentation), then click **Execute**. `print(...)` output appears in the **Lua Console**, with arguments
-separated by tabs. Syntax errors and runtime tracebacks appear in red. Successful executions show a
-completion message. Both windows can be moved, resized and collapsed.
+separated by tabs. Printed messages use the format `lua > output`. Syntax errors and runtime tracebacks appear
+in red. Execution banners and completion messages are omitted. Both windows can be moved, resized and collapsed.
 
 ```lua
 counter = (counter or 0) + 1

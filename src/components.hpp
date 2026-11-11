@@ -6,6 +6,10 @@
 
 #include "math.hpp"
 #include "mesh.hpp"
+#include <string>
+
+// Human-readable label used by the level object list.
+struct ObjectName { std::string value; };
 
 // Where the entity is, how it is turned and how big it is.
 struct Transform {
