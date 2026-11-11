@@ -20,6 +20,8 @@
 #include "editor_layout.hpp"
 #include "inspector.hpp"
 #include "play_mode.hpp"
+#include "editor_history.hpp"
+#include "playback_controls.hpp"
 #include "editor_theme.hpp"
 
 #include <SDL3/SDL.h>
@@ -246,6 +248,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
     Entity selectedEntity;
     ScriptEditor scripts;
     scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh);
+    EditorHistory history(world);
     PlayMode playMode;
     Entity editSelection;
     TransformEditor editor;
@@ -369,19 +372,42 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         }
         placeEditorPanel(layout.toolbar);
         ImGui::Begin("Scene controls",nullptr,fixedPanelFlags | ImGuiWindowFlags_NoTitleBar);
+        // Scene undo must not intercept Ctrl+Z while editing text.
+        bool undoRequested=false,redoRequested=false;
+        if (!playMode.active() && !ImGui::GetIO().WantTextInput && !editor.dragging()) {
+            undoRequested=ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z);
+            redoRequested=ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y) ||
+                ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z);
+        }
+        ImGui::BeginDisabled(playMode.active() || editor.dragging());
+        ImGui::BeginDisabled(!history.canUndo());
+        undoRequested |= ImGui::Button("Undo");
+        ImGui::EndDisabled();ImGui::SameLine();
+        ImGui::BeginDisabled(!history.canRedo());
+        redoRequested |= ImGui::Button("Redo");
+        ImGui::EndDisabled();ImGui::EndDisabled();
+        if ((undoRequested || redoRequested) && !playMode.active()) {
+            editor.finish(world);clicking=false;
+            history.commit(world,selectedEntity);
+            const bool restored=undoRequested?history.undo(world,selectedEntity):history.redo(world,selectedEntity);
+            if(restored)physics.reset();
+        }
+        const float playbackWidth=90+2*ImGui::GetStyle().ItemSpacing.x;
+        ImGui::SameLine();ImGui::SetCursorPosX((layout.toolbar.width-playbackWidth)*0.5f);
         ImGui::BeginDisabled(playMode.active());
-        if (ImGui::Button("Play")) {
+        if (playbackButton("##Play","Play",PlaybackIcon::Play,playMode.active())) {
             editor.finish(world); clicking=false;
             editSelection=selectedEntity;
+            history.commit(world,selectedEntity);
             if (playMode.play(world)) { physics.reset(); scripts.startPlay(); }
         }
         ImGui::EndDisabled(); ImGui::SameLine();
         ImGui::BeginDisabled(!playMode.active());
-        if (ImGui::Button(playMode.state()==PlayMode::State::Paused?"Resume":"Pause")) {
+        if (playbackButton("##Pause",playMode.state()==PlayMode::State::Paused?"Resume":"Pause",playMode.state()==PlayMode::State::Paused?PlaybackIcon::Play:PlaybackIcon::Pause,playMode.state()==PlayMode::State::Paused)) {
             editor.finish(world); clicking=false; playMode.pause();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Stop")) {
+        if (playbackButton("##Stop","Stop",PlaybackIcon::Stop)) {
             editor.finish(world); clicking=false;
             // Run stop callbacks before restoring, so their edits are discarded too.
             scripts.shutdown();
@@ -390,6 +416,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             selectedEntity=world.alive(editSelection)?editSelection:Entity{};
         }
         ImGui::EndDisabled(); ImGui::SameLine();
+        const bool compactToolbar=layout.toolbar.width<1000;
+        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),layout.toolbar.width-(compactToolbar?125.0f:370.0f)));
+        if(compactToolbar && ImGui::Button("Scene options")) ImGui::OpenPopup("Scene options popup");
+        if(!compactToolbar || ImGui::BeginPopup("Scene options popup")) {
         if(ImGui::Checkbox("Spawn Mode",&spawnMode)){editor.finish(world);selectedEntity={};clicking=false;}
         ImGui::SameLine();
         if(ImGui::Checkbox("Freecam",&freeCamera))clicking=false;
@@ -397,8 +427,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         const char* names[]{"Cube","Sphere","Capsule","Cone"};int shape=static_cast<int>(selected);
         ImGui::SetNextItemWidth(100);ImGui::BeginDisabled(!spawnMode);
         if(ImGui::Combo("Shape",&shape,names,4))selected=static_cast<ColliderShape>(shape);
-        ImGui::EndDisabled();ImGui::SameLine();
-        ImGui::TextDisabled("WASD/QE: move | RMB: look | Shift: faster");
+        ImGui::EndDisabled();
+            if(compactToolbar)ImGui::EndPopup();
+        }
         ImGui::End();
         if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy)) {editor.finish(world);clicking=false;}
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
@@ -417,6 +448,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             editor.draw(world,selectedEntity,!spawnMode,camera,pixels.aspect(),&gizmoRect);
             if (editor.capturesMouse()) clicking=false;
         } else editor.finish(world);
+        if (!playMode.active()) {
+            updateHierarchy(world);
+            history.observe(world,selectedEntity,editor.dragging() || ImGui::IsAnyItemActive() ||
+                ImGui::IsMouseDown(ImGuiMouseButton_Left));
+        }
         ImGui::Render();
 
         // The time that has passed since the previous frame.

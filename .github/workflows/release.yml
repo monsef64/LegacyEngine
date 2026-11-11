@@ -124,12 +124,8 @@ jobs:
 
       - name: Package
         run: |
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
-            version=$GITHUB_REF_NAME
-          else
-            version=${GITHUB_SHA::7}
-          fi
-          package=LegacyEngine-$version-linux-x86_64
+          timestamp=$(date -u +%Y%m%d-%H%M%S)
+          package=LegacyEngine-$timestamp-linux-x86_64
 
           mkdir -p "$package/licenses"
           cp build/LegacyEngine "$package/"
@@ -140,6 +136,7 @@ jobs:
           cp build/_deps/imgui-src/LICENSE.txt "$package/licenses/DearImGui.txt"
           cp build/_deps/imguizmo-src/LICENSE "$package/licenses/ImGuizmo.txt"
           cp build/_deps/lua-src/lua.h "$package/licenses/Lua.txt"
+          cp third_party/roboto/LICENSE "$package/licenses/Roboto.txt"
           cp third_party/glad/LICENSE "$package/licenses/glad.txt"
           tar -czf "$package.tar.gz" "$package"
 
