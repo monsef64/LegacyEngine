@@ -19,6 +19,7 @@
 #include "create_menu.hpp"
 #include "editor_layout.hpp"
 #include "inspector.hpp"
+#include "editor_theme.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -468,7 +469,7 @@ int main(int, char**)
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui::GetIO().IniFilename = nullptr;
-        ImGui::StyleColorsDark();
+        applyEditorTheme();
         if (!ImGui_ImplSDL3_InitForOpenGL(window, context) ||
             !ImGui_ImplOpenGL3_Init("#version 330 core")) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not initialise Dear ImGui");

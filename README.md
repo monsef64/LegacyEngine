@@ -412,3 +412,11 @@ to verify the rendered editor and physical mouse interaction.
 Lua tests cover console output, errors/tracebacks, persistent state, reset/clear, execution and
 memory limits, bounded output, and recovery. CPU ImGui integration tests click Execute and Clear
 to verify the editor-to-console flow without needing a display.
+
+### Editor appearance
+
+The editor uses a slate-dark ImGui theme with blue interaction accents, rounded
+input controls, and flat panel borders. Bundled Roboto Regular at 16 px replaces
+the small bitmap default; oversampled glyphs and anti-aliased UI geometry improve
+legibility. The font is embedded in the executable (no external font installation
+or asset folder required). Its Apache 2.0 license is in `third_party/roboto/LICENSE`.
