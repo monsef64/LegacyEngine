@@ -101,6 +101,23 @@ set(IMGUIZMO_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(imguizmo)
 target_link_libraries(imguizmo PUBLIC legacy_imgui)
 
+# --- Lua (embedded, no external interpreter installation needed) -------------
+FetchContent_Declare(lua
+  GIT_REPOSITORY https://github.com/lua/lua.git
+  GIT_TAG v5.4.8
+  GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(lua)
+file(GLOB lua_sources CONFIGURE_DEPENDS "${lua_SOURCE_DIR}/*.c")
+list(FILTER lua_sources EXCLUDE REGEX "/(lua|luac|onelua|ltests)\\.c$")
+add_library(legacy_lua STATIC ${lua_sources})
+target_include_directories(legacy_lua SYSTEM PUBLIC ${lua_SOURCE_DIR})
+if(UNIX)
+  target_link_libraries(legacy_lua PUBLIC m)
+endif()
+add_library(lua_console STATIC src/lua_console.cpp)
+target_include_directories(lua_console PUBLIC src)
+target_link_libraries(lua_console PUBLIC legacy_lua)
+
 # --- LegacyEngine -----------------------------------------------------------
 
 add_executable(LegacyEngine
@@ -109,8 +126,9 @@ add_executable(LegacyEngine
   src/physics.cpp
   src/renderer.cpp
   src/transform_editor.cpp
+  src/script_editor.cpp
 )
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui imguizmo)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui imguizmo lua_console)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
@@ -134,4 +152,17 @@ if(BUILD_TESTING)
   target_include_directories(transform_editor_tests PRIVATE src)
   target_link_libraries(transform_editor_tests PRIVATE imguizmo)
   add_test(NAME transform_editor COMMAND transform_editor_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(lua_console_tests tests/lua_console.cpp)
+  target_link_libraries(lua_console_tests PRIVATE lua_console)
+  add_test(NAME lua_console COMMAND lua_console_tests)
+  set_tests_properties(lua_console PROPERTIES TIMEOUT 15)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(script_editor_tests tests/script_editor.cpp src/script_editor.cpp)
+  target_link_libraries(script_editor_tests PRIVATE lua_console legacy_imgui)
+  add_test(NAME script_editor COMMAND script_editor_tests)
 endif()

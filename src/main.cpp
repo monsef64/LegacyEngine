@@ -14,6 +14,7 @@
 #include "physics.hpp"
 #include "renderer.hpp"
 #include "transform_editor.hpp"
+#include "script_editor.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -262,6 +263,7 @@ static void run(SDL_Window* window, Renderer& renderer)
     bool spawnMode = true;
     bool freeCamera = true;
     Entity selectedEntity;
+    ScriptEditor scripts;
     TransformEditor editor;
     OrbitCamera camera;
     Uint64 lastTicks = SDL_GetTicksNS();
@@ -386,6 +388,7 @@ static void run(SDL_Window* window, Renderer& renderer)
             ImGui::TextUnformatted("WASD: move | Q/E: down/up\nRight drag: look | Shift: faster\nWheel: move forward/back");
         ImGui::TextUnformatted("F: drop cube | Esc: quit");
         ImGui::End();
+        scripts.draw();
         int drawableWidth=0, drawableHeight=0;
         SDL_GetWindowSizeInPixels(window,&drawableWidth,&drawableHeight);
         if (drawableWidth>0 && drawableHeight>0) {
