@@ -47,6 +47,13 @@ inline Vec3 normalize(Vec3 v)
 // The point at fraction t of the way from a to b.
 inline Vec3 lerp(Vec3 a, Vec3 b, float t) { return a + (b - a) * t; }
 
+// A line that starts at `origin` and goes on without end in `direction`, a
+// unit vector.
+struct Ray {
+    Vec3 origin;
+    Vec3 direction = {0.0f, 0.0f, -1.0f};
+};
+
 // ---------------------------------------------------------------------------
 // Rotations
 // ---------------------------------------------------------------------------

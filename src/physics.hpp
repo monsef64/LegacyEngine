@@ -24,8 +24,17 @@
 #pragma once
 
 #include "ecs.hpp"
+#include "math.hpp"
 
 #include <memory>
+
+// What Physics::raycast() found.
+struct RayHit {
+    Entity entity;          // the entity whose BoxCollider the ray met
+    Vec3   point;           // where it met it
+    Vec3   normal;          // unit vector pointing straight out of the surface there
+    float  distance = 0.0f; // metres from the origin of the ray to `point`
+};
 
 class Physics {
 public:
@@ -37,6 +46,22 @@ public:
     // Advances the simulation. Call it once per frame with the time that has
     // passed since the previous call.
     void update(World& world, float seconds);
+
+    // The two questions below are about the BoxColliders as the last update()
+    // left them: what has been added, moved or destroyed since then is not
+    // taken into account.
+
+    // Finds the first BoxCollider that a ray meets within `maxDistance`
+    // metres: what is under the mouse pointer, for example (see
+    // OrbitCamera::rayThrough()). Returns false, and leaves `hit` alone, if it
+    // meets none. A collider that the ray starts inside of does not count.
+    bool raycast(const Ray& ray, float maxDistance, RayHit& hit) const;
+
+    // Whether a box would reach into a BoxCollider, or touch one: whether
+    // there is no room for a new object, for example. `center` is the middle
+    // of the box and `size` the length of its edges, which lie along the X, Y
+    // and Z axes.
+    bool checkBox(Vec3 center, Vec3 size) const;
 
 private:
     struct Impl; // keeps ReactPhysics3D out of the rest of the engine

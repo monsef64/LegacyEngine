@@ -12,16 +12,27 @@ LegacyEngine opens a window onto a small 3D world:
 - a solid 5 × 5 m plane lying on the grid, centred on the origin
 - a 1 m cube floating above the plane, with its centre at (0, 1, 0)
 
-Press `F` and the cube falls onto the plane.
+Press `F` and the cube falls onto the plane. Left-click to create a coloured 1 m cube at
+the spot under the pointer; new cubes have gravity and collide with the scene.
 
 One unit is one metre, +Y points up and the ground is the XZ plane.
 
 | Input | Action |
 | --- | --- |
 | `F` | Drop the cube. Pressing it again puts the cube back and drops it once more |
-| Drag with the left mouse button | Orbit around the scene |
+| Left click | Spawn a cube under the pointer |
+| Drag with the left mouse button | Orbit around the scene (movement beyond 5 window units) |
 | Mouse wheel | Zoom in and out |
 | `Esc`, or closing the window | Quit |
+
+Clicks hit the nearest solid surface, or the ground at y = 0 when nothing solid is under the
+pointer (up to 100 m away). A sky click places a cube at the camera target's distance.
+Cubes are offset to touch the surface and moved nearby if space is blocked. Colours cycle
+through blue, green, yellow, red, purple and turquoise.
+
+Only the plane is solid ground: cubes outside it fall and are removed below y = −200 m.
+The original orange cube stays fixed until `F`; if it later falls out of the scene, it is
+kept there without a `RigidBody` so `F` can bring it back. Tall stacks may wobble or collapse.
 
 It is written in C++17 with:
 
@@ -122,8 +133,8 @@ The code is in `src`:
 | `components.hpp` | The four components above |
 | `mesh.hpp` | What a mesh is made of, and the box, the plane and the grid |
 | `renderer.hpp` | Drawing with OpenGL. `createMesh()` takes the triangles of any shape |
-| `physics.hpp` | The simulation, done by ReactPhysics3D |
-| `camera.hpp`, `math.hpp` | The orbit camera, and vectors, rotations and matrices |
+| `physics.hpp` | The ReactPhysics3D simulation, plus `raycast()` and `checkBox()` queries |
+| `camera.hpp`, `math.hpp` | The orbit camera, `rayThrough()` for picking, rays, vectors, rotations and matrices |
 
 ## Download
 
