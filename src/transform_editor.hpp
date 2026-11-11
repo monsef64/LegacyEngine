@@ -3,6 +3,7 @@
 #include "camera.hpp"
 #include "ecs.hpp"
 #include "transform_edit.hpp"
+#include "editor_layout.hpp"
 #include <imgui.h>
 #include <ImGuizmo.h>
 
@@ -20,7 +21,7 @@ public:
         heldEntity_ = {};
         dragging_ = hovered_ = false;
     }
-    void draw(World& world, Entity entity, bool enabled, const OrbitCamera& camera, float aspect);
+    void draw(World& world, Entity entity, bool enabled, const OrbitCamera& camera, float aspect,const EditorRect* scene=nullptr);
 
 private:
     TransformTool tool_ = TransformTool::Move;

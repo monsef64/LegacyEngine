@@ -3,6 +3,7 @@
 #include "components.hpp"
 #include "ecs.hpp"
 #include "hierarchy.hpp"
+#include "editor_layout.hpp"
 #include <imgui.h>
 #include <algorithm>
 #include <string>
@@ -28,19 +29,19 @@ inline std::vector<LevelObject> levelObjects(World& world)
 }
 
 // Returns true when selection changes. The caller can end any active gizmo gesture.
-inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled)
+inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr)
 {
     bool changed=false;
     if (!world.alive(selected) && selected!=Entity{}) { selected={}; changed=true; }
-    ImGui::SetNextWindowPos(ImVec2(16,360),ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(250,240),ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("Level Objects")) {
+    if(panel)placeEditorPanel(*panel);
+    else {ImGui::SetNextWindowPos(ImVec2(16,360),ImGuiCond_FirstUseEver);ImGui::SetNextWindowSize(ImVec2(250,240),ImGuiCond_FirstUseEver);}
+    if (ImGui::Begin(panel?"Hierarchy":"Level Objects",nullptr,panel?fixedPanelFlags:0)) {
         const auto objects=levelObjects(world);
         ImGui::Text("Objects: %d",static_cast<int>(objects.size()));
         if (!selectionEnabled) ImGui::TextDisabled("Disable Spawn Shapes Mode to select");
         ImGui::BeginDisabled(!selectionEnabled);
         if (ImGui::Button("Clear selection")) { selected={}; changed=true; }
-        if (world.alive(selected)) {
+        if (!panel && world.alive(selected)) {
             const Entity parent=getParent(world,selected);
             const auto* label=world.tryGet<ObjectName>(parent);
             if(ImGui::BeginCombo("Parent",parent==Entity{}?"None":label?label->value.c_str():"Object")) {

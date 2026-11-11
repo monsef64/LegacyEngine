@@ -1,5 +1,6 @@
 #pragma once
 #include "lua_console.hpp"
+#include "editor_layout.hpp"
 #include <array>
 #include <string>
 struct ImGuiInputTextCallbackData;
@@ -7,7 +8,7 @@ struct ImGuiInputTextCallbackData;
 class ScriptEditor {
 public:
     ScriptEditor();
-    void draw();
+    void draw(const EditorLayout* layout=nullptr);
     void bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone={}) { console_.bindWorld(world,cube,sphere,capsule,cone); }
     void update(float dt) { console_.update(dt); }
     void fixedUpdate(float dt) { console_.fixedUpdate(dt); }

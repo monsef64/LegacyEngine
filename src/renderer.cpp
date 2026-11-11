@@ -233,9 +233,10 @@ MeshHandle Renderer::createMesh(const MeshData& data)
     return {static_cast<std::uint32_t>(meshes_.size() - 1)};
 }
 
-void Renderer::draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition)
+void Renderer::draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition, int x, int y)
 {
-    glViewport(0, 0, width, height);
+    glDisable(GL_SCISSOR_TEST);
+    glViewport(x, y, width, height);
     glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

@@ -26,10 +26,10 @@ void toolButton(const char* id, const char* tooltip, TransformTool value, Transf
 }
 }
 
-void TransformEditor::draw(World& world, Entity entity, bool enabled, const OrbitCamera& camera, float aspect)
+void TransformEditor::draw(World& world, Entity entity, bool enabled, const OrbitCamera& camera, float aspect,const EditorRect* scene)
 {
     const auto* viewport=ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x+16,viewport->WorkPos.y+viewport->WorkSize.y-16),
+    ImGui::SetNextWindowPos(scene?ImVec2(scene->x+8,scene->y+scene->height-8):ImVec2(viewport->WorkPos.x+16,viewport->WorkPos.y+viewport->WorkSize.y-16),
                             ImGuiCond_Always,ImVec2(0,1));
     ImGui::Begin("Transform tools",nullptr,ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
@@ -57,7 +57,8 @@ void TransformEditor::draw(World& world, Entity entity, bool enabled, const Orbi
     ImGuizmo::Enable(true);
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
-    ImGuizmo::SetRect(viewport->Pos.x,viewport->Pos.y,viewport->Size.x,viewport->Size.y);
+    ImGuizmo::SetRect(scene?scene->x:viewport->Pos.x,scene?scene->y:viewport->Pos.y,
+                      scene?scene->width:viewport->Size.x,scene?scene->height:viewport->Size.y);
     const bool wasDragging=dragging_;
     const bool changed=ImGuizmo::Manipulate(view.m,projection.m,operations[static_cast<int>(tool_)],
         tool_==TransformTool::Move ? ImGuizmo::WORLD : ImGuizmo::LOCAL,model.m);

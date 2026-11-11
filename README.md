@@ -13,9 +13,9 @@ LegacyEngine opens a maximized, resizable window onto a small 3D world:
 - a 32 × 32 m grid on the ground, 1 m per grid block
 - a solid 16 × 16 m plane lying on the grid, centred on the origin
 - a black/white checkerboard floor with 1 m squares and a glossy, view-dependent specular highlight
-- a 1 m cube floating above the plane, with its centre at (0, 1, 0)
+- an ordinary 1 m cube starting at (0, 1, 0), which falls under gravity
 
-Press `F` and the cube falls onto the plane. Choose **Cube**, **Sphere**, **Capsule** or **Cone** in the
+Choose **Cube**, **Sphere**, **Capsule** or **Cone** in the
 Dear ImGui **Spawn shapes** list, then left-click the scene to spawn that shape. The selection
 stays active for subsequent clicks. Every spawned object has gravity and a matching native
 ReactPhysics3D collider: box, sphere, capsule or convex cone (not a bounding-box approximation).
@@ -40,6 +40,30 @@ The **Freecam** checkbox switches between free flight (checked by default) and a
 The wheel moves forward/back. Static mode ignores all navigation input; spawning and selection
 still work. Switching modes preserves your view.
 
+### Editor layout and Inspector
+
+The UI uses a fixed, Unity-style layout that follows the window size rather than movable floating
+panels: Create menu and scene controls at the top, **Hierarchy** on the left, **Scene** in the
+center, **Inspector** on the right, and **Lua Editor / Lua Console** below the Scene. Camera
+navigation, picking and gizmos use only the Scene area, including on high-DPI displays. Hover the
+Scene to use freecam keyboard movement. The panels currently use fixed proportions, not draggable
+docking splitters.
+
+Select an object to inspect its existing components:
+
+- **Name / Parent:** rename the object and change its parent.
+- **Transform:** edit world position, rotation in degrees and scale. Round primitive colliders use
+  uniform scale to keep rendering and collision geometry aligned.
+- **MeshRenderer:** choose a primitive mesh, color, checkerboard material and specular strength.
+  Choosing a primitive also updates an existing collider to the matching shape.
+- **Collider:** edit shape, local center, size/radius/height, friction and bounciness independently.
+- **RigidBody:** edit mass, gravity and linear/angular velocity.
+
+**Add Component** adds missing Transform, MeshRenderer, Collider or RigidBody components. Optional
+render/collision/physics components can be removed from their sections; Transform and the identity
+fields remain available for scene editing. Inspector writes update live components and are picked
+up by physics on the next update. Dynamic bodies continue simulating while you inspect them.
+
 ### Create menu and parenting
 
 The top menu contains **Create → Empty GameObject** and **Create → Shape → Capsule / Cone / Cube /
@@ -48,7 +72,7 @@ Spawn Shapes Mode so it can immediately be edited. Empty objects have a name and
 no renderer or collider. Shape objects have matching render/collision geometry and a RigidBody.
 Cones are also available in the click-to-spawn shape picker and Lua mesh/collider fields.
 
-Select an object in **Level Objects** and use its **Parent** dropdown, or drag its row onto another
+Select an object in **Hierarchy** and use the **Inspector → Parent** dropdown, or drag its row onto another
 object's row. **None** unparents it. Children appear indented under parents. Parenting and
 unparenting preserve the current world pose; subsequent parent translation, rotation and scale
 move descendants. Empty objects are useful as editable group pivots. Self-parenting, cycles and
@@ -73,9 +97,9 @@ deltas; it is not a rigid physics joint. Children with RigidBodies still simulat
 Use uniform parent scaling for rotated or round descendants: the TRS/component representation
 does not represent shear or ellipsoidal colliders.
 
-### Level Objects
+### Hierarchy
 
-The **Level Objects** window lists the grid, plane, original cube and all spawned shapes by name.
+The **Hierarchy** panel lists the grid, plane, original cube and all spawned shapes by name.
 Turn off **Spawn Shapes Mode**, then click a row to select it. List selection and scene selection
 share the same highlight and transform tools; **Clear selection** clears both. Spawned objects
 appear automatically and destroyed objects disappear. The grid can be selected in the list but is
@@ -103,7 +127,6 @@ One unit is one metre, +Y points up and the ground is the XZ plane.
 
 | Input | Action |
 | --- | --- |
-| `F` | Drop the cube. Pressing it again puts the cube back and drops it once more |
 | Spawn Shapes Mode checkbox | Checked: spawn; unchecked: select objects |
 | Shape list (spawn mode) | Select Cube, Sphere or Capsule |
 | Left click in the scene | Spawn the chosen shape, or select an object in selection mode |
@@ -121,9 +144,11 @@ The room search uses a conservative bounding box, so round objects may be placed
 further away in tight gaps. Colours cycle
 through blue, green, yellow, red, purple and turquoise.
 
-Only the plane is solid ground: spawned objects outside it fall and are removed below y = −200 m.
-The original orange cube stays fixed until `F`; if it later falls out of the scene, it is
-kept there without a `RigidBody` so `F` can bring it back. Tall stacks may wobble or collapse.
+Only the plane is solid ground: objects outside it fall, but are **not automatically deleted**.
+They remain in Hierarchy and can be repositioned in Inspector. Physics may suspend bodies whose
+coordinates exceed its supported range (about one million metres); correcting the position lets
+them rejoin the simulation. The initial cube has no special behavior and `F` has no engine action.
+Tall stacks may wobble or collapse.
 
 It is written in C++17 with:
 
@@ -145,7 +170,7 @@ It follows the plane when transformed. Its collider spans the full 16 × 16 m su
 The **Lua Editor** opens on the right with an example snippet. Edit the multiline text (Tab inserts
 indentation), then click **Execute**. `print(...)` output appears in the **Lua Console**, with arguments
 separated by tabs. Printed messages use the format `lua > output`. Syntax errors and runtime tracebacks appear
-in red. Execution banners and completion messages are omitted. Both windows can be moved, resized and collapsed.
+in red. Execution banners and completion messages are omitted. Both windows occupy fixed bottom panels in the editor layout.
 
 ```lua
 counter = (counter or 0) + 1
