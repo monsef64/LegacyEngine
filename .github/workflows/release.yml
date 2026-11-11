@@ -23,48 +23,57 @@ jobs:
         with:
           persist-credentials: false
 
-      # Hosted runners may point APT at azure.archive.ubuntu.com. Avoid that
-      # mirror when it stalls; support both deb822 (.sources) and legacy lists.
-      - name: Configure reliable Ubuntu mirrors
-        timeout-minutes: 1
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo find /etc/apt -maxdepth 2 -type f \
-            \( -name '*.list' -o -name '*.sources' \) -print0 |
-            sudo xargs -0 -r sed -i -E \
-              -e 's|https?://azure\.archive\.ubuntu\.com/ubuntu/?|https://archive.ubuntu.com/ubuntu/|g' \
-              -e 's|http://archive\.ubuntu\.com/ubuntu/?|https://archive.ubuntu.com/ubuntu/|g' \
-              -e 's|http://security\.ubuntu\.com/ubuntu/?|https://security.ubuntu.com/ubuntu/|g'
-
-      # SDL's development packages plus a software OpenGL display for tests.
-      # Bound the whole commands as well as individual network/lock waits.
+      # Use an isolated Ubuntu source list: neither the Azure mirror nor
+      # unrelated third-party repositories on the runner can stall this build.
+      # Try a second HTTPS mirror if metadata or package downloads fail.
       - name: Install build dependencies
-        timeout-minutes: 10
+        timeout-minutes: 14
         shell: bash
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
           set -euo pipefail
-          apt_options=(
-            -o Acquire::Retries=3
-            -o Acquire::http::Timeout=20
-            -o Acquire::https::Timeout=20
-            -o DPkg::Lock::Timeout=60
+          packages=(
+            build-essential cmake ninja-build pkg-config git
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev
+            libxi-dev libxss-dev libxtst-dev
+            libwayland-dev libxkbcommon-dev libdecor-0-dev
+            libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libdrm-dev libgbm-dev
+            libdbus-1-dev libibus-1.0-dev libudev-dev libusb-1.0-0-dev
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-dev libsndio-dev
+            libfribidi-dev libthai-dev liburing-dev
+            xvfb xauth libgl1-mesa-dri
           )
-          sudo timeout --signal=TERM --kill-after=15s 120s \
-            apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
-          sudo --preserve-env=DEBIAN_FRONTEND timeout --signal=TERM --kill-after=15s 420s \
-            apt-get "${apt_options[@]}" install -y --no-install-recommends \
-              build-essential cmake ninja-build pkg-config git \
-              libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
-              libxi-dev libxss-dev libxtst-dev \
-              libwayland-dev libxkbcommon-dev libdecor-0-dev \
-              libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libdrm-dev libgbm-dev \
-              libdbus-1-dev libibus-1.0-dev libudev-dev libusb-1.0-0-dev \
-              libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-dev libsndio-dev \
-              libfribidi-dev libthai-dev liburing-dev \
-              xvfb xauth libgl1-mesa-dri
+          sources="$RUNNER_TEMP/legacy-ubuntu.list"
+          apt_options=(
+            -o "Dir::Etc::sourcelist=$sources"
+            -o Dir::Etc::sourceparts=-
+            -o Acquire::ForceIPv4=true
+            -o Acquire::Languages=none
+            -o Acquire::Retries=1
+            -o Acquire::http::Timeout=15
+            -o Acquire::https::Timeout=15
+            -o DPkg::Lock::Timeout=30
+          )
+          for mirror in https://mirrors.edge.kernel.org/ubuntu https://archive.ubuntu.com/ubuntu; do
+            echo "::group::Ubuntu dependencies from $mirror"
+            : > "$sources"
+            for suite in noble noble-updates noble-security; do
+              printf 'deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] %s %s main universe restricted multiverse\n' \
+                "$mirror" "$suite" >> "$sources"
+            done
+            if sudo timeout --signal=TERM --kill-after=15s 90s \
+                apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update &&
+               sudo --preserve-env=DEBIAN_FRONTEND timeout --signal=TERM --kill-after=15s 270s \
+                apt-get "${apt_options[@]}" install -y --no-install-recommends "${packages[@]}"; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::Dependency installation from $mirror failed or timed out; trying the next mirror."
+          done
+          echo "::error::Both Ubuntu mirrors failed within their time limits. See the APT output above."
+          exit 1
 
       # SDL, ReactPhysics3D, libstdc++ and libgcc are linked statically so that
       # the binary runs without any of them installed.
