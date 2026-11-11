@@ -8,7 +8,7 @@ class ScriptEditor {
 public:
     ScriptEditor();
     void draw();
-    void bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule) { console_.bindWorld(world,cube,sphere,capsule); }
+    void bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone={}) { console_.bindWorld(world,cube,sphere,capsule,cone); }
     void update(float dt) { console_.update(dt); }
     void fixedUpdate(float dt) { console_.fixedUpdate(dt); }
     void shutdown() { console_.shutdown(); }

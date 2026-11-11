@@ -15,13 +15,14 @@ LegacyEngine opens a maximized, resizable window onto a small 3D world:
 - a black/white checkerboard floor with 1 m squares and a glossy, view-dependent specular highlight
 - a 1 m cube floating above the plane, with its centre at (0, 1, 0)
 
-Press `F` and the cube falls onto the plane. Choose **Cube**, **Sphere** or **Capsule** in the
+Press `F` and the cube falls onto the plane. Choose **Cube**, **Sphere**, **Capsule** or **Cone** in the
 Dear ImGui **Spawn shapes** list, then left-click the scene to spawn that shape. The selection
 stays active for subsequent clicks. Every spawned object has gravity and a matching native
-ReactPhysics3D collider: box, sphere or capsule (not a bounding-box approximation).
+ReactPhysics3D collider: box, sphere, capsule or convex cone (not a bounding-box approximation).
 
 Cubes have 1 m edges, spheres have a 0.5 m radius, and capsules have a 0.5 m radius plus a
-1 m cylindrical section (2 m total height). UI interactions do not spawn objects or move the camera.
+1 m cylindrical section (2 m total height). Cones have a 0.5 m base radius and 1 m height,
+with matching 32-sided render geometry and convex collision hulls. UI interactions do not spawn objects or move the camera.
 
 The **Spawn Shapes Mode** checkbox starts checked. Uncheck it to select instead of spawn:
 left-click any solid object (including the original cube or plane) to see its actual collider
@@ -39,13 +40,46 @@ The **Freecam** checkbox switches between free flight (checked by default) and a
 The wheel moves forward/back. Static mode ignores all navigation input; spawning and selection
 still work. Switching modes preserves your view.
 
+### Create menu and parenting
+
+The top menu contains **Create → Empty GameObject** and **Create → Shape → Capsule / Cone / Cube /
+Sphere**. Menu creation places the object near the camera target, selects it, and switches off
+Spawn Shapes Mode so it can immediately be edited. Empty objects have a name and Transform but
+no renderer or collider. Shape objects have matching render/collision geometry and a RigidBody.
+Cones are also available in the click-to-spawn shape picker and Lua mesh/collider fields.
+
+Select an object in **Level Objects** and use its **Parent** dropdown, or drag its row onto another
+object's row. **None** unparents it. Children appear indented under parents. Parenting and
+unparenting preserve the current world pose; subsequent parent translation, rotation and scale
+move descendants. Empty objects are useful as editable group pivots. Self-parenting, cycles and
+chains deeper than 128 levels are rejected. Removing a parent detaches children rather than
+removing them, retaining their last world pose.
+
+Lua supports `setParent(child, parent)`, `setParent(child, nil)`, `getParent(child)` and the live
+`object.parent` property. For example:
+
+```lua
+local group = createGameObject("Group")
+local cube = createGameObject("Child")
+addComponent(cube, "MeshRenderer")
+addComponent(cube, "Collider")
+getComponent(cube, "Transform").position.x = 2
+setParent(cube, group)
+getComponent(group, "Transform").position.y = 3
+```
+
+Transforms exposed to Lua and gizmos remain **world-space**. Parenting propagates transform
+deltas; it is not a rigid physics joint. Children with RigidBodies still simulate independently.
+Use uniform parent scaling for rotated or round descendants: the TRS/component representation
+does not represent shear or ellipsoidal colliders.
+
 ### Level Objects
 
 The **Level Objects** window lists the grid, plane, original cube and all spawned shapes by name.
 Turn off **Spawn Shapes Mode**, then click a row to select it. List selection and scene selection
 share the same highlight and transform tools; **Clear selection** clears both. Spawned objects
 appear automatically and destroyed objects disappear. The grid can be selected in the list but is
-a visual helper with no collider outline or transform gizmo.
+a visual helper with no collider outline, but its Transform can still be edited.
 
 ### Transform tools
 
@@ -165,7 +199,7 @@ at most once. Reset/shutdown destroys objects created by Lua, but preserves pre-
 Types are strings: `Transform`, `RigidBody`, `Collider` (`BoxCollider` alias), `MeshRenderer`, and
 `ObjectName`. Vector properties support both whole assignments (`position = {x=0,y=3,z=0}`) and
 live coordinate edits (`position.y = 4`). Rotation is a quaternion `{x,y,z,w}`. MeshRenderer `mesh`
-is `"Cube"`, `"Sphere"` or `"Capsule"`; Collider `shape` is `"Box"`, `"Sphere"` or `"Capsule"`.
+is `"Cube"`, `"Sphere"`, `"Capsule"` or `"Cone"`; Collider `shape` is `"Box"`, `"Sphere"`, `"Capsule"` or `"Cone"`.
 Set both to matching shapes. Other fields match the C++ component names below. Names are limited
 to 256 bytes, and the runtime tracks at most 4,096 simultaneous object handles. Stale handles and
 removed component accesses report Lua errors instead of accessing recycled ECS storage.
@@ -263,7 +297,7 @@ world.add(roof, MeshRenderer{pyramidMesh, {0.80f, 0.20f, 0.20f}});
 ```
 
 There is no loader for model files such as `.obj` yet; one would fill a `MeshData` in the same way.
-Set `Collider::shape` to `ColliderShape::Box`, `Sphere` or `Capsule`. Boxes use `size`;
+Set `Collider::shape` to `ColliderShape::Box`, `Sphere`, `Capsule` or `Cone`. Boxes use `size`;
 spheres use `radius`; capsules use `radius` and `height` (distance between hemisphere centres,
 along local Y). All use `center`, `friction` and `bounciness`. Attach only one `Collider` per entity.
 Use uniform scale for round meshes: native round colliders cannot become ellipsoids; non-uniform

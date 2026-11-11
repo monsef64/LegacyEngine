@@ -26,7 +26,7 @@ struct MeshRenderer {
     float      specular = 0.0f;              // highlight strength (0 is matte)
 };
 
-enum class ColliderShape { Box, Sphere, Capsule };
+enum class ColliderShape { Box, Sphere, Capsule, Cone };
 
 // A solid shape around the entity that other colliders cannot pass through. It
 // follows the entity's Transform, scale included.

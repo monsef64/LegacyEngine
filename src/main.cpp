@@ -16,6 +16,7 @@
 #include "transform_editor.hpp"
 #include "script_editor.hpp"
 #include "level_objects.hpp"
+#include "create_menu.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -263,12 +264,13 @@ static void run(SDL_Window* window, Renderer& renderer)
 
     const MeshHandle sphereMesh = renderer.createMesh(makeSphere(0.5f));
     const MeshHandle capsuleMesh = renderer.createMesh(makeCapsule(0.5f, 1.0f));
+    const MeshHandle coneMesh = renderer.createMesh(makeCone(0.5f,1.0f));
     ColliderShape selected = ColliderShape::Box;
     bool spawnMode = true;
     bool freeCamera = true;
     Entity selectedEntity;
     ScriptEditor scripts;
-    scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh);
+    scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh);
     TransformEditor editor;
     OrbitCamera camera;
     Uint64 lastTicks = SDL_GetTicksNS();
@@ -343,11 +345,11 @@ static void run(SDL_Window* window, Renderer& renderer)
                             break;
                         }
                         const MeshHandle mesh = selected == ColliderShape::Box ? cubeMesh :
-                            (selected == ColliderShape::Sphere ? sphereMesh : capsuleMesh);
+                            (selected == ColliderShape::Sphere ? sphereMesh : selected==ColliderShape::Capsule?capsuleMesh:coneMesh);
                         Vec3 center = placeForCube(physics, camera, ray, selected);
                         const Entity object = world.create();
                         const char* shapeName=selected==ColliderShape::Box ? "Cube" :
-                            (selected==ColliderShape::Sphere ? "Sphere" : "Capsule");
+                            (selected==ColliderShape::Sphere ? "Sphere" : selected==ColliderShape::Capsule?"Capsule":"Cone");
                         world.add(object,ObjectName{std::string(shapeName)+" "+std::to_string(clickCubes+1)});
                         world.add(object, Transform{center});
                         world.add(object, MeshRenderer{mesh, kClickColors[clickCubes % std::size(kClickColors)]});
@@ -372,7 +374,18 @@ static void run(SDL_Window* window, Renderer& renderer)
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
-        ImGui::SetNextWindowPos(ImVec2(16, 16), ImGuiCond_FirstUseEver);
+        const int created=drawCreateMenu();
+        if(created>=0) {
+            editor.finish(world);spawnMode=false;clicking=false;
+            const char* labels[]{"Empty GameObject","Capsule","Cone","Cube","Sphere"};
+            const MeshHandle meshes[]{MeshHandle{},capsuleMesh,coneMesh,cubeMesh,sphereMesh};
+            const ColliderShape shapes[]{ColliderShape::Box,ColliderShape::Capsule,ColliderShape::Cone,ColliderShape::Box,ColliderShape::Sphere};
+            Vec3 position=camera.target;
+            position.y=std::max(position.y,created==1?1.0f:created==0?0.0f:0.5f);
+            if(created!=0)position=findRoom(physics,position,shapes[created]);
+            selectedEntity=createLevelObject(world,labels[created],position,meshes[created],shapes[created],created==0);
+        }
+        ImGui::SetNextWindowPos(ImVec2(16, ImGui::GetMainViewport()->WorkPos.y+16), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(230, 0), ImGuiCond_FirstUseEver);
         ImGui::Begin("Spawn shapes", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
         if (ImGui::Checkbox("Spawn Shapes Mode", &spawnMode)) {
@@ -384,8 +397,8 @@ static void run(SDL_Window* window, Renderer& renderer)
         ImGui::TextUnformatted(freeCamera ? "Camera: free" : "Camera: static (locked)");
         ImGui::BeginDisabled(!spawnMode);
         ImGui::TextUnformatted("Select a shape");
-        const char* names[] = {"Cube", "Sphere", "Capsule"};
-        for (int i = 0; i < 3; ++i) {
+        const char* names[] = {"Cube", "Sphere", "Capsule", "Cone"};
+        for (int i = 0; i < 4; ++i) {
             if (ImGui::Selectable(names[i], static_cast<int>(selected) == i))
                 selected = static_cast<ColliderShape>(i);
         }
@@ -427,7 +440,10 @@ static void run(SDL_Window* window, Renderer& renderer)
                         speed * std::min(seconds, 0.1f));
         }
         scripts.update(std::min(seconds,0.25f));
-        physics.update(world, seconds, [&](float dt){ scripts.fixedUpdate(dt); });
+        updateHierarchy(world);
+        physics.update(world, seconds, [&](float dt){ scripts.fixedUpdate(dt);updateHierarchy(world); });
+        updateHierarchy(world);
+        physics.update(world,0); // collider poses follow parent motion before picking next frame
 
         int width = 0;
         int height = 0;

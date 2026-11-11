@@ -9,6 +9,7 @@
 ---@alias ComponentType 'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'
 ---@class GameObject
 ---@field name string
+---@field parent GameObject|nil
 ---@field onStart fun()|nil
 ---@field onUpdate fun(deltaTime:number)|nil
 ---@field onFixedUpdate fun(deltaTime:number)|nil
@@ -23,7 +24,7 @@
 ---@field linearVelocity Vec3
 ---@field angularVelocity Vec3
 ---@class Collider
----@field shape 'Box'|'Sphere'|'Capsule'
+---@field shape 'Box'|'Sphere'|'Capsule'|'Cone'
 ---@field size Vec3
 ---@field center Vec3
 ---@field radius number
@@ -31,7 +32,7 @@
 ---@field friction number
 ---@field bounciness number
 ---@class MeshRenderer
----@field mesh 'Cube'|'Sphere'|'Capsule'
+---@field mesh 'Cube'|'Sphere'|'Capsule'|'Cone'
 ---@field color Vec3
 ---@field checkerboard boolean
 ---@field specular number
@@ -76,3 +77,10 @@ function findGameObjectByName(name) end
 ---@param componentType ComponentType
 ---@return GameObject[]
 function findGameObjectsByComponent(componentType) end
+
+---@param child GameObject
+---@param parent GameObject|nil
+function setParent(child,parent) end
+---@param child GameObject
+---@return GameObject|nil
+function getParent(child) end

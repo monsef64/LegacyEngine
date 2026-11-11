@@ -89,3 +89,17 @@ MeshData makeCapsule(float radius, float height)
 }
 
 MeshData makeSphere(float radius) { return makeCapsule(radius, 0.0f); }
+
+MeshData makeCone(float radius,float height) {
+    MeshData mesh;
+    const auto hull=coneHullVertices();
+    const Vec3 scale{radius*2,height,radius*2};
+    const Vec3 tip=hull[0]*scale;
+    for(int i=0;i<kConeSegments;++i) {
+        const Vec3 a=hull[1+i]*scale,b=hull[1+(i+1)%kConeSegments]*scale;
+        const Vec3 n=normalize(cross(tip-a,b-a));
+        for(Vec3 p:{a,tip,b})mesh.vertices.push_back({p,n});
+        for(Vec3 p:{a,b,Vec3{0,-height*0.5f,0}})mesh.vertices.push_back({p,{0,-1,0}});
+    }
+    return mesh;
+}

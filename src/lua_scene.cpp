@@ -1,4 +1,5 @@
 #include "lua_scene.hpp"
+#include "hierarchy.hpp"
 extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
@@ -70,9 +71,9 @@ int trace(lua_State* L) {
     luaL_traceback(L,L,lua_type(L,1)==LUA_TSTRING ? lua_tostring(L,1) : "Lua callback error",1);return 1;
 }
 }
-LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,
+LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone,
                    std::function<void(std::string_view)> error)
-    :state_(L),world_(world),meshes_{cube,sphere,capsule},error_(std::move(error)) {
+    :state_(L),world_(world),meshes_{cube,sphere,capsule,cone},error_(std::move(error)) {
     // Keep lifecycle keys interned even when a script exhausts its allocation budget.
     for(const char* key:{"onStart","onUpdate","onFixedUpdate","onDestroy"}) {
         lua_pushboolean(L,1);lua_setfield(L,LUA_REGISTRYINDEX,key);
@@ -86,8 +87,8 @@ LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,M
         lua_pushcfunction(L,writes[i]);lua_setfield(L,-2,"__newindex");
         lua_pushliteral(L,"locked");lua_setfield(L,-2,"__metatable");lua_pop(L,1);
     }
-    const char* names[]{"createGameObject","destroyGameObject","getComponent","addComponent","removeComponent","findGameObjectByName","findGameObjectsByComponent"};
-    for(int i=0;i<7;++i) {
+    const char* names[]{"createGameObject","destroyGameObject","getComponent","addComponent","removeComponent","findGameObjectByName","findGameObjectsByComponent","setParent","getParent"};
+    for(int i=0;i<9;++i) {
         lua_pushlightuserdata(L,this);lua_pushinteger(L,i);lua_pushcclosure(L,api,2);lua_setglobal(L,names[i]);
     }
 }
@@ -103,6 +104,13 @@ void LuaScene::pushObject(Entity e,bool owned) {
 int LuaScene::api(lua_State* L) {
     auto& self=*static_cast<LuaScene*>(lua_touserdata(L,lua_upvalueindex(1)));
     const int op=static_cast<int>(lua_tointeger(L,lua_upvalueindex(2)));
+    if(op==7 || op==8) {
+        const Handle child=handle(L,1);
+        if(op==8){const Entity p=getParent(self.world_,child.entity);if(p==Entity{})lua_pushnil(L);else self.pushObject(p);return 1;}
+        const Entity parent=lua_isnoneornil(L,2)?Entity{}:handle(L,2).entity;
+        if(!setParent(self.world_,child.entity,parent))return luaL_error(L,"Invalid parent: cycle, stale object or missing Transform");
+        return 0;
+    }
     if(op==0) {
         if(self.stopping_) return luaL_error(L,"Cannot create objects during shutdown");
         if(self.entries_.size()>=4096) return luaL_error(L,"GameObject handle limit exceeded");
@@ -160,11 +168,13 @@ int LuaScene::api(lua_State* L) {
 }
 int LuaScene::objectIndex(lua_State* L) {
     auto& h=handle(L,1);const char* key=luaL_checkstring(L,2);
+    if(!std::strcmp(key,"parent")){const Entity p=getParent(*h.world,h.entity);if(p==Entity{})lua_pushnil(L);else h.scene->pushObject(p);return 1;}
     if(!std::strcmp(key,"name")) {auto* n=h.world->tryGet<ObjectName>(h.entity);lua_pushstring(L,n?n->value.c_str():"");return 1;}
     lua_getiuservalue(L,1,1);lua_pushvalue(L,2);lua_rawget(L,-2);return 1;
 }
 int LuaScene::objectNewIndex(lua_State* L) {
     auto& h=handle(L,1);const char* key=luaL_checkstring(L,2);
+    if(!std::strcmp(key,"parent")){const Entity p=lua_isnil(L,3)?Entity{}:handle(L,3).entity;if(!setParent(*h.world,h.entity,p))return luaL_error(L,"Invalid parent");return 0;}
     if(!std::strcmp(key,"name")) {const char* n=objectName(L,3);h.world->add(h.entity,ObjectName{n});return 0;}
     lua_getiuservalue(L,1,1);lua_pushvalue(L,2);lua_pushvalue(L,3);lua_rawset(L,-3);return 0;
 }
@@ -175,8 +185,8 @@ int LuaScene::componentIndex(lua_State* L) {
     case Kind::Number:lua_pushnumber(L,*static_cast<float*>(f.value));break;
     case Kind::Boolean:lua_pushboolean(L,*static_cast<bool*>(f.value));break;
     case Kind::String:lua_pushstring(L,static_cast<std::string*>(f.value)->c_str());break;
-    case Kind::Shape:lua_pushstring(L,(*static_cast<ColliderShape*>(f.value)==ColliderShape::Box)?"Box":(*static_cast<ColliderShape*>(f.value)==ColliderShape::Sphere)?"Sphere":"Capsule");break;
-    case Kind::Mesh:{const auto m=*static_cast<MeshHandle*>(f.value);const auto& meshes=c.object.scene->meshes_;lua_pushstring(L,m.id==meshes[1].id?"Sphere":m.id==meshes[2].id?"Capsule":"Cube");break;}
+    case Kind::Shape:lua_pushstring(L,(*static_cast<ColliderShape*>(f.value)==ColliderShape::Box)?"Box":(*static_cast<ColliderShape*>(f.value)==ColliderShape::Sphere)?"Sphere":(*static_cast<ColliderShape*>(f.value)==ColliderShape::Capsule)?"Capsule":"Cone");break;
+    case Kind::Mesh:{const auto m=*static_cast<MeshHandle*>(f.value);const auto& meshes=c.object.scene->meshes_;lua_pushstring(L,m.id==meshes[1].id?"Sphere":m.id==meshes[2].id?"Capsule":m.id==meshes[3].id?"Cone":"Cube");break;}
     default:{auto* v=static_cast<Vector*>(lua_newuserdatauv(L,sizeof(Vector),0));v->component=c;std::strncpy(v->field,key,31);v->field[31]=0;luaL_setmetatable(L,"Vector");break;}
     }return 1;
 }
@@ -186,8 +196,8 @@ int LuaScene::componentNewIndex(lua_State* L) {
     case Kind::Number:*static_cast<float*>(f.value)=number(L,3);break;
     case Kind::Boolean:luaL_checktype(L,3,LUA_TBOOLEAN);*static_cast<bool*>(f.value)=lua_toboolean(L,3)!=0;break;
     case Kind::String:*static_cast<std::string*>(f.value)=objectName(L,3);break;
-    case Kind::Shape:{const char* s=luaL_checkstring(L,3);int i=!std::strcmp(s,"Box")?0:!std::strcmp(s,"Sphere")?1:!std::strcmp(s,"Capsule")?2:-1;if(i<0)return luaL_error(L,"Expected Box, Sphere or Capsule");*static_cast<ColliderShape*>(f.value)=static_cast<ColliderShape>(i);break;}
-    case Kind::Mesh:{const char* s=luaL_checkstring(L,3);int i=!std::strcmp(s,"Cube")?0:!std::strcmp(s,"Sphere")?1:!std::strcmp(s,"Capsule")?2:-1;if(i<0)return luaL_error(L,"Expected Cube, Sphere or Capsule");*static_cast<MeshHandle*>(f.value)=c.object.scene->meshes_[i];break;}
+    case Kind::Shape:{const char* s=luaL_checkstring(L,3);int i=!std::strcmp(s,"Box")?0:!std::strcmp(s,"Sphere")?1:!std::strcmp(s,"Capsule")?2:!std::strcmp(s,"Cone")?3:-1;if(i<0)return luaL_error(L,"Expected Box, Sphere, Capsule or Cone");*static_cast<ColliderShape*>(f.value)=static_cast<ColliderShape>(i);break;}
+    case Kind::Mesh:{const char* s=luaL_checkstring(L,3);int i=!std::strcmp(s,"Cube")?0:!std::strcmp(s,"Sphere")?1:!std::strcmp(s,"Capsule")?2:!std::strcmp(s,"Cone")?3:-1;if(i<0)return luaL_error(L,"Expected Cube, Sphere, Capsule or Cone");*static_cast<MeshHandle*>(f.value)=c.object.scene->meshes_[i];break;}
     default:{
         float values[4]{};const char* keys[]{"x","y","z","w"};const int count=f.kind==Kind::Quat?4:3;
         for(int i=0;i<count;++i){lua_getfield(L,3,keys[i]);values[i]=number(L,-1);lua_pop(L,1);}
@@ -249,8 +259,8 @@ void LuaScene::tick(const char* name,float dt) {
         } else ++i;
     }
 }
-void LuaScene::update(float dt){tick("onUpdate",dt);}
-void LuaScene::fixedUpdate(float dt){tick("onFixedUpdate",dt);}
+void LuaScene::update(float dt){tick("onUpdate",dt);updateHierarchy(world_);}
+void LuaScene::fixedUpdate(float dt){tick("onFixedUpdate",dt);updateHierarchy(world_);}
 void LuaScene::stop() {
     if(stopping_)return;
     stopping_=true;

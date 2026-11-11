@@ -78,5 +78,15 @@ int main(){
         assert(findGameObjectByName('replacement')~=nil)
     )"),"reentrant destruction and creation safe");
     require(luaCompletion("createG")=="createGameObject" && luaCompletion("findGameObject")=="findGameObject", "completion definitions match API names");
+    require(console.execute(R"(
+        parent=createGameObject('parent')
+        child=createGameObject('child')
+        getComponent(child,'Transform').position.x=1
+        setParent(child,parent)
+        assert(getParent(child)==parent and child.parent==parent)
+        getComponent(parent,'Transform').position.x=4
+    )"),"Lua parenting API available");
+    console.update(0);
+    require(console.execute("assert(getComponent(child,'Transform').position.x==5); child.parent=nil; assert(getParent(child)==nil)"),"Lua hierarchy propagation and detach");
     std::puts("Lua scene lifecycle, live components, stale handles, cleanup and fixed-step tests passed");
 }
