@@ -23,21 +23,57 @@ jobs:
         with:
           persist-credentials: false
 
-      # What SDL needs for a build with all features (see docs/README-linux.md
-      # in SDL), plus a virtual display and a software OpenGL driver for the
-      # smoke test.
+      # Use an isolated Ubuntu source list: neither the Azure mirror nor
+      # unrelated third-party repositories on the runner can stall this build.
+      # Try a second HTTPS mirror if metadata or package downloads fail.
       - name: Install build dependencies
+        timeout-minutes: 14
+        shell: bash
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
-            libxi-dev libxss-dev libxtst-dev \
-            libwayland-dev libxkbcommon-dev libdecor-0-dev \
-            libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libdrm-dev libgbm-dev \
-            libdbus-1-dev libibus-1.0-dev libudev-dev libusb-1.0-0-dev \
-            libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-dev libsndio-dev \
-            libfribidi-dev libthai-dev liburing-dev \
+          set -euo pipefail
+          packages=(
+            build-essential cmake ninja-build pkg-config git
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev
+            libxi-dev libxss-dev libxtst-dev
+            libwayland-dev libxkbcommon-dev libdecor-0-dev
+            libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libdrm-dev libgbm-dev
+            libdbus-1-dev libibus-1.0-dev libudev-dev libusb-1.0-0-dev
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-dev libsndio-dev
+            libfribidi-dev libthai-dev liburing-dev
             xvfb xauth libgl1-mesa-dri
+          )
+          sources="$RUNNER_TEMP/legacy-ubuntu.list"
+          apt_options=(
+            -o "Dir::Etc::sourcelist=$sources"
+            -o Dir::Etc::sourceparts=-
+            -o Acquire::ForceIPv4=true
+            -o Acquire::Languages=none
+            -o Acquire::Retries=1
+            -o Acquire::http::Timeout=15
+            -o Acquire::https::Timeout=15
+            -o DPkg::Lock::Timeout=30
+          )
+          for mirror in https://mirrors.edge.kernel.org/ubuntu https://archive.ubuntu.com/ubuntu; do
+            echo "::group::Ubuntu dependencies from $mirror"
+            : > "$sources"
+            for suite in noble noble-updates noble-security; do
+              printf 'deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] %s %s main universe restricted multiverse\n' \
+                "$mirror" "$suite" >> "$sources"
+            done
+            if sudo timeout --signal=TERM --kill-after=15s 90s \
+                apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update &&
+               sudo --preserve-env=DEBIAN_FRONTEND timeout --signal=TERM --kill-after=15s 270s \
+                apt-get "${apt_options[@]}" install -y --no-install-recommends "${packages[@]}"; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "::warning::Dependency installation from $mirror failed or timed out; trying the next mirror."
+          done
+          echo "::error::Both Ubuntu mirrors failed within their time limits. See the APT output above."
+          exit 1
 
       # SDL, ReactPhysics3D, libstdc++ and libgcc are linked statically so that
       # the binary runs without any of them installed.
@@ -65,8 +101,9 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      - name: Shape regression tests
-        run: ctest --test-dir build --output-on-failure
+      - name: Regression tests
+        timeout-minutes: 5
+        run: ctest --test-dir build --output-on-failure --timeout 60
 
       # The engine runs until its window is closed. Let it render on a virtual
       # display for a few seconds: it must still be running when `timeout`
@@ -103,6 +140,7 @@ jobs:
           cp build/_deps/reactphysics3d-src/LICENSE "$package/licenses/ReactPhysics3D.txt"
           cp build/_deps/imgui-src/LICENSE.txt "$package/licenses/DearImGui.txt"
           cp build/_deps/imguizmo-src/LICENSE "$package/licenses/ImGuizmo.txt"
+          cp build/_deps/lua-src/lua.h "$package/licenses/Lua.txt"
           cp third_party/glad/LICENSE "$package/licenses/glad.txt"
           tar -czf "$package.tar.gz" "$package"
 
