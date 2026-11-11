@@ -2,7 +2,7 @@
 
 Trying to make a custom game engine with AI
 
-The screenshot below shows the initial scene (before the shape picker was added).
+The screenshot below shows the older scene, before the larger checkerboard floor and editor UI.
 
 ![An orange 1 m cube floating above a 5 × 5 m plane that lies on a 7 × 7 grid](docs/screenshot.png)
 
@@ -10,8 +10,9 @@ The screenshot below shows the initial scene (before the shape picker was added)
 
 LegacyEngine opens a window onto a small 3D world:
 
-- a 7 × 7 grid on the ground, 1 m per grid block
-- a solid 5 × 5 m plane lying on the grid, centred on the origin
+- a 32 × 32 m grid on the ground, 1 m per grid block
+- a solid 16 × 16 m plane lying on the grid, centred on the origin
+- a black/white checkerboard floor with 1 m squares and a glossy, view-dependent specular highlight
 - a 1 m cube floating above the plane, with its centre at (0, 1, 0)
 
 Press `F` and the cube falls onto the plane. Choose **Cube**, **Sphere** or **Capsule** in the
@@ -37,6 +38,24 @@ The **Freecam** checkbox switches between free flight (checked by default) and a
 **Q/E** to move down/up, **Shift** for faster movement and **right-drag** to look around in place.
 The wheel moves forward/back. Static mode ignores all navigation input; spawning and selection
 still work. Switching modes preserves your view.
+
+### Transform tools
+
+The bottom-left toolbar has three **icon-only buttons** with hover tooltips: **Move** (arrows),
+**Rotate** (circular arrow), and **Scale** (expanding square). The active tool is highlighted.
+Turn off **Spawn Shapes Mode**, select an object, then drag its gizmo handles:
+
+- **Move:** drag the red X, green Y or blue Z arrow (world axes), or a plane handle.
+- **Rotate:** drag an axis ring to turn the object around that local axis.
+- **Scale:** drag a local-axis handle to resize a box, or the centre to resize uniformly.
+  Spheres and capsules scale uniformly with any scale handle so their native colliders still
+  match the graphics. Scale is limited to 0.05–100 to avoid degenerate physics shapes.
+
+During a drag, the selected dynamic object is held in place; on release, its mass/gravity settings
+are restored with zero velocity. The rest of the scene keeps simulating. Objects can be moved into
+other objects; normal collision resolution resumes after release. Tool handles capture the mouse,
+so manipulating an axis does not spawn, deselect, or move the camera. Tools are hidden when nothing
+is selected or spawn mode is on; the bottom-left toolbar remains available.
 
 One unit is one metre, +Y points up and the ground is the XZ plane.
 
@@ -69,10 +88,14 @@ It is written in C++17 with:
 - [SDL3](https://www.libsdl.org/) for the window, the input and the OpenGL context
 - OpenGL 3.3 (core profile) for the rendering
 - [GLAD](https://github.com/Dav1dde/glad) for loading the OpenGL functions (generated code in `third_party/glad`)
-- [Dear ImGui](https://github.com/ocornut/imgui) for the shape picker (MIT licence)
+- [Dear ImGui](https://github.com/ocornut/imgui) for the editor UI (MIT licence)
+- [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) for draggable transform axes (MIT licence)
 - [ReactPhysics3D](https://www.reactphysics3d.com/) for the physics: gravity and collisions
 
 Only Linux has been built and tested so far.
+
+The checkerboard texture is generated at startup and mipmapped; no image asset is needed.
+It follows the plane when transformed. Its collider spans the full 16 × 16 m surface.
 
 ## Adding objects
 
@@ -228,11 +251,14 @@ binary and attaches it to the workflow run.
 
 ## Tests
 
-After building, run the CPU-only shape regression tests (no display required):
+After building, run the CPU-only regression tests (no display required):
 
 ```sh
 ctest --test-dir build --output-on-failure
 ```
 
 These cover mesh dimensions and winding, native collider raycasts and overlaps, capsule rotation,
-resting heights, collider replacement/removal, and selection wireframe geometry. UI interaction still needs a graphical session.
+resting heights, collider replacement/removal, and selection wireframe geometry. Transform tests
+also exercise matrix-to-quaternion conversion, scale limits, icon toolbar clicks, actual move/rotate/scale
+gizmo drags through ImGui input, and physics-body hold/release. A real graphical session is still needed
+to verify the rendered editor and physical mouse interaction.

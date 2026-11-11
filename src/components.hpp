@@ -18,6 +18,8 @@ struct Transform {
 struct MeshRenderer {
     MeshHandle mesh;                     // from Renderer::createMesh()
     Vec3       color = {1.0f, 1.0f, 1.0f}; // red, green and blue, each from 0 to 1
+    bool       checkerboard = false;         // repeating 1 m squares in local XZ
+    float      specular = 0.0f;              // highlight strength (0 is matte)
 };
 
 enum class ColliderShape { Box, Sphere, Capsule };

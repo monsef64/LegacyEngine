@@ -2,6 +2,7 @@
 #include "physics.hpp"
 #include "collider_debug.hpp"
 #include "camera.hpp"
+#include "transform_edit.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -130,6 +131,13 @@ int main()
         physics.update(world, 0);
         require(physics.raycast({{0, 6, 0}, {0, -1, 0}}, 10, hit), "changed shape hit");
         require(std::abs(hit.point.y-4.75f) < 1e-4f, "changed radius rebuilds");
+        // Transform scale edits are reflected in the real collider on the next update.
+        Transform& edited=world.get<Transform>(e);
+        require(applyGizmoMatrix(edited,transformMatrix(edited.position,edited.rotation,{2,2,2}),
+                                TransformTool::Scale,true),"gizmo scaling accepted");
+        physics.update(world,0);
+        require(physics.raycast({{0,8,0},{0,-1,0}},10,hit),"scaled collider hit");
+        require(std::abs(hit.point.y-5.5f)<1e-4f,"collider follows gizmo scale");
         world.destroy(e);
         physics.update(world, 0);
     }
