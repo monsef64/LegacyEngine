@@ -25,7 +25,7 @@ public:
 
     // Clears the picture, which is `width` x `height` pixels, and draws every
     // entity that has a Transform and a MeshRenderer.
-    void draw(World& world, const Mat4& viewProjection, int width, int height);
+    void draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition);
 
     // Green collider overlay for a selected object, drawn over the scene.
     void drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection);
@@ -48,7 +48,13 @@ private:
     int          unlitColor_ = -1;
 
     // Colour shaded by a single directional light, for surfaces.
+    unsigned int checkerTexture_ = 0;
     unsigned int litProgram_ = 0;
+    int          litModel_ = -1;
+    int          litCameraPosition_ = -1;
+    int          litCheckerboard_ = -1;
+    int          litCheckerTexture_ = -1;
+    int          litSpecular_ = -1;
     int          litModelViewProjection_ = -1;
     int          litNormalMatrix_ = -1;
     int          litColor_ = -1;

@@ -1,5 +1,5 @@
 // LegacyEngine - a small 3D scene: an orange 1 m cube floating above a
-// 5 x 5 m plane, on a 7 x 7 m grid. Pressing F drops the cube onto the plane,
+// 16 x 16 m plane, on a 32 x 32 m grid. Pressing F drops the cube onto the plane,
 // and a click puts a new cube under the mouse pointer.
 //
 // World conventions:
@@ -31,9 +31,9 @@
 // Scene description
 // ---------------------------------------------------------------------------
 
-constexpr int   kGridCells = 7;    // grid blocks per side
+constexpr int   kGridCells = 32;    // grid blocks per side
 constexpr float kCellSize  = 1.0f; // metres per grid block
-constexpr float kPlaneSize = 5.0f; // metres per side of the plane
+constexpr float kPlaneSize = 16.0f; // metres per side of the plane
 constexpr float kCubeSize  = 1.0f; // metres per edge of a cube
 
 // Where the centre of the first cube is before it falls.
@@ -246,7 +246,7 @@ static void run(SDL_Window* window, Renderer& renderer)
     // steps, so its collider is a 1 m thick slab whose top is the plane.
     const Entity plane = world.create();
     world.add(plane, Transform{});
-    world.add(plane, MeshRenderer{planeMesh, {0.30f, 0.34f, 0.40f}});
+    world.add(plane, MeshRenderer{planeMesh, {1.0f, 1.0f, 1.0f}, true, 0.65f});
     world.add(plane, BoxCollider{{kPlaneSize, 1.0f, kPlaneSize}, {0.0f, -0.5f, 0.0f}});
 
     // The first cube is drawn and is solid. Without a RigidBody it is an
@@ -419,7 +419,7 @@ static void run(SDL_Window* window, Renderer& renderer)
         if (width > 0 && height > 0) {
             const float aspect = static_cast<float>(width) / static_cast<float>(height);
             const Mat4 viewProjection = camera.viewProjection(aspect);
-            renderer.draw(world, viewProjection, width, height);
+            renderer.draw(world, viewProjection, width, height, camera.position());
             if (!spawnMode && world.alive(selectedEntity)) {
                 const auto* transform = world.tryGet<Transform>(selectedEntity);
                 const auto* collider = world.tryGet<Collider>(selectedEntity);

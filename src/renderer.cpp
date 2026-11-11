@@ -39,19 +39,31 @@ layout(location = 1) in vec3 aNormal;
 
 uniform mat4 uModelViewProjection;
 uniform mat3 uNormalMatrix;
+uniform mat4 uModel;
 
 out vec3 vNormal;
+out vec3 vWorldPosition;
+out vec2 vCheckerUV;
 
 void main()
 {
     vNormal = uNormalMatrix * aNormal;
+    vWorldPosition = (uModel * vec4(aPosition, 1.0)).xyz;
+    // A 2x2 repeat covers 2 metres: each texel is one checker square.
+    vCheckerUV = aPosition.xz * 0.5;
     gl_Position = uModelViewProjection * vec4(aPosition, 1.0);
 }
 )glsl";
 
 const char* const kLitFragmentShader = R"glsl(#version 330 core
 in vec3 vNormal;
+in vec3 vWorldPosition;
+in vec2 vCheckerUV;
 
+uniform bool uCheckerboard;
+uniform sampler2D uCheckerTexture;
+uniform float uSpecular;
+uniform vec3 uCameraPosition;
 uniform vec3 uColor;
 uniform vec3 uLightDirection; // unit vector pointing towards the light
 
@@ -59,8 +71,14 @@ out vec4 fragColor;
 
 void main()
 {
-    float diffuse = max(dot(normalize(vNormal), uLightDirection), 0.0);
-    fragColor = vec4(uColor * (0.35 + 0.65 * diffuse), 1.0);
+    vec3 normal = normalize(vNormal);
+    float diffuse = max(dot(normal, uLightDirection), 0.0);
+    vec3 albedo = uColor;
+    if (uCheckerboard) albedo *= texture(uCheckerTexture, vCheckerUV).rgb;
+    vec3 viewDirection = normalize(uCameraPosition - vWorldPosition);
+    vec3 halfway = normalize(uLightDirection + viewDirection);
+    float highlight = diffuse > 0.0 ? pow(max(dot(normal, halfway), 0.0), 64.0) : 0.0;
+    fragColor = vec4(albedo * (0.35 + 0.65 * diffuse) + vec3(uSpecular * highlight), 1.0);
 }
 )glsl";
 
@@ -132,10 +150,29 @@ bool Renderer::init()
 
     unlitModelViewProjection_ = glGetUniformLocation(unlitProgram_, "uModelViewProjection");
     unlitColor_               = glGetUniformLocation(unlitProgram_, "uColor");
+    litModel_ = glGetUniformLocation(litProgram_, "uModel");
+    litCameraPosition_ = glGetUniformLocation(litProgram_, "uCameraPosition");
+    litCheckerboard_ = glGetUniformLocation(litProgram_, "uCheckerboard");
+    litCheckerTexture_ = glGetUniformLocation(litProgram_, "uCheckerTexture");
+    litSpecular_ = glGetUniformLocation(litProgram_, "uSpecular");
     litModelViewProjection_   = glGetUniformLocation(litProgram_, "uModelViewProjection");
     litNormalMatrix_          = glGetUniformLocation(litProgram_, "uNormalMatrix");
     litColor_                 = glGetUniformLocation(litProgram_, "uColor");
     litLightDirection_        = glGetUniformLocation(litProgram_, "uLightDirection");
+
+    // Small generated texture: no external asset paths, with mipmaps to reduce
+    // shimmer at distance and nearest magnification for crisp checker edges.
+    const unsigned char checks[]{0,0,0,255,255,255,255,255,255,0,0,0};
+    glGenTextures(1, &checkerTexture_);
+    glBindTexture(GL_TEXTURE_2D, checkerTexture_);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGB8,2,2,0,GL_RGB,GL_UNSIGNED_BYTE,checks);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+    glGenerateMipmap(GL_TEXTURE_2D);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
@@ -155,6 +192,8 @@ void Renderer::shutdown()
         glDeleteVertexArrays(1, &mesh.vertexArray);
     }
     meshes_.clear();
+    glDeleteTextures(1, &checkerTexture_);
+    checkerTexture_ = 0;
     glDeleteBuffers(1, &colliderVertexBuffer_);
     glDeleteVertexArrays(1, &colliderVertexArray_);
     colliderVertexBuffer_ = colliderVertexArray_ = 0;
@@ -194,15 +233,20 @@ MeshHandle Renderer::createMesh(const MeshData& data)
     return {static_cast<std::uint32_t>(meshes_.size() - 1)};
 }
 
-void Renderer::draw(World& world, const Mat4& viewProjection, int width, int height)
+void Renderer::draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition)
 {
     glViewport(0, 0, width, height);
     glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    const Vec3 lightDirection = normalize(Vec3{0.4f, 1.0f, 0.6f});
+    // Light from the far side places a visible floor highlight in the starting view.
+    const Vec3 lightDirection = normalize(Vec3{-0.4f, 1.0f, -0.6f});
     glUseProgram(litProgram_);
     glUniform3f(litLightDirection_, lightDirection.x, lightDirection.y, lightDirection.z);
+    glUniform3f(litCameraPosition_, cameraPosition.x, cameraPosition.y, cameraPosition.z);
+    glUniform1i(litCheckerTexture_, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, checkerTexture_);
 
     world.each<Transform, MeshRenderer>(
         [&](Entity, const Transform& transform, const MeshRenderer& renderer) {
@@ -229,6 +273,9 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
 
                 const Mat3 normals = normalMatrix(transform.rotation, transform.scale);
                 glUseProgram(litProgram_);
+                glUniformMatrix4fv(litModel_, 1, GL_FALSE, model.m);
+                glUniform1i(litCheckerboard_, renderer.checkerboard ? 1 : 0);
+                glUniform1f(litSpecular_, renderer.specular);
                 glUniformMatrix4fv(litModelViewProjection_, 1, GL_FALSE, modelViewProjection.m);
                 glUniformMatrix3fv(litNormalMatrix_, 1, GL_FALSE, normals.m);
                 glUniform3f(litColor_, renderer.color.x, renderer.color.y, renderer.color.z);
