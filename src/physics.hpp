@@ -27,6 +27,7 @@
 #include "math.hpp"
 
 #include <memory>
+#include <functional>
 
 // What Physics::raycast() found.
 struct RayHit {
@@ -44,8 +45,9 @@ public:
     Physics& operator=(const Physics&) = delete;
 
     // Advances the simulation. Call it once per frame with the time that has
-    // passed since the previous call.
-    void update(World& world, float seconds);
+    // passed since the previous call. beforeStep runs immediately before each
+    // fixed solver step; its ECS changes are synchronized before simulation.
+    void update(World& world, float seconds, const std::function<void(float)>& beforeStep = {});
 
     // The two questions below are about the colliders as the last update()
     // left them: what has been added, moved or destroyed since then is not

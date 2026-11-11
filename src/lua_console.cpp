@@ -1,4 +1,5 @@
 #include "lua_console.hpp"
+#include "lua_scene.hpp"
 
 extern "C" {
 #include <lua.h>
@@ -24,7 +25,7 @@ void* LuaConsole::allocate(void* user, void* pointer, std::size_t oldSize, std::
 }
 
 LuaConsole::LuaConsole() { reset(); }
-LuaConsole::~LuaConsole() { if (state_) lua_close(state_); }
+LuaConsole::~LuaConsole() { shutdown(); if (state_) lua_close(state_); }
 
 void LuaConsole::append(Kind kind, std::string_view text)
 {
@@ -38,6 +39,7 @@ void LuaConsole::append(Kind kind, std::string_view text)
 
 void LuaConsole::reset()
 {
+    shutdown();
     if (state_) lua_close(state_);
     state_=nullptr;
     allocated_=0;
@@ -57,6 +59,7 @@ void LuaConsole::reset()
     }
     lua_pushlightuserdata(state_,this);
     lua_pushcclosure(state_,print,1); lua_setglobal(state_,"print");
+    installScene();
     append(Kind::Info,"Lua 5.4 ready. print(...) writes here.");
 }
 
@@ -99,12 +102,12 @@ bool LuaConsole::execute(std::string_view source)
     if (!state_) { append(Kind::Error,"Lua runtime is unavailable"); return false; }
     if (source.size()>maxSourceBytes) { append(Kind::Error,"Script exceeds the 64 KiB editor limit"); return false; }
     lua_settop(state_,0);
-    remainingInstructions_=1000000;
-    lua_sethook(state_,instructionHook,LUA_MASKCOUNT,1000);
+    beginBudget();
     lua_pushcfunction(state_,traceback);
     int status=luaL_loadbufferx(state_,source.data(),source.size(),"editor","t");
     if (status==LUA_OK) status=lua_pcall(state_,0,0,1);
-    lua_sethook(state_,nullptr,0,0);
+    if (status==LUA_OK && scene_) scene_->start();
+    endBudget();
     if (status!=LUA_OK) {
         const char* message=lua_tostring(state_,-1);
         append(Kind::Error,message ? message : "Unknown Lua error");
@@ -112,4 +115,22 @@ bool LuaConsole::execute(std::string_view source)
     lua_settop(state_,0);
     lua_gc(state_,LUA_GCCOLLECT,0);
     return status==LUA_OK;
+}
+
+void LuaConsole::beginBudget() {
+    remainingInstructions_=1000000;
+    lua_sethook(state_,instructionHook,LUA_MASKCOUNT,1000);
+}
+void LuaConsole::endBudget() { lua_sethook(state_,nullptr,0,0); }
+void LuaConsole::installScene() {
+    if(world_ && state_) scene_=std::make_unique<LuaScene>(state_,*world_,meshes_[0],meshes_[1],meshes_[2],meshes_[3],
+        [this](std::string_view message){append(Kind::Error,message);});
+}
+void LuaConsole::bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone) {
+    shutdown();world_=&world;meshes_[0]=cube;meshes_[1]=sphere;meshes_[2]=capsule;meshes_[3]=cone;installScene();
+}
+void LuaConsole::update(float dt) { if(scene_){beginBudget();scene_->update(dt);endBudget();} }
+void LuaConsole::fixedUpdate(float dt) { if(scene_){beginBudget();scene_->fixedUpdate(dt);endBudget();} }
+void LuaConsole::shutdown() {
+    if(scene_){beginBudget();scene_->stop();endBudget();scene_.reset();}
 }

@@ -46,3 +46,15 @@ struct MeshHandle {
 // Round shapes centred at the origin. Capsule's cylindrical section runs along Y.
 MeshData makeSphere(float radius);
 MeshData makeCapsule(float radius, float height);
+
+// Faceted cone, local Y axis, centred on origin. Shared geometry with its hull collider.
+constexpr int kConeSegments = 32;
+MeshData makeCone(float radius, float height);
+inline std::vector<Vec3> coneHullVertices() {
+    std::vector<Vec3> vertices{{0,0.5f,0}};
+    for(int i=0;i<kConeSegments;++i) {
+        const float a=2*kPi*i/kConeSegments;
+        vertices.push_back({0.5f*std::cos(a),-0.5f,0.5f*std::sin(a)});
+    }
+    return vertices;
+}

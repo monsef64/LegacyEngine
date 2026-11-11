@@ -264,6 +264,7 @@ struct Physics::Impl {
 
     rp3d::PhysicsCommon common;
     rp3d::PhysicsWorld* world = nullptr;
+    rp3d::ConvexMesh* coneMesh = nullptr;
 
     std::unordered_map<std::uint64_t, Body> bodies;
     float pendingSeconds = 0.0f; // time that has passed but is not simulated yet
@@ -279,6 +280,11 @@ struct Physics::Impl {
         rp3d::PhysicsWorld::WorldSettings settings;
         settings.gravity = rp3d::Vector3(0, rp3d::decimal(-9.81), 0); // metres per second squared
         world = common.createPhysicsWorld(settings);
+        const auto vertices=coneHullVertices();
+        const rp3d::VertexArray array(vertices.data(),sizeof(Vec3),static_cast<rp3d::uint32>(vertices.size()),
+                                     rp3d::VertexArray::DataType::VERTEX_FLOAT_TYPE);
+        std::vector<rp3d::Message> messages;
+        coneMesh=common.createConvexMesh(array,messages);
     }
 
     // `common` frees the world and everything in it when it is destroyed.
@@ -311,6 +317,7 @@ struct Physics::Impl {
             case ColliderShape::Box: common.destroyBoxShape(static_cast<rp3d::BoxShape*>(body.shape)); break;
             case ColliderShape::Sphere: common.destroySphereShape(static_cast<rp3d::SphereShape*>(body.shape)); break;
             case ColliderShape::Capsule: common.destroyCapsuleShape(static_cast<rp3d::CapsuleShape*>(body.shape)); break;
+            case ColliderShape::Cone: common.destroyConvexMeshShape(static_cast<rp3d::ConvexMeshShape*>(body.shape)); break;
             }
         }
         body.body     = nullptr;
@@ -333,6 +340,7 @@ struct Physics::Impl {
             case ColliderShape::Box: body.shape = common.createBoxShape(toRp3d(box->halfSize)); break;
             case ColliderShape::Sphere: body.shape = common.createSphereShape(box->radius); break;
             case ColliderShape::Capsule: body.shape = common.createCapsuleShape(box->radius, box->height); break;
+            case ColliderShape::Cone: body.shape = common.createConvexMeshShape(coneMesh,{box->radius*2,box->height,box->radius*2}); break;
             }
             body.collider = body.body->addCollider(body.shape, place);
             body.collider->getMaterial().setFrictionCoefficient(box->friction);
@@ -469,10 +477,11 @@ Physics::Physics() : impl_(std::make_unique<Impl>()) {}
 
 Physics::~Physics() = default;
 
-void Physics::update(World& world, float seconds)
+void Physics::update(World& world, float seconds, const std::function<void(float)>& beforeStep)
 {
     Impl& impl = *impl_;
 
+    const auto synchronize = [&]() {
     // 1. Pick up what game code did since the last update: new, changed and
     //    removed components, and destroyed entities.
     for (auto& entry : impl.bodies) {
@@ -519,6 +528,9 @@ void Physics::update(World& world, float seconds)
         impl.wakeAll = false;
     }
 
+    };
+    synchronize();
+
     // 2. Simulate the time that has passed, one fixed step at a time. What is
     //    left over, less than a step, waits for the next update.
     if (seconds > 0.0f) { // also false for NaN
@@ -526,6 +538,7 @@ void Physics::update(World& world, float seconds)
     }
     while (impl.pendingSeconds >= kStepSeconds) {
         impl.pendingSeconds -= kStepSeconds;
+        if (beforeStep) { beforeStep(kStepSeconds); synchronize(); }
         impl.world->update(kStepSeconds);
         for (auto& entry : impl.bodies) {
             Impl::Body& body = entry.second;

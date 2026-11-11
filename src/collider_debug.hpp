@@ -29,6 +29,17 @@ inline MeshData colliderWireframe(const Collider& collider, Vec3 scale)
                 if (!(i & bit)) line(corners[i], corners[i | bit]);
         return mesh;
     }
+    if (collider.shape==ColliderShape::Cone) {
+        const float radius=std::max(std::abs(collider.radius)*std::max(std::abs(scale.x),std::abs(scale.z)),0.0005f);
+        const float height=std::max(std::abs(collider.height*scale.y),0.001f);
+        const auto points=coneHullVertices();
+        const Vec3 dimensions{radius*2,height,radius*2};
+        for(int i=0;i<kConeSegments;++i) {
+            line(points[1+i]*dimensions,points[1+(i+1)%kConeSegments]*dimensions);
+            if(i%8==0)line(points[1+i]*dimensions,points[0]*dimensions);
+        }
+        return mesh;
+    }
     const bool capsule = collider.shape == ColliderShape::Capsule;
     const float radialScale = capsule ? std::max(std::abs(scale.x), std::abs(scale.z))
         : std::max({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z)});

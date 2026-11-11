@@ -31,6 +31,15 @@ int main()
     require(hello,"Execute button sends script output to console");
     click(840,492); // Clear in the default bottom-right Lua Console.
     require(editor.console().lines().empty(),"console Clear button empties transcript");
+    io.AddMousePosEvent(900,140); frame();
+    io.AddMouseButtonEvent(0,true); frame();
+    io.AddMouseButtonEvent(0,false); frame();
+    io.AddKeyEvent(ImGuiMod_Ctrl,true); io.AddKeyEvent(ImGuiKey_A,true); frame();
+    io.AddKeyEvent(ImGuiKey_A,false); io.AddKeyEvent(ImGuiMod_Ctrl,false); frame();
+    io.AddInputCharactersUTF8("createG"); frame();
+    io.AddKeyEvent(ImGuiKey_Tab,true); frame();
+    io.AddKeyEvent(ImGuiKey_Tab,false); frame();
+    require(editor.source()=="createGameObject","Tab completes scene API in multiline editor");
     ImGui::DestroyContext();
     std::puts("ImGui Execute-to-console and Clear button tests passed");
 }

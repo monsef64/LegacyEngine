@@ -44,7 +44,7 @@ void TransformEditor::draw(World& world, Entity entity, bool enabled, const Orbi
         if (active) ImGui::PopStyleColor();
     }
     ImGui::End();
-    if (!enabled || !world.alive(entity) || !world.has<Transform>(entity) || !world.has<Collider>(entity)) {
+    if (!enabled || !world.alive(entity) || !world.has<Transform>(entity)) {
         finish(world);
         return;
     }
@@ -72,7 +72,8 @@ void TransformEditor::draw(World& world, Entity entity, bool enabled, const Orbi
         world.remove<RigidBody>(entity);
     }
     if (changed) {
-        const bool round=world.get<Collider>(entity).shape!=ColliderShape::Box;
+        const auto* collider=world.tryGet<Collider>(entity);
+        const bool round=collider && collider->shape!=ColliderShape::Box;
         if (round && tool_==TransformTool::Scale) {
             // ImGuizmo returns absolute scale relative to the start of its drag.
             // Compare against that baseline, not last frame's uniform result.

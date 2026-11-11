@@ -8,20 +8,21 @@ The screenshot below shows the older scene, before the larger checkerboard floor
 
 ## What it does so far
 
-LegacyEngine opens a window onto a small 3D world:
+LegacyEngine opens a maximized, resizable window onto a small 3D world:
 
 - a 32 × 32 m grid on the ground, 1 m per grid block
 - a solid 16 × 16 m plane lying on the grid, centred on the origin
 - a black/white checkerboard floor with 1 m squares and a glossy, view-dependent specular highlight
 - a 1 m cube floating above the plane, with its centre at (0, 1, 0)
 
-Press `F` and the cube falls onto the plane. Choose **Cube**, **Sphere** or **Capsule** in the
+Press `F` and the cube falls onto the plane. Choose **Cube**, **Sphere**, **Capsule** or **Cone** in the
 Dear ImGui **Spawn shapes** list, then left-click the scene to spawn that shape. The selection
 stays active for subsequent clicks. Every spawned object has gravity and a matching native
-ReactPhysics3D collider: box, sphere or capsule (not a bounding-box approximation).
+ReactPhysics3D collider: box, sphere, capsule or convex cone (not a bounding-box approximation).
 
 Cubes have 1 m edges, spheres have a 0.5 m radius, and capsules have a 0.5 m radius plus a
-1 m cylindrical section (2 m total height). UI interactions do not spawn objects or move the camera.
+1 m cylindrical section (2 m total height). Cones have a 0.5 m base radius and 1 m height,
+with matching 32-sided render geometry and convex collision hulls. UI interactions do not spawn objects or move the camera.
 
 The **Spawn Shapes Mode** checkbox starts checked. Uncheck it to select instead of spawn:
 left-click any solid object (including the original cube or plane) to see its actual collider
@@ -39,13 +40,46 @@ The **Freecam** checkbox switches between free flight (checked by default) and a
 The wheel moves forward/back. Static mode ignores all navigation input; spawning and selection
 still work. Switching modes preserves your view.
 
+### Create menu and parenting
+
+The top menu contains **Create → Empty GameObject** and **Create → Shape → Capsule / Cone / Cube /
+Sphere**. Menu creation places the object near the camera target, selects it, and switches off
+Spawn Shapes Mode so it can immediately be edited. Empty objects have a name and Transform but
+no renderer or collider. Shape objects have matching render/collision geometry and a RigidBody.
+Cones are also available in the click-to-spawn shape picker and Lua mesh/collider fields.
+
+Select an object in **Level Objects** and use its **Parent** dropdown, or drag its row onto another
+object's row. **None** unparents it. Children appear indented under parents. Parenting and
+unparenting preserve the current world pose; subsequent parent translation, rotation and scale
+move descendants. Empty objects are useful as editable group pivots. Self-parenting, cycles and
+chains deeper than 128 levels are rejected. Removing a parent detaches children rather than
+removing them, retaining their last world pose.
+
+Lua supports `setParent(child, parent)`, `setParent(child, nil)`, `getParent(child)` and the live
+`object.parent` property. For example:
+
+```lua
+local group = createGameObject("Group")
+local cube = createGameObject("Child")
+addComponent(cube, "MeshRenderer")
+addComponent(cube, "Collider")
+getComponent(cube, "Transform").position.x = 2
+setParent(cube, group)
+getComponent(group, "Transform").position.y = 3
+```
+
+Transforms exposed to Lua and gizmos remain **world-space**. Parenting propagates transform
+deltas; it is not a rigid physics joint. Children with RigidBodies still simulate independently.
+Use uniform parent scaling for rotated or round descendants: the TRS/component representation
+does not represent shear or ellipsoidal colliders.
+
 ### Level Objects
 
 The **Level Objects** window lists the grid, plane, original cube and all spawned shapes by name.
 Turn off **Spawn Shapes Mode**, then click a row to select it. List selection and scene selection
 share the same highlight and transform tools; **Clear selection** clears both. Spawned objects
 appear automatically and destroyed objects disappear. The grid can be selected in the list but is
-a visual helper with no collider outline or transform gizmo.
+a visual helper with no collider outline, but its Transform can still be edited.
 
 ### Transform tools
 
@@ -126,13 +160,63 @@ built-in functions; it does not erase the editor text or existing console messag
 clears the console. The console has an auto-scroll toggle and keeps the last 1,000 messages,
 with long messages truncated at about 8 KiB. Scripts are held in memory, not saved to disk.
 
-Lua 5.4.8 is embedded, so no Lua installation is needed. This is a snippet editor, not yet an engine
-scripting API: scripts cannot spawn or transform scene objects. Available libraries are base,
+Lua 5.4.8 is embedded, so no Lua installation is needed. Scripts can manipulate the live scene
+using the game-object and component API below. Available libraries are base,
 `math`, `string`, `table` and `utf8`. File/process access, native modules, debug APIs, coroutines,
 metatable access, dynamic loading and script-side `pcall`/`xpcall` are omitted. Execution is synchronous
 with a 1,000,000 VM-instruction budget, a 32 MiB Lua allocation limit and a 64 KiB source limit.
 The instruction guard covers Lua loops, not time spent inside native library calls; these limits
 are guardrails for local snippets, **not a security boundary for untrusted code**.
+
+### Lua game and object lifecycle
+
+Define global `onStart()`, `onUpdate(deltaTime)`, `onFixedUpdate(deltaTime)` and `onDestroy()`
+functions in the editor. `onStart()` runs after **each successful Execute**. Frame callbacks start
+on the next frame; `onUpdate` receives seconds capped at 0.25, and `onFixedUpdate` receives 1/60
+seconds immediately before each actual physics step (zero or multiple times per frame).
+`onDestroy()` runs on Reset Runtime or engine shutdown. Callback errors go to the Lua console
+and pause lifecycle updates until the next successful Execute or Reset Runtime.
+
+The same callbacks can be assigned to individual GameObject handles, e.g.
+`ball.onUpdate = function(dt) ... end`. Object `onStart` runs once before that object's first
+update/fixed update. Callbacks receive only the documented arguments, **not an implicit self**;
+close over the object handle when needed. Objects created during a callback start on a subsequent
+tick. Explicit destruction calls the object's `onDestroy` before removing components. Destruction
+by the engine is detected on the next tick, when the handle is already invalid; such a callback
+should not try to read the destroyed object's components. Each object destruction callback runs
+at most once. Reset/shutdown destroys objects created by Lua, but preserves pre-existing objects.
+
+| Lua function | Result |
+| --- | --- |
+| `createGameObject(name)` | New object with Transform and ObjectName, initially invisible |
+| `destroyGameObject(object)` | Calls object onDestroy, then removes it from the scene |
+| `getComponent(object, type)` | Live component proxy, or nil if absent |
+| `addComponent(object, type)` | Existing component or newly added default component |
+| `removeComponent(object, type)` | Removes the named component; harmless if absent |
+| `findGameObjectByName(name)` | First matching named object, or nil |
+| `findGameObjectsByComponent(type)` | Array of matching objects, including pre-existing scene objects |
+
+Types are strings: `Transform`, `RigidBody`, `Collider` (`BoxCollider` alias), `MeshRenderer`, and
+`ObjectName`. Vector properties support both whole assignments (`position = {x=0,y=3,z=0}`) and
+live coordinate edits (`position.y = 4`). Rotation is a quaternion `{x,y,z,w}`. MeshRenderer `mesh`
+is `"Cube"`, `"Sphere"`, `"Capsule"` or `"Cone"`; Collider `shape` is `"Box"`, `"Sphere"`, `"Capsule"` or `"Cone"`.
+Set both to matching shapes. Other fields match the C++ component names below. Names are limited
+to 256 bytes, and the runtime tracks at most 4,096 simultaneous object handles. Stale handles and
+removed component accesses report Lua errors instead of accessing recycled ECS storage.
+
+See [`scripts/lifecycle_example.lua`](scripts/lifecycle_example.lua) for a runnable example.
+Use uniform scale for spheres/capsules, as with C++ component edits. Reset clears callbacks and
+globals; Execute otherwise retains existing objects/globals and re-runs the current onStart.
+
+### Autocomplete definitions
+
+The multiline editor shows API/field signatures while typing. **Tab** completes an unambiguous
+identifier (or extends a shared prefix); type more characters to disambiguate. Tab with an empty
+prefix inserts indentation. This is built-in API completion, not a full Lua language server.
+
+[`scripts/definitions/legacyengine.lua`](scripts/definitions/legacyengine.lua) supplies LuaLS/EmmyLua
+types, lifecycle signatures and component overloads. The repository's `.luarc.json` includes that
+folder for external editors. Definitions are editor-only metadata; do **not** Execute them.
 
 ## Adding objects
 
@@ -213,7 +297,7 @@ world.add(roof, MeshRenderer{pyramidMesh, {0.80f, 0.20f, 0.20f}});
 ```
 
 There is no loader for model files such as `.obj` yet; one would fill a `MeshData` in the same way.
-Set `Collider::shape` to `ColliderShape::Box`, `Sphere` or `Capsule`. Boxes use `size`;
+Set `Collider::shape` to `ColliderShape::Box`, `Sphere`, `Capsule` or `Cone`. Boxes use `size`;
 spheres use `radius`; capsules use `radius` and `height` (distance between hemisphere centres,
 along local Y). All use `center`, `friction` and `bounciness`. Attach only one `Collider` per entity.
 Use uniform scale for round meshes: native round colliders cannot become ellipsoids; non-uniform

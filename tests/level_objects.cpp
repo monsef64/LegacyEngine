@@ -18,7 +18,7 @@ int main()
     world.add(first,Collider{});
     const Entity hidden=world.create(); world.add(hidden,Transform{});
     auto objects=levelObjects(world);
-    require(objects.size()==2,"only visible level entities listed");
+    require(objects.size()==3,"empty game objects are listed");
     require(objects[0].entity==first && objects[1].entity==second,"stable entity order");
     require(objects[0].hasCollider && !objects[1].hasCollider,"visual helpers identified");
     ImGui::CreateContext();
@@ -46,7 +46,7 @@ int main()
     frame();
     require(selected==Entity{},"destroyed selection cleared");
     const Entity replacement=add("Sphere");
-    require(replacement!=second && levelObjects(world).size()==2,"new generation listed without stale selection");
+    require(replacement!=second && levelObjects(world).size()==3,"new generation listed without stale selection");
     ImGui::DestroyContext();
     std::puts("Level object listing, selection, disabled mode and lifecycle tests passed");
 }
