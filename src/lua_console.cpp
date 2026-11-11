@@ -30,7 +30,8 @@ void LuaConsole::append(Kind kind, std::string_view text)
 {
     if (lines_.size()>=maxLines) lines_.pop_front();
     // Bound the host transcript as well as Lua's own memory.
-    std::string message(text.substr(0,maxLineBytes));
+    std::string message = kind == Kind::Output ? "lua > " : "";
+    message.append(text.substr(0,maxLineBytes));
     if (text.size()>maxLineBytes) message += " [truncated]";
     lines_.push_back({kind,std::move(message)});
 }
@@ -97,7 +98,6 @@ bool LuaConsole::execute(std::string_view source)
 {
     if (!state_) { append(Kind::Error,"Lua runtime is unavailable"); return false; }
     if (source.size()>maxSourceBytes) { append(Kind::Error,"Script exceeds the 64 KiB editor limit"); return false; }
-    append(Kind::Info,"> Execute");
     lua_settop(state_,0);
     remainingInstructions_=1000000;
     lua_sethook(state_,instructionHook,LUA_MASKCOUNT,1000);
@@ -108,7 +108,7 @@ bool LuaConsole::execute(std::string_view source)
     if (status!=LUA_OK) {
         const char* message=lua_tostring(state_,-1);
         append(Kind::Error,message ? message : "Unknown Lua error");
-    } else append(Kind::Info,"Execution finished");
+    }
     lua_settop(state_,0);
     lua_gc(state_,LUA_GCCOLLECT,0);
     return status==LUA_OK;

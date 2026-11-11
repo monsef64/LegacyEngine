@@ -16,7 +16,12 @@ int main()
     using Kind=LuaConsole::Kind;
     LuaConsole console;
     require(console.ready(),"runtime starts");
+    console.clear();
+    require(console.execute("local value = 42"),"silent script succeeds");
+    require(console.lines().empty(),"silent scripts produce no execution banners");
     require(console.execute("print('Hello', 42, true, nil)"),"print succeeds");
+    require(console.lines().size()==1 && console.lines().front().text=="lua > Hello\t42\ttrue\tnil",
+            "output has Lua prompt and no execution banners");
     require(contains(console,Kind::Output,"Hello\t42\ttrue\tnil"),"print routes values to transcript");
     require(console.execute("print('100% %s %n'); print()"),"format strings treated as text");
     require(contains(console,Kind::Output,"100% %s %n"),"format string preserved");
