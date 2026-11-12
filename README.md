@@ -53,7 +53,9 @@ LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s '-screen 0 1600x900x24' \
 
 Both modes finish after 120 rendered frames. `--screenshot` captures the actual
 OpenGL/ImGui framebuffer as BMP and ignores the saved layout for a reproducible view.
-CI converts this to PNG and uploads it as **editor-screenshot**.
+CI converts this to PNG and uploads it as **editor-screenshot**. A manual run can
+also enable **update_screenshot** to commit the captured image back to its selected
+branch; ordinary builds never modify the repository.
 
 ## Source organization
 

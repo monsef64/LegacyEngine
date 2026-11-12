@@ -24,6 +24,11 @@ on:
       - 'scripts/**'
       - '.github/workflows/release.yml'
   workflow_dispatch:
+    inputs:
+      update_screenshot:
+        description: Commit the captured screenshot to the selected branch
+        type: boolean
+        default: false
 
 permissions:
   contents: write # needed to create the release
@@ -145,6 +150,21 @@ jobs:
           name: editor-screenshot
           path: build/editor-screenshot.png
           if-no-files-found: error
+
+      - name: Update README screenshot on this branch
+        if: github.event_name == 'workflow_dispatch' && inputs.update_screenshot && github.ref_type == 'branch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/editor-screenshot.png docs/screenshot.png
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshot.png
+          if ! git diff --cached --quiet; then
+            git commit -m "Refresh editor screenshot from graphical build"
+            git -c 'credential.helper=!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f' \
+              push origin "HEAD:$GITHUB_REF_NAME"
+          fi
 
       # README.md says which glibc the binary needs. The number depends on what
       # is linked into the binary, so show it on the page of the run.
