@@ -6,6 +6,9 @@ struct LuaDefinition { const char* name; const char* signature; };
 inline constexpr LuaDefinition luaDefinitions[]{
     {"createAudioSource","createAudioSource(owner=self, clipPath=nil) -> AudioSource"},
     {"AudioClip","AudioClip(projectRelativeWavPath) -> AudioClip path"},
+    {"AudioListener","AudioListener - receives sound at its GameObject world position"},
+    {"spatialBlend","audio:spatialBlend(value) -> 0 (2D) to 1 (3D)"},
+    {"setSpatialBlend","audio:setSpatialBlend(value) -> alias for spatialBlend"},
     {"AudioSource","AudioSource - audio component type token"},
     {"play","audio:play() - restart assigned clip"},
     {"stop","audio:stop() - stop and rewind"},
@@ -19,7 +22,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"unmute","audio:unmute()"},
     {"setLooping","audio:setLooping(enabled) -> boolean"},
     {"setPan","audio:setPan(pan) -> clamped -1 left to 1 right"},
-    {"setDistance","audio:setDistance(distance) -> attenuation distance"},
+    {"setDistance","audio:setDistance(distance) -> maximum audible distance (3D)"},
     {"isPlaying","audio:isPlaying() -> boolean"},
     {"playOneShot","audio:playOneShot(AudioClip) - overlapping nonlooping clip"},
     {"new","GameObject.new(name) / Camera.new(name)"},

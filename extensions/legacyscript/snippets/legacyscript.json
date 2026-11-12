@@ -1,7 +1,50 @@
 {
-"Start":{"prefix":"onStart","body":["function onStart()","    $0","end"]},
-"Update":{"prefix":"onUpdate","body":["function onUpdate(deltaTime)","    $0","end"]},
-"Fixed update":{"prefix":"onFixedUpdate","body":["function onFixedUpdate(deltaTime)","    $0","end"]},
-"Destroy":{"prefix":"onDestroy","body":["function onDestroy()","    $0","end"]},
-"Camera FOV":{"prefix":"cameraFov","body":["function onStart()","    self:setFieldOfView(${1:90})","end"],"description":"Set FOV on owning Camera"}
+  "Start": {
+    "prefix": "onStart",
+    "body": [
+      "function onStart()",
+      "    $0",
+      "end"
+    ]
+  },
+  "Update": {
+    "prefix": "onUpdate",
+    "body": [
+      "function onUpdate(deltaTime)",
+      "    $0",
+      "end"
+    ]
+  },
+  "Fixed update": {
+    "prefix": "onFixedUpdate",
+    "body": [
+      "function onFixedUpdate(deltaTime)",
+      "    $0",
+      "end"
+    ]
+  },
+  "Destroy": {
+    "prefix": "onDestroy",
+    "body": [
+      "function onDestroy()",
+      "    $0",
+      "end"
+    ]
+  },
+  "Camera FOV": {
+    "prefix": "cameraFov",
+    "body": [
+      "function onStart()",
+      "    self:setFieldOfView(${1:90})",
+      "end"
+    ],
+    "description": "Set FOV on owning Camera"
+  },
+  "Export field": {
+    "prefix": "export",
+    "body": [
+      "@export ${1:target} ${2|GameObject,AudioSource,AudioListener,Transform,RigidBody,Collider,Camera,AudioClip,Asset,number,boolean,string|} ${3}"
+    ],
+    "description": "Declare an Inspector-assigned LegacyScript field"
+  }
 }

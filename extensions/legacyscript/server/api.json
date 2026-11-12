@@ -8,6 +8,18 @@
     "signature": "AudioClip(projectRelativeWavPath) -> AudioClip path"
   },
   {
+    "name": "AudioListener",
+    "signature": "AudioListener - receives sound at its GameObject world position"
+  },
+  {
+    "name": "spatialBlend",
+    "signature": "audio:spatialBlend(value) -> 0 (2D) to 1 (3D)"
+  },
+  {
+    "name": "setSpatialBlend",
+    "signature": "audio:setSpatialBlend(value) -> alias for spatialBlend"
+  },
+  {
     "name": "AudioSource",
     "signature": "AudioSource - audio component type token"
   },
@@ -61,7 +73,7 @@
   },
   {
     "name": "setDistance",
-    "signature": "audio:setDistance(distance) -> attenuation distance"
+    "signature": "audio:setDistance(distance) -> maximum audible distance (3D)"
   },
   {
     "name": "isPlaying",

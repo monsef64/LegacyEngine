@@ -7,7 +7,7 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
@@ -227,7 +227,9 @@ Camera = nil
 ---@field unmute fun(self:AudioSource)
 ---@field setLooping fun(self:AudioSource,enabled:boolean):boolean
 ---@field setPan fun(self:AudioSource,pan:number):number
----@field setDistance fun(self:AudioSource,distance:number):number
+---@field setDistance fun(self:AudioSource,distance:number):number Maximum audible 3D range
+---@field spatialBlend fun(self:AudioSource,value:number):number 0 = 2D, 1 = 3D
+---@field setSpatialBlend fun(self:AudioSource,value:number):number
 ---@field isPlaying fun(self:AudioSource):boolean
 ---@field playOneShot fun(self:AudioSource,clip:AudioClip)
 AudioSource = nil
@@ -238,3 +240,7 @@ function AudioClip(path) end
 ---@param clip? AudioClip
 ---@return AudioSource
 function createAudioSource(owner,clip) end
+
+---@class AudioListener
+---@field enabled boolean
+AudioListener = nil

@@ -30,6 +30,7 @@ public:
     void reset();
     void bindWorld(World& world, MeshHandle cube={}, MeshHandle sphere={}, MeshHandle capsule={}, MeshHandle cone={});
     bool bindObject(Entity entity);
+    bool bindExports(const std::vector<ScriptField>& fields);
     void update(float deltaTime);
     void fixedUpdate(float deltaTime);
     void shutdown();

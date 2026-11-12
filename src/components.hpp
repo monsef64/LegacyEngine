@@ -64,11 +64,17 @@ struct RigidBody {
 };
 
 // Primary LegacyScript and additional attachments, all relative to project assets.
-struct ScriptAttachment { std::string path;bool enabled=true; };
-struct LuaScript { std::string path; bool enabled=true; std::vector<ScriptAttachment> additional; };
+struct ScriptField {
+    std::string name,type,text;
+    float number=0;bool boolean=false;
+    Entity entity{};
+};
+struct EditorComponentPayload {Entity entity;int type;};
+struct ScriptAttachment { std::string path;bool enabled=true;std::vector<ScriptField> fields; };
+struct LuaScript { std::string path; bool enabled=true; std::vector<ScriptAttachment> additional;std::vector<ScriptField> fields; };
 inline std::vector<ScriptAttachment> scriptAttachments(const LuaScript& scripts) {
     std::vector<ScriptAttachment> result;
-    if(!scripts.path.empty())result.push_back({scripts.path,scripts.enabled});
+    if(!scripts.path.empty())result.push_back({scripts.path,scripts.enabled,scripts.fields});
     result.insert(result.end(),scripts.additional.begin(),scripts.additional.end());return result;
 }
 

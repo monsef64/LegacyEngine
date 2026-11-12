@@ -68,7 +68,11 @@ inline Entity copyLevelObject(World& sourceWorld, Entity source, World& world, b
         if (auto* original = sourceWorld.tryGet<T>(source)) { T data = *original; world.add(copy, data); }
     };
     component(Transform{}); component(MeshRenderer{}); component(Collider{});
-    component(AudioSource{});component(RigidBody{}); component(ObjectName{}); component(LuaScript{}); component(Camera{});
+    component(AudioListener{});component(AudioSource{});component(RigidBody{}); component(ObjectName{}); component(LuaScript{}); component(Camera{});
+    if(auto* scripts=world.tryGet<LuaScript>(copy)){
+        auto remap=[&](std::vector<ScriptField>& fields){for(auto& field:fields)if(field.entity==source)field.entity=copy;};
+        remap(scripts->fields);for(auto& extra:scripts->additional)remap(extra.fields);
+    }
     if(auto* audio=world.tryGet<AudioSource>(copy))audio->stop();
     if(auto* camera=world.tryGet<Camera>(copy))camera->active=false;
     if(preserveParent)component(Parent{});
@@ -151,7 +155,6 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
 
         if (!selectionEnabled) ImGui::TextDisabled("Disable Spawn Shapes Mode to select");
         ImGui::BeginDisabled(!selectionEnabled);
-        if (ImGui::Button("Clear selection")) { selected={}; changed=true; }
         if (!panel && world.alive(selected)) {
             const Entity parent=getParent(world,selected);
             const auto* label=world.tryGet<ObjectName>(parent);
@@ -174,8 +177,8 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
             ImGui::PushID(static_cast<int>(object.entity.generation));
             if(depth)ImGui::Indent(static_cast<float>(depth)*12);
             const auto iconPos=ImGui::GetCursorScreenPos();
-            const std::string rowLabel="     "+object.name;
-            if (ImGui::Selectable(rowLabel.c_str(),selected==object.entity)) {
+            // Reserve pixels rather than spaces (font-dependent widths can overlap the icon).
+            if (ImGui::Selectable(("##object"+std::to_string(object.entity.index)).c_str(),selected==object.entity,0,ImVec2(0,std::max(20.0f,ImGui::GetTextLineHeight()+4)))) {
                 changed=selected!=object.entity;
                 selected=object.entity;
             }
@@ -208,7 +211,8 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
                 }
                 ImGui::EndDragDropTarget();
             }
-            hierarchyIcon(world,object.entity,iconPos);
+            hierarchyIcon(world,object.entity,ImVec2(iconPos.x,iconPos.y+2));
+            ImGui::GetWindowDrawList()->AddText(ImVec2(iconPos.x+24,iconPos.y+2),ImGui::GetColorU32(ImGuiCol_Text),object.name.c_str());
             if(depth)ImGui::Unindent(static_cast<float>(depth)*12);
             ImGui::PopID();ImGui::PopID();
             if(depth<128)for(const auto& child:objects)

@@ -16,6 +16,8 @@ function completion(doc, position) {
   for (const label of ['print','type','tostring','tonumber','pairs','ipairs','assert','error','math','string','table','self']) if (!items.has(label)) items.set(label, { label, kind: 6 });
   for (const match of doc.getText().matchAll(/\b(?:local\s+(?:function\s+)?|function\s+)([A-Za-z_]\w*)/g))
     items.set(match[1], { label: match[1], kind: 6, detail: 'Document symbol' });
+  for (const match of doc.getText().matchAll(/^[ \t]*(?:---)?@export\s+([A-Za-z_]\w*)\s+(\w+)/gm))
+    items.set(match[1], { label: match[1], kind: 6, detail: `Exported ${match[2]} (assigned in Inspector)` });
   return [...items.values()];
 }
 function signature(name, receiver) {
@@ -30,7 +32,8 @@ function hover(doc, position) {
   while(start>0 && /\w/.test(text[start-1]))--start;
   while(end<text.length && /\w/.test(text[end]))++end;
   const word=text.slice(start,end),receiver=text.slice(0,start).match(/(\w+)\s*[.:]\s*$/)?.[1];
-  const detail=word==='self'?'self: GameObject — owner of the attached script. Camera methods require a Camera component.':signature(word,receiver);
+  const exported=[...text.matchAll(/^[ \t]*(?:---)?@export\s+([A-Za-z_]\w*)\s+(\w+)/gm)].find(m=>m[1]===word);
+  const detail=exported?`${word}: ${exported[2]} — exported Inspector field`:word==='self'?'self: GameObject — owner of the attached script. Camera methods require a Camera component.':signature(word,receiver);
   return detail?{contents:{kind:'markdown',value:`\`\`\`lua\n${detail}\n\`\`\``},range:{start:doc.positionAt(start),end:doc.positionAt(end)}}:null;
 }
 function signatureHelp(doc, position) {

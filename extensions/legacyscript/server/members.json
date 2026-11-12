@@ -107,8 +107,13 @@
     "unmute": "fun(self:AudioSource)",
     "setLooping": "fun(self:AudioSource,enabled:boolean):boolean",
     "setPan": "fun(self:AudioSource,pan:number):number",
-    "setDistance": "fun(self:AudioSource,distance:number):number",
+    "setDistance": "fun(self:AudioSource,distance:number):number Maximum audible 3D range",
+    "spatialBlend": "fun(self:AudioSource,value:number):number 0 = 2D, 1 = 3D",
+    "setSpatialBlend": "fun(self:AudioSource,value:number):number",
     "isPlaying": "fun(self:AudioSource):boolean",
     "playOneShot": "fun(self:AudioSource,clip:AudioClip)"
+  },
+  "AudioListener": {
+    "enabled": "boolean"
   }
 }
