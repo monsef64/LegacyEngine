@@ -1,0 +1,310 @@
+[
+  {
+    "name": "new",
+    "signature": "GameObject.new(name) / Camera.new(name)"
+  },
+  {
+    "name": "find",
+    "signature": "GameObject.find(name) -> GameObject or nil"
+  },
+  {
+    "name": "getActive",
+    "signature": "Camera.getActive() -> Camera GameObject or nil"
+  },
+  {
+    "name": "setPosition",
+    "signature": "object:setPosition(x,y,z) or object:setPosition({x,y,z})"
+  },
+  {
+    "name": "getPosition",
+    "signature": "object:getPosition() -> position copy"
+  },
+  {
+    "name": "setRotation",
+    "signature": "object:setRotation(x,y,z) degrees or quaternion/table"
+  },
+  {
+    "name": "getRotation",
+    "signature": "object:getRotation() -> quaternion copy"
+  },
+  {
+    "name": "setScale",
+    "signature": "object:setScale(x,y,z) or vector"
+  },
+  {
+    "name": "getScale",
+    "signature": "object:getScale() -> scale copy"
+  },
+  {
+    "name": "translate",
+    "signature": "object:translate(x,y,z) or vector"
+  },
+  {
+    "name": "setName",
+    "signature": "object:setName(name)"
+  },
+  {
+    "name": "getName",
+    "signature": "object:getName() -> string"
+  },
+  {
+    "name": "destroy",
+    "signature": "object:destroy()"
+  },
+  {
+    "name": "setActive",
+    "signature": "camera:setActive(enabled=true)"
+  },
+  {
+    "name": "setTarget",
+    "signature": "camera:setTarget(objectOrPositionOrNil)"
+  },
+  {
+    "name": "setShake",
+    "signature": "camera:setShake(intensity,seconds)"
+  },
+  {
+    "name": "createCamera",
+    "signature": "createCamera(name) -> Camera GameObject"
+  },
+  {
+    "name": "setActiveCamera",
+    "signature": "setActiveCamera(cameraOrNil)"
+  },
+  {
+    "name": "getActiveCamera",
+    "signature": "getActiveCamera() -> Camera GameObject or nil"
+  },
+  {
+    "name": "setCameraPosition",
+    "signature": "setCameraPosition(camera, {x,y,z})"
+  },
+  {
+    "name": "setCameraRotation",
+    "signature": "setCameraRotation(camera, Euler degrees {x,y,z} or quaternion {x,y,z,w})"
+  },
+  {
+    "name": "lookAt",
+    "signature": "lookAt(camera, worldPositionOrGameObject) - one-shot aim"
+  },
+  {
+    "name": "setFieldOfView",
+    "signature": "setFieldOfView(camera, degrees)"
+  },
+  {
+    "name": "setProjectionMode",
+    "signature": "setProjectionMode(camera, Perspective | Orthographic)"
+  },
+  {
+    "name": "setNearClipPlane",
+    "signature": "setNearClipPlane(camera, distance)"
+  },
+  {
+    "name": "setFarClipPlane",
+    "signature": "setFarClipPlane(camera, distance)"
+  },
+  {
+    "name": "setViewport",
+    "signature": "setViewport(camera, x,y,width,height) - normalized top-left viewport"
+  },
+  {
+    "name": "setCameraTarget",
+    "signature": "setCameraTarget(camera, pointOrObjectOrNil) - continuous aim"
+  },
+  {
+    "name": "setFollowTarget",
+    "signature": "setFollowTarget(camera, pointOrObjectOrNil, worldOffset)"
+  },
+  {
+    "name": "setCameraShake",
+    "signature": "setCameraShake(camera, intensity, durationSeconds)"
+  },
+  {
+    "name": "worldToScreen",
+    "signature": "worldToScreen(camera, worldPosition) -> normalized {x,y,zDepth}"
+  },
+  {
+    "name": "screenToWorld",
+    "signature": "screenToWorld(camera, normalized {x,y,zDepth}) -> world position"
+  },
+  {
+    "name": "Camera",
+    "signature": "Camera - camera component type token"
+  },
+  {
+    "name": "onStart",
+    "signature": "onStart() - called when Execute succeeds"
+  },
+  {
+    "name": "onUpdate",
+    "signature": "onUpdate(deltaTime) - once per frame, seconds"
+  },
+  {
+    "name": "onFixedUpdate",
+    "signature": "onFixedUpdate(deltaTime) - before each 1/60 s physics step"
+  },
+  {
+    "name": "onDestroy",
+    "signature": "onDestroy() - object destruction or runtime shutdown/reset"
+  },
+  {
+    "name": "createGameObject",
+    "signature": "createGameObject(name) -> GameObject"
+  },
+  {
+    "name": "destroyGameObject",
+    "signature": "destroyGameObject(gameObject)"
+  },
+  {
+    "name": "getComponent",
+    "signature": "getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil"
+  },
+  {
+    "name": "addComponent",
+    "signature": "addComponent(gameObject, componentType) -> live component"
+  },
+  {
+    "name": "removeComponent",
+    "signature": "removeComponent(gameObject, componentType)"
+  },
+  {
+    "name": "findGameObjectByName",
+    "signature": "findGameObjectByName(name) -> GameObject or nil"
+  },
+  {
+    "name": "findGameObjectsByComponent",
+    "signature": "findGameObjectsByComponent(componentType) -> GameObject[]"
+  },
+  {
+    "name": "setParent",
+    "signature": "setParent(child, parentOrNil) - keep world pose; reject cycles"
+  },
+  {
+    "name": "getParent",
+    "signature": "getParent(child) -> GameObject or nil"
+  },
+  {
+    "name": "Transform",
+    "signature": "Transform - component type token"
+  },
+  {
+    "name": "RigidBody",
+    "signature": "RigidBody - component type token"
+  },
+  {
+    "name": "Collider",
+    "signature": "Collider - component type token"
+  },
+  {
+    "name": "BoxCollider",
+    "signature": "BoxCollider - alias of Collider"
+  },
+  {
+    "name": "MeshRenderer",
+    "signature": "MeshRenderer - component type token"
+  },
+  {
+    "name": "ObjectName",
+    "signature": "ObjectName - component type token"
+  },
+  {
+    "name": "LuaScript",
+    "signature": "LuaScript - attached script component (path, enabled)"
+  },
+  {
+    "name": "self",
+    "signature": "self - GameObject owning the attached Lua Script"
+  },
+  {
+    "name": "enabled",
+    "signature": "LuaScript.enabled: boolean"
+  },
+  {
+    "name": "path",
+    "signature": "LuaScript.path: relative asset path"
+  },
+  {
+    "name": "parent",
+    "signature": "GameObject.parent: GameObject or nil"
+  },
+  {
+    "name": "position",
+    "signature": "Transform.position: {x,y,z}"
+  },
+  {
+    "name": "rotation",
+    "signature": "Transform.rotation: quaternion {x,y,z,w}"
+  },
+  {
+    "name": "scale",
+    "signature": "Transform.scale: {x,y,z}"
+  },
+  {
+    "name": "mass",
+    "signature": "RigidBody.mass: number"
+  },
+  {
+    "name": "useGravity",
+    "signature": "RigidBody.useGravity: boolean"
+  },
+  {
+    "name": "linearVelocity",
+    "signature": "RigidBody.linearVelocity: {x,y,z}"
+  },
+  {
+    "name": "angularVelocity",
+    "signature": "RigidBody.angularVelocity: {x,y,z}"
+  },
+  {
+    "name": "shape",
+    "signature": "Collider.shape: Box | Sphere | Capsule | Cone"
+  },
+  {
+    "name": "radius",
+    "signature": "Collider.radius: number"
+  },
+  {
+    "name": "height",
+    "signature": "Collider.height: number"
+  },
+  {
+    "name": "size",
+    "signature": "Collider.size: {x,y,z}"
+  },
+  {
+    "name": "center",
+    "signature": "Collider.center: {x,y,z}"
+  },
+  {
+    "name": "friction",
+    "signature": "Collider.friction: number"
+  },
+  {
+    "name": "bounciness",
+    "signature": "Collider.bounciness: number"
+  },
+  {
+    "name": "mesh",
+    "signature": "MeshRenderer.mesh: Cube | Sphere | Capsule | Cone"
+  },
+  {
+    "name": "color",
+    "signature": "MeshRenderer.color: {x,y,z}"
+  },
+  {
+    "name": "checkerboard",
+    "signature": "MeshRenderer.checkerboard: boolean"
+  },
+  {
+    "name": "specular",
+    "signature": "MeshRenderer.specular: number"
+  },
+  {
+    "name": "name",
+    "signature": "GameObject.name: string"
+  },
+  {
+    "name": "value",
+    "signature": "ObjectName.value: string"
+  }
+]

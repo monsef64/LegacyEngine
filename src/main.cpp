@@ -585,7 +585,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             editor.finish(world); clicking=false;
             editSelection=selectedEntity;
             history.commit(world,selectedEntity);
-            if (playMode.play(world)) { physics.reset(); scripts.startPlay();
+            if (playMode.play(world)) { physics.reset(); scripts.setAssetContext(browser.openedScript,selectedEntity);scripts.startPlay();
                 const MeshHandle runtimeMeshes[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
                 componentScripts.start(world,browser.assets,runtimeMeshes); }
         }
@@ -625,6 +625,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
         drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging());
         scripts.componentOutput=componentScripts.messages();
+        scripts.setAssetContext(browser.openedScript,selectedEntity);
         scripts.draw(&layout,playMode.playing());
         browser.draw(window,world,selectedEntity,scripts,editAllowed,&history);
         ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false,sceneFocused=false;

@@ -42,6 +42,23 @@ int main()
     io.AddKeyEvent(ImGuiKey_Tab,true); frame();
     io.AddKeyEvent(ImGuiKey_Tab,false); frame();
     require(editor.source()=="createGameObject","Tab completes scene API in multiline editor");
+    World world;auto owner=world.create();world.add(owner,Transform{});world.add(owner,LuaScript{"Camera.ls",true,{}});
+    editor.bindWorld(world,{},{},{});editor.setAssetContext("Camera.ls",owner);
+    editor.setSource("function onStart() self:setPosition(1,2,3) end");
+    editor.startPlay();
+    require(world.get<Transform>(owner).position==Vec3{},"asset is not executed twice as a global script on Play");
+    require(editor.executeSource(),"Execute resolves attachment owner");
+    require(world.get<Transform>(owner).position==Vec3{1,2,3},"attached script Execute receives self");
+    auto other=world.create();world.add(other,Transform{});world.add(other,LuaScript{"Camera.ls",true,{}});
+    editor.setAssetContext("Camera.ls",{});
+    require(!editor.executeSource(),"ambiguous attachment requires selection");
+    editor.setAssetContext("Camera.ls",other);
+    require(editor.executeSource(),"selected attachment resolves ambiguity");
+    require(world.get<Transform>(other).position==Vec3{1,2,3},"self is selected owner");
+    world.destroy(other);editor.setAssetContext("Camera.ls",other);
+    require(editor.executeSource(),"stale selection falls back to unique live owner");
+    editor.setAssetContext("missing.ls",owner);
+    require(!editor.executeSource(),"unattached asset cannot execute with wrong self");
     ImGui::DestroyContext();
     std::puts("ImGui Execute-to-console and Clear button tests passed");
 }

@@ -750,7 +750,7 @@ New scripts and the initial Lua Editor are blank—no example snippet is inserte
 `.ls` is the default LegacyScript extension. Existing `.lua` files still load
 for compatibility; user files are not automatically renamed. The shipped runtime
 example now uses `.ls`; editor-only LuaLS definitions remain `.lua`. VS Code file
-associations treat `.ls` as Lua for language tooling.
+associations use the LegacyScript language supplied by the bundled VS Code extension.
 
 Multiple enabled scripts on a GameObject run in separate Lua states with the
 same owning `self`. Removing/disabling one does not stop its siblings. Project
@@ -763,3 +763,21 @@ Inspector rotation uses stable Y-X-Z Euler fields (degrees) backed by quaternion
 Changing Y no longer feeds a decomposed matrix back into X/Z every frame. As with
 any Euler representation, an external gizmo/script rotation may be displayed in
 an equivalent angle representation, especially at a 90-degree pitch.
+
+When an asset script is open, **Execute** binds `self` to the selected GameObject
+that has that script attached. If there is only one owner, it is resolved
+automatically. If several objects share the asset, select the desired owner;
+unattached or ambiguous assets are not executed. Each Execute starts a fresh
+editor runtime. On **Play**, open asset scripts run only through their attachments,
+not again as a global editor snippet. Plain non-asset editor snippets remain global.
+
+### VS Code LegacyScript extension
+
+An installable `.ls` extension with a bundled LSP server lives in
+[`extensions/legacyscript`](extensions/legacyscript/README.md). It provides engine
+API completion (including `self:`), hover/signature help, function outline,
+syntax highlighting and lifecycle snippets. Build the VSIX with `npm ci && npm
+test && npm run package` in that directory, then use VS Code's **Install from
+VSIX** command. The repository associates `.ls` with `legacyscript`; install this
+extension to activate it. This initial LSP is engine-aware but does not yet offer
+full Lua type checking or diagnostics.

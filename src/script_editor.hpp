@@ -1,5 +1,6 @@
 #pragma once
 #include "lua_console.hpp"
+#include "components.hpp"
 #include "editor_layout.hpp"
 #include <array>
 #include <string>
@@ -12,9 +13,30 @@ public:
     ScriptEditor();
     std::vector<std::string> componentOutput;
     void draw(const EditorLayout* layout=nullptr, bool executionEnabled=true);
-    void startPlay() { console_.reset(); console_.execute(source_.data()); }
+    void startPlay() {
+        console_.reset();
+        // Asset scripts are executed by ScriptComponents, once per attachment.
+        if(assetPath_.empty())console_.execute(source_.data());
+    }
+    void setAssetContext(std::string_view path,Entity selected) { assetPath_=path;selected_=selected; }
+    bool executeSource() {
+        Entity owner{};int count=0;
+        if(world_ && !assetPath_.empty()) {
+            world_->each<LuaScript>([&](Entity e,LuaScript& scripts) {
+                for(const auto& script:scriptAttachments(scripts))if(script.path==assetPath_) {
+                    ++count;owner=e;break;
+                }
+            });
+            if(world_->alive(selected_))if(auto* scripts=world_->tryGet<LuaScript>(selected_))
+                for(const auto& script:scriptAttachments(*scripts))if(script.path==assetPath_){owner=selected_;count=1;break;}
+            if(count!=1)return false;
+        }
+        console_.reset();
+        if(!assetPath_.empty() && !console_.bindObject(owner))return false;
+        console_.execute(source_.data());return true;
+    }
     void resetRuntime() { console_.reset(); }
-    void bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone={}) { console_.bindWorld(world,cube,sphere,capsule,cone); }
+    void bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone={}) { world_=&world;console_.bindWorld(world,cube,sphere,capsule,cone); }
     void update(float dt) { console_.update(dt); }
     void fixedUpdate(float dt) { console_.fixedUpdate(dt); }
     void shutdown() { console_.shutdown(); }
@@ -26,6 +48,10 @@ public:
     std::string_view source() const { return source_.data(); }
     const LuaConsole& console() const { return console_; }
 private:
+    World* world_=nullptr;
+    std::string assetPath_;
+    Entity selected_{};
+    bool ownerError_=false;
     LuaConsole console_;
     std::array<char,LuaConsole::maxSourceBytes+1> source_{};
     static int completion(ImGuiInputTextCallbackData* data);

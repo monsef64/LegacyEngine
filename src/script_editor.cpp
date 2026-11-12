@@ -19,12 +19,13 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
     if (beginEditorPanel("Lua Editor",layout?fixedPanelFlags:0)) {
         ImGui::BeginDisabled(!executionEnabled);
         if (ImGui::Button("Execute")) {
-            console_.execute(source_.data());
+            ownerError_=!executeSource();
             scrollToBottom_=true;
         }
         ImGui::SameLine();
         if (ImGui::Button("Reset Runtime")) { console_.reset(); scrollToBottom_=true; }
         ImGui::EndDisabled();
+        if(ownerError_)ImGui::TextWrapped("Select a GameObject with this script attached before executing it.");
         ImGui::TextDisabled("Lua 5.4 | Tab: complete API names | output below");
         ImGui::InputTextMultiline("##source",source_.data(),source_.size(),ImVec2(-1,-1),
                                  ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackAlways,
