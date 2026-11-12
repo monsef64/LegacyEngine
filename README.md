@@ -36,7 +36,7 @@ and two end rings with four curved meridians for a capsule.
 
 The **Freecam** checkbox switches between free flight (checked by default) and a static camera
 (unchecked, locks the current view). In freecam, use **WASD** to fly forward/back/sideways,
-**Q/E** to move down/up, **Shift** for faster movement and **right-drag** to look around in place.
+**Q/E** to move down/up and **right-drag** to look around in place. Holding Ctrl, Shift, Alt, or Super/Command blocks camera navigation.
 The wheel moves forward/back. Static mode ignores all navigation input; spawning and selection
 still work. Switching modes preserves your view.
 
@@ -133,7 +133,7 @@ One unit is one metre, +Y points up and the ground is the XZ plane.
 | Freecam checkbox | Checked: fly camera; unchecked: lock current view |
 | Right drag (freecam) | Look around in place |
 | WASD, Q/E (freecam) | Fly forward/back/sideways, down/up |
-| Shift (freecam) | Move faster |
+| Ctrl / Shift / Alt / Super held | Block camera navigation |
 | Mouse wheel (freecam) | Move forward/back |
 | Closing the window | Quit (Escape does not exit the engine) |
 
@@ -511,11 +511,18 @@ invalid targets to prevent cycles and preserves the object's world-space pose.
 ### Saving and opening projects
 
 Use **File > Save Project** (**Ctrl+S**), **Save Project As...**
-(**Ctrl+Shift+S**), or **Open Project...** (**Ctrl+O**). The first save opens a
-path-entry dialog; enter an absolute path or a path relative to the working
-directory, for example `/home/me/MyScene.legacy`. The containing directory must
-already exist. Subsequent Ctrl+S saves update the same file. Escape cancels the
-dialog but never exits the engine.
+(**Ctrl+Shift+S**), or **Open Project...** (**Ctrl+O**). Open and Save As use
+the system file picker, with a `.legacy` project filter. The first save also
+opens the picker; later Ctrl+S saves update the same file. If no extension is
+chosen when saving, `.legacy` is added. Cancel leaves the current project
+unchanged. Escape never exits the engine.
+
+The window title shows the project filename (or **Untitled**) with a trailing
+`*` while unsaved, for example `MyScene.legacy* - LegacyEngine`. Successful Save
+or Open clears the marker; scene, Lua source, and camera changes set it again.
+Undoing back to the saved state clears it. Play-mode simulation is not counted
+as an edit to the saved scene. There is no persistent "Project saved" status
+message in the menu bar.
 
 A project is a versioned, single text file containing all scene GameObjects,
 names, transforms, built-in mesh/material properties, colliders, rigid bodies,
@@ -529,9 +536,14 @@ resets physics and the Lua runtime, and clears scene undo history; save existing
 work first. Invalid or unsupported files leave the current project intact.
 Saves are validated and written to a temporary sibling file before replacing
 the destination, so serialization/write failures do not truncate an existing
-project. Errors are shown in the path dialog. Version 1 limits projects to
+project. Errors are shown in a system message box. Version 1 limits projects to
 10,000 objects, 16 MiB total, and 64 KiB of Lua source.
 
 Duplicate and Paste use numbered names: `GameObject` becomes `GameObject (2)`,
 and copying `GameObject (2)` produces `GameObject (3)`. Existing scene names are
 skipped so repeated duplicates/pastes do not create naming collisions.
+
+On Linux, native file selection uses SDL's desktop portal or a supported system
+dialog backend (for example Zenity). A desktop session with a working picker
+backend is required; unavailable pickers report an error instead of falling
+back to the old typed-path dialog.
