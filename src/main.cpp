@@ -410,7 +410,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             saveAsProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S,ImGuiInputFlags_RouteGlobal);
         }
         auto saveTo=[&](const std::string& path) {
-            auto assetRoot=std::filesystem::absolute(std::filesystem::path(path)).parent_path()/"Assets";
+            auto assetRoot=projectAssetsPath(path);
             try { browser.assets.copyTo(assetRoot); }
             catch(const std::exception& e){projectError=e.what();return;}
             if(ProjectIO::save(path,world,scripts.source(),camera,projectMeshes,projectError)) {
@@ -446,10 +446,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                     if(!path.has_extension())path+=".legacy";
                     saveTo(path.string());
                 } else {
-                    std::string source;World loadedWorld;OrbitCamera loadedCamera;
-                    if(ProjectIO::load(result->path,loadedWorld,source,loadedCamera,projectMeshes,projectError)) {
+                    std::string source,assetDirectory;World loadedWorld;OrbitCamera loadedCamera;
+                    if(ProjectIO::load(result->path,loadedWorld,source,loadedCamera,projectMeshes,projectError,&assetDirectory)) {
                         componentScripts.stop();scripts.shutdown();world.restore(loadedWorld);camera=loadedCamera;
-                        browser.setRoot(std::filesystem::absolute(result->path).parent_path()/"Assets");
+                        browser.setRoot(assetDirectory.empty()?existingProjectAssetsPath(result->path):std::filesystem::absolute(result->path).parent_path()/assetDirectory);
                         scripts.resetRuntime();scripts.setSource(source);
                         selectedEntity={};history=EditorHistory(world);physics.reset();
                         clicking=false;spawnMode=false;currentProject=result->path;

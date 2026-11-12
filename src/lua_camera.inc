@@ -1,13 +1,9 @@
 // Included by lua_scene.cpp to share its checked generation-safe handle helpers.
 int LuaScene::cameraApi(lua_State* L) {
     auto& self=*static_cast<LuaScene*>(lua_touserdata(L,lua_upvalueindex(1)));
-    const int op=static_cast<int>(lua_tointeger(L,lua_upvalueindex(2)));
-    auto vector=[&](int index)->Vec3 {
-        luaL_checktype(L,index,LUA_TTABLE);Vec3 v;
-        lua_getfield(L,index,"x");v.x=number(L,-1);lua_pop(L,1);
-        lua_getfield(L,index,"y");v.y=number(L,-1);lua_pop(L,1);
-        lua_getfield(L,index,"z");v.z=number(L,-1);lua_pop(L,1);return v;
-    };
+    int op=static_cast<int>(lua_tointeger(L,lua_upvalueindex(2)));
+    if(op>=100)op-=100;
+    auto vector=[&](int index){return vectorArgument(L,index);};
     if(op==0) {
         if(self.stopping_ || self.entries_.size()>=4096)return luaL_error(L,"Cannot create camera now");
         const char* name=objectName(L,1);
@@ -26,14 +22,9 @@ int LuaScene::cameraApi(lua_State* L) {
     try {
         Camera proposed=c;
         switch(op) {
-        case 1:activateCamera(self.world_,h.entity);return 0;
+        case 1:if(lua_isboolean(L,2) && !lua_toboolean(L,2))c.active=false;else activateCamera(self.world_,h.entity);return 0;
         case 3:t.position=vector(2);return 0;
-        case 4:{
-            const auto v=vector(2);lua_getfield(L,2,"w");
-            if(lua_isnil(L,-1))t.rotation=composeRotation(composeRotation(axisAngle({0,1,0},radians(v.y)),axisAngle({1,0,0},radians(v.x))),axisAngle({0,0,1},radians(v.z)));
-            else {const float w=number(L,-1);if(v.x*v.x+v.y*v.y+v.z*v.z+w*w<1e-12f)return luaL_error(L,"Rotation quaternion must not be zero");t.rotation=normalize(Quat{v.x,v.y,v.z,w});}
-            lua_pop(L,1);c.tracking=false;c.following=false;return 0;
-        }
+        case 4:t.rotation=rotationArgument(L,2);c.tracking=false;c.following=false;return 0;
         case 5:case 11:case 12:{
             if(lua_isnil(L,2)){c.tracking=false;c.following=false;c.targetEntity={};return 0;}
             Vec3 target;Entity targetEntity;
@@ -42,7 +33,8 @@ int LuaScene::cameraApi(lua_State* L) {
                 if(targetHandle.entity==h.entity || !self.world_.has<Transform>(targetHandle.entity))return luaL_error(L,"Invalid camera target");
                 targetEntity=targetHandle.entity;target=self.world_.get<Transform>(targetEntity).position;
             } else target=vector(2);
-            const Vec3 offset=op==12 && !lua_isnoneornil(L,3)?vector(3):Vec3{};
+            const int offsetIndex=lua_type(L,2)==LUA_TNUMBER?5:3;
+            const Vec3 offset=op==12 && !lua_isnoneornil(L,offsetIndex)?vector(offsetIndex):Vec3{};
             c.target=target;c.targetEntity=targetEntity;c.tracking=op!=5;c.following=op==12;c.followOffset=offset;
             if(c.following)t.position=target+offset;
             aimCamera(t,target);return 0;
