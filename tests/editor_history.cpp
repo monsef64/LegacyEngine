@@ -1,5 +1,6 @@
 #include "editor_history.hpp"
 #include "play_mode.hpp"
+#include "level_objects.hpp"
 #include "playback_controls.hpp"
 #include <cassert>
 
@@ -58,6 +59,28 @@ int main() {
     }
     int count=0;while(noops.undo(world,selection))++count;
     assert(count==64);
+    // Clipboard is a value snapshot and survives source deletion and ID reuse.
+    World copiedWorld;
+    Entity source=copiedWorld.create(),parent=copiedWorld.create();
+    copiedWorld.add(source,Transform{{2,3,4}});
+    copiedWorld.add(parent,Transform{});
+    copiedWorld.add(source,ObjectName{"Copied"});
+    copiedWorld.add(source,RigidBody{});copiedWorld.add(source,Collider{});
+    assert(setParent(copiedWorld,source,parent));
+    ObjectClipboard clipboard;assert(!clipboard.available());
+    clipboard.copy(copiedWorld,source);assert(clipboard.available());
+    Entity duplicate=duplicateLevelObject(copiedWorld,source);
+    assert(getParent(copiedWorld,duplicate)==parent);
+    copiedWorld.get<Transform>(source).position.x=100;
+    copiedWorld.destroy(source);
+    Entity pasted=clipboard.paste(copiedWorld);
+    assert(copiedWorld.get<Transform>(pasted).position.x==2);
+    assert(copiedWorld.get<ObjectName>(pasted).value=="Copied (Copy)");
+    assert(getParent(copiedWorld,pasted)==Entity{});
+    assert(copiedWorld.has<RigidBody>(pasted) && copiedWorld.has<Collider>(pasted));
+    copiedWorld.get<Collider>(pasted).radius=9;
+    Entity again=clipboard.paste(copiedWorld);
+    assert(copiedWorld.get<Collider>(again).radius==0.5f);
     // Icon controls generate geometry without requiring Unicode font glyphs.
     ImGui::CreateContext();auto& io=ImGui::GetIO();
     io.DisplaySize=ImVec2(800,600);io.DeltaTime=1.0f/60;

@@ -250,6 +250,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
     scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh);
     EditorHistory history(world);
     PlayMode playMode;
+    ObjectClipboard clipboard;
     Entity editSelection;
     TransformEditor editor;
     OrbitCamera camera;
@@ -370,32 +371,81 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             if(created!=0)position=findRoom(physics,position,shapes[created]);
             selectedEntity=createLevelObject(world,labels[created],position,meshes[created],shapes[created],created==0);
         }
+        bool undoRequested=false,redoRequested=false;
+        bool duplicateRequested=false,copyRequested=false,pasteRequested=false,parentRequested=false;
+        const bool editAllowed=!playMode.active() && !editor.dragging();
+        const bool objectSelected=world.alive(selectedEntity);
+        if(ImGui::BeginMainMenuBar()) {
+            if(ImGui::BeginMenu("Edit")) {
+                undoRequested=ImGui::MenuItem("Undo","Ctrl+Z",false,editAllowed && history.canUndo());
+                redoRequested=ImGui::MenuItem("Redo","Ctrl+Y / Ctrl+Shift+Z",false,editAllowed && history.canRedo());
+                ImGui::Separator();
+                duplicateRequested=ImGui::MenuItem("Duplicate","Ctrl+D",false,editAllowed && objectSelected);
+                copyRequested=ImGui::MenuItem("Copy","Ctrl+C",false,editAllowed && objectSelected);
+                pasteRequested=ImGui::MenuItem("Paste","Ctrl+V",false,editAllowed && clipboard.available());
+                parentRequested=ImGui::MenuItem("Parent / Unparent","Ctrl+P",false,editAllowed && objectSelected);
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+        // Let text widgets own editing shortcuts while typing. Global routing
+        // otherwise makes shortcuts independent of which editor panel has focus.
+        if(editAllowed && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive()) {
+            const auto flags=ImGuiInputFlags_RouteGlobal;
+            undoRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z,flags);
+            redoRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y,flags) ||
+                ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z,flags);
+            duplicateRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_D,flags);
+            copyRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C,flags);
+            pasteRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_V,flags);
+            parentRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_P,flags);
+        }
         placeEditorPanel(layout.toolbar);
         ImGui::Begin("Scene controls",nullptr,fixedPanelFlags | ImGuiWindowFlags_NoTitleBar);
-        // Scene undo must not intercept Ctrl+Z while editing text.
-        bool undoRequested=false,redoRequested=false;
-        if (!playMode.active() && !ImGui::GetIO().WantTextInput && !editor.dragging()) {
-            undoRequested=ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z);
-            redoRequested=ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y) ||
-                ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z);
+        if(editAllowed) {
+            if(copyRequested && objectSelected)clipboard.copy(world,selectedEntity);
+            if((duplicateRequested && objectSelected) || (pasteRequested && clipboard.available())) {
+                editor.finish(world);clicking=false;spawnMode=false;
+                history.commit(world,selectedEntity);
+                selectedEntity=duplicateRequested?duplicateLevelObject(world,selectedEntity):clipboard.paste(world);
+                history.commit(world,selectedEntity);
+            }
+            if(parentRequested && objectSelected) {
+                editor.finish(world);clicking=false;
+                if(getParent(world,selectedEntity)!=Entity{}) {
+                    history.commit(world,selectedEntity);
+                    setParent(world,selectedEntity,{});history.commit(world,selectedEntity);
+                } else ImGui::OpenPopup("Choose parent");
+            }
         }
-        ImGui::BeginDisabled(playMode.active() || editor.dragging());
-        ImGui::BeginDisabled(!history.canUndo());
-        undoRequested |= ImGui::Button("Undo");
-        ImGui::EndDisabled();ImGui::SameLine();
-        ImGui::BeginDisabled(!history.canRedo());
-        redoRequested |= ImGui::Button("Redo");
-        ImGui::EndDisabled();ImGui::EndDisabled();
+        if(ImGui::BeginPopup("Choose parent")) {
+            ImGui::TextUnformatted("Choose parent for selected GameObject");
+            ImGui::Separator();
+            for(const auto& object:levelObjects(world)) {
+                if(!editAllowed || !canParent(world,selectedEntity,object.entity))continue;
+                ImGui::PushID(static_cast<int>(object.entity.index));
+                if(ImGui::Selectable(object.name.c_str())) {
+                    history.commit(world,selectedEntity);
+                    setParent(world,selectedEntity,object.entity);history.commit(world,selectedEntity);
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndPopup();
+        }
         if ((undoRequested || redoRequested) && !playMode.active()) {
             editor.finish(world);clicking=false;
             history.commit(world,selectedEntity);
             const bool restored=undoRequested?history.undo(world,selectedEntity):history.redo(world,selectedEntity);
             if(restored)physics.reset();
         }
+        const bool playbackKeys=!ImGui::GetIO().WantTextInput && !editor.dragging();
+        const bool playKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F5,ImGuiInputFlags_RouteGlobal);
+        const bool pauseKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F6,ImGuiInputFlags_RouteGlobal);
+        const bool stopKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F7,ImGuiInputFlags_RouteGlobal);
         const float playbackWidth=90+2*ImGui::GetStyle().ItemSpacing.x;
-        ImGui::SameLine();ImGui::SetCursorPosX((layout.toolbar.width-playbackWidth)*0.5f);
+        ImGui::SetCursorPosX((layout.toolbar.width-playbackWidth)*0.5f);
         ImGui::BeginDisabled(playMode.active());
-        if (playbackButton("##Play","Play",PlaybackIcon::Play,playMode.active())) {
+        if (playbackButton("##Play","Play (F5)",PlaybackIcon::Play,playMode.active()) || (playKey && !playMode.active())) {
             editor.finish(world); clicking=false;
             editSelection=selectedEntity;
             history.commit(world,selectedEntity);
@@ -403,11 +453,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         }
         ImGui::EndDisabled(); ImGui::SameLine();
         ImGui::BeginDisabled(!playMode.active());
-        if (playbackButton("##Pause",playMode.state()==PlayMode::State::Paused?"Resume":"Pause",playMode.state()==PlayMode::State::Paused?PlaybackIcon::Play:PlaybackIcon::Pause,playMode.state()==PlayMode::State::Paused)) {
+        if (playbackButton("##Pause",playMode.state()==PlayMode::State::Paused?"Resume (F6)":"Pause (F6)",playMode.state()==PlayMode::State::Paused?PlaybackIcon::Play:PlaybackIcon::Pause,playMode.state()==PlayMode::State::Paused) || (pauseKey && playMode.active())) {
             editor.finish(world); clicking=false; playMode.pause();
         }
         ImGui::SameLine();
-        if (playbackButton("##Stop","Stop",PlaybackIcon::Stop)) {
+        if (playbackButton("##Stop","Stop (F7)",PlaybackIcon::Stop) || (stopKey && playMode.active())) {
             editor.finish(world); clicking=false;
             // Run stop callbacks before restoring, so their edits are discarded too.
             scripts.shutdown();

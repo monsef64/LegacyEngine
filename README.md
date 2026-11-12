@@ -467,7 +467,7 @@ crash, or forced kill fails the check rather than being accepted as success.
 
 ### Undo and redo
 
-In Edit mode, use **Undo / Redo** in the toolbar, **Ctrl+Z** to undo, or
+In Edit mode, use **Edit > Undo / Redo** in the menu bar, **Ctrl+Z** to undo, or
 **Ctrl+Y / Ctrl+Shift+Z** to redo. History covers scene creation/deletion,
 duplication, reparenting, Inspector component/property edits, and gizmo changes.
 Continuous drags and active text-field edits are grouped until the gesture ends.
@@ -482,3 +482,28 @@ are available through **Scene options** to avoid overlapping playback buttons.
 
 New release and workflow build packages are named
 `LegacyEngine-YYYYMMDD-HHMMSS-linux-x86_64.tar.gz` using packaging time in UTC.
+
+### Editor shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl+Z | Undo scene edit |
+| Ctrl+Y / Ctrl+Shift+Z | Redo scene edit |
+| F5 | Play (from Edit mode) |
+| F6 | Pause / Resume |
+| F7 | Stop and restore the edit scene |
+| Ctrl+D | Duplicate selected GameObject |
+| Ctrl+C | Copy selected GameObject |
+| Ctrl+V | Paste copied GameObject |
+| Ctrl+P | Unparent if parented; otherwise open a parent picker |
+
+Undo/Redo buttons have been removed from the toolbar; these commands live in
+**Edit**, along with Duplicate, Copy, Paste, and Parent / Unparent. Scene editing
+commands are disabled during Play/Pause and gizmo drags. While typing, text
+widgets keep their normal editing shortcuts instead of triggering scene actions.
+
+Copy stores an internal snapshot of the object's standard components, not its
+children. Paste creates a detached object at the copied world-space pose even if
+the original has since changed or been deleted; Duplicate retains the original's
+parent. These scene changes participate in undo/redo. The parent picker excludes
+invalid targets to prevent cycles and preserves the object's world-space pose.
