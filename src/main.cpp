@@ -398,6 +398,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             try { browser.assets.copyTo(assetRoot); }
             catch(const std::exception& e){projectError=e.what();return;}
             if(ProjectIO::save(path,world,scripts.source(),camera,projectMeshes,projectError)) {
+                if(std::filesystem::weakly_canonical(browser.assets.root)!=std::filesystem::weakly_canonical(assetRoot))
+                    history=EditorHistory(world,selectedEntity); // Old Trash receipts belong to the previous project root.
                 browser.assets.root=assetRoot;
                 currentProject=path;
                 savedProjectState=projectContentState(world,scripts.source(),camera);
@@ -533,6 +535,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             history.commit(world,selectedEntity);
             const bool restored=undoRequested?history.undo(world,selectedEntity):history.redo(world,selectedEntity);
             if(restored)physics.reset();
+            else if(!history.error.empty()){projectError=history.error;history.error.clear();}
         }
         const bool playbackKeys=!ImGui::GetIO().WantTextInput && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
         const bool playKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F5,ImGuiInputFlags_RouteGlobal);
@@ -579,17 +582,19 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             if(compactToolbar)ImGui::EndPopup();
         }
         ImGui::End();
-        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy)) {editor.finish(world);clicking=false;}
+        bool hierarchyFocused=false;
+        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused)) {editor.finish(world);clicking=false;}
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
         drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging());
         scripts.componentOutput=componentScripts.messages();
         scripts.draw(&layout,playMode.playing());
-        browser.draw(window,world,selectedEntity,scripts,!playMode.active());
-        ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false;
+        browser.draw(window,world,selectedEntity,scripts,editAllowed,&history);
+        ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false,sceneFocused=false;
         sceneHovered=false;sceneRect={};
         if(panelOpen[2]) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
             if(beginEditorPanel("Scene")) {
+                sceneFocused=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
                 const auto pos=ImGui::GetCursorScreenPos(),size=ImGui::GetContentRegionAvail();
                 sceneRect={pos.x,pos.y,std::max(size.x,1.0f),std::max(size.y,1.0f)};
                 layout.scene=sceneRect;sceneVisible=true;sceneDrawList=ImGui::GetWindowDrawList();
@@ -609,6 +614,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             ImGui::End();ImGui::PopStyleVar();
         }
         if(!sceneVisible) {editor.finish(world);layout.scene={};}
+        if(editAllowed && (hierarchyFocused || sceneFocused) && world.alive(selectedEntity) &&
+            !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+            !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId) && ImGui::IsKeyPressed(ImGuiKey_Delete,false)) {
+            editor.finish(world);clicking=false;history.commit(world,selectedEntity);
+            deleteLevelObject(world,selectedEntity);selectedEntity={};
+            history.commit(world,selectedEntity);physics.reset();
+        }
         if (!playMode.active()) {
             updateHierarchy(world);
             history.observe(world,selectedEntity,editor.dragging() || ImGui::IsAnyItemActive() ||

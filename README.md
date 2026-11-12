@@ -562,8 +562,10 @@ into Assets. Existing filenames are preserved with numbered collision suffixes.
 The browser displays file-type badges for Lua, images, models, audio, projects,
 text, and other files. Right-click assets to rename or delete them; renaming
 updates matching Lua Script component references in the current scene. Deletion
-is confirmed and may leave missing references. Asset file operations are not
-part of scene Undo/Redo. Import is limited to individual files up to 256 MiB;
+moves files to the system Trash without a confirmation dialog and can be undone
+or redone through Edit / Ctrl+Z / Ctrl+Y. Deleted scripts may leave missing
+references until restored. Import, rename, and script-file writes are not part
+of scene Undo/Redo. Import is limited to individual files up to 256 MiB;
 folder import and media/model rendering or thumbnails are not implemented.
 
 Choose **New Lua** to create a template. Double-click a Lua asset to edit it in
@@ -607,3 +609,26 @@ Project format version 2 stores script references; version 1 projects still
 load. Save As copies the current asset tree into the destination's `Assets/`
 directory and refuses conflicting files instead of replacing them silently.
 Distribute the `.legacy` file together with its `Assets/` directory.
+
+### Asset views and focused keyboard actions
+
+Switch between **List** and **Grid** in the Assets panel. Grid tiles use the same
+selection, Lua editing, context menu, and drag/drop behavior as list rows.
+While Assets is focused, **F2** opens Rename for the selected asset (Enter applies,
+Escape cancels), and **Delete** moves it to the system Trash immediately. These
+shortcuts do not fire while typing, using another panel, or running Play mode.
+
+Asset deletion shares the same chronological, 64-step Undo/Redo history as scene
+edits. Undo restores the file to its original location; Redo trashes it again.
+The Linux build uses freedesktop Trash files and `.trashinfo` metadata, so files
+also appear in the desktop Trash. If the desktop has emptied the Trash, or a new
+file occupies the original path, Undo reports an error and does not overwrite
+anything or advance history. Abandoning/trimming history leaves files in Trash,
+not permanently deleted. History is session-only; opening a project or saving
+into a different Assets root clears it. Platforms without an implemented Trash
+backend report an error instead of permanently deleting an asset.
+
+With **Hierarchy** or **Scene** focused, **Delete** removes the selected GameObject
+and records the change in scene history. Its children remain detached at their
+current world-space poses, as with the Hierarchy context-menu action. Asset
+focus never deletes a GameObject, and Hierarchy/Scene focus never trashes assets.
