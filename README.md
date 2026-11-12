@@ -135,7 +135,7 @@ One unit is one metre, +Y points up and the ground is the XZ plane.
 | WASD, Q/E (freecam) | Fly forward/back/sideways, down/up |
 | Shift (freecam) | Move faster |
 | Mouse wheel (freecam) | Move forward/back |
-| `Esc`, or closing the window | Quit |
+| Closing the window | Quit (Escape does not exit the engine) |
 
 Clicks hit the nearest solid surface, or the ground at y = 0 when nothing solid is under the
 pointer (up to 100 m away). A sky click places an object at the camera target's distance.
@@ -183,7 +183,7 @@ end
 Variables persist between executions. **Reset Runtime** clears Lua variables and restores the
 built-in functions; it does not erase the editor text or existing console messages. **Clear** only
 clears the console. The console has an auto-scroll toggle and keeps the last 1,000 messages,
-with long messages truncated at about 8 KiB. Scripts are held in memory, not saved to disk.
+with long messages truncated at about 8 KiB. Lua source is saved with the project when you use File > Save Project.
 
 Lua 5.4.8 is embedded, so no Lua installation is needed. Scripts can manipulate the live scene
 using the game-object and component API below. Available libraries are base,
@@ -507,3 +507,27 @@ children. Paste creates a detached object at the copied world-space pose even if
 the original has since changed or been deleted; Duplicate retains the original's
 parent. These scene changes participate in undo/redo. The parent picker excludes
 invalid targets to prevent cycles and preserves the object's world-space pose.
+
+### Saving and opening projects
+
+Use **File > Save Project** (**Ctrl+S**), **Save Project As...**
+(**Ctrl+Shift+S**), or **Open Project...** (**Ctrl+O**). The first save opens a
+path-entry dialog; enter an absolute path or a path relative to the working
+directory, for example `/home/me/MyScene.legacy`. The containing directory must
+already exist. Subsequent Ctrl+S saves update the same file. Escape cancels the
+dialog but never exits the engine.
+
+A project is a versioned, single text file containing all scene GameObjects,
+names, transforms, built-in mesh/material properties, colliders, rigid bodies,
+parent relationships, the Lua Editor source, and camera view. Built-in meshes
+are stored by stable catalog index rather than graphics-driver handles. Runtime
+Lua state, console output, clipboard, and undo history are not stored. Imported
+custom meshes and custom C++ component types are not supported by this format.
+
+Save/Open are available only in Edit mode. Opening replaces the current scene,
+resets physics and the Lua runtime, and clears scene undo history; save existing
+work first. Invalid or unsupported files leave the current project intact.
+Saves are validated and written to a temporary sibling file before replacing
+the destination, so serialization/write failures do not truncate an existing
+project. Errors are shown in the path dialog. Version 1 limits projects to
+10,000 objects, 16 MiB total, and 64 KiB of Lua source.
