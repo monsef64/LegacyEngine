@@ -5,6 +5,7 @@
 #include "project_dialog.hpp"
 #include "editor_history.hpp"
 #include "system_trash.hpp"
+#include "project_assets.hpp"
 
 inline void fileBadge(const std::string& path,ImVec2 pos) {
     auto ext=AssetManager::extension(path);
@@ -24,7 +25,9 @@ inline void fileIcon(const std::string& path) {
     auto pos=ImGui::GetCursorScreenPos();ImGui::Dummy(ImVec2(44,28));fileBadge(path,pos);ImGui::SameLine();
 }
 class AssetBrowser {
+    UntitledProjectAssets staging_;
 public:
+    AssetBrowser(){assets.root=staging_.path;}
     void setGridMode(bool grid){grid_=grid;}
     bool gridMode() const{return grid_;}
     AssetManager assets;
@@ -51,7 +54,7 @@ public:
                 try {
                     int n=1;std::string name="NewScript.lua";
                     while(std::filesystem::exists(assets.resolve(name)))name="NewScript"+std::to_string(++n)+".lua";
-                    assets.writeScript(name,"-- self is the attached GameObject\nfunction onUpdate(dt)\n    -- self.getComponent(Transform).position.x = 1\nend\n");selected=name;
+                    assets.writeScript(name,"-- self is the attached GameObject\nfunction onUpdate(dt)\n    -- self:translate(dt, 0, 0)\nend\n");selected=name;
                 }catch(const std::exception& e){assets.error=e.what();}
             }
             if(!openedScript.empty()) {

@@ -173,3 +173,41 @@ function worldToScreen(camera,worldPosition) end
 ---@param screenPosition Vec3 Normalized x/y and depth
 ---@return Vec3
 function screenToWorld(camera,screenPosition) end
+
+-- Object-oriented constructors and methods. Existing global APIs remain valid.
+---@class GameObject
+---@field setPosition fun(self:GameObject,x:number|Vec3,y?:number,z?:number)
+---@field getPosition fun(self:GameObject):Vec3
+---@field setRotation fun(self:GameObject,x:number|Vec3|Quaternion,y?:number,z?:number,w?:number)
+---@field getRotation fun(self:GameObject):Quaternion
+---@field setScale fun(self:GameObject,x:number|Vec3,y?:number,z?:number)
+---@field getScale fun(self:GameObject):Vec3
+---@field translate fun(self:GameObject,x:number|Vec3,y?:number,z?:number)
+---@field lookAt fun(self:GameObject,x:number|Vec3|GameObject,y?:number,z?:number)
+---@field setParent fun(self:GameObject,parent:GameObject|nil)
+---@field getParent fun(self:GameObject):GameObject|nil
+---@field setName fun(self:GameObject,name:string)
+---@field getName fun(self:GameObject):string
+---@field destroy fun(self:GameObject)
+---@class GameObjectConstructor
+---@field new fun(name:string):GameObject
+---@field find fun(name:string):GameObject|nil
+---@type GameObjectConstructor
+GameObject = nil
+---@class CameraObject:GameObject
+---@field setActive fun(self:CameraObject,enabled?:boolean)
+---@field setFieldOfView fun(self:CameraObject,degrees:number)
+---@field setProjectionMode fun(self:CameraObject,mode:string)
+---@field setNearClipPlane fun(self:CameraObject,distance:number)
+---@field setFarClipPlane fun(self:CameraObject,distance:number)
+---@field setViewport fun(self:CameraObject,x:number,y:number,width:number,height:number)
+---@field setTarget fun(self:CameraObject,target:GameObject|Vec3|number|nil,y?:number,z?:number)
+---@field setFollowTarget fun(self:CameraObject,target:GameObject|Vec3|nil,offset:Vec3|number,y?:number,z?:number)
+---@field setShake fun(self:CameraObject,intensity:number,duration:number)
+---@field worldToScreen fun(self:CameraObject,x:Vec3|number,y?:number,z?:number):Vec3
+---@field screenToWorld fun(self:CameraObject,x:Vec3|number,y?:number,z?:number):Vec3
+---@class CameraConstructor:ComponentToken
+---@field new fun(name:string):CameraObject
+---@field getActive fun():CameraObject|nil
+---@type CameraConstructor
+Camera = nil

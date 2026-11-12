@@ -70,6 +70,29 @@ float number(lua_State* L,int index) {
     if (!std::isfinite(n) || std::abs(n)>1e6) luaL_error(L,"Number must be finite and within +/-1000000");
     return static_cast<float>(n);
 }
+Vec3 vectorArgument(lua_State* L,int index) {
+    if(lua_type(L,index)==LUA_TNUMBER)return {number(L,index),number(L,index+1),number(L,index+2)};
+    luaL_checktype(L,index,LUA_TTABLE);Vec3 v;
+    lua_getfield(L,index,"x");v.x=number(L,-1);lua_pop(L,1);
+    lua_getfield(L,index,"y");v.y=number(L,-1);lua_pop(L,1);
+    lua_getfield(L,index,"z");v.z=number(L,-1);lua_pop(L,1);return v;
+}
+Quat rotationArgument(lua_State* L,int index) {
+    const Vec3 v=vectorArgument(L,index);const bool table=lua_istable(L,index);
+    if(table)lua_getfield(L,index,"w");
+    const int wIndex=table?-1:index+3;
+    Quat result;
+    if(lua_isnoneornil(L,wIndex))result=composeRotation(composeRotation(axisAngle({0,1,0},radians(v.y)),axisAngle({1,0,0},radians(v.x))),axisAngle({0,0,1},radians(v.z)));
+    else {
+        const float w=number(L,wIndex);
+        if(v.x*v.x+v.y*v.y+v.z*v.z+w*w<1e-12f)luaL_error(L,"Rotation quaternion must not be zero");
+        result=normalize(Quat{v.x,v.y,v.z,w});
+    }
+    if(table)lua_pop(L,1);return result;
+}
+void pushVector(lua_State* L,Vec3 v) {
+    lua_createtable(L,0,3);lua_pushnumber(L,v.x);lua_setfield(L,-2,"x");lua_pushnumber(L,v.y);lua_setfield(L,-2,"y");lua_pushnumber(L,v.z);lua_setfield(L,-2,"z");
+}
 void component(lua_State* L,const Handle& h,int type) {
     auto* c=static_cast<Component*>(lua_newuserdatauv(L,sizeof(Component),0));
     *c={h,type};luaL_setmetatable(L,"Component");
@@ -96,6 +119,7 @@ LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,M
     }
     // Opaque type tokens cannot be forged by passing a number or a table.
     luaL_newmetatable(L,"ComponentType");
+    lua_pushlightuserdata(L,this);lua_pushcclosure(L,componentTypeIndex,1);lua_setfield(L,-2,"__index");
     lua_pushliteral(L,"locked");lua_setfield(L,-2,"__metatable");lua_pop(L,1);
     for (int i=0;i<7;++i) {
         auto* type=static_cast<int*>(lua_newuserdatauv(L,sizeof(int),0));
@@ -107,6 +131,10 @@ LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,M
     for(int i=0;i<16;++i) {
         lua_pushlightuserdata(L,this);lua_pushinteger(L,i);lua_pushcclosure(L,cameraApi,2);lua_setglobal(L,cameraFunctions[i]);
     }
+    lua_newtable(L);
+    lua_pushlightuserdata(L,this);lua_pushinteger(L,0);lua_pushcclosure(L,api,2);lua_setfield(L,-2,"new");
+    lua_pushlightuserdata(L,this);lua_pushinteger(L,5);lua_pushcclosure(L,api,2);lua_setfield(L,-2,"find");
+    lua_setglobal(L,"GameObject");
     const char* names[]{"createGameObject","destroyGameObject","getComponent","addComponent","removeComponent","findGameObjectByName","findGameObjectsByComponent","setParent","getParent"};
     for(int i=0;i<9;++i) {
         lua_pushlightuserdata(L,this);lua_pushinteger(L,i);lua_pushcclosure(L,api,2);lua_setglobal(L,names[i]);
@@ -197,11 +225,14 @@ int LuaScene::objectMethod(lua_State* L) {
     const Handle bound=handle(L,lua_upvalueindex(3));
     if (luaL_testudata(L,1,"GameObject")) {
         const Handle explicitSelf=handle(L,1);
-        if(explicitSelf.entity!=bound.entity || explicitSelf.scene!=bound.scene)
-            return luaL_error(L,"Method called with a different GameObject");
-        lua_remove(L,1);
+        const int operation=static_cast<int>(lua_tointeger(L,lua_upvalueindex(2)));
+        if(explicitSelf.entity==bound.entity && explicitSelf.scene==bound.scene &&
+            !(operation==7 && lua_gettop(L)==1))lua_remove(L,1);
     }
     lua_pushvalue(L,lua_upvalueindex(3));lua_insert(L,1);
+    const int operation=static_cast<int>(lua_tointeger(L,lua_upvalueindex(2)));
+    if(operation>=200)return objectApi(L);
+    if(operation>=100)return cameraApi(L);
     return api(L);
 }
 int LuaScene::objectIndex(lua_State* L) {
@@ -210,6 +241,21 @@ int LuaScene::objectIndex(lua_State* L) {
     for(int i=0;i<3;++i) if(!std::strcmp(key,methods[i])) {
         lua_pushlightuserdata(L,h.scene);lua_pushinteger(L,i+2);lua_pushvalue(L,1);
         lua_pushcclosure(L,objectMethod,3);return 1;
+    }
+    struct Method {const char* name;int operation;};
+    const Method objectMethods[]{{"setPosition",200},{"getPosition",201},{"setRotation",202},{"getRotation",203},
+        {"setScale",204},{"getScale",205},{"translate",206},{"lookAt",207},{"setParent",7},{"getParent",8},{"destroy",1},
+        {"setName",208},{"getName",209}};
+    for(const auto& method:objectMethods)if(!std::strcmp(key,method.name)) {
+        lua_pushlightuserdata(L,h.scene);lua_pushinteger(L,method.operation);lua_pushvalue(L,1);lua_pushcclosure(L,objectMethod,3);return 1;
+    }
+    if(h.world->has<Camera>(h.entity)) {
+        const Method cameraMethods[]{{"setActive",101},{"setFieldOfView",106},{"setProjectionMode",107},
+            {"setNearClipPlane",108},{"setFarClipPlane",109},{"setViewport",110},{"setTarget",111},{"setCameraTarget",111},
+            {"setFollowTarget",112},{"setShake",113},{"setCameraShake",113},{"worldToScreen",114},{"screenToWorld",115}};
+        for(const auto& method:cameraMethods)if(!std::strcmp(key,method.name)) {
+            lua_pushlightuserdata(L,h.scene);lua_pushinteger(L,method.operation);lua_pushvalue(L,1);lua_pushcclosure(L,objectMethod,3);return 1;
+        }
     }
     if(!std::strcmp(key,"parent")){const Entity p=getParent(*h.world,h.entity);if(p==Entity{})lua_pushnil(L);else h.scene->pushObject(p);return 1;}
     if(!std::strcmp(key,"name")) {auto* n=h.world->tryGet<ObjectName>(h.entity);lua_pushstring(L,n?n->value.c_str():"");return 1;}
@@ -329,3 +375,5 @@ void LuaScene::stop() {
 void LuaScene::setSelf(Entity entity) { pushObject(entity);lua_setglobal(state_,"self"); }
 
 #include "lua_camera.inc"
+
+#include "lua_objects.inc"

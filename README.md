@@ -529,7 +529,7 @@ Undoing back to the saved state clears it. Play-mode simulation is not counted
 as an edit to the saved scene. There is no persistent "Project saved" status
 message in the menu bar.
 
-A project is a versioned text file with an accompanying `Assets/` directory, containing all scene GameObjects,
+A project is a versioned text file with an accompanying project-specific `.assets/` directory, containing all scene GameObjects,
 names, transforms, built-in mesh/material properties, colliders, rigid bodies,
 parent relationships, the Lua Editor source, and camera view. Built-in meshes
 are stored by stable catalog index rather than graphics-driver handles. Runtime
@@ -555,8 +555,10 @@ back to the old typed-path dialog.
 
 ### Assets and attached Lua scripts
 
-The **Assets** panel manages the `Assets/` directory next to the open project
-(or in the working directory for an untitled scene). Use **Import...**, or drop
+The **Assets** panel manages a private asset directory for the open project.
+Saving `MyGame.legacy` stores its assets in `MyGame.legacy.assets/` next to the
+project file. Untitled projects stage assets in the OS temporary directory, never
+in the engine installation or working directory. Save the project to keep them. Use **Import...**, or drop
 individual files from your system file explorer onto the engine to copy them
 into Assets. Existing filenames are preserved with numbered collision suffixes.
 The browser displays file-type badges for Lua, images, models, audio, projects,
@@ -605,10 +607,12 @@ report errors without crashing the editor; at most 128 component runtimes are
 active. The existing Lua Editor Execute/runtime remains separate. Components
 are accessible through `self.getComponent(LuaScript).path` and `.enabled`.
 
-Project format version 2 stores script references; version 1 projects still
-load. Save As copies the current asset tree into the destination's `Assets/`
-directory and refuses conflicting files instead of replacing them silently.
-Distribute the `.legacy` file together with its `Assets/` directory.
+Project format version 4 records the relative asset-directory name as well as
+script and camera references. Versions 1–3 still load, including their legacy
+`Assets/` directories. Save As copies assets into the new project's private
+companion directory and refuses conflicting files rather than overwriting them.
+Distribute the `.legacy` file together with its companion `.assets/` directory.
+The stored relative path keeps assets connected when the project file is renamed.
 
 ### Asset views and focused keyboard actions
 
@@ -645,8 +649,8 @@ Game panel if closed. Its layout is dockable just like other panels.
 The first created camera is active automatically. Select it to edit projection,
 FOV, clip planes, orthographic size, viewport, and active state in Inspector.
 Camera settings participate in Undo/Redo, duplication, and Play/Stop restoration.
-Duplicates start inactive. Project format 3 saves camera settings and remaps
-camera target references; format 1/2 projects remain readable. Shake and current
+Duplicates start inactive. Projects save camera settings and remap camera target references; older
+format 1/2/3 projects remain readable. Shake and current
 Game-view aspect are transient and not saved.
 
 Lua camera functions:
@@ -690,3 +694,44 @@ including depth. Values outside the view/depth range represent off-screen points
 Conversions use the current Game-view aspect (last known aspect when hidden,
 or 16:9 before first display). Orthographic size is the vertical world-space
 span, adjustable through Inspector or `getComponent(Camera).orthographicSize`.
+
+### Object-oriented Lua and numeric coordinates
+
+```lua
+local player = GameObject.new("Player")
+player:setPosition(0, 1, 0)
+player:setScale(1, 1, 1)
+player:translate(2, 0, 0)
+
+local camera = Camera.new("Main Camera")
+camera:setPosition(0, 3, 8)
+camera:lookAt(player)
+camera:setFieldOfView(60)
+camera:setActive()
+camera:setFollowTarget(player, 0, 3, 8)
+```
+
+`setPosition(x,y,z)` works on GameObjects, Cameras, and attached-script `self`.
+Vector tables remain accepted, and dot-bound calls such as
+`camera.setPosition(0,3,8)` also work. Constructors use dot syntax:
+`GameObject.new(name)` and `Camera.new(name)`. `Camera` remains a valid component
+token for `object:getComponent(Camera)`.
+
+Common methods: `setPosition/getPosition`, `setRotation/getRotation`,
+`setScale/getScale`, `translate`, `lookAt`, `setParent/getParent`,
+`setName/getName`, `getComponent/addComponent/removeComponent`, and `destroy`.
+`GameObject.find(name)` finds an existing object. Getters return value copies;
+use setters or live Transform component fields to change the scene.
+
+Cameras inherit those methods and add `setActive`, `setFieldOfView`,
+`setProjectionMode`, `setNearClipPlane`, `setFarClipPlane`, `setViewport`,
+`setTarget`, `setFollowTarget`, `setShake`, `worldToScreen`, and `screenToWorld`.
+`Camera.getActive()` retrieves the active camera. Euler rotations use degrees;
+`setRotation(x,y,z,w)` supplies a quaternion. Existing global camera functions
+also accept numeric vector coordinates, for example
+`setCameraPosition(camera,0,3,8)` and `lookAt(camera,0,1,0)`.
+
+Objects and Cameras retain the existing lifecycle callbacks and generation-safe
+handles; a stored method fails safely after its object is destroyed. Untitled
+asset staging is temporary and cleaned on normal shutdown; save the project
+before closing if you created or imported assets you want to keep.

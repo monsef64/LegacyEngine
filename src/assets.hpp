@@ -10,13 +10,14 @@
 
 class AssetManager {
 public:
-    std::filesystem::path root=std::filesystem::current_path()/"Assets";
+    std::filesystem::path root; // Must be supplied by the owning project.
     std::string error;
     static std::string extension(const std::filesystem::path& p) {
         auto e=p.extension().string();for(char& c:e)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return e;
     }
     static bool script(const std::filesystem::path& p) {return extension(p)==".lua";}
     std::filesystem::path resolve(const std::string& relative) const {
+        if(root.empty())throw std::runtime_error("No project asset root is configured");
         const std::filesystem::path p(relative);
         if(relative.find('\0')!=std::string::npos)throw std::runtime_error("Invalid asset path");
         if(p.is_absolute())throw std::runtime_error("Asset path must be relative");
@@ -29,7 +30,7 @@ public:
     }
     std::vector<std::string> files() const {
         std::vector<std::string> result;
-        if(!std::filesystem::exists(root))return result;
+        if(root.empty() || !std::filesystem::exists(root))return result;
         for(const auto& entry:std::filesystem::recursive_directory_iterator(root)) {
             if(result.size()>=10000)break;
             if(entry.is_regular_file() && !entry.is_symlink()) {
@@ -40,6 +41,7 @@ public:
         std::sort(result.begin(),result.end());return result;
     }
     std::string import(const std::filesystem::path& source) {
+        if(root.empty())throw std::runtime_error("No project asset root is configured");
         if(!std::filesystem::is_regular_file(source))throw std::runtime_error("Drop individual files, not directories");
         if(std::filesystem::file_size(source)>256*1024*1024)throw std::runtime_error("Asset exceeds 256 MiB import limit");
         std::filesystem::create_directories(root);
@@ -68,6 +70,8 @@ public:
     // Save As copies the asset tree without changing existing project assets.
     // Conflicting content is rejected rather than silently breaking references.
     void copyTo(const std::filesystem::path& destination) const {
+        if(root.empty())throw std::runtime_error("No project asset root is configured");
+        std::filesystem::create_directories(destination);
         if(std::filesystem::weakly_canonical(root)==std::filesystem::weakly_canonical(destination))return;
         for(const auto& path:files()) {
             const auto from=resolve(path),to=destination/path;

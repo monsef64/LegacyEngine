@@ -4,6 +4,22 @@
 
 struct LuaDefinition { const char* name; const char* signature; };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"new","GameObject.new(name) / Camera.new(name)"},
+    {"find","GameObject.find(name) -> GameObject or nil"},
+    {"getActive","Camera.getActive() -> Camera GameObject or nil"},
+    {"setPosition","object:setPosition(x,y,z) or object:setPosition({x,y,z})"},
+    {"getPosition","object:getPosition() -> position copy"},
+    {"setRotation","object:setRotation(x,y,z) degrees or quaternion/table"},
+    {"getRotation","object:getRotation() -> quaternion copy"},
+    {"setScale","object:setScale(x,y,z) or vector"},
+    {"getScale","object:getScale() -> scale copy"},
+    {"translate","object:translate(x,y,z) or vector"},
+    {"setName","object:setName(name)"},
+    {"getName","object:getName() -> string"},
+    {"destroy","object:destroy()"},
+    {"setActive","camera:setActive(enabled=true)"},
+    {"setTarget","camera:setTarget(objectOrPositionOrNil)"},
+    {"setShake","camera:setShake(intensity,seconds)"},
     {"createCamera","createCamera(name) -> Camera GameObject"},
     {"setActiveCamera","setActiveCamera(cameraOrNil)"},
     {"getActiveCamera","getActiveCamera() -> Camera GameObject or nil"},

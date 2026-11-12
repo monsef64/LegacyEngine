@@ -29,11 +29,11 @@ inline Transform readTransform(std::istream& in) {
     t.rotation.x=number(in);t.rotation.y=number(in);t.rotation.z=number(in);t.rotation.w=number(in);
     t.scale=readVec(in);return t;
 }
-inline std::string encode(World& world,std::string_view source,const OrbitCamera& camera,const Meshes& meshes) {
+inline std::string encode(World& world,std::string_view source,const OrbitCamera& camera,const Meshes& meshes,std::string_view assetDirectory={}) {
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 3\n";
-    out<<std::quoted(std::string(source))<<'\n';
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 4\n";
+    out<<std::quoted(std::string(source))<<'\n'<<std::quoted(std::string(assetDirectory))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
     for(Entity e:entities) {
@@ -67,12 +67,17 @@ inline std::string encode(World& world,std::string_view source,const OrbitCamera
     }
     auto text=out.str();require(text.size()<=maxBytes);return text;
 }
-struct Loaded { World world; std::string source; OrbitCamera camera; };
+struct Loaded { World world; std::string source,assetDirectory; OrbitCamera camera; };
 inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=3));
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=4));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
+    if(version>=4) {
+        in>>std::quoted(result.assetDirectory);
+        require(result.assetDirectory.size()<=4096 && result.assetDirectory.find('\0')==std::string::npos && !std::filesystem::path(result.assetDirectory).is_absolute());
+        for(const auto& part:std::filesystem::path(result.assetDirectory))require(part!="..");
+    }
     auto& camera=result.camera;camera.target=readVec(in);camera.yaw=number(in);camera.pitch=number(in);
     camera.distance=number(in);camera.fieldOfView=number(in);
     require(camera.distance>0 && camera.fieldOfView>0 && camera.fieldOfView<3.14f);
@@ -123,7 +128,7 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
 inline bool save(const std::string& path,World& world,std::string_view source,const OrbitCamera& camera,const Meshes& meshes,std::string& error) {
     std::filesystem::path temporary;
     try {
-        auto text=encode(world,source,camera,meshes);
+        auto text=encode(world,source,camera,meshes,std::filesystem::path(path).filename().string()+".assets");
         Loaded check;decode(text,check,meshes); // Never replace a project with invalid values.
         temporary=path+".tmp-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
         std::ofstream out(temporary,std::ios::binary|std::ios::trunc);
@@ -135,13 +140,15 @@ inline bool save(const std::string& path,World& world,std::string_view source,co
         error=e.what();if(!temporary.empty()){std::error_code ec;std::filesystem::remove(temporary,ec);}return false;
     }
 }
-inline bool load(const std::string& path,World& world,std::string& source,OrbitCamera& camera,const Meshes& meshes,std::string& error) {
+inline bool load(const std::string& path,World& world,std::string& source,OrbitCamera& camera,const Meshes& meshes,std::string& error,std::string* assetDirectory=nullptr) {
     try {
         std::ifstream in(path,std::ios::binary);if(!in)throw std::runtime_error("Could not open project file");
         in.seekg(0,std::ios::end);auto size=in.tellg();require(size>=0 && size<=static_cast<std::streamoff>(maxBytes));
         in.seekg(0);std::string text(static_cast<std::size_t>(size),'\0');in.read(text.data(),size);require(bool(in));
         Loaded loaded;decode(text,loaded,meshes);
-        world.restore(loaded.world);source=std::move(loaded.source);camera=loaded.camera;error.clear();return true;
+        world.restore(loaded.world);source=std::move(loaded.source);camera=loaded.camera;
+        if(assetDirectory)*assetDirectory=std::move(loaded.assetDirectory);
+        error.clear();return true;
     } catch(const std::exception& e) { error=e.what();return false; }
 }
 }
