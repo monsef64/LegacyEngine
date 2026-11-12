@@ -58,3 +58,6 @@ inline std::vector<Vec3> coneHullVertices() {
     }
     return vertices;
 }
+
+// Editor-only camera body, lens and viewfinder; forward is local -Z.
+MeshData makeCameraModel();

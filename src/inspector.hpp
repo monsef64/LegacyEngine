@@ -1,6 +1,7 @@
 #pragma once
 #include "editor_layout.hpp"
 #include "level_objects.hpp"
+#include "scene_camera.hpp"
 #include "transform_edit.hpp"
 #include <ImGuizmo.h>
 #include <cstdio>
@@ -87,6 +88,26 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 editVector("Linear velocity",rb->linearVelocity);editVector("Angular velocity",rb->angularVelocity);
                 if(ImGui::Button("Remove RigidBody"))world.remove<RigidBody>(selected);
             }
+            if(auto* camera=world.tryGet<Camera>(selected);camera && componentHeader("Camera")) {
+                Camera edited=*camera;
+                bool active=camera->active;
+                if(ImGui::Checkbox("Active camera",&active)) {
+                    if(active)activateCamera(world,selected);else camera->active=false;
+                }
+                edited.active=camera->active;
+                ImGui::Checkbox("Orthographic",&edited.orthographic);
+                ImGui::DragFloat("Field of view (degrees)",&edited.fieldOfView,.1f,1,178);
+                ImGui::DragFloat("Orthographic size",&edited.orthographicSize,.1f,.01f,1000000);
+                ImGui::DragFloat("Near clip",&edited.nearClip,.01f,.001f,edited.farClip-.001f);
+                ImGui::DragFloat("Far clip",&edited.farClip,1,edited.nearClip+.001f,1000000);
+                float viewport[]{edited.viewportX,edited.viewportY,edited.viewportWidth,edited.viewportHeight};
+                if(ImGui::DragFloat4("Viewport",viewport,.005f,0,1)) {
+                    edited.viewportX=viewport[0];edited.viewportY=viewport[1];edited.viewportWidth=viewport[2];edited.viewportHeight=viewport[3];
+                }
+                if(validCamera(edited))*camera=edited;
+                if(ImGui::Button("Clear camera target")){camera->tracking=false;camera->following=false;camera->targetEntity={};}
+                if(ImGui::Button("Remove Camera"))world.remove<Camera>(selected);
+            }
             if(auto* script=world.tryGet<LuaScript>(selected);script && componentHeader("Lua Script")) {
                 ImGui::Checkbox("Script enabled",&script->enabled);
                 char path[4097];std::snprintf(path,sizeof(path),"%s",script->path.c_str());
@@ -106,6 +127,7 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 if(!world.has<MeshRenderer>(selected) && ImGui::MenuItem("MeshRenderer"))world.add(selected,MeshRenderer{meshes[0]});
                 if(!world.has<Collider>(selected) && ImGui::MenuItem("Collider"))world.add(selected,Collider{});
                 if(!world.has<RigidBody>(selected) && ImGui::MenuItem("RigidBody"))world.add(selected,RigidBody{});
+                if(!world.has<Camera>(selected) && world.has<Transform>(selected) && ImGui::MenuItem("Camera"))world.add(selected,Camera{});
                 if(!world.has<LuaScript>(selected) && ImGui::MenuItem("Lua Script"))world.add(selected,LuaScript{});
                 ImGui::EndPopup();
             }

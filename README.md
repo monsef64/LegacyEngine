@@ -632,3 +632,61 @@ With **Hierarchy** or **Scene** focused, **Delete** removes the selected GameObj
 and records the change in scene history. Its children remain detached at their
 current world-space poses, as with the Hierarchy context-menu action. Asset
 focus never deletes a GameObject, and Hierarchy/Scene focus never trashes assets.
+
+### Scene Cameras and Game view
+
+Use **Create > Camera** to add a Camera GameObject. It has a selectable 3D body,
+lens, and viewfinder model in **Scene**, but that editor-only model is never
+drawn in **Game**. Cameras are not player characters and have no collider or
+rigid body unless you explicitly add one. The existing Scene freecam remains
+independent of the active game camera. Use **Windows > Game** to restore the
+Game panel if closed. Its layout is dockable just like other panels.
+
+The first created camera is active automatically. Select it to edit projection,
+FOV, clip planes, orthographic size, viewport, and active state in Inspector.
+Camera settings participate in Undo/Redo, duplication, and Play/Stop restoration.
+Duplicates start inactive. Project format 3 saves camera settings and remaps
+camera target references; format 1/2 projects remain readable. Shake and current
+Game-view aspect are transient and not saved.
+
+Lua camera functions:
+
+```lua
+local camera = createCamera("Main Camera")
+setCameraPosition(camera, {x=0, y=3, z=8})
+lookAt(camera, {x=0, y=1, z=0})
+setFieldOfView(camera, 60)
+setNearClipPlane(camera, 0.1)
+setFarClipPlane(camera, 1000)
+setProjectionMode(camera, "Perspective") -- or "Orthographic"
+setViewport(camera, 0, 0, 1, 1)
+setActiveCamera(camera)
+assert(getActiveCamera() == camera)
+```
+
+- `setCameraRotation(camera, rotation)` accepts Euler degrees `{x,y,z}` (yaw Y,
+  pitch X, roll Z), or a normalized quaternion `{x,y,z,w}`. Local forward is -Z,
+  up is +Y. Explicit rotation clears target tracking.
+- `lookAt(camera, target)` aims once. Target can be a world position or GameObject.
+- `setCameraTarget(camera, target)` continuously aims without moving the camera.
+- `setFollowTarget(camera, target, offset)` continuously positions at target +
+  world-space offset and aims at it. Target can be a point or GameObject; `nil`
+  clears tracking/following. Destroyed entity targets detach safely.
+- `setCameraShake(camera, intensity, duration)` adds a temporary render-only
+  shake in world units for the given seconds. It never permanently alters the
+  Transform. Pause freezes shake, and Stop restores the edit scene.
+- `setActiveCamera(nil)` disables the game camera. If none is active, Game shows
+  a placeholder rather than silently using the editor freecam.
+- `camera.getComponent(Camera)` exposes `active`, `orthographic`, `fieldOfView`,
+  `nearClip`, `farClip`, and `orthographicSize`. Use the setter functions for
+  validated projection changes. FOV must be between 0 and 179 degrees, near clip
+  positive, far clip greater than near clip, and viewport contained within 0..1.
+
+`setViewport(camera,x,y,width,height)` uses normalized Game-view coordinates
+with a top-left origin. `worldToScreen(camera,worldPosition)` returns normalized
+full-Game-view `{x,y,z}` with depth 0 at near clip and 1 at far clip.
+`screenToWorld(camera,screenPosition)` reverses it; supply all three coordinates,
+including depth. Values outside the view/depth range represent off-screen points.
+Conversions use the current Game-view aspect (last known aspect when hidden,
+or 16:9 before first display). Orthographic size is the vertical world-space
+span, adjustable through Inspector or `getComponent(Camera).orthographicSize`.

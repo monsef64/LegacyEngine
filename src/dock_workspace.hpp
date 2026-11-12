@@ -23,7 +23,7 @@ inline void drawWorkspace(const EditorRect& toolbar,bool& reset) {
         ImGuiID console=ImGui::DockBuilderSplitNode(bottom,ImGuiDir_Right,.45f,nullptr,&bottom);
         ImGui::DockBuilderDockWindow("Hierarchy",left);ImGui::DockBuilderDockWindow("Inspector",right);
         ImGui::DockBuilderDockWindow("Scene",center);ImGui::DockBuilderDockWindow("Assets",bottom);
-        ImGui::DockBuilderDockWindow("Lua Editor",bottom);ImGui::DockBuilderDockWindow("Lua Console",console);
+        ImGui::DockBuilderDockWindow("Lua Editor",bottom);ImGui::DockBuilderDockWindow("Lua Console",console);ImGui::DockBuilderDockWindow("Game",console);
         ImGui::DockBuilderFinish(id);
     }
     ImGui::DockSpace(id,ImVec2(0,0));ImGui::End();ImGui::PopStyleVar(2);

@@ -4,6 +4,23 @@
 
 struct LuaDefinition { const char* name; const char* signature; };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"createCamera","createCamera(name) -> Camera GameObject"},
+    {"setActiveCamera","setActiveCamera(cameraOrNil)"},
+    {"getActiveCamera","getActiveCamera() -> Camera GameObject or nil"},
+    {"setCameraPosition","setCameraPosition(camera, {x,y,z})"},
+    {"setCameraRotation","setCameraRotation(camera, Euler degrees {x,y,z} or quaternion {x,y,z,w})"},
+    {"lookAt","lookAt(camera, worldPositionOrGameObject) - one-shot aim"},
+    {"setFieldOfView","setFieldOfView(camera, degrees)"},
+    {"setProjectionMode","setProjectionMode(camera, Perspective | Orthographic)"},
+    {"setNearClipPlane","setNearClipPlane(camera, distance)"},
+    {"setFarClipPlane","setFarClipPlane(camera, distance)"},
+    {"setViewport","setViewport(camera, x,y,width,height) - normalized top-left viewport"},
+    {"setCameraTarget","setCameraTarget(camera, pointOrObjectOrNil) - continuous aim"},
+    {"setFollowTarget","setFollowTarget(camera, pointOrObjectOrNil, worldOffset)"},
+    {"setCameraShake","setCameraShake(camera, intensity, durationSeconds)"},
+    {"worldToScreen","worldToScreen(camera, worldPosition) -> normalized {x,y,zDepth}"},
+    {"screenToWorld","screenToWorld(camera, normalized {x,y,zDepth}) -> world position"},
+    {"Camera","Camera - camera component type token"},
     {"onStart","onStart() - called when Execute succeeds"},
     {"onUpdate","onUpdate(deltaTime) - once per frame, seconds"},
     {"onFixedUpdate","onFixedUpdate(deltaTime) - before each 1/60 s physics step"},

@@ -65,7 +65,8 @@ inline Entity copyLevelObject(World& sourceWorld, Entity source, World& world, b
         if (auto* original = sourceWorld.tryGet<T>(source)) { T data = *original; world.add(copy, data); }
     };
     component(Transform{}); component(MeshRenderer{}); component(Collider{});
-    component(RigidBody{}); component(ObjectName{}); component(LuaScript{});
+    component(RigidBody{}); component(ObjectName{}); component(LuaScript{}); component(Camera{});
+    if(auto* camera=world.tryGet<Camera>(copy))camera->active=false;
     if(preserveParent)component(Parent{});
     if (auto* name = world.tryGet<ObjectName>(copy)) name->value = copiedObjectName(world,name->value);
     return copy;
