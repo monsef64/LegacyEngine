@@ -1,5 +1,6 @@
 #include "lua_console.hpp"
 #include "lua_scene.hpp"
+#include "legacy_script.hpp"
 
 extern "C" {
 #include <lua.h>
@@ -101,10 +102,11 @@ bool LuaConsole::execute(std::string_view source)
 {
     if (!state_) { append(Kind::Error,"Lua runtime is unavailable"); return false; }
     if (source.size()>maxSourceBytes) { append(Kind::Error,"Script exceeds the 64 KiB editor limit"); return false; }
+    const auto prepared=preprocessLegacyScript(source);
     lua_settop(state_,0);
     beginBudget();
     lua_pushcfunction(state_,traceback);
-    int status=luaL_loadbufferx(state_,source.data(),source.size(),"editor","t");
+    int status=luaL_loadbufferx(state_,prepared.data(),prepared.size(),"editor","t");
     if (status==LUA_OK) status=lua_pcall(state_,0,0,1);
     if (status==LUA_OK && scene_) scene_->start();
     endBudget();
@@ -144,4 +146,12 @@ bool LuaConsole::bindObject(Entity entity) {
     lua_pushlightuserdata(state_,&bind);
     if(lua_pcall(state_,1,0,0)!=LUA_OK) { append(Kind::Error,lua_tostring(state_,-1));lua_pop(state_,1);return false; }
     return true;
+}
+
+bool LuaConsole::bindExports(const std::vector<ScriptField>& fields){
+    if(!state_ || !scene_)return false;
+    struct Binding{LuaScene* scene;const std::vector<ScriptField>* fields;} binding{scene_.get(),&fields};
+    lua_pushcfunction(state_,+[](lua_State* L)->int{auto* b=static_cast<Binding*>(lua_touserdata(L,1));b->scene->setExports(*b->fields);return 0;});
+    lua_pushlightuserdata(state_,&binding);
+    if(lua_pcall(state_,1,0,0)!=LUA_OK){append(Kind::Error,lua_tostring(state_,-1));lua_pop(state_,1);return false;}return true;
 }

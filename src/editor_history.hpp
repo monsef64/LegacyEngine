@@ -17,11 +17,13 @@ inline std::string sceneSignature(World& world) {
         using T=decltype(value);
         const auto* c=world.tryGet<T>(e);scalar(c!=nullptr);if(c)write(*c);
     };
+    auto fields=[&](const std::vector<ScriptField>& entries){scalar(entries.size());for(const auto& f:entries){scalar(f.name.size());result+=f.name;scalar(f.type.size());result+=f.type;scalar(f.text.size());result+=f.text;scalar(f.number);scalar(f.boolean);scalar(f.entity.index);scalar(f.entity.generation);}};
     for(Entity e:world.entities()) {
         scalar(e.index);scalar(e.generation);
         component(e,ObjectName{},[&](const ObjectName& n){scalar(n.value.size());result+=n.value;});
-        component(e,LuaScript{},[&](const LuaScript& script){scalar(script.path.size());result+=script.path;scalar(script.enabled);scalar(script.additional.size());for(const auto& entry:script.additional){scalar(entry.path.size());result+=entry.path;scalar(entry.enabled);}});
-        component(e,AudioSource{},[&](const AudioSource& a){scalar(a.clip.size());result+=a.clip;scalar(a.volume);scalar(a.pitch);scalar(a.pan);scalar(a.distance);scalar(a.looping);scalar(a.muted);scalar(a.playOnStart);});
+        component(e,LuaScript{},[&](const LuaScript& script){scalar(script.path.size());result+=script.path;scalar(script.enabled);fields(script.fields);scalar(script.additional.size());for(const auto& entry:script.additional){scalar(entry.path.size());result+=entry.path;scalar(entry.enabled);fields(entry.fields);}});
+        component(e,AudioListener{},[&](const AudioListener& listener){scalar(listener.enabled);});
+        component(e,AudioSource{},[&](const AudioSource& a){scalar(a.clip.size());result+=a.clip;scalar(a.volume);scalar(a.pitch);scalar(a.pan);scalar(a.distance);scalar(a.blend);scalar(a.looping);scalar(a.muted);scalar(a.playOnStart);});
         component(e,Camera{},[&](const Camera& c){
             scalar(c.active);scalar(c.orthographic);scalar(c.fieldOfView);scalar(c.nearClip);scalar(c.farClip);scalar(c.orthographicSize);
             scalar(c.viewportX);scalar(c.viewportY);scalar(c.viewportWidth);scalar(c.viewportHeight);

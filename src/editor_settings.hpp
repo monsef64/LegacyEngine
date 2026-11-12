@@ -23,8 +23,13 @@ struct EditorSettings {
         if(!SDL_OpenURL(("vscode://file/"+encoded).c_str())){error=SDL_GetError();return false;}
         error.clear();return true;
     }
-    void draw(const std::filesystem::path& folder){if(!visible)return;if(ImGui::Begin("Settings",&visible)){
+    void draw(const std::filesystem::path& folder){if(!visible)return;
+        const auto area=ImGui::GetMainViewport()->WorkSize;
+        ImGui::SetNextWindowSize(ImVec2(std::min(540.0f,area.x),std::min(300.0f,area.y)),ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSizeConstraints(ImVec2(std::min(360.0f,area.x),std::min(220.0f,area.y)),area);
+        if(ImGui::Begin("Settings",&visible,ImGuiWindowFlags_NoDocking)){
         ImGui::SeparatorText("Editor");int choice=external?1:0;
+        ImGui::SetNextItemWidth(-120);
         if(ImGui::Combo("Code editor",&choice,"Internal\0External (VS Code)\0")){external=choice==1;save();if(external)openExternal(folder);}
         ImGui::TextWrapped("External mode opens the project folder in VS Code when a script is double-clicked. VS Code must register its vscode:// URL handler.");
         if(external && ImGui::Button("Open project in VS Code"))openExternal(folder);

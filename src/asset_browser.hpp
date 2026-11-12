@@ -1,5 +1,6 @@
 #pragma once
 #include "assets.hpp"
+#include "audio_preview.hpp"
 #include "editor_settings.hpp"
 #include "editor_layout.hpp"
 #include "script_editor.hpp"
@@ -36,10 +37,11 @@ public:
     EditorSettings settings;
     std::filesystem::path projectFolder;
     ProjectDialog dialog;
+    AudioPreview preview;
     void importFile(const std::string& path) {
         try{selected=assets.import(path);assets.error.clear();}catch(const std::exception& e){assets.error=e.what();}
     }
-    void setRoot(const std::filesystem::path& root) {assets.root=root;selected.clear();openedScript.clear();}
+    void setRoot(const std::filesystem::path& root) {preview.stop();assets.root=root;selected.clear();openedScript.clear();}
     void draw(SDL_Window* window,World& world,Entity selectedObject,ScriptEditor& scripts,bool editable,EditorHistory* history=nullptr) {
         if(auto result=dialog.poll()) {if(!result->error.empty())assets.error=result->error;else if(!result->path.empty())importFile(result->path);}
         if(dockedEditor && !panelOpen[5])return;
@@ -48,8 +50,6 @@ public:
                 !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
                 !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId) && editable && !dialog.pending();
             ImGui::TextDisabled("%s",assets.root.string().c_str());
-            if(ImGui::RadioButton("List",!grid_))grid_=false;
-            ImGui::SameLine();if(ImGui::RadioButton("Grid",grid_))grid_=true;
             ImGui::BeginDisabled(!editable || dialog.pending());
             if(ImGui::Button("Import..."))dialog.showImport(window);
             ImGui::SameLine();
@@ -60,6 +60,8 @@ public:
             }
             ImGui::TextWrapped("Drop files here to import. Drag LegacyScript assets onto a GameObject or Inspector to attach.");
             if(!assets.error.empty())ImGui::TextWrapped("%s",assets.error.c_str());
+            if(!preview.error.empty())ImGui::TextWrapped("%s",preview.error.c_str());
+            ImGui::BeginChild("Asset files",ImVec2(0,-32));
             try {
                 const auto files=assets.files();
                 const int columns=grid_?std::clamp(static_cast<int>(ImGui::GetContentRegionAvail().x/120),1,64):1;
@@ -67,7 +69,9 @@ public:
                 for(const auto& file:files) {
                     ImGui::TableNextColumn();ImGui::PushID(file.c_str());
                     if(!grid_)fileIcon(file);
-                    const bool clicked=ImGui::Selectable(grid_?"##tile":file.c_str(),selected==file,ImGuiSelectableFlags_AllowDoubleClick,ImVec2(0,grid_?84.0f:28.0f));
+                    const bool clicked=ImGui::Selectable(grid_?"##tile":file.c_str(),selected==file,ImGuiSelectableFlags_AllowDoubleClick|ImGuiSelectableFlags_AllowOverlap,ImVec2(0,grid_?84.0f:28.0f));
+                    const auto itemMin=ImGui::GetItemRectMin(),itemMax=ImGui::GetItemRectMax();
+                    const bool itemHovered=ImGui::IsMouseHoveringRect(itemMin,itemMax);
                     if(grid_) {
                         const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
                         auto* draw=ImGui::GetWindowDrawList();draw->PushClipRect(a,b,true);
@@ -91,6 +95,18 @@ public:
                         if(ImGui::MenuItem("Rename...","F2")) {selected=file;renameRequested_=true;}
                         if(ImGui::MenuItem("Move to Trash","Del")){selected=file;deleteRequested_=true;}
                         ImGui::EndPopup();
+                    }
+                    if(AssetManager::extension(file)==".wav" && (itemHovered || preview.playing(file))){
+                        const auto cursor=ImGui::GetCursorScreenPos();
+                        const bool active=preview.playing(file);
+                        ImVec2 position(itemMax.x-26,itemMin.y+2);
+                        ImGui::SetCursorScreenPos(position);
+                        if(ImGui::InvisibleButton("##preview",ImVec2(24,24)))preview.toggle(assets,file);
+                        auto* draw=ImGui::GetWindowDrawList();draw->AddRectFilled(position,ImVec2(position.x+24,position.y+24),IM_COL32(40,50,65,240),3);
+                        if(active)draw->AddRectFilled(ImVec2(position.x+7,position.y+7),ImVec2(position.x+17,position.y+17),IM_COL32_WHITE);
+                        else draw->AddTriangleFilled(ImVec2(position.x+8,position.y+5),ImVec2(position.x+8,position.y+19),ImVec2(position.x+19,position.y+12),IM_COL32_WHITE);
+                        if(ImGui::IsItemHovered())ImGui::SetTooltip(active?"Stop preview":"Play preview");
+                        ImGui::SetCursorScreenPos(cursor);
                     }
                     ImGui::PopID();
                 }
@@ -135,6 +151,7 @@ public:
                             else {
                                 std::filesystem::rename(assets.resolve(selected),assets.resolve(relative));
                                 world.each<LuaScript>([&](Entity,LuaScript& s){if(s.path==selected)s.path=relative;for(auto& entry:s.additional)if(entry.path==selected)entry.path=relative;});
+                                world.each<LuaScript>([&](Entity,LuaScript& scripts){auto rename=[&](std::vector<ScriptField>& fields){for(auto& field:fields)if(exportAssetType(field.type) && field.text==selected)field.text=relative;};rename(scripts.fields);for(auto& extra:scripts.additional)rename(extra.fields);});
                                 world.each<AudioSource>([&](Entity,AudioSource& a){if(a.clip==selected)a.clip=relative;});
                                 if(openedScript==selected)openedScript=relative;
                                 selected=relative;
@@ -146,7 +163,20 @@ public:
                     ImGui::SameLine();if(ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();ImGui::EndPopup();
                 }
             } catch(const std::exception& e){assets.error=e.what();}
+            ImGui::EndChild();
             ImGui::EndDisabled();
+            ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),ImGui::GetWindowContentRegionMax().x-60));
+            for(int mode=0;mode<2;++mode){
+                if(mode)ImGui::SameLine();
+                ImGui::PushID(mode);
+                auto pos=ImGui::GetCursorScreenPos();
+                if(ImGui::InvisibleButton("View mode",ImVec2(26,26)))grid_=mode==1;
+                auto* draw=ImGui::GetWindowDrawList();const auto color=ImGui::GetColorU32((grid_==(mode==1))?ImGuiCol_CheckMark:ImGuiCol_TextDisabled);
+                if(mode)for(int y=0;y<2;++y)for(int x=0;x<2;++x)draw->AddRect(ImVec2(pos.x+5+x*9,pos.y+5+y*9),ImVec2(pos.x+11+x*9,pos.y+11+y*9),color);
+                else for(int y=0;y<3;++y)draw->AddLine(ImVec2(pos.x+5,pos.y+6+y*6),ImVec2(pos.x+22,pos.y+6+y*6),color,2);
+                if(ImGui::IsItemHovered())ImGui::SetTooltip(mode?"Grid view":"List view");
+                ImGui::PopID();
+            }
         }
         ImGui::End();
     }

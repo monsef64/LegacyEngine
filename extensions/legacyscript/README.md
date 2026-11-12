@@ -57,3 +57,11 @@ Open a successful run and download **legacyscript-vsix** under **Artifacts**
 using **Extensions → … → Install from VSIX…** in VS Code.
 Artifacts are retained for 30 days; rerun the workflow if a download has expired.
 This workflow does not publish to the VS Code Marketplace.
+
+## Export declarations
+
+Use `@export target GameObject` or `@export speed number 5` at the beginning
+of a line to expose an Inspector field. The engine preprocesses this LegacyScript
+syntax before executing Lua; external plain-Lua runtimes cannot execute it as-is.
+Legacy `---@export` comments remain supported. The `export` snippet inserts the
+preferred bare form, and both forms supply completion and hover information.

@@ -1,5 +1,6 @@
 #include "lua_scene.hpp"
 #include "hierarchy.hpp"
+#include "script_exports.hpp"
 #include "scene_camera.hpp"
 #include <cstdio>
 extern "C" {
@@ -13,12 +14,12 @@ namespace {
 struct Handle { LuaScene* scene; World* world; Entity entity; };
 struct Component { Handle object; int type; };
 struct Vector { Component component; char field[32]; };
-const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource"};
+const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener"};
 int componentType(lua_State* L,int index) {
     if (auto* type=static_cast<int*>(luaL_testudata(L,index,"ComponentType"))) return *type;
     const char* name=luaL_checkstring(L,index);
     if (!std::strcmp(name,"BoxCollider")) return 2;
-    for (int i=0;i<8;++i) if (!std::strcmp(name,types[i])) return i;
+    for (int i=0;i<9;++i) if (!std::strcmp(name,types[i])) return i;
     return luaL_error(L,"Unknown component type: %s",name);
 }
 Handle& handle(lua_State* L,int index) {
@@ -35,7 +36,8 @@ bool has(const Handle& h,int type) {
     case 4:return h.world->has<ObjectName>(h.entity);
     case 5:return h.world->has<LuaScript>(h.entity);
     case 6:return h.world->has<Camera>(h.entity);
-    default:return h.world->has<AudioSource>(h.entity);
+    case 7:return h.world->has<AudioSource>(h.entity);
+    default:return h.world->has<AudioListener>(h.entity);
     }
 }
 enum class Kind { Missing, Number, Boolean, String, Vec, Quat, Shape, Mesh };
@@ -51,6 +53,7 @@ Field field(lua_State* L,const Component& c,const char* key) {
     case 3:{auto& v=h.world->get<MeshRenderer>(h.entity); FIELD(color,Vec);FIELD(checkerboard,Boolean);FIELD(specular,Number);FIELD(mesh,Mesh);break;}
     case 4:{auto& v=h.world->get<ObjectName>(h.entity); FIELD(value,String);break;}
     case 5:{auto& v=h.world->get<LuaScript>(h.entity); FIELD(path,String);FIELD(enabled,Boolean);break;}
+    case 8:{auto& v=h.world->get<AudioListener>(h.entity);FIELD(enabled,Boolean);break;}
     case 6:{auto& v=h.world->get<Camera>(h.entity); FIELD(active,Boolean);FIELD(orthographic,Boolean);FIELD(fieldOfView,Number);FIELD(nearClip,Number);FIELD(farClip,Number);FIELD(orthographicSize,Number);break;}
     }
 #undef FIELD
@@ -122,7 +125,7 @@ LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,M
     luaL_newmetatable(L,"ComponentType");
     lua_pushlightuserdata(L,this);lua_pushcclosure(L,componentTypeIndex,1);lua_setfield(L,-2,"__index");
     lua_pushliteral(L,"locked");lua_setfield(L,-2,"__metatable");lua_pop(L,1);
-    for (int i=0;i<8;++i) {
+    for (int i=0;i<9;++i) {
         auto* type=static_cast<int*>(lua_newuserdatauv(L,sizeof(int),0));
         *type=i;luaL_setmetatable(L,"ComponentType");
         if(i==2) { lua_pushvalue(L,-1);lua_setglobal(L,"BoxCollider"); }
@@ -191,6 +194,7 @@ int LuaScene::api(lua_State* L) {
         case 3:self.world_.each<MeshRenderer>([&](Entity e,MeshRenderer&){collect(e);});break;
         case 4:self.world_.each<ObjectName>([&](Entity e,ObjectName&){collect(e);});break;
         case 5:self.world_.each<LuaScript>([&](Entity e,LuaScript&){collect(e);});break;
+        case 8:self.world_.each<AudioListener>([&](Entity e,AudioListener&){collect(e);});break;
         case 7:self.world_.each<AudioSource>([&](Entity e,AudioSource&){collect(e);});break;
         case 6:self.world_.each<Camera>([&](Entity e,Camera&){collect(e);});break;
         }
@@ -212,6 +216,7 @@ int LuaScene::api(lua_State* L) {
         case 5:self.world_.remove<LuaScript>(h.entity);break;
         case 6:self.world_.remove<Camera>(h.entity);break;
         case 7:self.world_.remove<AudioSource>(h.entity);break;
+        case 8:self.world_.remove<AudioListener>(h.entity);break;
         } return 0;
     }
     if(!has(h,type)) switch(type) {
@@ -223,6 +228,7 @@ int LuaScene::api(lua_State* L) {
     case 5:self.world_.add(h.entity,LuaScript{});break;
     case 6:self.world_.add(h.entity,Camera{});break;
     case 7:self.world_.add(h.entity,AudioSource{});break;
+    case 8:if(!self.world_.has<Transform>(h.entity))self.world_.add(h.entity,Transform{});self.world_.add(h.entity,AudioListener{});break;
     }
     component(L,h,type);return 1;
 }
@@ -277,8 +283,8 @@ int LuaScene::componentIndex(lua_State* L) {
     const auto c=*static_cast<Component*>(luaL_checkudata(L,1,"Component"));const char* key=luaL_checkstring(L,2);
     if(c.type==7){
         if(!c.object.world->alive(c.object.entity) || !c.object.world->has<AudioSource>(c.object.entity))return luaL_error(L,"AudioSource no longer exists");
-        const char* names[]{"play","stop","pause","resume","setPitch","fadeIn","fadeOut","setVolume","mute","unmute","setLooping","setPan","setDistance","isPlaying","playOneShot"};
-        for(int i=0;i<15;++i)if(!std::strcmp(key,names[i])){lua_pushvalue(L,1);lua_pushinteger(L,i);lua_pushcclosure(L,audioMethod,2);return 1;}
+        const char* names[]{"play","stop","pause","resume","setPitch","fadeIn","fadeOut","setVolume","mute","unmute","setLooping","setPan","setDistance","isPlaying","playOneShot","spatialBlend","setSpatialBlend"};
+        for(int i=0;i<17;++i)if(!std::strcmp(key,names[i])){lua_pushvalue(L,1);lua_pushinteger(L,i);lua_pushcclosure(L,audioMethod,2);return 1;}
         auto& a=c.object.world->get<AudioSource>(c.object.entity);
         if(!std::strcmp(key,"clip")){lua_pushstring(L,a.clip.c_str());return 1;}
         lua_pushnil(L);return 1;
@@ -411,11 +417,26 @@ int LuaScene::audioMethod(lua_State* L){
     const int op=lua_tointeger(L,lua_upvalueindex(2));
     if(op==14){a.playOneShot(luaL_checkstring(L,1));return 0;}
     if(op==10){luaL_checktype(L,1,LUA_TBOOLEAN);lua_pushboolean(L,a.setLooping(lua_toboolean(L,1)));return 1;}
-    float value=0;if(op==4 || op==5 || op==6 || op==7 || op==11 || op==12){value=luaL_checknumber(L,1);if(!std::isfinite(value))return luaL_error(L,"Expected finite audio value");}
+    float value=0;if(op==4 || op==5 || op==6 || op==7 || op==11 || op==12 || op==15 || op==16){value=luaL_checknumber(L,1);if(!std::isfinite(value))return luaL_error(L,"Expected finite audio value");}
     switch(op){case 0:a.play();break;case 1:a.stop();break;case 2:a.pause();break;case 3:a.resume();break;
     case 4:lua_pushnumber(L,a.setPitch(value));return 1;case 5:a.fadeIn(value);break;case 6:a.fadeOut(value);break;
     case 7:lua_pushnumber(L,a.setVolume(value));return 1;case 8:a.mute();break;case 9:a.unmute();break;
     case 11:lua_pushnumber(L,a.setPan(value));return 1;case 12:lua_pushnumber(L,a.setDistance(value));return 1;
-    case 13:lua_pushboolean(L,a.isPlaying());return 1;}
+    case 13:lua_pushboolean(L,a.isPlaying());return 1;
+    case 15:case 16:lua_pushnumber(L,a.spatialBlend(value));return 1;}
     return 0;
+}
+
+void LuaScene::setExports(const std::vector<ScriptField>& fields){
+    for(const auto& field:fields){
+        if(!exportName(field.name))continue;
+        if(field.type=="number")lua_pushnumber(state_,field.number);
+        else if(field.type=="boolean")lua_pushboolean(state_,field.boolean);
+        else if(field.type=="string" || exportAssetType(field.type))lua_pushlstring(state_,field.text.data(),field.text.size());
+        else if(exportHasComponent(world_,field.entity,field.type)){
+            if(field.type=="GameObject")pushObject(field.entity);
+            else{int type=0;for(;type<9;++type)if(field.type==types[type])break;component(state_,Handle{this,&world_,field.entity},type);}
+        }else lua_pushnil(state_);
+        lua_setglobal(state_,field.name.c_str());
+    }
 }

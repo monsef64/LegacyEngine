@@ -1,5 +1,6 @@
 #pragma once
 #include "assets.hpp"
+#include "script_exports.hpp"
 #include "lua_console.hpp"
 
 // Each attached script has an isolated Lua state and a generation-safe `self`.
@@ -50,7 +51,11 @@ private:
                 auto source=assets_->readScript(entry.path);
                 entry.console=std::make_unique<LuaConsole>();
                 entry.console->bindWorld(*world_,meshes_[0],meshes_[1],meshes_[2],meshes_[3]);
-                if(entry.console->bindObject(entry.entity))entry.console->execute(source);
+                auto* scripts=world_->tryGet<LuaScript>(entry.entity);
+                auto* fields=&scripts->fields;
+                if(scripts->path!=entry.path)for(auto& extra:scripts->additional)if(extra.path==entry.path){fields=&extra.fields;break;}
+                syncScriptExports(source,*fields);
+                if(entry.console->bindObject(entry.entity) && entry.console->bindExports(*fields))entry.console->execute(source);
             } catch(const std::exception& error) {entry.error=error.what();}
             entries_.push_back(std::move(entry));
         }

@@ -2,6 +2,7 @@
 #include "hierarchy.hpp"
 #include "scene_camera.hpp"
 #include "camera.hpp"
+#include "script_exports.hpp"
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -32,13 +33,19 @@ inline Transform readTransform(std::istream& in) {
 inline std::string encode(World& world,std::string_view source,const OrbitCamera& camera,const Meshes& meshes,std::string_view assetDirectory={}) {
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 6\n";
+    auto entityIndex=[&](Entity target){int index=-1;for(std::size_t i=0;i<entities.size();++i)if(entities[i]==target)index=static_cast<int>(i);return index;};
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 8\n";
     out<<std::quoted(std::string(source))<<'\n'<<std::quoted(std::string(assetDirectory))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
+    auto writeFields=[&](const std::vector<ScriptField>& fields){require(fields.size()<=64);out<<fields.size()<<' ';
+        for(const auto& field:fields){require(exportName(field.name) && exportType(field.type) && field.text.size()<=4096 && std::isfinite(field.number) && std::abs(field.number)<=1e6f);
+            if(exportAssetType(field.type))require(exportAssetPath(field.text));
+            out<<std::quoted(field.name)<<' '<<std::quoted(field.type)<<' '<<std::quoted(field.text)<<' '<<field.number<<' '<<field.boolean<<' '<<entityIndex(field.entity)<<' ';}
+    };
     for(Entity e:entities) {
         unsigned mask=(world.has<ObjectName>(e)?1:0)|(world.has<Transform>(e)?2:0)|
-            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0)|(world.has<Camera>(e)?64:0)|(world.has<AudioSource>(e)?128:0);
+            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0)|(world.has<Camera>(e)?64:0)|(world.has<AudioSource>(e)?128:0)|(world.has<AudioListener>(e)?256:0);
         int parent=-1;const Entity p=getParent(world,e);
         for(std::size_t i=0;i<entities.size();++i)if(entities[i]==p)parent=static_cast<int>(i);
         out<<mask<<' '<<parent<<' ';
@@ -59,6 +66,7 @@ inline std::string encode(World& world,std::string_view source,const OrbitCamera
             require(script->additional.size()<=63);
             out<<std::quoted(script->path)<<' '<<script->enabled<<' '<<script->additional.size()<<' ';
             for(const auto& entry:script->additional)out<<std::quoted(entry.path)<<' '<<entry.enabled<<' ';
+            writeFields(script->fields);for(const auto& entry:script->additional)writeFields(entry.fields);
         }
         if(auto* c=world.tryGet<Camera>(e)) {
             require(validCamera(*c));
@@ -67,7 +75,8 @@ inline std::string encode(World& world,std::string_view source,const OrbitCamera
                 <<c->viewportX<<' '<<c->viewportY<<' '<<c->viewportWidth<<' '<<c->viewportHeight<<' '<<target<<' ';
             writeVec(out,c->target);writeVec(out,c->followOffset);out<<c->tracking<<' '<<c->following<<' ';
         }
-        if(auto* a=world.tryGet<AudioSource>(e))out<<std::quoted(a->clip)<<' '<<a->volume<<' '<<a->pitch<<' '<<a->pan<<' '<<a->distance<<' '<<a->looping<<' '<<a->muted<<' '<<a->playOnStart<<' ';
+        if(auto* a=world.tryGet<AudioSource>(e))out<<std::quoted(a->clip)<<' '<<a->volume<<' '<<a->pitch<<' '<<a->pan<<' '<<a->distance<<' '<<a->looping<<' '<<a->muted<<' '<<a->playOnStart<<' '<<a->blend<<' ';
+        if(auto* listener=world.tryGet<AudioListener>(e))out<<listener->enabled<<' ';
         out<<'\n';
     }
     auto text=out.str();require(text.size()<=maxBytes);return text;
@@ -76,7 +85,7 @@ struct Loaded { World world; std::string source,assetDirectory; OrbitCamera came
 inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=6));
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=8));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
     if(version>=4) {
         in>>std::quoted(result.assetDirectory);
@@ -88,9 +97,16 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
     require(camera.distance>0 && camera.fieldOfView>0 && camera.fieldOfView<3.14f);
     int count=-1;in>>count;require(bool(in) && count>=0 && count<=static_cast<int>(maxObjects));
     std::vector<Entity> entities;std::vector<int> parents,cameraTargets;
+    auto readFields=[&](std::vector<ScriptField>& fields){int size=-1;in>>size;require(size>=0 && size<=64);
+        for(int i=0;i<size;++i){ScriptField field;int target=-1;in>>std::quoted(field.name)>>std::quoted(field.type)>>std::quoted(field.text);field.number=number(in);in>>field.boolean>>target;
+            require(exportName(field.name) && exportType(field.type) && field.text.size()<=4096 && field.text.find('\0')==std::string::npos && target>=-1 && target<count);
+            if(exportAssetType(field.type)){require(!std::filesystem::path(field.text).is_absolute());for(const auto& part:std::filesystem::path(field.text))require(part!="..");}
+            if(target>=0)field.entity={static_cast<std::uint32_t>(target),0};
+            fields.push_back(field);}
+    };
     for(int i=0;i<count;++i) {
         unsigned mask=0;int parent=-1;in>>mask>>parent;
-        require(bool(in) && mask<=(version==1?31u:version==2?63u:version<6?127u:255u) && parent>=-1 && parent<count && parent!=i);
+        require(bool(in) && mask<=(version==1?31u:version==2?63u:version<6?127u:version<7?255u:511u) && parent>=-1 && parent<count && parent!=i);
         const Entity e=result.world.create();entities.push_back(e);parents.push_back(parent);cameraTargets.push_back(-1);
         if(mask&1) {std::string name;in>>std::quoted(name);require(name.size()<=4096);result.world.add(e,ObjectName{name});}
         if(mask&2)result.world.add(e,readTransform(in));
@@ -120,6 +136,7 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
                     script.additional.push_back(entry);
                 }
             }
+            if(version>=8){readFields(script.fields);for(auto& entry:script.additional)readFields(entry.fields);}
             result.world.add(e,script);
         }
         if(mask&64) {
@@ -131,9 +148,16 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
         }
         if(mask&128){AudioSource a;in>>std::quoted(a.clip);require(a.clip.size()<=4096 && a.clip.find('\0')==std::string::npos && !std::filesystem::path(a.clip).is_absolute());for(const auto& part:std::filesystem::path(a.clip))require(part!="..");
             a.volume=number(in);a.pitch=number(in);a.pan=number(in);a.distance=number(in);in>>a.looping>>a.muted>>a.playOnStart;
+            if(version>=7)a.blend=number(in);
+            require(a.blend>=0 && a.blend<=1);
             require(a.volume>=0 && a.volume<=1 && a.pitch>=.1f && a.pitch<=4 && a.pan>=-1 && a.pan<=1 && a.distance>=0);result.world.add(e,a);}
+        if(mask&256){AudioListener listener;in>>listener.enabled;result.world.add(e,listener);}
         require(bool(in));
     }
+    result.world.each<LuaScript>([&](Entity,LuaScript& scripts){
+        auto remap=[&](std::vector<ScriptField>& fields){for(auto& field:fields)if(field.entity!=Entity{})field.entity=entities[field.entity.index];};
+        remap(scripts.fields);for(auto& entry:scripts.additional)remap(entry.fields);
+    });
     for(int i=0;i<count;++i)if(cameraTargets[i]>=0) {
         require(result.world.has<Transform>(entities[cameraTargets[i]]));
         result.world.get<Camera>(entities[i]).targetEntity=entities[cameraTargets[i]];

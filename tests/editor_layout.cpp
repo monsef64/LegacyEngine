@@ -3,6 +3,7 @@
 #include "create_menu.hpp"
 #include "script_editor.hpp"
 #include "physics.hpp"
+#include <imgui_internal.h>
 #include <cstdio>
 #include <cstdlib>
 
@@ -47,6 +48,26 @@ int main(){
     io.AddInputCharactersUTF8("7");frame();
     io.AddKeyEvent(ImGuiKey_Enter,true);frame();io.AddKeyEvent(ImGuiKey_Enter,false);frame();
     require(world.get<Transform>(object).position.x==7,"Inspector edits live Transform position");
+    // Removal works from a collapsed component header, with no transport buttons.
+    world.add(object,AudioSource{});
+    ImVec2 headerPosition;
+    auto componentFrame=[&]{
+        ImGui::NewFrame();ImGui::SetNextWindowPos(ImVec2(50,50));ImGui::SetNextWindowSize(ImVec2(400,250));
+        ImGui::Begin("Component context test");
+        if(world.has<AudioSource>(object)){
+            headerPosition=ImGui::GetCursorScreenPos();ImGui::SetNextItemOpen(false,ImGuiCond_Always);
+            componentHeader<AudioSource>(world,object,"AudioSource");
+        }
+        ImGui::End();ImGui::Render();
+    };
+    componentFrame();componentFrame();
+    io.AddMousePosEvent(headerPosition.x+80,headerPosition.y+7);componentFrame();
+    io.AddMouseButtonEvent(1,true);componentFrame();io.AddMouseButtonEvent(1,false);componentFrame();
+    require(!GImGui->OpenPopupStack.empty(),"right click collapsed header opens component menu");
+    auto* popup=GImGui->OpenPopupStack.back().Window;require(popup!=nullptr,"component menu is rendered");
+    io.AddMousePosEvent(popup->Pos.x+30,popup->Pos.y+ImGui::GetStyle().WindowPadding.y+7);componentFrame();
+    io.AddMouseButtonEvent(0,true);componentFrame();io.AddMouseButtonEvent(0,false);componentFrame();
+    require(!world.has<AudioSource>(object),"context menu removes component");
     ImGui::DestroyContext();
     // Objects stay alive below the former cleanup cutoff, with their body intact.
     Physics physics;world.get<Transform>(object).position={20,-300,0};

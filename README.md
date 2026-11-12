@@ -798,7 +798,7 @@ Transform fields explicitly show X/Y/Z; Inspector rotation input is clamped to
 Add **AudioSource** via Inspector's **Add Component**. Import a WAV into Assets,
 then drag it onto **AudioClip (.wav)** or enter its project-relative path.
 Inspector includes volume, pitch, pan, distance, looping, mute, play-on-start,
-transport and one-second fade controls. Audio plays only while Play mode is
+and Spatial Blend controls. Transport and fades are script-only. Audio plays only while Play mode is
 running. Pause/Stop and scene restoration clear the device queue.
 
 ```lua
@@ -820,7 +820,8 @@ end
 -- audio:mute()
 -- audio:unmute()
 -- audio:setPan(-0.5)    -- -1 left to +1 right
--- audio:setDistance(5)  -- explicit distance attenuation: 1 / (1 + distance)
+-- audio:setDistance(50) -- maximum audible range in 3D
+-- audio:spatialBlend(1) -- 0 = 2D, 1 = 3D
 -- audio:isPlaying()
 -- audio:playOneShot(AudioClip("click.wav"))
 -- self:getComponent(AudioSource) returns the same component
@@ -828,17 +829,18 @@ end
 ```
 
 Setters return their clamped value: volume 0–1, pitch 0.1–4, pan -1–1,
-distance 0–10000; setLooping returns the enabled flag. AudioClip is a validated-at-
+maximum distance 0–10000; setLooping returns the enabled flag. AudioClip is a validated-at-
 playback path, not an eagerly decoded resource. Clips are resolved inside the
 project assets, including traversal/symlink protection. This initial system uses
 SDL WAV decoding and a stereo 48kHz float mixer (linear pitch resampling, up to
-128 voices). MP3/OGG decoding and automatic 3D listener positioning are not yet
-supported. Distance is explicitly supplied, not inferred from transforms.
+128 voices). MP3/OGG decoding is not yet supported. AudioListener and AudioSource world
+transforms supply 3D distance and directional pan. An enabled AudioListener is
+required even for 2D sound.
 Individual WAVs are limited to 32 MiB and the decoded cache to 256 MiB. Missing
 clips/device errors appear in the **Audio errors** window. Device tests use SDL's
 dummy driver; real-device listening and VS Code URI launching require manual
-platform validation. Project format 6 saves AudioSource configuration, while
-still accepting formats 1–5; transient playback cursors are not serialized.
+platform validation. Project format 7 saves AudioSource/AudioListener configuration, while
+still accepting formats 1–6; transient playback cursors are not serialized.
 
 ### Hierarchy search and level root
 
@@ -852,3 +854,95 @@ ancestors of matching objects visible. Searching expands the level root so
 results are visible. Clearing the search restores all rows without changing the
 scene hierarchy or selection. Object rows show line icons for Camera, AudioSource,
 mesh objects and empty GameObjects (in that priority order for combined components).
+
+### Audio listener, spatial blend and component menus
+
+Right-click any Inspector component header (even when collapsed) for **Remove
+component**. Transform removal is disabled while Camera or AudioListener depends
+on it. Script entries also have a right-click removal menu. Audio transport and
+fade buttons have been removed from Inspector; use Lua instead.
+
+Add **AudioListener** to your camera/player in Inspector, or call
+`self:addComponent(AudioListener)` in its attached script. A listener needs a
+Transform and can be enabled/disabled. Without an enabled listener all output is
+silent, but playback cursors still advance. Multiple listeners use the enabled
+one with the lowest entity ID, rather than doubling the sound.
+
+**Spatial Blend** interpolates from 0 (2D, no position attenuation) to 1 (3D).
+Use `audio:spatialBlend(1)` or its alias `audio:setSpatialBlend(1)` in `.ls`.
+In 3D, **Max Distance** / `audio:setDistance(range)` is the maximum range at which
+the listener hears this source. Gain falls linearly from full at zero separation
+to silence at that range. Increasing the physical source/listener separation
+makes audio quieter; increasing Max Distance makes its audible range larger.
+The listener's rotation determines left/right direction. Zero Max Distance
+allows 3D sound only at the exact same position. 2D sound ignores Max Distance.
+Old format-6 sources load as 2D; add a listener to hear them.
+
+`fadeIn(seconds)` starts the clip from silence, then keeps it playing after the
+fade completes until its natural end (or loops if Looping is enabled).
+`fadeOut(seconds)` fades the current playback without restarting it, then stops
+and rewinds even if the clip has not finished. Fades advance once per source,
+including one-shots, and pause while the source is paused. A zero-duration fade
+is immediate. Device buffering can add up to roughly 50 ms to audible changes.
+Hierarchy icons now have a fixed pixel gap to their text and extra row spacing.
+
+### Exported LegacyScript fields (Inspector assignments)
+
+Declare fields with `@export` in an attached `.ls` file:
+
+```lua
+@export target GameObject
+@export speaker AudioSource
+@export sound AudioClip "click.wav"
+@export speed number 5
+@export active boolean true
+@export title string "Player"
+
+function onStart()
+    if target then target:setPosition(speed, 0, 0) end
+    if speaker and active then speaker:playOneShot(sound) end
+end
+```
+
+Save the script, attach it, and select its owner. Inspector displays these fields
+under that specific script attachment. Drag a Hierarchy GameObject into a
+GameObject field, or onto a typed component field if it has that component. You
+can also drag Inspector component headers into compatible fields. Drag Assets
+into `Asset` / `AudioClip` slots (`AudioClip` accepts WAV); **X** clears a slot.
+Number, boolean and string fields have editable controls. Field values are
+injected as globals into the attachment's isolated Lua state before its code runs;
+do not shadow them with `local target` or overwrite them with default assignments.
+Removed/destroyed objects or missing components bind as `nil` when starting a
+script. Previously bound handles remain generation-safe if destroyed later.
+
+Supported component field types: Transform, RigidBody, Collider, MeshRenderer,
+ObjectName, LuaScript, Camera, AudioSource and AudioListener. Metadata supports
+up to 64 fields per attachment. Names/types preserve their Inspector values when
+the script is refreshed; renaming a field or changing its type resets it to its
+declared default. Fields are recognized from `@export name type [default]`
+lines, not by executing arbitrary Lua expressions. Defaults are literal numbers,
+`true`/`false`, and quoted strings; object references default to unassigned.
+Assignments persist in project format 8 (formats 1–7 still load), duplication,
+Undo/Redo, and Play/Stop. Self-references on duplicated objects point at the copy.
+Asset rename updates exported asset references. LuaLS-style `---@type` alone does
+not export a field. VS Code supports exported-name suggestions and an `export`
+snippet; object field completion is still not full type inference.
+
+### Asset Browser and editor conveniences
+
+List/Grid are now icon controls at the bottom-right, below the scrolling asset
+area. Hover a WAV tile/row to show **Play preview**; during playback it becomes
+**Stop preview**. Clicking again stops; previewing another file replaces the
+current preview. This is editor-only playback independent of Play mode and
+AudioListener, and is limited to WAVs under 32 MiB. Errors appear in Assets.
+
+Settings now has a constrained, usable initial size and cannot dock into another
+panel. Hierarchy's Clear Selection button is removed. **Create → Audio Source**
+(including the empty-Hierarchy context menu) creates a GameObject with Transform
+and AudioSource, without mesh/physics components.
+
+Bare `@export` is LegacyScript syntax, not native Lua. The engine blanks declaration
+lines before passing the source to Lua, preserving original line numbers in errors.
+Declarations must start a line (indentation is allowed); they are not recognized
+inside quoted/long strings or block comments. Existing `---@export` comment
+annotations remain compatible. The VS Code export snippet now inserts `@export`.

@@ -10,6 +10,7 @@ inline std::vector<LuaToken> luaTokens(std::string_view s){
     auto longEnd=[&](std::size_t start)->std::size_t{if(start>=s.size() || s[start]!='[')return start;auto p=start+1;while(p<s.size() && s[p]=='=')++p;if(p>=s.size() || s[p]!='[')return start;auto close="]"+std::string(p-start-1,'=')+"]";auto end=s.find(close,p+1);return end==s.npos?s.size():end+close.size();};
     for(std::size_t i=0;i<s.size();){auto begin=i;auto kind=LuaToken::Plain;
         if(s.substr(i,2)=="--"){kind=LuaToken::Comment;auto end=longEnd(i+2);if(end>i+2)i=end;else{auto e=s.find('\n',i);i=e==s.npos?s.size():e;}}
+        else if(s.substr(i,7)=="@export" && (i+7==s.size() || std::isspace(static_cast<unsigned char>(s[i+7])))){kind=LuaToken::Api;i+=7;}
         else if(s[i]=='\'' || s[i]=='"'){kind=LuaToken::String;char q=s[i++];while(i<s.size()){if(s[i]=='\\'){i=std::min(i+2,s.size());continue;}if(s[i++]==q)break;}}
         else if(auto end=longEnd(i);end>i){kind=LuaToken::String;i=end;}
         else if(std::isdigit(static_cast<unsigned char>(s[i]))){kind=LuaToken::Number;++i;while(i<s.size() && (std::isalnum(static_cast<unsigned char>(s[i]))||s[i]=='.'))++i;}

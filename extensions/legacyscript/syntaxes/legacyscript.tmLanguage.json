@@ -1,11 +1,65 @@
-{"scopeName":"source.legacyscript","patterns":[
-{"name":"comment.block.lua","begin":"--\\[(=*)\\[","end":"\\]\\1\\]"},
-{"name":"comment.line.double-dash.lua","match":"--.*$"},
-{"name":"string.quoted.double.lua","begin":"\"","end":"\"","patterns":[{"match":"\\\\.","name":"constant.character.escape.lua"}]},
-{"name":"string.quoted.single.lua","begin":"'","end":"'","patterns":[{"match":"\\\\.","name":"constant.character.escape.lua"}]},
-{"name":"string.unquoted.lua","begin":"\\[(=*)\\[","end":"\\]\\1\\]"},
-{"name":"keyword.control.lua","match":"\\b(and|break|do|else|elseif|end|for|function|goto|if|in|local|not|or|repeat|return|then|until|while)\\b"},
-{"name":"constant.language.lua","match":"\\b(true|false|nil)\\b"},
-{"name":"variable.language.lua","match":"\\bself\\b"},
-{"name":"support.class.legacyscript","match":"\\b(GameObject|Camera|Transform|RigidBody|Collider|MeshRenderer|LuaScript)\\b"},
-{"name":"constant.numeric.lua","match":"\\b[0-9]+(\\.[0-9]+)?\\b"}]}
+{
+  "scopeName": "source.legacyscript",
+  "patterns": [
+    {
+      "name": "keyword.other.export.legacyscript",
+      "match": "^\\s*@export\\b"
+    },
+    {
+      "name": "comment.block.lua",
+      "begin": "--\\[(=*)\\[",
+      "end": "\\]\\1\\]"
+    },
+    {
+      "name": "comment.line.double-dash.lua",
+      "match": "--.*$"
+    },
+    {
+      "name": "string.quoted.double.lua",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.lua"
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.single.lua",
+      "begin": "'",
+      "end": "'",
+      "patterns": [
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.lua"
+        }
+      ]
+    },
+    {
+      "name": "string.unquoted.lua",
+      "begin": "\\[(=*)\\[",
+      "end": "\\]\\1\\]"
+    },
+    {
+      "name": "keyword.control.lua",
+      "match": "\\b(and|break|do|else|elseif|end|for|function|goto|if|in|local|not|or|repeat|return|then|until|while)\\b"
+    },
+    {
+      "name": "constant.language.lua",
+      "match": "\\b(true|false|nil)\\b"
+    },
+    {
+      "name": "variable.language.lua",
+      "match": "\\bself\\b"
+    },
+    {
+      "name": "support.class.legacyscript",
+      "match": "\\b(GameObject|Camera|Transform|RigidBody|Collider|MeshRenderer|LuaScript)\\b"
+    },
+    {
+      "name": "constant.numeric.lua",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 #pragma once
 #include "lua_console.hpp"
 #include "components.hpp"
+#include "script_exports.hpp"
 #include "editor_layout.hpp"
 #include <array>
 #include <string>
@@ -33,6 +34,11 @@ public:
         }
         console_.reset();
         if(!assetPath_.empty() && !console_.bindObject(owner))return false;
+        if(!assetPath_.empty()){
+            auto& scripts=world_->get<LuaScript>(owner);auto* fields=&scripts.fields;
+            if(scripts.path!=assetPath_)for(auto& extra:scripts.additional)if(extra.path==assetPath_){fields=&extra.fields;break;}
+            syncScriptExports(source_.data(),*fields);if(!console_.bindExports(*fields))return false;
+        }
         console_.execute(source_.data());return true;
     }
     void resetRuntime() { console_.reset(); }
