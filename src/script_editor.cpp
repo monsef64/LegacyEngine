@@ -4,11 +4,7 @@
 #include <cctype>
 #include "lua_definitions.hpp"
 
-ScriptEditor::ScriptEditor()
-{
-    const char* example="-- Execute this snippet; output appears in the Lua Console.\nprint(\"Hello from Lua!\")\nfor i = 1, 3 do\n    print(\"Square\", i, i * i)\nend\n";
-    std::memcpy(source_.data(),example,std::strlen(example)+1);
-}
+ScriptEditor::ScriptEditor() = default;
 
 void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
 {
@@ -23,12 +19,13 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
     if (beginEditorPanel("Lua Editor",layout?fixedPanelFlags:0)) {
         ImGui::BeginDisabled(!executionEnabled);
         if (ImGui::Button("Execute")) {
-            console_.execute(source_.data());
+            ownerError_=!executeSource();
             scrollToBottom_=true;
         }
         ImGui::SameLine();
         if (ImGui::Button("Reset Runtime")) { console_.reset(); scrollToBottom_=true; }
         ImGui::EndDisabled();
+        if(ownerError_)ImGui::TextWrapped("Select a GameObject with this script attached before executing it.");
         ImGui::TextDisabled("Lua 5.4 | Tab: complete API names | output below");
         ImGui::InputTextMultiline("##source",source_.data(),source_.size(),ImVec2(-1,-1),
                                  ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackAlways,

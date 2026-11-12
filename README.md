@@ -36,7 +36,7 @@ and two end rings with four curved meridians for a capsule.
 
 The **Freecam** checkbox switches between free flight (checked by default) and a static camera
 (unchecked, locks the current view). In freecam, use **WASD** to fly forward/back/sideways,
-**Q/E** to move down/up and **right-drag** to look around in place. Holding Ctrl, Shift, Alt, or Super/Command blocks camera navigation.
+**Q/E** to move down/up and **right-drag** to look around in place. Holding Ctrl, Alt, or Super/Command blocks camera navigation. Hold Shift to speed up; Shift+wheel adjusts the boosted speed.
 The wheel moves forward/back. Static mode ignores all navigation input; spawning and selection
 still work. Switching modes preserves your view.
 
@@ -138,7 +138,9 @@ One unit is one metre, +Y points up and the ground is the XZ plane.
 | Freecam checkbox | Checked: fly camera; unchecked: lock current view |
 | Right drag (freecam) | Look around in place |
 | WASD, Q/E (freecam) | Fly forward/back/sideways, down/up |
-| Ctrl / Shift / Alt / Super held | Block camera navigation |
+| Ctrl / Alt / Super held | Block camera navigation |
+| Shift + WASD/QE | Faster Scene camera movement |
+| Shift + mouse wheel | Adjust boosted camera speed (no dolly movement) |
 | Mouse wheel (freecam) | Move forward/back |
 | Closing the window | Quit (Escape does not exit the engine) |
 
@@ -234,7 +236,7 @@ Set both to matching shapes. Other fields match the C++ component names below. N
 to 256 bytes, and the runtime tracks at most 4,096 simultaneous object handles. Stale handles and
 removed component accesses report Lua errors instead of accessing recycled ECS storage.
 
-See [`scripts/lifecycle_example.lua`](scripts/lifecycle_example.lua) for a runnable example.
+See [`scripts/lifecycle_example.ls`](scripts/lifecycle_example.ls) for a runnable example.
 Use uniform scale for spheres/capsules, as with C++ component edits. Reset clears callbacks and
 globals; Execute otherwise retains existing objects/globals and re-runs the current onStart.
 
@@ -570,16 +572,17 @@ references until restored. Import, rename, and script-file writes are not part
 of scene Undo/Redo. Import is limited to individual files up to 256 MiB;
 folder import and media/model rendering or thumbnails are not implemented.
 
-Choose **New Lua** to create a template. Double-click a Lua asset to edit it in
-the Lua Editor, then use **Save Lua asset** in Assets to write edits to disk.
+Choose **New LegacyScript** to create a blank `.ls` file. Double-click it to edit
+in Lua Editor, then use **Save script asset** in Assets to write edits to disk.
 Project Save stores the editor source but does not implicitly overwrite a Lua
 asset; save the asset before playing to run its latest disk contents.
 
-Drag a Lua asset onto a Hierarchy GameObject, the Inspector's script drop area,
+Drag a LegacyScript asset onto a Hierarchy GameObject, the Inspector's script drop area,
 or the Scene with a selected GameObject to attach it. You can also use
-**Add Component > Lua Script**, enter a relative asset path, and toggle Enabled.
-There is currently one Lua Script component per GameObject. Attaching another
-replaces its path. Script components participate in duplicate, copy/paste,
+**Add Component > LegacyScript**, enter a relative asset path, and toggle Enabled.
+Each GameObject can hold a primary script and up to 63 additional LegacyScripts.
+Dropping another script appends it (the same path is not attached twice).
+Inspector provides independent enabled/path/remove controls for each script. Script components participate in duplicate, copy/paste,
 scene Undo/Redo, project Save/Open, and Play/Stop scene restoration.
 
 Each enabled component runs in an isolated, budgeted Lua state. `self` is the
@@ -607,8 +610,8 @@ report errors without crashing the editor; at most 128 component runtimes are
 active. The existing Lua Editor Execute/runtime remains separate. Components
 are accessible through `self.getComponent(LuaScript).path` and `.enabled`.
 
-Project format version 4 records the relative asset-directory name as well as
-script and camera references. Versions 1–3 still load, including their legacy
+Project format version 5 records multiple script attachments, the relative asset-directory name as well as
+script and camera references. Versions 1–4 still load, including their legacy
 `Assets/` directories. Save As copies assets into the new project's private
 companion directory and refuses conflicting files rather than overwriting them.
 Distribute the `.legacy` file together with its companion `.assets/` directory.
@@ -639,9 +642,8 @@ focus never deletes a GameObject, and Hierarchy/Scene focus never trashes assets
 
 ### Scene Cameras and Game view
 
-Use **Create > Camera** to add a Camera GameObject. It has a selectable 3D body,
-lens, and viewfinder model in **Scene**, but that editor-only model is never
-drawn in **Game**. Cameras are not player characters and have no collider or
+Use **Create > Camera** to add a Camera GameObject. It has a selectable line-only body/frustum icon in **Scene**, never a solid
+3D camera model. The editor icon is not drawn in **Game**. Cameras are not player characters and have no collider or
 rigid body unless you explicitly add one. The existing Scene freecam remains
 independent of the active game camera. Use **Windows > Game** to restore the
 Game panel if closed. Its layout is dockable just like other panels.
@@ -735,3 +737,47 @@ Objects and Cameras retain the existing lifecycle callbacks and generation-safe
 handles; a stored method fails safely after its object is destroyed. Untitled
 asset staging is temporary and cleaned on normal shutdown; save the project
 before closing if you created or imported assets you want to keep.
+
+### Editor workflow updates
+
+The menu bar is ordered **File, Create, Edit, Windows, Help**. Help provides
+**GitHub** (opens the repository in your browser) and **About**. Right-click
+unused space in Hierarchy for **Create**, with the same GameObject/Camera/Shape
+choices as the menu bar. Right-click unused space in Assets for **Create >
+LegacyScript (.ls)** or **Text file (.txt)**. Names are numbered if already used.
+New scripts and the initial Lua Editor are blank—no example snippet is inserted.
+
+`.ls` is the default LegacyScript extension. Existing `.lua` files still load
+for compatibility; user files are not automatically renamed. The shipped runtime
+example now uses `.ls`; editor-only LuaLS definitions remain `.lua`. VS Code file
+associations use the LegacyScript language supplied by the bundled VS Code extension.
+
+Multiple enabled scripts on a GameObject run in separate Lua states with the
+same owning `self`. Removing/disabling one does not stop its siblings. Project
+format 5, duplicate/copy, scene Undo/Redo, and Play/Stop preserve the attachment
+list. The existing `getComponent(LuaScript).path/enabled` API controls the primary
+attachment; additional attachments are managed in Inspector or by asset drops.
+There is still a global limit of 128 active script runtimes.
+
+Inspector rotation uses stable Y-X-Z Euler fields (degrees) backed by quaternions.
+Changing Y no longer feeds a decomposed matrix back into X/Z every frame. As with
+any Euler representation, an external gizmo/script rotation may be displayed in
+an equivalent angle representation, especially at a 90-degree pitch.
+
+When an asset script is open, **Execute** binds `self` to the selected GameObject
+that has that script attached. If there is only one owner, it is resolved
+automatically. If several objects share the asset, select the desired owner;
+unattached or ambiguous assets are not executed. Each Execute starts a fresh
+editor runtime. On **Play**, open asset scripts run only through their attachments,
+not again as a global editor snippet. Plain non-asset editor snippets remain global.
+
+### VS Code LegacyScript extension
+
+An installable `.ls` extension with a bundled LSP server lives in
+[`extensions/legacyscript`](extensions/legacyscript/README.md). It provides engine
+API completion (including `self:`), hover/signature help, function outline,
+syntax highlighting and lifecycle snippets. Build the VSIX with `npm ci && npm
+test && npm run package` in that directory, then use VS Code's **Install from
+VSIX** command. The repository associates `.ls` with `legacyscript`; install this
+extension to activate it. This initial LSP is engine-aware but does not yet offer
+full Lua type checking or diagnostics.

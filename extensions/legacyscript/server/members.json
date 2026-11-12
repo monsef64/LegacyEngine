@@ -1,0 +1,96 @@
+{
+  "Vec3": {
+    "x": "number",
+    "y": "number",
+    "z": "number"
+  },
+  "Quaternion": {
+    "w": "number"
+  },
+  "GameObject": {
+    "name": "string",
+    "parent": "GameObject|nil",
+    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil",
+    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript",
+    "removeComponent": "fun(componentType:ComponentType)",
+    "onStart": "fun()|nil",
+    "onUpdate": "fun(deltaTime:number)|nil",
+    "onFixedUpdate": "fun(deltaTime:number)|nil",
+    "onDestroy": "fun()|nil",
+    "setPosition": "fun(self:GameObject,x:number|Vec3,y?:number,z?:number)",
+    "getPosition": "fun(self:GameObject):Vec3",
+    "setRotation": "fun(self:GameObject,x:number|Vec3|Quaternion,y?:number,z?:number,w?:number)",
+    "getRotation": "fun(self:GameObject):Quaternion",
+    "setScale": "fun(self:GameObject,x:number|Vec3,y?:number,z?:number)",
+    "getScale": "fun(self:GameObject):Vec3",
+    "translate": "fun(self:GameObject,x:number|Vec3,y?:number,z?:number)",
+    "lookAt": "fun(self:GameObject,x:number|Vec3|GameObject,y?:number,z?:number)",
+    "setParent": "fun(self:GameObject,parent:GameObject|nil)",
+    "getParent": "fun(self:GameObject):GameObject|nil",
+    "setName": "fun(self:GameObject,name:string)",
+    "getName": "fun(self:GameObject):string",
+    "destroy": "fun(self:GameObject)"
+  },
+  "Transform": {
+    "position": "Vec3",
+    "rotation": "Quaternion",
+    "scale": "Vec3"
+  },
+  "RigidBody": {
+    "mass": "number",
+    "useGravity": "boolean",
+    "linearVelocity": "Vec3",
+    "angularVelocity": "Vec3"
+  },
+  "Collider": {
+    "shape": "'Box'|'Sphere'|'Capsule'|'Cone'",
+    "size": "Vec3",
+    "center": "Vec3",
+    "radius": "number",
+    "height": "number",
+    "friction": "number",
+    "bounciness": "number"
+  },
+  "MeshRenderer": {
+    "mesh": "'Cube'|'Sphere'|'Capsule'|'Cone'",
+    "color": "Vec3",
+    "checkerboard": "boolean",
+    "specular": "number"
+  },
+  "ObjectName": {
+    "value": "string"
+  },
+  "LuaScript": {
+    "path": "string Relative asset path under Assets",
+    "enabled": "boolean"
+  },
+  "Camera": {
+    "active": "boolean",
+    "orthographic": "boolean",
+    "fieldOfView": "number Degrees",
+    "nearClip": "number",
+    "farClip": "number",
+    "orthographicSize": "number Vertical size in world units"
+  },
+  "GameObjectConstructor": {
+    "new": "fun(name:string):GameObject",
+    "find": "fun(name:string):GameObject|nil"
+  },
+  "CameraObject": {
+    "setActive": "fun(self:CameraObject,enabled?:boolean)",
+    "setFieldOfView": "fun(self:CameraObject,degrees:number)",
+    "setProjectionMode": "fun(self:CameraObject,mode:string)",
+    "setNearClipPlane": "fun(self:CameraObject,distance:number)",
+    "setFarClipPlane": "fun(self:CameraObject,distance:number)",
+    "setViewport": "fun(self:CameraObject,x:number,y:number,width:number,height:number)",
+    "setTarget": "fun(self:CameraObject,target:GameObject|Vec3|number|nil,y?:number,z?:number)",
+    "setFollowTarget": "fun(self:CameraObject,target:GameObject|Vec3|nil,offset:Vec3|number,y?:number,z?:number)",
+    "setShake": "fun(self:CameraObject,intensity:number,duration:number)",
+    "worldToScreen": "fun(self:CameraObject,x:Vec3|number,y?:number,z?:number):Vec3",
+    "screenToWorld": "fun(self:CameraObject,x:Vec3|number,y?:number,z?:number):Vec3"
+  },
+  "CameraConstructor": {
+    "new": "fun(name:string):CameraObject",
+    "getActive": "fun():CameraObject|nil"
+  }
+}

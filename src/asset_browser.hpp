@@ -10,7 +10,7 @@
 inline void fileBadge(const std::string& path,ImVec2 pos) {
     auto ext=AssetManager::extension(path);
     const char* tag="FILE";ImU32 color=IM_COL32(150,165,185,255);
-    if(ext==".lua"){tag="LUA";color=IM_COL32(100,165,255,255);}
+    if(ext==".ls" || ext==".lua"){tag="LS";color=IM_COL32(100,165,255,255);}
     else if(ext==".png" || ext==".jpg" || ext==".jpeg" || ext==".webp" || ext==".bmp"){tag="IMG";color=IM_COL32(110,205,160,255);}
     else if(ext==".obj" || ext==".fbx" || ext==".gltf" || ext==".glb"){tag="3D";color=IM_COL32(215,165,100,255);}
     else if(ext==".wav" || ext==".mp3" || ext==".ogg"){tag="SND";color=IM_COL32(200,130,225,255);}
@@ -50,18 +50,12 @@ public:
             ImGui::BeginDisabled(!editable || dialog.pending());
             if(ImGui::Button("Import..."))dialog.showImport(window);
             ImGui::SameLine();
-            if(ImGui::Button("New Lua")) {
-                try {
-                    int n=1;std::string name="NewScript.lua";
-                    while(std::filesystem::exists(assets.resolve(name)))name="NewScript"+std::to_string(++n)+".lua";
-                    assets.writeScript(name,"-- self is the attached GameObject\nfunction onUpdate(dt)\n    -- self:translate(dt, 0, 0)\nend\n");selected=name;
-                }catch(const std::exception& e){assets.error=e.what();}
-            }
+            if(ImGui::Button("New LegacyScript"))createFile(".ls");
             if(!openedScript.empty()) {
                 ImGui::TextWrapped("Editing asset: %s",openedScript.c_str());
-                if(ImGui::Button("Save Lua asset"))try{assets.writeScript(openedScript,scripts.source());}catch(const std::exception& e){assets.error=e.what();}
+                if(ImGui::Button("Save script asset"))try{assets.writeScript(openedScript,scripts.source());}catch(const std::exception& e){assets.error=e.what();}
             }
-            ImGui::TextWrapped("Drop files here to import. Drag Lua assets onto a GameObject or Inspector to attach.");
+            ImGui::TextWrapped("Drop files here to import. Drag LegacyScript assets onto a GameObject or Inspector to attach.");
             if(!assets.error.empty())ImGui::TextWrapped("%s",assets.error.c_str());
             try {
                 const auto files=assets.files();
@@ -90,7 +84,7 @@ public:
                         fileIcon(file);ImGui::TextUnformatted(file.c_str());ImGui::EndDragDropSource();
                     }
                     if(ImGui::BeginPopupContextItem("Asset actions")) {
-                        if(ImGui::MenuItem("Attach Lua to selected object",nullptr,false,world.alive(selectedObject) && AssetManager::script(file)))attachScriptAsset(world,selectedObject,file);
+                        if(ImGui::MenuItem("Attach LegacyScript to selected object",nullptr,false,world.alive(selectedObject) && AssetManager::script(file)))attachScriptAsset(world,selectedObject,file);
                         if(ImGui::MenuItem("Rename...","F2")) {selected=file;renameRequested_=true;}
                         if(ImGui::MenuItem("Move to Trash","Del")){selected=file;deleteRequested_=true;}
                         ImGui::EndPopup();
@@ -98,6 +92,14 @@ public:
                     ImGui::PopID();
                 }
                 ImGui::EndTable();
+                }
+                if(ImGui::BeginPopupContextWindow("Assets empty actions",ImGuiPopupFlags_MouseButtonRight|ImGuiPopupFlags_NoOpenOverItems)) {
+                    if(ImGui::BeginMenu("Create")) {
+                        if(ImGui::MenuItem("LegacyScript (.ls)"))createFile(".ls");
+                        if(ImGui::MenuItem("Text file (.txt)"))createFile(".txt");
+                        ImGui::EndMenu();
+                    }
+                    ImGui::EndPopup();
                 }
                 if(shortcutFocus && !selected.empty()) {
                     if(ImGui::IsKeyPressed(ImGuiKey_F2,false))renameRequested_=true;
@@ -129,7 +131,7 @@ public:
                             if(std::filesystem::exists(assets.resolve(relative)))assets.error="An asset with that name exists";
                             else {
                                 std::filesystem::rename(assets.resolve(selected),assets.resolve(relative));
-                                world.each<LuaScript>([&](Entity,LuaScript& s){if(s.path==selected)s.path=relative;});
+                                world.each<LuaScript>([&](Entity,LuaScript& s){if(s.path==selected)s.path=relative;for(auto& entry:s.additional)if(entry.path==selected)entry.path=relative;});
                                 if(openedScript==selected)openedScript=relative;
                                 selected=relative;
                                 ImGui::CloseCurrentPopup();
@@ -145,5 +147,15 @@ public:
         ImGui::End();
     }
 private:
+    void createFile(const std::string& extension) {
+        try {
+            const std::string base=extension==".ls"?"NewScript":"NewText";
+            std::string name=base+extension;int n=2;
+            while(std::filesystem::exists(assets.resolve(name)))name=base+" ("+std::to_string(n++)+")"+extension;
+            if(extension==".ls")assets.writeScript(name,"");
+            else {std::filesystem::create_directories(assets.root);std::ofstream out(assets.resolve(name));if(!out)throw std::runtime_error("Cannot create text asset");}
+            selected=name;
+        }catch(const std::exception& e){assets.error=e.what();}
+    }
     char rename_[256]{};bool renameRequested_=false,deleteRequested_=false,grid_=false,renameFocus_=false;
 };

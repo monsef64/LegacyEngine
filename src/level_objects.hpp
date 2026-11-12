@@ -5,6 +5,7 @@
 #include "hierarchy.hpp"
 #include "editor_layout.hpp"
 #include "assets.hpp"
+#include "create_menu.hpp"
 #include <imgui.h>
 #include <algorithm>
 #include <charconv>
@@ -101,7 +102,7 @@ inline void deleteLevelObject(World& world, Entity object) {
 }
 
 // Returns true when selection changes. The caller can end any active gizmo gesture.
-inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr,bool* focused=nullptr)
+inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr,bool* focused=nullptr,int* createRequest=nullptr)
 {
     if(focused)*focused=false;
     if(dockedEditor && !panelOpen[0])return false;
@@ -176,8 +177,12 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
                 if(getParent(world,child.entity)==object.entity)self(self,child,depth+1);
         };
         for(const auto& object:objects)if(getParent(world,object.entity)==Entity{})row(row,object,0);
-        ImGui::EndChild();
         ImGui::EndDisabled();
+        if(createRequest && ImGui::BeginPopupContextWindow("Hierarchy empty actions",ImGuiPopupFlags_MouseButtonRight|ImGuiPopupFlags_NoOpenOverItems)) {
+            if(ImGui::BeginMenu("Create")){int item=drawCreateItems();if(item>=0)*createRequest=item;ImGui::EndMenu();}
+            ImGui::EndPopup();
+        }
+        ImGui::EndChild();
     }
     ImGui::End();
     return changed;

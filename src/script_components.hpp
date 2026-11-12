@@ -25,28 +25,32 @@ private:
     World* world_=nullptr;AssetManager* assets_=nullptr;MeshHandle meshes_[4];
     bool valid(const Entry& e) {
         auto* script=world_->tryGet<LuaScript>(e.entity);
-        return script && script->enabled && script->path==e.path;
+        if(script)for(const auto& entry:scriptAttachments(*script))if(entry.enabled && entry.path==e.path)return true;
+        return false;
     }
     void sync() {
         if(!world_)return;
         for(auto it=entries_.begin();it!=entries_.end();) {
             if(!valid(*it)){if(it->console)it->console->shutdown();it=entries_.erase(it);}else ++it;
         }
-        std::vector<Entity> pending;
-        world_->each<LuaScript>([&](Entity e,LuaScript& script) {
-            if(!script.enabled || script.path.empty())return;
-            for(const auto& entry:entries_)if(entry.entity==e)return;
-            if(entries_.size()+pending.size()<128)pending.push_back(e);
+        std::vector<std::pair<Entity,std::string>> pending;
+        world_->each<LuaScript>([&](Entity e,LuaScript& scripts) {
+            for(const auto& script:scriptAttachments(scripts)) {
+                if(!script.enabled || script.path.empty())continue;
+                bool found=false;for(const auto& entry:entries_)if(entry.entity==e && entry.path==script.path)found=true;
+                if(!found && entries_.size()+pending.size()<128)pending.push_back({e,script.path});
+            }
         });
-        for(Entity e:pending) {
-            // A preceding script may have destroyed this object.
-            auto* script=world_->tryGet<LuaScript>(e);if(!script || !script->enabled)continue;
-            Entry entry{e,script->path,{},{}};
+        for(const auto& candidate:pending) {
+            Entry entry{candidate.first,candidate.second,{},{}};
+            if(!valid(entry))continue;
+            bool duplicate=false;for(const auto& existing:entries_)if(existing.entity==entry.entity && existing.path==entry.path)duplicate=true;
+            if(duplicate)continue;
             try {
                 auto source=assets_->readScript(entry.path);
                 entry.console=std::make_unique<LuaConsole>();
                 entry.console->bindWorld(*world_,meshes_[0],meshes_[1],meshes_[2],meshes_[3]);
-                if(entry.console->bindObject(e))entry.console->execute(source);
+                if(entry.console->bindObject(entry.entity))entry.console->execute(source);
             } catch(const std::exception& error) {entry.error=error.what();}
             entries_.push_back(std::move(entry));
         }

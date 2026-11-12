@@ -6,9 +6,10 @@
 int main() {
     assert(!cameraModifiersHeld(SDL_KMOD_NONE));
     assert(!cameraModifiersHeld(SDL_KMOD_CAPS));
-    for(auto mod:{SDL_KMOD_LCTRL,SDL_KMOD_RCTRL,SDL_KMOD_LSHIFT,SDL_KMOD_RSHIFT,
+    for(auto mod:{SDL_KMOD_LCTRL,SDL_KMOD_RCTRL,
         SDL_KMOD_LALT,SDL_KMOD_RALT,SDL_KMOD_LGUI,SDL_KMOD_RGUI})assert(cameraModifiersHeld(mod));
     assert(cameraModifiersHeld(SDL_KMOD_CTRL|SDL_KMOD_SHIFT));
+    assert(!cameraModifiersHeld(SDL_KMOD_SHIFT));
     assert(projectWindowTitle("",true)=="Untitled* - LegacyEngine");
     assert(projectWindowTitle("/tmp/Scene.legacy",false)=="Scene.legacy - LegacyEngine");
     assert(projectWindowTitle("/tmp/Scene.legacy",true)=="Scene.legacy* - LegacyEngine");

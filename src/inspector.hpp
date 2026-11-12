@@ -2,6 +2,7 @@
 #include "editor_layout.hpp"
 #include "level_objects.hpp"
 #include "scene_camera.hpp"
+#include "rotation_editor.hpp"
 #include "transform_edit.hpp"
 #include <ImGuizmo.h>
 #include <cstdio>
@@ -37,12 +38,12 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
             }
             if(auto* t=world.tryGet<Transform>(selected);t && componentHeader("Transform")) {
                 editVector("Position",t->position);
-                Mat4 model=transformMatrix(t->position,t->rotation,t->scale);
-                float position[3],rotation[3],scale[3];
-                ImGuizmo::DecomposeMatrixToComponents(model.m,position,rotation,scale);
-                if(ImGui::DragFloat3("Rotation (deg)",rotation,0.5f,-36000,36000,"%.1f",ImGuiSliderFlags_AlwaysClamp)) {
-                    ImGuizmo::RecomposeMatrixFromComponents(position,rotation,scale,model.m);
-                    applyGizmoMatrix(*t,model,TransformTool::Rotate,false);
+                static RotationEditorState rotationState;
+                rotationState.sync(selected,t->rotation);
+                float rotation[]{rotationState.angles.x,rotationState.angles.y,rotationState.angles.z};
+                if(ImGui::DragFloat3("Rotation (deg)",rotation,.5f,-36000,36000,"%.1f",ImGuiSliderFlags_AlwaysClamp)) {
+                    if(std::isfinite(rotation[0]) && std::isfinite(rotation[1]) && std::isfinite(rotation[2]))
+                        t->rotation=rotationState.apply({rotation[0],rotation[1],rotation[2]});
                 }
                 const auto* c=world.tryGet<Collider>(selected);
                 if(c && c->shape!=ColliderShape::Box) {
@@ -108,14 +109,24 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 if(ImGui::Button("Clear camera target")){camera->tracking=false;camera->following=false;camera->targetEntity={};}
                 if(ImGui::Button("Remove Camera"))world.remove<Camera>(selected);
             }
-            if(auto* script=world.tryGet<LuaScript>(selected);script && componentHeader("Lua Script")) {
-                ImGui::Checkbox("Script enabled",&script->enabled);
-                char path[4097];std::snprintf(path,sizeof(path),"%s",script->path.c_str());
-                if(ImGui::InputText("Asset path",path,sizeof(path)))script->path=path;
-                ImGui::TextDisabled("Drop a .lua asset below to assign it.");
-                if(ImGui::Button("Remove Lua Script"))world.remove<LuaScript>(selected);
+            if(auto* scripts=world.tryGet<LuaScript>(selected);scripts && componentHeader("LegacyScripts")) {
+                int remove=-1;
+                auto row=[&](std::string& path,bool& enabled,int index) {
+                    ImGui::PushID(index);ImGui::Separator();
+                    ImGui::Checkbox("Enabled",&enabled);
+                    char buffer[4097];std::snprintf(buffer,sizeof(buffer),"%s",path.c_str());
+                    if(ImGui::InputText("Asset path",buffer,sizeof(buffer)))path=buffer;
+                    if(ImGui::Button("Remove script"))remove=index;
+                    ImGui::PopID();
+                };
+                row(scripts->path,scripts->enabled,0);
+                for(std::size_t i=0;i<scripts->additional.size();++i)row(scripts->additional[i].path,scripts->additional[i].enabled,static_cast<int>(i+1));
+                if(remove==0) {
+                    if(scripts->additional.empty())world.remove<LuaScript>(selected);
+                    else {auto next=scripts->additional.front();scripts->path=next.path;scripts->enabled=next.enabled;scripts->additional.erase(scripts->additional.begin());}
+                } else if(remove>0)scripts->additional.erase(scripts->additional.begin()+remove-1);
             }
-            ImGui::Button("Drop Lua script here",ImVec2(-1,32));
+            ImGui::Button("Drop LegacyScript (.ls) here",ImVec2(-1,32));
             if(ImGui::BeginDragDropTarget()) {
                 if(const auto* asset=ImGui::AcceptDragDropPayload("ASSET_PATH"))
                     attachScriptAsset(world,selected,static_cast<const char*>(asset->Data));
@@ -128,7 +139,10 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 if(!world.has<Collider>(selected) && ImGui::MenuItem("Collider"))world.add(selected,Collider{});
                 if(!world.has<RigidBody>(selected) && ImGui::MenuItem("RigidBody"))world.add(selected,RigidBody{});
                 if(!world.has<Camera>(selected) && world.has<Transform>(selected) && ImGui::MenuItem("Camera"))world.add(selected,Camera{});
-                if(!world.has<LuaScript>(selected) && ImGui::MenuItem("Lua Script"))world.add(selected,LuaScript{});
+                if(ImGui::MenuItem("LegacyScript")) {
+                    if(auto* scripts=world.tryGet<LuaScript>(selected)){if(scripts->additional.size()<63)scripts->additional.push_back({});}
+                    else world.add(selected,LuaScript{});
+                }
                 ImGui::EndPopup();
             }
             ImGui::EndDisabled();ImGui::PopID();
