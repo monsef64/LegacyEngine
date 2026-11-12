@@ -1,0 +1,69 @@
+name: LegacyScript VSIX
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'extensions/legacyscript/**'
+      - 'src/lua_definitions.hpp'
+      - 'scripts/definitions/legacyengine.lua'
+      - '.github/workflows/legacyscript.yml'
+  pull_request:
+    paths:
+      - 'extensions/legacyscript/**'
+      - 'src/lua_definitions.hpp'
+      - 'scripts/definitions/legacyengine.lua'
+      - '.github/workflows/legacyscript.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  vsix:
+    name: Test and package VS Code extension
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: extensions/legacyscript
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: extensions/legacyscript/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Refresh engine API catalogs
+        run: npm run generate
+
+      - name: Test language server
+        run: npm test
+
+      - name: Build VSIX
+        run: npm run package
+
+      - name: Upload installable extension
+        uses: actions/upload-artifact@v7
+        with:
+          name: legacyscript-vsix
+          path: extensions/legacyscript/legacyscript.vsix
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Installation instructions
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## LegacyScript extension
+          Download **legacyscript-vsix** from this run's **Artifacts** section and extract the ZIP.
+          In VS Code choose **Extensions → … → Install from VSIX…** and select `legacyscript.vsix`.
+          Open a `.ls` file and check that the language is **LegacyScript**.
+
+          Artifacts are retained for 30 days. This workflow does not publish to the Marketplace.
+          EOF

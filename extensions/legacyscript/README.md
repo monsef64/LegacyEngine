@@ -44,3 +44,16 @@ Not published on the Marketplace.
 
 `npm run generate` refreshes checked-in catalogs from engine definitions in the
 full repository. Run it after API changes, then test and package.
+
+## Download from GitHub Actions
+
+The **LegacyScript VSIX** workflow tests and builds automatically on pushes and
+pull requests affecting the extension or engine API definitions. You can also
+run it manually via **Actions → LegacyScript VSIX → Run workflow** once the
+workflow is available on the default branch.
+
+Open a successful run and download **legacyscript-vsix** under **Artifacts**
+(GitHub sign-in may be required). Extract the ZIP and install `legacyscript.vsix`
+using **Extensions → … → Install from VSIX…** in VS Code.
+Artifacts are retained for 30 days; rerun the workflow if a download has expired.
+This workflow does not publish to the VS Code Marketplace.
