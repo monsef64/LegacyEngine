@@ -233,7 +233,7 @@ MeshHandle Renderer::createMesh(const MeshData& data)
     return {static_cast<std::uint32_t>(meshes_.size() - 1)};
 }
 
-void Renderer::draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition, int x, int y)
+void Renderer::draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition, int x, int y, bool editorView)
 {
     glDisable(GL_SCISSOR_TEST);
     glViewport(x, y, width, height);
@@ -249,8 +249,7 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, checkerTexture_);
 
-    world.each<Transform, MeshRenderer>(
-        [&](Entity, const Transform& transform, const MeshRenderer& renderer) {
+    auto drawMesh=[&](const Transform& transform,const MeshRenderer& renderer) {
             if (renderer.mesh.id >= meshes_.size()) {
                 return; // no mesh to draw
             }
@@ -284,7 +283,16 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
 
             glBindVertexArray(mesh.vertexArray);
             glDrawArrays(mesh.lines ? GL_LINES : GL_TRIANGLES, 0, mesh.vertexCount);
+        };
+    world.each<Transform, MeshRenderer>([&](Entity e,const Transform& t,const MeshRenderer& r){
+        if(!world.has<Camera>(e))drawMesh(t,r);
+    });
+    if(editorView) {
+        if(cameraModel_.id==UINT32_MAX)cameraModel_=createMesh(makeCameraModel());
+        world.each<Camera,Transform>([&](Entity,const Camera&,const Transform& t){
+            drawMesh(t,MeshRenderer{cameraModel_,{.28f,.50f,.72f},false,.4f});
         });
+    }
 }
 
 void Renderer::drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection)

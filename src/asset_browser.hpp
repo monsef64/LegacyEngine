@@ -3,8 +3,10 @@
 #include "editor_layout.hpp"
 #include "script_editor.hpp"
 #include "project_dialog.hpp"
+#include "editor_history.hpp"
+#include "system_trash.hpp"
 
-inline void fileIcon(const std::string& path) {
+inline void fileBadge(const std::string& path,ImVec2 pos) {
     auto ext=AssetManager::extension(path);
     const char* tag="FILE";ImU32 color=IM_COL32(150,165,185,255);
     if(ext==".lua"){tag="LUA";color=IM_COL32(100,165,255,255);}
@@ -13,15 +15,18 @@ inline void fileIcon(const std::string& path) {
     else if(ext==".wav" || ext==".mp3" || ext==".ogg"){tag="SND";color=IM_COL32(200,130,225,255);}
     else if(ext==".legacy"){tag="PROJ";color=IM_COL32(105,200,225,255);}
     else if(ext==".txt" || ext==".json" || ext==".md"){tag="TXT";}
-    auto pos=ImGui::GetCursorScreenPos();ImGui::Dummy(ImVec2(44,28));
     auto* draw=ImGui::GetWindowDrawList();
     draw->AddRectFilled(pos,ImVec2(pos.x+40,pos.y+26),IM_COL32(35,45,60,255),4);
     draw->AddRect(pos,ImVec2(pos.x+40,pos.y+26),color,4);
     draw->AddText(ImVec2(pos.x+3,pos.y+4),color,tag);
-    ImGui::SameLine();
+}
+inline void fileIcon(const std::string& path) {
+    auto pos=ImGui::GetCursorScreenPos();ImGui::Dummy(ImVec2(44,28));fileBadge(path,pos);ImGui::SameLine();
 }
 class AssetBrowser {
 public:
+    void setGridMode(bool grid){grid_=grid;}
+    bool gridMode() const{return grid_;}
     AssetManager assets;
     std::string selected,openedScript;
     ProjectDialog dialog;
@@ -29,11 +34,16 @@ public:
         try{selected=assets.import(path);assets.error.clear();}catch(const std::exception& e){assets.error=e.what();}
     }
     void setRoot(const std::filesystem::path& root) {assets.root=root;selected.clear();openedScript.clear();}
-    void draw(SDL_Window* window,World& world,Entity selectedObject,ScriptEditor& scripts,bool editable) {
+    void draw(SDL_Window* window,World& world,Entity selectedObject,ScriptEditor& scripts,bool editable,EditorHistory* history=nullptr) {
         if(auto result=dialog.poll()) {if(!result->error.empty())assets.error=result->error;else if(!result->path.empty())importFile(result->path);}
         if(dockedEditor && !panelOpen[5])return;
         if(beginEditorPanel("Assets")) {
+            const bool shortcutFocus=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+                !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+                !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId) && editable && !dialog.pending();
             ImGui::TextDisabled("%s",assets.root.string().c_str());
+            if(ImGui::RadioButton("List",!grid_))grid_=false;
+            ImGui::SameLine();if(ImGui::RadioButton("Grid",grid_))grid_=true;
             ImGui::BeginDisabled(!editable || dialog.pending());
             if(ImGui::Button("Import..."))dialog.showImport(window);
             ImGui::SameLine();
@@ -51,9 +61,21 @@ public:
             ImGui::TextWrapped("Drop files here to import. Drag Lua assets onto a GameObject or Inspector to attach.");
             if(!assets.error.empty())ImGui::TextWrapped("%s",assets.error.c_str());
             try {
-                for(const auto& file:assets.files()) {
-                    ImGui::PushID(file.c_str());fileIcon(file);
-                    if(ImGui::Selectable(file.c_str(),selected==file,ImGuiSelectableFlags_AllowDoubleClick,ImVec2(0,28))) {
+                const auto files=assets.files();
+                const int columns=grid_?std::clamp(static_cast<int>(ImGui::GetContentRegionAvail().x/120),1,64):1;
+                if(ImGui::BeginTable("Asset items",columns,ImGuiTableFlags_SizingStretchSame)) {
+                for(const auto& file:files) {
+                    ImGui::TableNextColumn();ImGui::PushID(file.c_str());
+                    if(!grid_)fileIcon(file);
+                    const bool clicked=ImGui::Selectable(grid_?"##tile":file.c_str(),selected==file,ImGuiSelectableFlags_AllowDoubleClick,ImVec2(0,grid_?84.0f:28.0f));
+                    if(grid_) {
+                        const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
+                        auto* draw=ImGui::GetWindowDrawList();draw->PushClipRect(a,b,true);
+                        fileBadge(file,ImVec2((a.x+b.x)*.5f-20,a.y+4));
+                        draw->AddText(nullptr,0,ImVec2(a.x+4,a.y+34),ImGui::GetColorU32(ImGuiCol_Text),file.c_str(),nullptr,std::max(1.0f,b.x-a.x-8));
+                        draw->PopClipRect();
+                    }
+                    if(clicked) {
                         selected=file;
                         if(AssetManager::script(file) && ImGui::IsMouseDoubleClicked(0)) {
                             try {scripts.setSource(assets.readScript(file));openedScript=file;panelOpen[3]=true;}
@@ -66,17 +88,36 @@ public:
                     }
                     if(ImGui::BeginPopupContextItem("Asset actions")) {
                         if(ImGui::MenuItem("Attach Lua to selected object",nullptr,false,world.alive(selectedObject) && AssetManager::script(file)))attachScriptAsset(world,selectedObject,file);
-                        if(ImGui::MenuItem("Rename...")) {selected=file;std::snprintf(rename_,sizeof(rename_),"%s",std::filesystem::path(file).filename().string().c_str());renameRequested_=true;}
-                        if(ImGui::MenuItem("Delete...")){selected=file;deleteRequested_=true;}
+                        if(ImGui::MenuItem("Rename...","F2")) {selected=file;renameRequested_=true;}
+                        if(ImGui::MenuItem("Move to Trash","Del")){selected=file;deleteRequested_=true;}
                         ImGui::EndPopup();
                     }
                     ImGui::PopID();
                 }
-                if(renameRequested_){ImGui::OpenPopup("Rename asset");renameRequested_=false;}
-                if(deleteRequested_){ImGui::OpenPopup("Delete asset");deleteRequested_=false;}
+                ImGui::EndTable();
+                }
+                if(shortcutFocus && !selected.empty()) {
+                    if(ImGui::IsKeyPressed(ImGuiKey_F2,false))renameRequested_=true;
+                    if(ImGui::IsKeyPressed(ImGuiKey_Delete,false))deleteRequested_=true;
+                }
+                if(renameRequested_){
+                    std::snprintf(rename_,sizeof(rename_),"%s",std::filesystem::path(selected).filename().string().c_str());
+                    ImGui::OpenPopup("Rename asset");renameRequested_=false;renameFocus_=true;
+                }
+                if(deleteRequested_){
+                    deleteRequested_=false;
+                    if(history && !selected.empty()) {
+                        auto receipt=std::make_shared<TrashFile>(assets.resolve(selected));
+                        if(history->perform(world,selectedObject,[receipt](bool redo){if(redo)receipt->remove();else receipt->restore();})) {
+                            if(openedScript==selected)openedScript.clear();
+                            selected.clear();
+                        } else assets.error=history->error;
+                    } else assets.error="Asset deletion requires editor history";
+                }
                 if(ImGui::BeginPopupModal("Rename asset",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
-                    ImGui::InputText("Name",rename_,sizeof(rename_));
-                    if(ImGui::Button("Rename")) {
+                    if(renameFocus_){ImGui::SetKeyboardFocusHere();renameFocus_=false;}
+                    const bool renameEnter=ImGui::InputText("Name",rename_,sizeof(rename_),ImGuiInputTextFlags_EnterReturnsTrue);
+                    if(ImGui::Button("Rename") || renameEnter) {
                         try {
                         std::filesystem::path leaf(rename_);
                         if(leaf.empty() || leaf.has_parent_path() || leaf=="..")assets.error="Use a filename without directories";
@@ -93,12 +134,7 @@ public:
                         }
                         }catch(const std::exception& e){assets.error=e.what();}
                     }
-                    ImGui::SameLine();if(ImGui::Button("Cancel"))ImGui::CloseCurrentPopup();ImGui::EndPopup();
-                }
-                if(ImGui::BeginPopupModal("Delete asset",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
-                    ImGui::TextWrapped("Delete %s? Script references will become missing. File operations are not covered by scene undo.",selected.c_str());
-                    if(ImGui::Button("Delete"))try{std::filesystem::remove(assets.resolve(selected));if(openedScript==selected)openedScript.clear();selected.clear();ImGui::CloseCurrentPopup();}catch(const std::exception& e){assets.error=e.what();}
-                    ImGui::SameLine();if(ImGui::Button("Cancel"))ImGui::CloseCurrentPopup();ImGui::EndPopup();
+                    ImGui::SameLine();if(ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();ImGui::EndPopup();
                 }
             } catch(const std::exception& e){assets.error=e.what();}
             ImGui::EndDisabled();
@@ -106,5 +142,5 @@ public:
         ImGui::End();
     }
 private:
-    char rename_[256]{};bool renameRequested_=false,deleteRequested_=false;
+    char rename_[256]{};bool renameRequested_=false,deleteRequested_=false,grid_=false,renameFocus_=false;
 };

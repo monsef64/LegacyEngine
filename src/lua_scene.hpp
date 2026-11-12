@@ -30,6 +30,7 @@ private:
     void destroy(Entity e);
     void tick(const char* name,float dt);
     static int api(lua_State* state);
+    static int cameraApi(lua_State* state);
     static int objectMethod(lua_State* state);
     static int objectIndex(lua_State* state);
     static int objectNewIndex(lua_State* state);

@@ -9,6 +9,7 @@ inline int drawCreateMenu() {
     if(ImGui::BeginMainMenuBar()) {
         if(ImGui::BeginMenu("Create")) {
             if(ImGui::MenuItem("Empty GameObject"))item=0;
+            if(ImGui::MenuItem("Camera"))item=5;
             if(ImGui::BeginMenu("Shape")) {
                 const char* names[]{"Capsule","Cone","Cube","Sphere"};
                 for(int i=0;i<4;++i)if(ImGui::MenuItem(names[i]))item=i+1;

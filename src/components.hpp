@@ -5,6 +5,7 @@
 #pragma once
 
 #include "math.hpp"
+#include "ecs.hpp"
 #include "mesh.hpp"
 #include <string>
 
@@ -62,3 +63,15 @@ struct RigidBody {
 
 // Asset path relative to the project Assets directory. One script per object.
 struct LuaScript { std::string path; bool enabled=true; };
+
+// Cameras look along local -Z; rotation lives in the GameObject Transform.
+struct Camera {
+    bool active=false, orthographic=false;
+    float fieldOfView=60, nearClip=.1f, farClip=1000, orthographicSize=10;
+    float viewportX=0,viewportY=0,viewportWidth=1,viewportHeight=1;
+    Entity targetEntity{}; // generation-safe target, or a fixed world-space point
+    Vec3 target,followOffset;
+    bool tracking=false,following=false;
+    float shakeIntensity=0,shakeRemaining=0,shakePhase=0;
+    float aspect=16.0f/9; // Current Game viewport aspect, supplied by the editor.
+};

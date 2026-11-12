@@ -7,7 +7,7 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
@@ -110,3 +110,66 @@ ObjectName = nil
 LuaScript = nil
 ---@type GameObject
 self = nil -- Provided in each attached Lua Script runtime.
+
+---@class Camera
+---@field active boolean
+---@field orthographic boolean
+---@field fieldOfView number Degrees
+---@field nearClip number
+---@field farClip number
+---@field orthographicSize number Vertical size in world units
+---@type ComponentToken
+Camera = nil
+---@param name string
+---@return GameObject
+function createCamera(name) end
+---@param camera GameObject|nil
+function setActiveCamera(camera) end
+---@return GameObject|nil
+function getActiveCamera() end
+---@param camera GameObject
+---@param position Vec3
+function setCameraPosition(camera,position) end
+---@param camera GameObject
+---@param rotation Vec3|Quaternion Euler degrees or quaternion
+function setCameraRotation(camera,rotation) end
+---@param camera GameObject
+---@param target Vec3|GameObject
+function lookAt(camera,target) end
+---@param camera GameObject
+---@param degrees number
+function setFieldOfView(camera,degrees) end
+---@param camera GameObject
+---@param mode 'Perspective'|'Orthographic'|'perspective'|'orthographic'
+function setProjectionMode(camera,mode) end
+---@param camera GameObject
+---@param distance number
+function setNearClipPlane(camera,distance) end
+---@param camera GameObject
+---@param distance number
+function setFarClipPlane(camera,distance) end
+---@param camera GameObject
+---@param x number Normalized top-left origin
+---@param y number
+---@param width number
+---@param height number
+function setViewport(camera,x,y,width,height) end
+---@param camera GameObject
+---@param target Vec3|GameObject|nil
+function setCameraTarget(camera,target) end
+---@param camera GameObject
+---@param target Vec3|GameObject|nil
+---@param offset Vec3|nil World-space offset
+function setFollowTarget(camera,target,offset) end
+---@param camera GameObject
+---@param intensity number World units
+---@param duration number Seconds
+function setCameraShake(camera,intensity,duration) end
+---@param camera GameObject
+---@param worldPosition Vec3
+---@return Vec3 Normalized top-left screen x/y, depth 0 near to 1 far
+function worldToScreen(camera,worldPosition) end
+---@param camera GameObject
+---@param screenPosition Vec3 Normalized x/y and depth
+---@return Vec3
+function screenToWorld(camera,screenPosition) end

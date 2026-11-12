@@ -1,5 +1,7 @@
 #include "lua_scene.hpp"
 #include "hierarchy.hpp"
+#include "scene_camera.hpp"
+#include <cstdio>
 extern "C" {
 #include <lua.h>
 #include <lauxlib.h>
@@ -11,12 +13,12 @@ namespace {
 struct Handle { LuaScene* scene; World* world; Entity entity; };
 struct Component { Handle object; int type; };
 struct Vector { Component component; char field[32]; };
-const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript"};
+const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera"};
 int componentType(lua_State* L,int index) {
     if (auto* type=static_cast<int*>(luaL_testudata(L,index,"ComponentType"))) return *type;
     const char* name=luaL_checkstring(L,index);
     if (!std::strcmp(name,"BoxCollider")) return 2;
-    for (int i=0;i<6;++i) if (!std::strcmp(name,types[i])) return i;
+    for (int i=0;i<7;++i) if (!std::strcmp(name,types[i])) return i;
     return luaL_error(L,"Unknown component type: %s",name);
 }
 Handle& handle(lua_State* L,int index) {
@@ -31,7 +33,8 @@ bool has(const Handle& h,int type) {
     case 2:return h.world->has<Collider>(h.entity);
     case 3:return h.world->has<MeshRenderer>(h.entity);
     case 4:return h.world->has<ObjectName>(h.entity);
-    default:return h.world->has<LuaScript>(h.entity);
+    case 5:return h.world->has<LuaScript>(h.entity);
+    default:return h.world->has<Camera>(h.entity);
     }
 }
 enum class Kind { Missing, Number, Boolean, String, Vec, Quat, Shape, Mesh };
@@ -47,6 +50,7 @@ Field field(lua_State* L,const Component& c,const char* key) {
     case 3:{auto& v=h.world->get<MeshRenderer>(h.entity); FIELD(color,Vec);FIELD(checkerboard,Boolean);FIELD(specular,Number);FIELD(mesh,Mesh);break;}
     case 4:{auto& v=h.world->get<ObjectName>(h.entity); FIELD(value,String);break;}
     case 5:{auto& v=h.world->get<LuaScript>(h.entity); FIELD(path,String);FIELD(enabled,Boolean);break;}
+    case 6:{auto& v=h.world->get<Camera>(h.entity); FIELD(active,Boolean);FIELD(orthographic,Boolean);FIELD(fieldOfView,Number);FIELD(nearClip,Number);FIELD(farClip,Number);FIELD(orthographicSize,Number);break;}
     }
 #undef FIELD
     luaL_error(L,"Unknown %s field: %s",types[c.type],key);
@@ -93,11 +97,15 @@ LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,M
     // Opaque type tokens cannot be forged by passing a number or a table.
     luaL_newmetatable(L,"ComponentType");
     lua_pushliteral(L,"locked");lua_setfield(L,-2,"__metatable");lua_pop(L,1);
-    for (int i=0;i<6;++i) {
+    for (int i=0;i<7;++i) {
         auto* type=static_cast<int*>(lua_newuserdatauv(L,sizeof(int),0));
         *type=i;luaL_setmetatable(L,"ComponentType");
         if(i==2) { lua_pushvalue(L,-1);lua_setglobal(L,"BoxCollider"); }
         lua_setglobal(L,types[i]);
+    }
+    const char* cameraFunctions[]{"createCamera","setActiveCamera","getActiveCamera","setCameraPosition","setCameraRotation","lookAt","setFieldOfView","setProjectionMode","setNearClipPlane","setFarClipPlane","setViewport","setCameraTarget","setFollowTarget","setCameraShake","worldToScreen","screenToWorld"};
+    for(int i=0;i<16;++i) {
+        lua_pushlightuserdata(L,this);lua_pushinteger(L,i);lua_pushcclosure(L,cameraApi,2);lua_setglobal(L,cameraFunctions[i]);
     }
     const char* names[]{"createGameObject","destroyGameObject","getComponent","addComponent","removeComponent","findGameObjectByName","findGameObjectsByComponent","setParent","getParent"};
     for(int i=0;i<9;++i) {
@@ -152,6 +160,7 @@ int LuaScene::api(lua_State* L) {
         case 3:self.world_.each<MeshRenderer>([&](Entity e,MeshRenderer&){collect(e);});break;
         case 4:self.world_.each<ObjectName>([&](Entity e,ObjectName&){collect(e);});break;
         case 5:self.world_.each<LuaScript>([&](Entity e,LuaScript&){collect(e);});break;
+        case 6:self.world_.each<Camera>([&](Entity e,Camera&){collect(e);});break;
         }
         lua_newtable(L);int index=1;
         for(Entity e:self.query_) {self.pushObject(e);lua_rawseti(L,-2,index++);}return 1;
@@ -169,6 +178,7 @@ int LuaScene::api(lua_State* L) {
         case 3:self.world_.remove<MeshRenderer>(h.entity);break;
         case 4:self.world_.remove<ObjectName>(h.entity);break;
         case 5:self.world_.remove<LuaScript>(h.entity);break;
+        case 6:self.world_.remove<Camera>(h.entity);break;
         } return 0;
     }
     if(!has(h,type)) switch(type) {
@@ -178,6 +188,7 @@ int LuaScene::api(lua_State* L) {
     case 3:self.world_.add(h.entity,MeshRenderer{self.meshes_[0]});break;
     case 4:self.world_.add(h.entity,ObjectName{"GameObject"});break;
     case 5:self.world_.add(h.entity,LuaScript{});break;
+    case 6:self.world_.add(h.entity,Camera{});break;
     }
     component(L,h,type);return 1;
 }
@@ -224,6 +235,14 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c=*static_cast<Component*>(luaL_checkudata(L,1,"Component"));const Field f=field(L,c,luaL_checkstring(L,2));
+    if(c.type==6 && !std::strcmp(lua_tostring(L,2),"active")) {
+        luaL_checktype(L,3,LUA_TBOOLEAN);
+        if(lua_toboolean(L,3)) {
+            if(!c.object.world->has<Transform>(c.object.entity))return luaL_error(L,"Camera needs a Transform");
+            activateCamera(*c.object.world,c.object.entity);
+        } else c.object.world->get<Camera>(c.object.entity).active=false;
+        return 0;
+    }
     switch(f.kind) {
     case Kind::Number:*static_cast<float*>(f.value)=number(L,3);break;
     case Kind::Boolean:luaL_checktype(L,3,LUA_TBOOLEAN);*static_cast<bool*>(f.value)=lua_toboolean(L,3)!=0;break;
@@ -308,3 +327,5 @@ void LuaScene::stop() {
 }
 
 void LuaScene::setSelf(Entity entity) { pushObject(entity);lua_setglobal(state_,"self"); }
+
+#include "lua_camera.inc"

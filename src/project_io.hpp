@@ -1,5 +1,6 @@
 #pragma once
 #include "hierarchy.hpp"
+#include "scene_camera.hpp"
 #include "camera.hpp"
 #include <array>
 #include <chrono>
@@ -31,13 +32,13 @@ inline Transform readTransform(std::istream& in) {
 inline std::string encode(World& world,std::string_view source,const OrbitCamera& camera,const Meshes& meshes) {
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 2\n";
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 3\n";
     out<<std::quoted(std::string(source))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
     for(Entity e:entities) {
         unsigned mask=(world.has<ObjectName>(e)?1:0)|(world.has<Transform>(e)?2:0)|
-            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0);
+            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0)|(world.has<Camera>(e)?64:0);
         int parent=-1;const Entity p=getParent(world,e);
         for(std::size_t i=0;i<entities.size();++i)if(entities[i]==p)parent=static_cast<int>(i);
         out<<mask<<' '<<parent<<' ';
@@ -55,6 +56,13 @@ inline std::string encode(World& world,std::string_view source,const OrbitCamera
             out<<b->mass<<' '<<b->useGravity<<' ';writeVec(out,b->linearVelocity);writeVec(out,b->angularVelocity);
         }
         if(auto* script=world.tryGet<LuaScript>(e))out<<std::quoted(script->path)<<' '<<script->enabled<<' ';
+        if(auto* c=world.tryGet<Camera>(e)) {
+            require(validCamera(*c));
+            int target=-1;for(std::size_t i=0;i<entities.size();++i)if(entities[i]==c->targetEntity)target=static_cast<int>(i);
+            out<<c->active<<' '<<c->orthographic<<' '<<c->fieldOfView<<' '<<c->nearClip<<' '<<c->farClip<<' '<<c->orthographicSize<<' '
+                <<c->viewportX<<' '<<c->viewportY<<' '<<c->viewportWidth<<' '<<c->viewportHeight<<' '<<target<<' ';
+            writeVec(out,c->target);writeVec(out,c->followOffset);out<<c->tracking<<' '<<c->following<<' ';
+        }
         out<<'\n';
     }
     auto text=out.str();require(text.size()<=maxBytes);return text;
@@ -63,17 +71,17 @@ struct Loaded { World world; std::string source; OrbitCamera camera; };
 inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && (version==1 || version==2));
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=3));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
     auto& camera=result.camera;camera.target=readVec(in);camera.yaw=number(in);camera.pitch=number(in);
     camera.distance=number(in);camera.fieldOfView=number(in);
     require(camera.distance>0 && camera.fieldOfView>0 && camera.fieldOfView<3.14f);
     int count=-1;in>>count;require(bool(in) && count>=0 && count<=static_cast<int>(maxObjects));
-    std::vector<Entity> entities;std::vector<int> parents;
+    std::vector<Entity> entities;std::vector<int> parents,cameraTargets;
     for(int i=0;i<count;++i) {
         unsigned mask=0;int parent=-1;in>>mask>>parent;
-        require(bool(in) && mask<=(version==1?31u:63u) && parent>=-1 && parent<count && parent!=i);
-        const Entity e=result.world.create();entities.push_back(e);parents.push_back(parent);
+        require(bool(in) && mask<=(version==1?31u:version==2?63u:127u) && parent>=-1 && parent<count && parent!=i);
+        const Entity e=result.world.create();entities.push_back(e);parents.push_back(parent);cameraTargets.push_back(-1);
         if(mask&1) {std::string name;in>>std::quoted(name);require(name.size()<=4096);result.world.add(e,ObjectName{name});}
         if(mask&2)result.world.add(e,readTransform(in));
         if(mask&4) {
@@ -95,8 +103,20 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
             for(const auto& part:std::filesystem::path(script.path))require(part!="..");
             result.world.add(e,script);
         }
+        if(mask&64) {
+            require((mask&2)!=0);Camera c;
+            in>>c.active>>c.orthographic;c.fieldOfView=number(in);c.nearClip=number(in);c.farClip=number(in);c.orthographicSize=number(in);
+            c.viewportX=number(in);c.viewportY=number(in);c.viewportWidth=number(in);c.viewportHeight=number(in);
+            in>>cameraTargets.back();require(cameraTargets.back()>=-1 && cameraTargets.back()<count && cameraTargets.back()!=i);
+            c.target=readVec(in);c.followOffset=readVec(in);in>>c.tracking>>c.following;require(validCamera(c));result.world.add(e,c);
+        }
         require(bool(in));
     }
+    for(int i=0;i<count;++i)if(cameraTargets[i]>=0) {
+        require(result.world.has<Transform>(entities[cameraTargets[i]]));
+        result.world.get<Camera>(entities[i]).targetEntity=entities[cameraTargets[i]];
+    }
+    int activeCount=0;result.world.each<Camera>([&](Entity,Camera& c){if(c.active)++activeCount;});require(activeCount<=1);
     for(int i=0;i<count;++i)if(parents[i]>=0)require(setParent(result.world,entities[i],entities[parents[i]]));
     in>>std::ws;require(in.eof());
 }

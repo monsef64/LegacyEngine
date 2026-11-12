@@ -65,7 +65,8 @@ inline Entity copyLevelObject(World& sourceWorld, Entity source, World& world, b
         if (auto* original = sourceWorld.tryGet<T>(source)) { T data = *original; world.add(copy, data); }
     };
     component(Transform{}); component(MeshRenderer{}); component(Collider{});
-    component(RigidBody{}); component(ObjectName{}); component(LuaScript{});
+    component(RigidBody{}); component(ObjectName{}); component(LuaScript{}); component(Camera{});
+    if(auto* camera=world.tryGet<Camera>(copy))camera->active=false;
     if(preserveParent)component(Parent{});
     if (auto* name = world.tryGet<ObjectName>(copy)) name->value = copiedObjectName(world,name->value);
     return copy;
@@ -100,14 +101,16 @@ inline void deleteLevelObject(World& world, Entity object) {
 }
 
 // Returns true when selection changes. The caller can end any active gizmo gesture.
-inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr)
+inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr,bool* focused=nullptr)
 {
+    if(focused)*focused=false;
     if(dockedEditor && !panelOpen[0])return false;
     bool changed=false;
     if (!world.alive(selected) && selected!=Entity{}) { selected={}; changed=true; }
     if(panel)placeEditorPanel(*panel);
     else {ImGui::SetNextWindowPos(ImVec2(16,360),ImGuiCond_FirstUseEver);ImGui::SetNextWindowSize(ImVec2(250,240),ImGuiCond_FirstUseEver);}
     if (beginEditorPanel(panel?"Hierarchy":"Level Objects",panel?fixedPanelFlags:0)) {
+        if(focused)*focused=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         const auto objects=levelObjects(world);
         ImGui::Text("Objects: %d",static_cast<int>(objects.size()));
         if (!selectionEnabled) ImGui::TextDisabled("Disable Spawn Shapes Mode to select");

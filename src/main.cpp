@@ -27,6 +27,7 @@
 #include "script_components.hpp"
 #include "dock_workspace.hpp"
 #include "scene_surface.hpp"
+#include "scene_camera.hpp"
 #include "editor_input.hpp"
 #include "editor_history.hpp"
 #include "playback_controls.hpp"
@@ -250,6 +251,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
     const MeshHandle sphereMesh = renderer.createMesh(makeSphere(0.5f));
     const MeshHandle capsuleMesh = renderer.createMesh(makeCapsule(0.5f, 1.0f));
     const MeshHandle coneMesh = renderer.createMesh(makeCone(0.5f,1.0f));
+    // Exercise both the editor-only camera model and active Game render path in CI.
+    if(smokeTest) {
+        const Entity testCamera=world.create();Transform pose{{3,2,6}};aimCamera(pose,{0,.5f,0});
+        world.add(testCamera,ObjectName{"Smoke Camera"});world.add(testCamera,pose);
+        Camera c;c.active=true;world.add(testCamera,c);
+    }
     ColliderShape selected = ColliderShape::Box;
     bool spawnMode = false;
     bool freeCamera = true;
@@ -261,7 +268,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
     ObjectClipboard clipboard;
     AssetBrowser browser;
     ScriptComponents componentScripts;
-    SceneSurface sceneSurface;
+    SceneSurface sceneSurface,gameSurface;
     EditorRect sceneRect{};
     bool sceneHovered=false,resetWorkspace=false;
     Entity editSelection;
@@ -342,7 +349,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                     if (mouseRay(window, camera, event.button.x, event.button.y, ray,layout.scene)) {
                         if (!spawnMode) {
                             RayHit hit;
-                            selectedEntity = physics.raycast(ray, kClickReach, hit) ? hit.entity : Entity{};
+                            const bool found=physics.raycast(ray,kClickReach,hit);
+                            selectedEntity=found?hit.entity:Entity{};
+                            float closest=found?hit.distance:kClickReach;
+                            world.each<Camera,Transform>([&](Entity e,Camera&,Transform& t){
+                                const auto offset=ray.origin-t.position;
+                                const float radius=.6f*std::max({std::abs(t.scale.x),std::abs(t.scale.y),std::abs(t.scale.z)});
+                                const float b=dot(offset,ray.direction),disc=b*b-dot(offset,offset)+radius*radius;
+                                if(disc>=0){float distance=-b-std::sqrt(disc);if(distance<0)distance=-b+std::sqrt(disc);
+                                    if(distance>=0 && distance<closest){closest=distance;selectedEntity=e;}}
+                            });
                             break;
                         }
                         const MeshHandle mesh = selected == ColliderShape::Box ? cubeMesh :
@@ -398,6 +414,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             try { browser.assets.copyTo(assetRoot); }
             catch(const std::exception& e){projectError=e.what();return;}
             if(ProjectIO::save(path,world,scripts.source(),camera,projectMeshes,projectError)) {
+                if(std::filesystem::weakly_canonical(browser.assets.root)!=std::filesystem::weakly_canonical(assetRoot))
+                    history=EditorHistory(world,selectedEntity); // Old Trash receipts belong to the previous project root.
                 browser.assets.root=assetRoot;
                 currentProject=path;
                 savedProjectState=projectContentState(world,scripts.source(),camera);
@@ -447,7 +465,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         }
         if(ImGui::BeginMainMenuBar()) {
             if(ImGui::BeginMenu("Windows")) {
-                for(int i=0;i<6;++i)ImGui::MenuItem(panelNames[i],nullptr,&panelOpen[i]);
+                for(int i=0;i<7;++i)ImGui::MenuItem(panelNames[i],nullptr,&panelOpen[i]);
                 ImGui::Separator();if(ImGui::MenuItem("Reset layout"))resetWorkspace=true;
                 ImGui::EndMenu();
             }
@@ -458,13 +476,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         const int created=drawCreateMenu();
         if(created>=0) {
             editor.finish(world);spawnMode=false;clicking=false;
-            const char* labels[]{"Empty GameObject","Capsule","Cone","Cube","Sphere"};
-            const MeshHandle meshes[]{MeshHandle{},capsuleMesh,coneMesh,cubeMesh,sphereMesh};
-            const ColliderShape shapes[]{ColliderShape::Box,ColliderShape::Capsule,ColliderShape::Cone,ColliderShape::Box,ColliderShape::Sphere};
+            const char* labels[]{"Empty GameObject","Capsule","Cone","Cube","Sphere","Camera"};
+            const MeshHandle meshes[]{MeshHandle{},capsuleMesh,coneMesh,cubeMesh,sphereMesh,MeshHandle{}};
+            const ColliderShape shapes[]{ColliderShape::Box,ColliderShape::Capsule,ColliderShape::Cone,ColliderShape::Box,ColliderShape::Sphere,ColliderShape::Box};
             Vec3 position=camera.target;
             position.y=std::max(position.y,created==1?1.0f:created==0?0.0f:0.5f);
-            if(created!=0)position=findRoom(physics,position,shapes[created]);
-            selectedEntity=createLevelObject(world,labels[created],position,meshes[created],shapes[created],created==0);
+            if(created!=0 && created!=5)position=findRoom(physics,position,shapes[created]);
+            selectedEntity=createLevelObject(world,labels[created],position,meshes[created],shapes[created],created==0 || created==5);
+            if(created==5){Camera c;c.active=activeCamera(world)==Entity{};world.add(selectedEntity,c);}
         }
         bool undoRequested=false,redoRequested=false;
         bool duplicateRequested=false,copyRequested=false,pasteRequested=false,parentRequested=false;
@@ -533,6 +552,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             history.commit(world,selectedEntity);
             const bool restored=undoRequested?history.undo(world,selectedEntity):history.redo(world,selectedEntity);
             if(restored)physics.reset();
+            else if(!history.error.empty()){projectError=history.error;history.error.clear();}
         }
         const bool playbackKeys=!ImGui::GetIO().WantTextInput && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
         const bool playKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F5,ImGuiInputFlags_RouteGlobal);
@@ -579,17 +599,19 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             if(compactToolbar)ImGui::EndPopup();
         }
         ImGui::End();
-        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy)) {editor.finish(world);clicking=false;}
+        bool hierarchyFocused=false;
+        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused)) {editor.finish(world);clicking=false;}
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
         drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging());
         scripts.componentOutput=componentScripts.messages();
         scripts.draw(&layout,playMode.playing());
-        browser.draw(window,world,selectedEntity,scripts,!playMode.active());
-        ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false;
+        browser.draw(window,world,selectedEntity,scripts,editAllowed,&history);
+        ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false,sceneFocused=false;
         sceneHovered=false;sceneRect={};
         if(panelOpen[2]) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
             if(beginEditorPanel("Scene")) {
+                sceneFocused=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
                 const auto pos=ImGui::GetCursorScreenPos(),size=ImGui::GetContentRegionAvail();
                 sceneRect={pos.x,pos.y,std::max(size.x,1.0f),std::max(size.y,1.0f)};
                 layout.scene=sceneRect;sceneVisible=true;sceneDrawList=ImGui::GetWindowDrawList();
@@ -608,7 +630,31 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             }
             ImGui::End();ImGui::PopStyleVar();
         }
+        bool gameVisible=false;
+        if(panelOpen[6]) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
+            if(smokeTest && renderedFrames==0)ImGui::SetNextWindowFocus();
+            if(beginEditorPanel("Game")) {
+                const auto active=activeCamera(world);
+                if(active==Entity{})ImGui::TextUnformatted("No active camera. Create > Camera or createCamera(name).");
+                else {
+                    auto size=ImGui::GetContentRegionAvail();size.x=std::max(size.x,1.0f);size.y=std::max(size.y,1.0f);
+                    int dw=0,dh=0;SDL_GetWindowSizeInPixels(window,&dw,&dh);
+                    gameSurface.resize(static_cast<int>(size.x*dw/std::max(windowWidth,1)),static_cast<int>(size.y*dh/std::max(windowHeight,1)));
+                    world.each<Camera>([&](Entity,Camera& c){c.aspect=static_cast<float>(gameSurface.width)/gameSurface.height;});
+                    ImGui::Image(static_cast<ImTextureID>(gameSurface.texture),size,ImVec2(0,1),ImVec2(1,0));gameVisible=true;
+                }
+            }
+            ImGui::End();ImGui::PopStyleVar();
+        }
         if(!sceneVisible) {editor.finish(world);layout.scene={};}
+        if(editAllowed && (hierarchyFocused || sceneFocused) && world.alive(selectedEntity) &&
+            !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+            !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId) && ImGui::IsKeyPressed(ImGuiKey_Delete,false)) {
+            editor.finish(world);clicking=false;history.commit(world,selectedEntity);
+            deleteLevelObject(world,selectedEntity);selectedEntity={};
+            history.commit(world,selectedEntity);physics.reset();
+        }
         if (!playMode.active()) {
             updateHierarchy(world);
             history.observe(world,selectedEntity,editor.dragging() || ImGui::IsAnyItemActive() ||
@@ -636,6 +682,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         updateHierarchy(world);
         physics.update(world, playMode.playing()?seconds:0.0f, [&](float dt){ scripts.fixedUpdate(dt);componentScripts.fixedUpdate(dt);updateHierarchy(world); });
         updateHierarchy(world);
+        updateCameras(world,playMode.playing()?std::min(seconds,.25f):0);
+        updateHierarchy(world);
         physics.update(world,0); // collider poses follow parent motion before picking next frame
 
         int width = 0;
@@ -654,6 +702,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             } else {
                 selectedEntity = {};
             }
+            }
+            if(gameVisible && activeCamera(world)!=Entity{}) {
+                const auto e=activeCamera(world);const auto& c=world.get<Camera>(e);const auto& t=world.get<Transform>(e);
+                glBindFramebuffer(GL_FRAMEBUFFER,gameSurface.framebuffer);
+                try {
+                    const int x=static_cast<int>(c.viewportX*gameSurface.width),y=static_cast<int>((1-c.viewportY-c.viewportHeight)*gameSurface.height);
+                    renderer.draw(world,cameraMatrix(t,c),std::max(1,static_cast<int>(c.viewportWidth*gameSurface.width)),std::max(1,static_cast<int>(c.viewportHeight*gameSurface.height)),cameraEye(t,c),x,y,false);
+                }catch(const std::exception&){glClearColor(.1f,.1f,.1f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);}
             }
             glBindFramebuffer(GL_FRAMEBUFFER,0);glViewport(0,0,width,height);
             glDisable(GL_SCISSOR_TEST);glClearColor(.07f,.08f,.10f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);

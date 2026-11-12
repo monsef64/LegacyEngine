@@ -103,3 +103,10 @@ MeshData makeCone(float radius,float height) {
     }
     return mesh;
 }
+
+MeshData makeCameraModel() {
+    MeshData result;
+    auto box=[&](Vec3 size,Vec3 offset){auto mesh=makeBox(size);for(auto vertex:mesh.vertices){vertex.position=vertex.position+offset;result.vertices.push_back(vertex);}};
+    box({.65f,.45f,.4f},{});box({.35f,.30f,.35f},{0,0,-.35f});box({.25f,.15f,.2f},{0,.30f,0});
+    return result;
+}
