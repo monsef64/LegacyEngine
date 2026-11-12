@@ -18,6 +18,10 @@ public:
         if(saving)SDL_ShowSaveFileDialog(callback,request,window,filters,1,path.empty()?"project.legacy":path.c_str());
         else SDL_ShowOpenFileDialog(callback,request,window,filters,1,path.empty()?nullptr:path.c_str(),false);
     }
+    void showImport(SDL_Window* window) {
+        {std::lock_guard<std::mutex> lock(state_->mutex);if(state_->busy)return;state_->busy=true;}
+        SDL_ShowOpenFileDialog(callback,new Request{state_,false},window,nullptr,0,nullptr,false);
+    }
     std::optional<Result> poll() {
         std::lock_guard<std::mutex> lock(state_->mutex);
         if(!state_->result)return {};

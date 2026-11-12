@@ -11,12 +11,12 @@ namespace {
 struct Handle { LuaScene* scene; World* world; Entity entity; };
 struct Component { Handle object; int type; };
 struct Vector { Component component; char field[32]; };
-const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName"};
+const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript"};
 int componentType(lua_State* L,int index) {
     if (auto* type=static_cast<int*>(luaL_testudata(L,index,"ComponentType"))) return *type;
     const char* name=luaL_checkstring(L,index);
     if (!std::strcmp(name,"BoxCollider")) return 2;
-    for (int i=0;i<5;++i) if (!std::strcmp(name,types[i])) return i;
+    for (int i=0;i<6;++i) if (!std::strcmp(name,types[i])) return i;
     return luaL_error(L,"Unknown component type: %s",name);
 }
 Handle& handle(lua_State* L,int index) {
@@ -30,7 +30,8 @@ bool has(const Handle& h,int type) {
     case 1:return h.world->has<RigidBody>(h.entity);
     case 2:return h.world->has<Collider>(h.entity);
     case 3:return h.world->has<MeshRenderer>(h.entity);
-    default:return h.world->has<ObjectName>(h.entity);
+    case 4:return h.world->has<ObjectName>(h.entity);
+    default:return h.world->has<LuaScript>(h.entity);
     }
 }
 enum class Kind { Missing, Number, Boolean, String, Vec, Quat, Shape, Mesh };
@@ -45,6 +46,7 @@ Field field(lua_State* L,const Component& c,const char* key) {
     case 2:{auto& v=h.world->get<Collider>(h.entity); FIELD(size,Vec);FIELD(center,Vec);FIELD(friction,Number);FIELD(bounciness,Number);FIELD(radius,Number);FIELD(height,Number);FIELD(shape,Shape);break;}
     case 3:{auto& v=h.world->get<MeshRenderer>(h.entity); FIELD(color,Vec);FIELD(checkerboard,Boolean);FIELD(specular,Number);FIELD(mesh,Mesh);break;}
     case 4:{auto& v=h.world->get<ObjectName>(h.entity); FIELD(value,String);break;}
+    case 5:{auto& v=h.world->get<LuaScript>(h.entity); FIELD(path,String);FIELD(enabled,Boolean);break;}
     }
 #undef FIELD
     luaL_error(L,"Unknown %s field: %s",types[c.type],key);
@@ -91,7 +93,7 @@ LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,M
     // Opaque type tokens cannot be forged by passing a number or a table.
     luaL_newmetatable(L,"ComponentType");
     lua_pushliteral(L,"locked");lua_setfield(L,-2,"__metatable");lua_pop(L,1);
-    for (int i=0;i<5;++i) {
+    for (int i=0;i<6;++i) {
         auto* type=static_cast<int*>(lua_newuserdatauv(L,sizeof(int),0));
         *type=i;luaL_setmetatable(L,"ComponentType");
         if(i==2) { lua_pushvalue(L,-1);lua_setglobal(L,"BoxCollider"); }
@@ -149,6 +151,7 @@ int LuaScene::api(lua_State* L) {
         case 2:self.world_.each<Collider>([&](Entity e,Collider&){collect(e);});break;
         case 3:self.world_.each<MeshRenderer>([&](Entity e,MeshRenderer&){collect(e);});break;
         case 4:self.world_.each<ObjectName>([&](Entity e,ObjectName&){collect(e);});break;
+        case 5:self.world_.each<LuaScript>([&](Entity e,LuaScript&){collect(e);});break;
         }
         lua_newtable(L);int index=1;
         for(Entity e:self.query_) {self.pushObject(e);lua_rawseti(L,-2,index++);}return 1;
@@ -165,6 +168,7 @@ int LuaScene::api(lua_State* L) {
         case 2:self.world_.remove<Collider>(h.entity);break;
         case 3:self.world_.remove<MeshRenderer>(h.entity);break;
         case 4:self.world_.remove<ObjectName>(h.entity);break;
+        case 5:self.world_.remove<LuaScript>(h.entity);break;
         } return 0;
     }
     if(!has(h,type)) switch(type) {
@@ -173,6 +177,7 @@ int LuaScene::api(lua_State* L) {
     case 2:self.world_.add(h.entity,Collider{});break;
     case 3:self.world_.add(h.entity,MeshRenderer{self.meshes_[0]});break;
     case 4:self.world_.add(h.entity,ObjectName{"GameObject"});break;
+    case 5:self.world_.add(h.entity,LuaScript{});break;
     }
     component(L,h,type);return 1;
 }
@@ -301,3 +306,5 @@ void LuaScene::stop() {
     }
     entries_.clear();stopping_=false;
 }
+
+void LuaScene::setSelf(Entity entity) { pushObject(entity);lua_setglobal(state_,"self"); }

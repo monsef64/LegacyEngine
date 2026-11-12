@@ -14,8 +14,9 @@ inline bool editVector(const char* label,Vec3& value,float speed=0.05f,float min
 }
 inline bool componentHeader(const char* name) {return ImGui::CollapsingHeader(name,ImGuiTreeNodeFlags_DefaultOpen);}
 inline void drawInspector(World& world,Entity selected,const EditorRect& rect,const MeshHandle* meshes,bool editingGizmo) {
+    if(dockedEditor && !panelOpen[1])return;
     placeEditorPanel(rect);
-    if(ImGui::Begin("Inspector",nullptr,fixedPanelFlags)) {
+    if(beginEditorPanel("Inspector",fixedPanelFlags)) {
         if(!world.alive(selected))ImGui::TextDisabled("Select a GameObject in Hierarchy or Scene.");
         else {
             ImGui::PushID(static_cast<int>(selected.index));
@@ -86,12 +87,26 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 editVector("Linear velocity",rb->linearVelocity);editVector("Angular velocity",rb->angularVelocity);
                 if(ImGui::Button("Remove RigidBody"))world.remove<RigidBody>(selected);
             }
+            if(auto* script=world.tryGet<LuaScript>(selected);script && componentHeader("Lua Script")) {
+                ImGui::Checkbox("Script enabled",&script->enabled);
+                char path[4097];std::snprintf(path,sizeof(path),"%s",script->path.c_str());
+                if(ImGui::InputText("Asset path",path,sizeof(path)))script->path=path;
+                ImGui::TextDisabled("Drop a .lua asset below to assign it.");
+                if(ImGui::Button("Remove Lua Script"))world.remove<LuaScript>(selected);
+            }
+            ImGui::Button("Drop Lua script here",ImVec2(-1,32));
+            if(ImGui::BeginDragDropTarget()) {
+                if(const auto* asset=ImGui::AcceptDragDropPayload("ASSET_PATH"))
+                    attachScriptAsset(world,selected,static_cast<const char*>(asset->Data));
+                ImGui::EndDragDropTarget();
+            }
             if(ImGui::Button("Add Component"))ImGui::OpenPopup("AddComponent");
             if(ImGui::BeginPopup("AddComponent")) {
                 if(!world.has<Transform>(selected) && ImGui::MenuItem("Transform"))world.add(selected,Transform{});
                 if(!world.has<MeshRenderer>(selected) && ImGui::MenuItem("MeshRenderer"))world.add(selected,MeshRenderer{meshes[0]});
                 if(!world.has<Collider>(selected) && ImGui::MenuItem("Collider"))world.add(selected,Collider{});
                 if(!world.has<RigidBody>(selected) && ImGui::MenuItem("RigidBody"))world.add(selected,RigidBody{});
+                if(!world.has<LuaScript>(selected) && ImGui::MenuItem("Lua Script"))world.add(selected,LuaScript{});
                 ImGui::EndPopup();
             }
             ImGui::EndDisabled();ImGui::PopID();

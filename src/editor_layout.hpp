@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <cstring>
 #include <imgui.h>
 
 struct EditorRect {
@@ -30,9 +31,22 @@ struct EditorLayout {
                 {left+middle*0.55f,y+sceneHeight,middle*0.45f,bottom}};
     }
 };
+// Tests/legacy callers retain the fixed-layout fallback; the application opts in.
+inline bool dockedEditor=false;
+inline bool panelOpen[6]{true,true,true,true,true,true};
+inline const char* panelNames[]{"Hierarchy","Inspector","Scene","Lua Editor","Lua Console","Assets"};
+inline bool* panelVisibility(const char* name) {
+    if(dockedEditor)for(int i=0;i<6;++i)if(!std::strcmp(name,panelNames[i]))return &panelOpen[i];
+    return nullptr;
+}
+inline bool beginEditorPanel(const char* name,ImGuiWindowFlags fallback=0) {
+    bool* open=panelVisibility(name);
+    return ImGui::Begin(name,open,dockedEditor?0:fallback);
+}
 inline constexpr ImGuiWindowFlags fixedPanelFlags=ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
 inline void placeEditorPanel(const EditorRect& rect) {
+    if(dockedEditor)return;
     ImGui::SetNextWindowPos(ImVec2(rect.x,rect.y),ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(std::max(rect.width,1.0f),std::max(rect.height,1.0f)),ImGuiCond_Always);
 }

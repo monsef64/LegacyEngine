@@ -13,13 +13,14 @@ ScriptEditor::ScriptEditor()
 void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
 {
     const auto* viewport=ImGui::GetMainViewport();
+    if(!dockedEditor || panelOpen[3]) {
     if(layout)placeEditorPanel(layout->lua);
     else {
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x+viewport->WorkSize.x-16,viewport->WorkPos.y+16),
                             ImGuiCond_FirstUseEver,ImVec2(1,0));
     ImGui::SetNextWindowSize(ImVec2(450,320),ImGuiCond_FirstUseEver);
     }
-    if (ImGui::Begin("Lua Editor",nullptr,layout?fixedPanelFlags:0)) {
+    if (beginEditorPanel("Lua Editor",layout?fixedPanelFlags:0)) {
         ImGui::BeginDisabled(!executionEnabled);
         if (ImGui::Button("Execute")) {
             console_.execute(source_.data());
@@ -44,13 +45,15 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
     }
     ImGui::End();
 
+    }
+    if(!dockedEditor || panelOpen[4]) {
     if(layout)placeEditorPanel(layout->console);
     else {
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x+viewport->WorkSize.x-16,
                             viewport->WorkPos.y+viewport->WorkSize.y-16),ImGuiCond_FirstUseEver,ImVec2(1,1));
     ImGui::SetNextWindowSize(ImVec2(450,250),ImGuiCond_FirstUseEver);
     }
-    if (ImGui::Begin("Lua Console",nullptr,layout?fixedPanelFlags:0)) {
+    if (beginEditorPanel("Lua Console",layout?fixedPanelFlags:0)) {
         if (ImGui::Button("Clear")) console_.clear();
         ImGui::SameLine();
         ImGui::Checkbox("Auto-scroll",&autoScroll_);
@@ -64,11 +67,13 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
             ImGui::TextUnformatted(line.text.data(),line.text.data()+line.text.size());
             ImGui::PopStyleColor();
         }
+        for(const auto& line:componentOutput)ImGui::TextUnformatted(line.c_str());
         if (scrollToBottom_ || (autoScroll_ && atBottom)) ImGui::SetScrollHereY(1);
         scrollToBottom_=false;
         ImGui::EndChild();
     }
     ImGui::End();
+    }
 }
 
 int ScriptEditor::completion(ImGuiInputTextCallbackData* data) {

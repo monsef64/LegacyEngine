@@ -23,6 +23,10 @@
 #include "project_io.hpp"
 #include "project_dialog.hpp"
 #include "project_document.hpp"
+#include "asset_browser.hpp"
+#include "script_components.hpp"
+#include "dock_workspace.hpp"
+#include "scene_surface.hpp"
 #include "editor_input.hpp"
 #include "editor_history.hpp"
 #include "playback_controls.hpp"
@@ -255,6 +259,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
     EditorHistory history(world);
     PlayMode playMode;
     ObjectClipboard clipboard;
+    AssetBrowser browser;
+    ScriptComponents componentScripts;
+    SceneSurface sceneSurface;
+    EditorRect sceneRect{};
+    bool sceneHovered=false,resetWorkspace=false;
     Entity editSelection;
     TransformEditor editor;
     OrbitCamera camera;
@@ -278,20 +287,24 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
     while (running) {
         int windowWidth=1,windowHeight=1;
         SDL_GetWindowSize(window,&windowWidth,&windowHeight);
-        const EditorLayout layout=EditorLayout::calculate(static_cast<float>(windowWidth),static_cast<float>(windowHeight),std::max(20.0f,ImGui::GetFrameHeight()));
+        EditorLayout layout=EditorLayout::calculate(static_cast<float>(windowWidth),static_cast<float>(windowHeight),std::max(20.0f,ImGui::GetFrameHeight()));
+        layout.scene=sceneRect;
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL3_ProcessEvent(&event);
             const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                 event.type == SDL_EVENT_MOUSE_BUTTON_UP || event.type == SDL_EVENT_MOUSE_MOTION ||
                 event.type == SDL_EVENT_MOUSE_WHEEL;
-            if (mouseEvent && (projectDialog.pending() || ImGui::GetIO().WantCaptureMouse ||
+            if (mouseEvent && (projectDialog.pending() || browser.dialog.pending() || (ImGui::GetIO().WantCaptureMouse && !sceneHovered) ||
                 (!spawnMode && editor.capturesMouse()))) {
                 clicking = false;
                 continue;
             }
             if (event.type == SDL_EVENT_KEY_DOWN && ImGui::GetIO().WantCaptureKeyboard) continue;
             switch (event.type) {
+            case SDL_EVENT_DROP_FILE:
+                if(!playMode.active() && event.drop.data)browser.importFile(event.drop.data);
+                break;
             case SDL_EVENT_WINDOW_FOCUS_LOST:
                 editor.finish(world);
                 clicking = false;
@@ -317,7 +330,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                 // cancels a click but never moves the camera or selects/spawns.
                 if (event.motion.state & SDL_BUTTON_RMASK) {
                     clicking = false;
-                    if (freeCamera && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(event.motion.x,event.motion.y)) camera.look(event.motion.xrel, event.motion.yrel);
+                    if (freeCamera && sceneHovered && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(event.motion.x,event.motion.y)) camera.look(event.motion.xrel, event.motion.yrel);
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
@@ -352,7 +365,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             case SDL_EVENT_MOUSE_WHEEL: {
                 // Dolly in freecam; the static view ignores all navigation input.
                 float mx=0,my=0;SDL_GetMouseState(&mx,&my);
-                if (freeCamera && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(mx,my)) camera.move(event.wheel.y, 0, 0, std::abs(event.wheel.y));
+                if (freeCamera && sceneHovered && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(mx,my)) camera.move(event.wheel.y, 0, 0, std::abs(event.wheel.y));
                 break;
             }
             default:
@@ -365,7 +378,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
         bool openProject=false,saveProject=false,saveAsProject=false;
-        const bool projectEnabled=!playMode.active() && !editor.dragging() && !projectDialog.pending();
+        const bool projectEnabled=!playMode.active() && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
         if(ImGui::BeginMainMenuBar()) {
             if(ImGui::BeginMenu("File")) {
                 openProject=ImGui::MenuItem("Open Project...","Ctrl+O",false,projectEnabled);
@@ -381,7 +394,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             saveAsProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S,ImGuiInputFlags_RouteGlobal);
         }
         auto saveTo=[&](const std::string& path) {
+            auto assetRoot=std::filesystem::absolute(std::filesystem::path(path)).parent_path()/"Assets";
+            try { browser.assets.copyTo(assetRoot); }
+            catch(const std::exception& e){projectError=e.what();return;}
             if(ProjectIO::save(path,world,scripts.source(),camera,projectMeshes,projectError)) {
+                browser.assets.root=assetRoot;
                 currentProject=path;
                 savedProjectState=projectContentState(world,scripts.source(),camera);
                 projectDirty=false;
@@ -413,7 +430,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                 } else {
                     std::string source;World loadedWorld;OrbitCamera loadedCamera;
                     if(ProjectIO::load(result->path,loadedWorld,source,loadedCamera,projectMeshes,projectError)) {
-                        scripts.shutdown();world.restore(loadedWorld);camera=loadedCamera;
+                        componentScripts.stop();scripts.shutdown();world.restore(loadedWorld);camera=loadedCamera;
+                        browser.setRoot(std::filesystem::absolute(result->path).parent_path()/"Assets");
                         scripts.resetRuntime();scripts.setSource(source);
                         selectedEntity={};history=EditorHistory(world);physics.reset();
                         clicking=false;spawnMode=false;currentProject=result->path;
@@ -427,7 +445,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,"Project error",projectError.c_str(),window);
             projectError.clear();
         }
-        ImGui::BeginDisabled(projectDialog.pending());
+        if(ImGui::BeginMainMenuBar()) {
+            if(ImGui::BeginMenu("Windows")) {
+                for(int i=0;i<6;++i)ImGui::MenuItem(panelNames[i],nullptr,&panelOpen[i]);
+                ImGui::Separator();if(ImGui::MenuItem("Reset layout"))resetWorkspace=true;
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+        drawWorkspace(layout.toolbar,resetWorkspace);
+        ImGui::BeginDisabled(projectDialog.pending() || browser.dialog.pending());
         const int created=drawCreateMenu();
         if(created>=0) {
             editor.finish(world);spawnMode=false;clicking=false;
@@ -441,7 +468,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         }
         bool undoRequested=false,redoRequested=false;
         bool duplicateRequested=false,copyRequested=false,pasteRequested=false,parentRequested=false;
-        const bool editAllowed=!playMode.active() && !editor.dragging() && !projectDialog.pending();
+        const bool editAllowed=!playMode.active() && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
         const bool objectSelected=world.alive(selectedEntity);
         if(ImGui::BeginMainMenuBar()) {
             if(ImGui::BeginMenu("Edit")) {
@@ -468,8 +495,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             pasteRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_V,flags);
             parentRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_P,flags);
         }
-        placeEditorPanel(layout.toolbar);
-        ImGui::Begin("Scene controls",nullptr,fixedPanelFlags | ImGuiWindowFlags_NoTitleBar);
+        ImGui::SetNextWindowPos(ImVec2(layout.toolbar.x,layout.toolbar.y));
+        ImGui::SetNextWindowSize(ImVec2(layout.toolbar.width,layout.toolbar.height));
+        ImGui::Begin("Scene controls",nullptr,fixedPanelFlags | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoDocking);
         if(editAllowed) {
             if(copyRequested && objectSelected)clipboard.copy(world,selectedEntity);
             if((duplicateRequested && objectSelected) || (pasteRequested && clipboard.available())) {
@@ -506,7 +534,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             const bool restored=undoRequested?history.undo(world,selectedEntity):history.redo(world,selectedEntity);
             if(restored)physics.reset();
         }
-        const bool playbackKeys=!ImGui::GetIO().WantTextInput && !editor.dragging() && !projectDialog.pending();
+        const bool playbackKeys=!ImGui::GetIO().WantTextInput && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
         const bool playKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F5,ImGuiInputFlags_RouteGlobal);
         const bool pauseKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F6,ImGuiInputFlags_RouteGlobal);
         const bool stopKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F7,ImGuiInputFlags_RouteGlobal);
@@ -517,7 +545,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             editor.finish(world); clicking=false;
             editSelection=selectedEntity;
             history.commit(world,selectedEntity);
-            if (playMode.play(world)) { physics.reset(); scripts.startPlay(); }
+            if (playMode.play(world)) { physics.reset(); scripts.startPlay();
+                const MeshHandle runtimeMeshes[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
+                componentScripts.start(world,browser.assets,runtimeMeshes); }
         }
         ImGui::EndDisabled(); ImGui::SameLine();
         ImGui::BeginDisabled(!playMode.active());
@@ -528,7 +558,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         if (playbackButton("##Stop","Stop (F7)",PlaybackIcon::Stop) || (stopKey && playMode.active())) {
             editor.finish(world); clicking=false;
             // Run stop callbacks before restoring, so their edits are discarded too.
-            scripts.shutdown();
+            componentScripts.stop();scripts.shutdown();
             playMode.stop(world);
             physics.reset(); scripts.resetRuntime();
             selectedEntity=world.alive(editSelection)?editSelection:Entity{};
@@ -552,20 +582,33 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy)) {editor.finish(world);clicking=false;}
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
         drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging());
+        scripts.componentOutput=componentScripts.messages();
         scripts.draw(&layout,playMode.playing());
-        // A non-interactive Scene title is drawn over the actual GL viewport.
-        ImGui::GetBackgroundDrawList()->AddText(ImVec2(layout.scene.x+8,layout.scene.y+6),IM_COL32(170,180,190,255),"Scene");
-        int drawableWidth=0, drawableHeight=0;
-        SDL_GetWindowSizeInPixels(window,&drawableWidth,&drawableHeight);
-        if (drawableWidth>0 && drawableHeight>0) {
-            const auto pixels=scenePixels(layout.scene,windowWidth,windowHeight,drawableWidth,drawableHeight);
-            const EditorRect gizmoRect{static_cast<float>(pixels.x)*windowWidth/drawableWidth,
-                static_cast<float>(pixels.top)*windowHeight/drawableHeight,
-                static_cast<float>(pixels.width)*windowWidth/drawableWidth,
-                static_cast<float>(pixels.height)*windowHeight/drawableHeight};
-            editor.draw(world,selectedEntity,!spawnMode,camera,pixels.aspect(),&gizmoRect);
-            if (editor.capturesMouse()) clicking=false;
-        } else editor.finish(world);
+        browser.draw(window,world,selectedEntity,scripts,!playMode.active());
+        ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false;
+        sceneHovered=false;sceneRect={};
+        if(panelOpen[2]) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
+            if(beginEditorPanel("Scene")) {
+                const auto pos=ImGui::GetCursorScreenPos(),size=ImGui::GetContentRegionAvail();
+                sceneRect={pos.x,pos.y,std::max(size.x,1.0f),std::max(size.y,1.0f)};
+                layout.scene=sceneRect;sceneVisible=true;sceneDrawList=ImGui::GetWindowDrawList();
+                int dw=0,dh=0;SDL_GetWindowSizeInPixels(window,&dw,&dh);
+                auto pixels=scenePixels(sceneRect,windowWidth,windowHeight,dw,dh);
+                sceneSurface.resize(pixels.width,pixels.height);
+                ImGui::Image(static_cast<ImTextureID>(sceneSurface.texture),ImVec2(sceneRect.width,sceneRect.height),ImVec2(0,1),ImVec2(1,0));
+                sceneHovered=ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && ImGui::IsItemHovered();
+                if(ImGui::BeginDragDropTarget()) {
+                    if(const auto* asset=ImGui::AcceptDragDropPayload("ASSET_PATH"))
+                        attachScriptAsset(world,selectedEntity,static_cast<const char*>(asset->Data));
+                    ImGui::EndDragDropTarget();
+                }
+                editor.draw(world,selectedEntity,!spawnMode,camera,static_cast<float>(sceneSurface.width)/sceneSurface.height,&sceneRect,sceneDrawList);
+                if(editor.capturesMouse())clicking=false;
+            }
+            ImGui::End();ImGui::PopStyleVar();
+        }
+        if(!sceneVisible) {editor.finish(world);layout.scene={};}
         if (!playMode.active()) {
             updateHierarchy(world);
             history.observe(world,selectedEntity,editor.dragging() || ImGui::IsAnyItemActive() ||
@@ -580,7 +623,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         lastTicks            = ticks;
 
         float mouseX=0,mouseY=0;SDL_GetMouseState(&mouseX,&mouseY);
-        if (freeCamera && !projectDialog.pending() && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(mouseX,mouseY) && !editor.dragging() && !ImGui::GetIO().WantCaptureKeyboard &&
+        if (freeCamera && sceneHovered && !browser.dialog.pending() && !projectDialog.pending() && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(mouseX,mouseY) && !editor.dragging() && !ImGui::GetIO().WantCaptureKeyboard &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             const float speed = 5.0f;
@@ -589,9 +632,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                         static_cast<float>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],
                         speed * std::min(seconds, 0.1f));
         }
-        if (playMode.playing()) scripts.update(std::min(seconds,0.25f));
+        if (playMode.playing()) {scripts.update(std::min(seconds,0.25f));componentScripts.update(std::min(seconds,0.25f));}
         updateHierarchy(world);
-        physics.update(world, playMode.playing()?seconds:0.0f, [&](float dt){ scripts.fixedUpdate(dt);updateHierarchy(world); });
+        physics.update(world, playMode.playing()?seconds:0.0f, [&](float dt){ scripts.fixedUpdate(dt);componentScripts.fixedUpdate(dt);updateHierarchy(world); });
         updateHierarchy(world);
         physics.update(world,0); // collider poses follow parent motion before picking next frame
 
@@ -599,10 +642,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         int height = 0;
         SDL_GetWindowSizeInPixels(window, &width, &height);
         if (width > 0 && height > 0) {
-            const auto pixels=scenePixels(layout.scene,windowWidth,windowHeight,width,height);
-            const float aspect=pixels.aspect();
+            if(sceneVisible) {
+            glBindFramebuffer(GL_FRAMEBUFFER,sceneSurface.framebuffer);
+            const float aspect=static_cast<float>(sceneSurface.width)/sceneSurface.height;
             const Mat4 viewProjection = camera.viewProjection(aspect);
-            renderer.draw(world, viewProjection, pixels.width, pixels.height, camera.position(),pixels.x,pixels.bottom(height));
+            renderer.draw(world, viewProjection, sceneSurface.width, sceneSurface.height, camera.position());
             if (!spawnMode && world.alive(selectedEntity)) {
                 const auto* transform = world.tryGet<Transform>(selectedEntity);
                 const auto* collider = world.tryGet<Collider>(selectedEntity);
@@ -610,6 +654,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             } else {
                 selectedEntity = {};
             }
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER,0);glViewport(0,0,width,height);
+            glDisable(GL_SCISSOR_TEST);glClearColor(.07f,.08f,.10f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         }
 
@@ -628,7 +675,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         }
     }
     editor.finish(world);
-    scripts.shutdown();
+    componentScripts.stop();scripts.shutdown();
     return !smokeTest || renderedFrames >= smokeFrames;
 }
 
@@ -669,7 +716,9 @@ int main(int argc, char** argv)
     if (rendererReady) {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
-        ImGui::GetIO().IniFilename = nullptr;
+        ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        dockedEditor=true;
+        ImGui::GetIO().IniFilename = "legacy-layout.ini";
         applyEditorTheme();
         if (!ImGui_ImplSDL3_InitForOpenGL(window, context) ||
             !ImGui_ImplOpenGL3_Init("#version 330 core")) {

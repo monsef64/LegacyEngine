@@ -21,7 +21,7 @@ public:
         heldEntity_ = {};
         dragging_ = hovered_ = false;
     }
-    void draw(World& world, Entity entity, bool enabled, const OrbitCamera& camera, float aspect,const EditorRect* scene=nullptr);
+    void draw(World& world, Entity entity, bool enabled, const OrbitCamera& camera, float aspect,const EditorRect* scene=nullptr, ImDrawList* drawList=nullptr);
 
 private:
     TransformTool tool_ = TransformTool::Move;

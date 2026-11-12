@@ -82,7 +82,7 @@ target_include_directories(glad SYSTEM PUBLIC third_party/glad/include)
 # --- Dear ImGui (SDL3 + OpenGL3 backends) -----------------------------------
 FetchContent_Declare(imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG v1.92.5
+  GIT_TAG v1.92.5-docking
   GIT_SHALLOW TRUE)
 FetchContent_MakeAvailable(imgui)
 add_library(legacy_imgui STATIC
@@ -261,4 +261,16 @@ if(BUILD_TESTING)
     target_compile_options(editor_document_tests PRIVATE -UNDEBUG)
   endif()
   add_test(NAME editor_document COMMAND editor_document_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(assets_scripts_tests tests/assets_scripts.cpp)
+  target_include_directories(assets_scripts_tests PRIVATE src)
+  target_link_libraries(assets_scripts_tests PRIVATE lua_console legacy_imgui)
+  if(MSVC)
+    target_compile_options(assets_scripts_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(assets_scripts_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME assets_scripts COMMAND assets_scripts_tests)
 endif()

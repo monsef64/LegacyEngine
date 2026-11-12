@@ -11,6 +11,7 @@ class LuaScene {
 public:
     LuaScene(lua_State* state, World& world, MeshHandle cube, MeshHandle sphere, MeshHandle capsule, MeshHandle cone,
              std::function<void(std::string_view)> error);
+    void setSelf(Entity entity);
     void start();
     void update(float dt);
     void fixedUpdate(float dt);

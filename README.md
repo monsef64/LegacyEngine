@@ -42,12 +42,17 @@ still work. Switching modes preserves your view.
 
 ### Editor layout and Inspector
 
-The UI uses a fixed, Unity-style layout that follows the window size rather than movable floating
-panels: Create menu and scene controls at the top, **Hierarchy** on the left, **Scene** in the
-center, **Inspector** on the right, and **Lua Editor / Lua Console** below the Scene. Camera
-navigation, picking and gizmos use only the Scene area, including on high-DPI displays. Hover the
-Scene to use freecam keyboard movement. The panels currently use fixed proportions, not draggable
-docking splitters.
+The editor uses Dear ImGui docking. **Hierarchy**, **Scene**, **Inspector**,
+**Assets**, **Lua Editor**, and **Lua Console** can be rearranged by dragging
+their tabs/title bars, docked beside or tabbed with other panels, resized, floated
+inside the application, or closed with their X button. Restore panels from
+**Windows**, or choose **Windows > Reset layout** for the default arrangement.
+Layout positions are remembered in `legacy-layout.ini` in the working directory.
+Floating panels remain inside the engine's main OS window (not separate OS windows).
+
+The Scene renders into its own texture, so docking and floating panels do not
+cover or corrupt the 3D framebuffer. Camera input, picking, and gizmos follow
+the Scene content rectangle, including high-DPI displays.
 
 Select an object to inspect its existing components:
 
@@ -419,7 +424,7 @@ The editor uses a slate-dark ImGui theme with blue interaction accents, rounded
 input controls, and flat panel borders. Bundled Roboto Regular at 16 px replaces
 the small bitmap default; oversampled glyphs and anti-aliased UI geometry improve
 legibility. The font is embedded in the executable (no external font installation
-or asset folder required). Its Apache 2.0 license is in `third_party/roboto/LICENSE`.
+required). Its Apache 2.0 license is in `third_party/roboto/LICENSE`.
 
 ### Play mode and Hierarchy actions
 
@@ -524,7 +529,7 @@ Undoing back to the saved state clears it. Play-mode simulation is not counted
 as an edit to the saved scene. There is no persistent "Project saved" status
 message in the menu bar.
 
-A project is a versioned, single text file containing all scene GameObjects,
+A project is a versioned text file with an accompanying `Assets/` directory, containing all scene GameObjects,
 names, transforms, built-in mesh/material properties, colliders, rigid bodies,
 parent relationships, the Lua Editor source, and camera view. Built-in meshes
 are stored by stable catalog index rather than graphics-driver handles. Runtime
@@ -536,7 +541,7 @@ resets physics and the Lua runtime, and clears scene undo history; save existing
 work first. Invalid or unsupported files leave the current project intact.
 Saves are validated and written to a temporary sibling file before replacing
 the destination, so serialization/write failures do not truncate an existing
-project. Errors are shown in a system message box. Version 1 limits projects to
+project. Errors are shown in a system message box. Projects are limited to
 10,000 objects, 16 MiB total, and 64 KiB of Lua source.
 
 Duplicate and Paste use numbered names: `GameObject` becomes `GameObject (2)`,
@@ -547,3 +552,58 @@ On Linux, native file selection uses SDL's desktop portal or a supported system
 dialog backend (for example Zenity). A desktop session with a working picker
 backend is required; unavailable pickers report an error instead of falling
 back to the old typed-path dialog.
+
+### Assets and attached Lua scripts
+
+The **Assets** panel manages the `Assets/` directory next to the open project
+(or in the working directory for an untitled scene). Use **Import...**, or drop
+individual files from your system file explorer onto the engine to copy them
+into Assets. Existing filenames are preserved with numbered collision suffixes.
+The browser displays file-type badges for Lua, images, models, audio, projects,
+text, and other files. Right-click assets to rename or delete them; renaming
+updates matching Lua Script component references in the current scene. Deletion
+is confirmed and may leave missing references. Asset file operations are not
+part of scene Undo/Redo. Import is limited to individual files up to 256 MiB;
+folder import and media/model rendering or thumbnails are not implemented.
+
+Choose **New Lua** to create a template. Double-click a Lua asset to edit it in
+the Lua Editor, then use **Save Lua asset** in Assets to write edits to disk.
+Project Save stores the editor source but does not implicitly overwrite a Lua
+asset; save the asset before playing to run its latest disk contents.
+
+Drag a Lua asset onto a Hierarchy GameObject, the Inspector's script drop area,
+or the Scene with a selected GameObject to attach it. You can also use
+**Add Component > Lua Script**, enter a relative asset path, and toggle Enabled.
+There is currently one Lua Script component per GameObject. Attaching another
+replaces its path. Script components participate in duplicate, copy/paste,
+scene Undo/Redo, project Save/Open, and Play/Stop scene restoration.
+
+Each enabled component runs in an isolated, budgeted Lua state. `self` is the
+owning GameObject; the usual lifecycle functions execute on Play:
+
+```lua
+function onStart()
+    print("Started", self.name)
+end
+function onUpdate(dt)
+    local transform = self.getComponent(Transform)
+    transform.position.x = transform.position.x + dt
+end
+function onFixedUpdate(dt)
+    -- Physics-step logic
+end
+function onDestroy()
+    print("Stopped")
+end
+```
+
+Pause freezes callbacks, Stop runs teardown and restores the edit scene. Script
+errors and output appear in Lua Console with the asset path. Missing scripts
+report errors without crashing the editor; at most 128 component runtimes are
+active. The existing Lua Editor Execute/runtime remains separate. Components
+are accessible through `self.getComponent(LuaScript).path` and `.enabled`.
+
+Project format version 2 stores script references; version 1 projects still
+load. Save As copies the current asset tree into the destination's `Assets/`
+directory and refuses conflicting files instead of replacing them silently.
+Distribute the `.legacy` file together with its `Assets/` directory.
