@@ -1,10 +1,10 @@
-#include "level_objects.hpp"
-#include "asset_browser.hpp"
-#include "script_components.hpp"
-#include "project_io.hpp"
-#include "editor_history.hpp"
-#include "play_mode.hpp"
-#include "dock_workspace.hpp"
+#include "editor/level_objects.hpp"
+#include "editor/asset_browser.hpp"
+#include "scripting/script_components.hpp"
+#include "project/project_io.hpp"
+#include "editor/editor_history.hpp"
+#include "editor/play_mode.hpp"
+#include "editor/dock_workspace.hpp"
 #include <cassert>
 
 int main() {

@@ -1,8 +1,9 @@
-#include "script_editor.hpp"
+#include "editor/script_editor.hpp"
 #include <imgui.h>
 #include <cstdio>
 #include <cstdlib>
 
+static std::string clipboard;
 static void require(bool ok,const char* message)
 {
     if (!ok) { std::fprintf(stderr,"FAIL: %s\n",message); std::exit(1); }
@@ -16,6 +17,7 @@ int main()
     io.DeltaTime=1.0f/60;
     unsigned char* pixels; int width,height;
     io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
+    ImGui::GetPlatformIO().Platform_SetClipboardTextFn=+[](ImGuiContext*,const char* text){clipboard=text;};
     ScriptEditor editor;
     require(editor.source().empty(),"new editor has no example snippet");
     editor.setSource("print(\"Hello from Lua!\")");
@@ -31,6 +33,8 @@ int main()
     for (const auto& line:editor.console().lines())
         if (line.kind==LuaConsole::Kind::Output && line.text=="lua > Hello from Lua!") hello=true;
     require(hello,"Execute button sends script output to console");
+    for(float x=970;x<1130 && clipboard.empty();x+=8)click(x,492);
+    require(clipboard.find("Hello from Lua!")!=std::string::npos,"Copy all copies console output");
     click(840,492); // Clear in the default bottom-right Lua Console.
     require(editor.console().lines().empty(),"console Clear button empties transcript");
     io.AddMousePosEvent(900,140); frame();

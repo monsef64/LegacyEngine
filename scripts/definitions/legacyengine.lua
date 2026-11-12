@@ -212,7 +212,7 @@ GameObject = nil
 ---@type CameraConstructor
 Camera = nil
 
----@alias AudioClip string Project-relative WAV path
+---@alias AudioClip string Project-relative WAV or MP3 path
 ---@class AudioSource
 ---@field clip AudioClip
 ---@field play fun(self:AudioSource)
@@ -233,7 +233,7 @@ Camera = nil
 ---@field isPlaying fun(self:AudioSource):boolean
 ---@field playOneShot fun(self:AudioSource,clip:AudioClip)
 AudioSource = nil
----@param path string Project-relative WAV asset
+---@param path string Project-relative WAV or MP3 asset
 ---@return AudioClip
 function AudioClip(path) end
 ---@param owner? GameObject Defaults to attached self
@@ -244,3 +244,71 @@ function createAudioSource(owner,clip) end
 ---@class AudioListener
 ---@field enabled boolean
 AudioListener = nil
+
+-- Input snapshots are shared across attached scripts for the current render frame.
+---@class Vec2
+---@field x number
+---@field y number
+---@param key string|integer SDL key name or scancode
+---@return boolean
+function isKeyPressed(key) end
+---@param key string|integer SDL key name or scancode
+---@return boolean
+function isKeyDown(key) end
+---@param key string|integer SDL key name or scancode
+---@return boolean
+function isKeyReleased(key) end
+---@param button string|integer left/middle/right or SDL button number
+---@return boolean
+function isMouseButtonPressed(button) end
+---@param button string|integer left/middle/right or SDL button number
+---@return boolean
+function isMouseButtonDown(button) end
+---@param button string|integer left/middle/right or SDL button number
+---@return boolean
+function isMouseButtonReleased(button) end
+---@return Vec2
+function getMousePosition() end
+---@return Vec2
+function getMouseDelta() end
+---@return Vec2
+function getMouseWheelDelta() end
+---@param negativeButton string Project button name
+---@param positiveButton string Project button name
+---@return number
+function getInputAxis(negativeButton,positiveButton) end
+---@param leftButton string
+---@param rightButton string
+---@param downButton string
+---@param upButton string
+---@return Vec2
+function getInputVector(leftButton,rightButton,downButton,upButton) end
+---@param button string|integer SDL button name or enum value
+---@return boolean
+function isGamepadButtonPressed(button) end
+---@param button string|integer SDL button name or enum value
+---@return boolean
+function isGamepadButtonDown(button) end
+---@param axis string|integer SDL axis name or enum value
+---@return number
+function getGamepadAxis(axis) end
+---@param stick? 'left'|'right'
+---@return Vec2
+function getGamepadStick(stick) end
+---@param name string Defined in Project > Input Settings
+---@return boolean
+function isButtonPressed(name) end
+---@param name string Defined in Project > Input Settings
+---@return boolean
+function isButtonReleased(name) end
+---@param name string Defined in Project > Input Settings
+---@return boolean
+function isButtonDown(name) end
+
+-- Restricted logging facade; not Lua's standard debug library.
+---@class LegacyDebug
+---@field log fun(...:any)
+---@field error fun(...:any)
+---@field warning fun(...:any)
+---@type LegacyDebug
+debug = nil

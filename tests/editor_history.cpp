@@ -1,7 +1,7 @@
-#include "editor_history.hpp"
-#include "play_mode.hpp"
-#include "level_objects.hpp"
-#include "playback_controls.hpp"
+#include "editor/editor_history.hpp"
+#include "editor/play_mode.hpp"
+#include "editor/level_objects.hpp"
+#include "editor/playback_controls.hpp"
 #include <cassert>
 
 int main() {

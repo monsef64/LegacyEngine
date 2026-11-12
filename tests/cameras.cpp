@@ -1,10 +1,10 @@
-#include "scene_camera.hpp"
-#include "project_io.hpp"
-#include "editor_history.hpp"
-#include "lua_console.hpp"
-#include "play_mode.hpp"
-#include "level_objects.hpp"
-#include "mesh.hpp"
+#include "scene/scene_camera.hpp"
+#include "project/project_io.hpp"
+#include "editor/editor_history.hpp"
+#include "scripting/lua_console.hpp"
+#include "editor/play_mode.hpp"
+#include "editor/level_objects.hpp"
+#include "rendering/mesh.hpp"
 #include <cassert>
 #include <cstdio>
 

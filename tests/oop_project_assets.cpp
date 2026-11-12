@@ -1,7 +1,7 @@
-#include "lua_console.hpp"
-#include "asset_browser.hpp"
-#include "project_assets.hpp"
-#include "project_io.hpp"
+#include "scripting/lua_console.hpp"
+#include "editor/asset_browser.hpp"
+#include "project/project_assets.hpp"
+#include "project/project_io.hpp"
 #include <cassert>
 #include <cstdio>
 
@@ -67,12 +67,12 @@ int main() {
     const auto temp=std::filesystem::temp_directory_path()/
         ("legacy-owned-assets-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(temp);
-    const auto first=temp/"First.legacy",second=temp/"Second.legacy";
+    const auto first=temp/"First"/"First.legacy",second=temp/"Second"/"Second.legacy";
     assert(projectAssetsPath(first)!=projectAssetsPath(second));
     std::filesystem::path staging;
     {
         AssetBrowser browser;staging=browser.assets.root;
-        assert(staging.parent_path()==std::filesystem::temp_directory_path());
+        assert(staging.parent_path().parent_path()==std::filesystem::temp_directory_path());
         assert(staging!=std::filesystem::current_path()/"Assets");
         browser.assets.writeScript("Move.lua","print('first')");
         browser.assets.copyTo(projectAssetsPath(first));
@@ -86,9 +86,9 @@ int main() {
     const ProjectIO::Meshes meshes{MeshHandle{1},MeshHandle{2},MeshHandle{3},MeshHandle{4},MeshHandle{5},MeshHandle{6}};
     World project;OrbitCamera camera;std::string error,source,directory;
     assert(ProjectIO::save(first.string(),project,"",camera,meshes,error));
-    auto renamed=temp/"Renamed.legacy";std::filesystem::rename(first,renamed);
+    auto renamed=first.parent_path()/"Renamed.legacy";std::filesystem::rename(first,renamed);
     assert(ProjectIO::load(renamed.string(),project,source,camera,meshes,error,&directory));
-    assert(directory=="First.legacy.assets");
+    assert(directory=="Assets");
     assert(std::filesystem::exists(renamed.parent_path()/directory/"Move.lua"));
     // Legacy projects still locate their original sibling Assets directory.
     std::filesystem::create_directories(temp/"Assets");

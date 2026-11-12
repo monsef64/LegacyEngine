@@ -115,5 +115,14 @@
   },
   "AudioListener": {
     "enabled": "boolean"
+  },
+  "Vec2": {
+    "x": "number",
+    "y": "number"
+  },
+  "LegacyDebug": {
+    "log": "fun(...:any)",
+    "error": "fun(...:any)",
+    "warning": "fun(...:any)"
   }
 }

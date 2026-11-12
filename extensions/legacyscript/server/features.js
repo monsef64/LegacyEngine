@@ -5,6 +5,7 @@ const objectMembers = { ...members.GameObject, ...members.CameraObject, ...membe
 function memberTable(receiver) {
   if (receiver === 'GameObject') return members.GameObjectConstructor;
   if (receiver === 'Camera') return members.CameraConstructor;
+  if (receiver === 'debug') return members.LegacyDebug;
   return objectMembers;
 }
 function completion(doc, position) {

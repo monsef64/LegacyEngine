@@ -114,19 +114,23 @@ target_include_directories(legacy_lua SYSTEM PUBLIC ${lua_SOURCE_DIR})
 if(UNIX)
   target_link_libraries(legacy_lua PUBLIC m)
 endif()
-add_library(lua_console STATIC src/lua_console.cpp src/lua_scene.cpp)
+add_library(legacy_audio STATIC src/audio/audio_clip.cpp)
+target_include_directories(legacy_audio PUBLIC src PRIVATE third_party/dr_libs)
+target_link_libraries(legacy_audio PUBLIC SDL3::SDL3)
+
+add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_scene.cpp src/scripting/lua_input.cpp)
 target_include_directories(lua_console PUBLIC src)
-target_link_libraries(lua_console PUBLIC legacy_lua)
+target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio)
 
 # --- LegacyEngine -----------------------------------------------------------
 
 add_executable(LegacyEngine
-  src/main.cpp
-  src/mesh.cpp
-  src/physics.cpp
-  src/renderer.cpp
-  src/transform_editor.cpp
-  src/script_editor.cpp
+  src/app/main.cpp
+  src/rendering/mesh.cpp
+  src/physics/physics.cpp
+  src/rendering/renderer.cpp
+  src/editor/transform_editor.cpp
+  src/editor/script_editor.cpp
 )
 # Embed the UI font so release binaries need no external asset directory.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
@@ -149,14 +153,14 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
-  add_executable(shape_tests tests/shapes.cpp src/mesh.cpp src/physics.cpp)
+  add_executable(shape_tests tests/shapes.cpp src/rendering/mesh.cpp src/physics/physics.cpp)
   target_include_directories(shape_tests PRIVATE src)
   target_link_libraries(shape_tests PRIVATE ReactPhysics3D::reactphysics3d)
   add_test(NAME shapes COMMAND shape_tests)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(transform_editor_tests tests/transform_editor.cpp src/transform_editor.cpp)
+  add_executable(transform_editor_tests tests/transform_editor.cpp src/editor/transform_editor.cpp)
   target_include_directories(transform_editor_tests PRIVATE src)
   target_link_libraries(transform_editor_tests PRIVATE imguizmo)
   add_test(NAME transform_editor COMMAND transform_editor_tests)
@@ -170,7 +174,7 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(script_editor_tests tests/script_editor.cpp src/script_editor.cpp)
+  add_executable(script_editor_tests tests/script_editor.cpp src/editor/script_editor.cpp)
   target_link_libraries(script_editor_tests PRIVATE lua_console legacy_imgui)
   add_test(NAME script_editor COMMAND script_editor_tests)
 endif()
@@ -183,21 +187,21 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(lua_scene_tests tests/lua_scene.cpp src/physics.cpp)
+  add_executable(lua_scene_tests tests/lua_scene.cpp src/physics/physics.cpp)
   target_link_libraries(lua_scene_tests PRIVATE lua_console ReactPhysics3D::reactphysics3d)
   add_test(NAME lua_scene COMMAND lua_scene_tests)
   set_tests_properties(lua_scene PROPERTIES TIMEOUT 15)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(create_hierarchy_tests tests/create_hierarchy.cpp src/physics.cpp src/mesh.cpp)
+  add_executable(create_hierarchy_tests tests/create_hierarchy.cpp src/physics/physics.cpp src/rendering/mesh.cpp)
   target_include_directories(create_hierarchy_tests PRIVATE src)
   target_link_libraries(create_hierarchy_tests PRIVATE legacy_imgui ReactPhysics3D::reactphysics3d)
   add_test(NAME create_hierarchy COMMAND create_hierarchy_tests)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(editor_layout_tests tests/editor_layout.cpp src/physics.cpp)
+  add_executable(editor_layout_tests tests/editor_layout.cpp src/physics/physics.cpp)
   target_include_directories(editor_layout_tests PRIVATE src)
   target_link_libraries(editor_layout_tests PRIVATE imguizmo ReactPhysics3D::reactphysics3d)
   add_test(NAME editor_layout COMMAND editor_layout_tests)
@@ -217,7 +221,7 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(play_mode_tests tests/play_mode.cpp src/physics.cpp)
+  add_executable(play_mode_tests tests/play_mode.cpp src/physics/physics.cpp)
   target_include_directories(play_mode_tests PRIVATE src)
   target_link_libraries(play_mode_tests PRIVATE legacy_imgui ReactPhysics3D::reactphysics3d)
   if(MSVC)
@@ -276,7 +280,7 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(asset_trash_tests tests/asset_trash.cpp src/script_editor.cpp)
+  add_executable(asset_trash_tests tests/asset_trash.cpp src/editor/script_editor.cpp)
   target_include_directories(asset_trash_tests PRIVATE src)
   target_link_libraries(asset_trash_tests PRIVATE lua_console legacy_imgui)
   if(MSVC)
@@ -288,7 +292,7 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(camera_tests tests/cameras.cpp src/mesh.cpp)
+  add_executable(camera_tests tests/cameras.cpp src/rendering/mesh.cpp)
   target_include_directories(camera_tests PRIVATE src)
   target_link_libraries(camera_tests PRIVATE lua_console legacy_imgui)
   if(MSVC)
@@ -312,7 +316,7 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(editor_polish_tests tests/editor_polish.cpp src/mesh.cpp src/script_editor.cpp)
+  add_executable(editor_polish_tests tests/editor_polish.cpp src/rendering/mesh.cpp src/editor/script_editor.cpp)
   target_include_directories(editor_polish_tests PRIVATE src)
   target_link_libraries(editor_polish_tests PRIVATE lua_console legacy_imgui)
   if(MSVC)
@@ -335,7 +339,7 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(script_exports_tests tests/script_exports.cpp src/script_editor.cpp)
+  add_executable(script_exports_tests tests/script_exports.cpp src/editor/script_editor.cpp)
   target_link_libraries(script_exports_tests PRIVATE lua_console legacy_imgui)
   if(MSVC)
     target_compile_options(script_exports_tests PRIVATE /UNDEBUG)
@@ -343,4 +347,16 @@ if(BUILD_TESTING)
     target_compile_options(script_exports_tests PRIVATE -UNDEBUG)
   endif()
   add_test(NAME script_exports COMMAND script_exports_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(input_audio_tests tests/input_audio.cpp)
+  target_link_libraries(input_audio_tests PRIVATE lua_console legacy_imgui)
+  target_compile_definitions(input_audio_tests PRIVATE TEST_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+  if(MSVC)
+    target_compile_options(input_audio_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(input_audio_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME input_audio COMMAND input_audio_tests)
 endif()

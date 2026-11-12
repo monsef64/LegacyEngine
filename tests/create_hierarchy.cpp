@@ -1,6 +1,6 @@
-#include "create_menu.hpp"
-#include "hierarchy.hpp"
-#include "physics.hpp"
+#include "editor/create_menu.hpp"
+#include "core/hierarchy.hpp"
+#include "physics/physics.hpp"
 #include <cstdio>
 #include <cstdlib>
 
