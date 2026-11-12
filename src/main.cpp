@@ -260,6 +260,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
     ColliderShape selected = ColliderShape::Box;
     bool spawnMode = false;
     bool freeCamera = true;
+    float cameraBoost=3.0f;
     Entity selectedEntity;
     ScriptEditor scripts;
     scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh);
@@ -354,7 +355,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                             float closest=found?hit.distance:kClickReach;
                             world.each<Camera,Transform>([&](Entity e,Camera&,Transform& t){
                                 const auto offset=ray.origin-t.position;
-                                const float radius=.6f*std::max({std::abs(t.scale.x),std::abs(t.scale.y),std::abs(t.scale.z)});
+                                const float radius=1.1f*std::max({std::abs(t.scale.x),std::abs(t.scale.y),std::abs(t.scale.z)});
                                 const float b=dot(offset,ray.direction),disc=b*b-dot(offset,offset)+radius*radius;
                                 if(disc>=0){float distance=-b-std::sqrt(disc);if(distance<0)distance=-b+std::sqrt(disc);
                                     if(distance>=0 && distance<closest){closest=distance;selectedEntity=e;}}
@@ -381,7 +382,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             case SDL_EVENT_MOUSE_WHEEL: {
                 // Dolly in freecam; the static view ignores all navigation input.
                 float mx=0,my=0;SDL_GetMouseState(&mx,&my);
-                if (freeCamera && sceneHovered && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(mx,my)) camera.move(event.wheel.y, 0, 0, std::abs(event.wheel.y));
+                if (freeCamera && sceneHovered && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(mx,my)) {
+                    if(SDL_GetModState()&SDL_KMOD_SHIFT)cameraBoost=adjustSceneCameraBoost(cameraBoost,event.wheel.y);
+                    else camera.move(event.wheel.y,0,0,std::abs(event.wheel.y));
+                }
                 break;
             }
             default:
@@ -463,18 +467,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,"Project error",projectError.c_str(),window);
             projectError.clear();
         }
-        if(ImGui::BeginMainMenuBar()) {
-            if(ImGui::BeginMenu("Windows")) {
-                for(int i=0;i<7;++i)ImGui::MenuItem(panelNames[i],nullptr,&panelOpen[i]);
-                ImGui::Separator();if(ImGui::MenuItem("Reset layout"))resetWorkspace=true;
-                ImGui::EndMenu();
-            }
-            ImGui::EndMainMenuBar();
-        }
         drawWorkspace(layout.toolbar,resetWorkspace);
         ImGui::BeginDisabled(projectDialog.pending() || browser.dialog.pending());
         const int created=drawCreateMenu();
-        if(created>=0) {
+        auto createObject=[&](int created) {
             editor.finish(world);spawnMode=false;clicking=false;
             const char* labels[]{"Empty GameObject","Capsule","Cone","Cube","Sphere","Camera"};
             const MeshHandle meshes[]{MeshHandle{},capsuleMesh,coneMesh,cubeMesh,sphereMesh,MeshHandle{}};
@@ -484,7 +480,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             if(created!=0 && created!=5)position=findRoom(physics,position,shapes[created]);
             selectedEntity=createLevelObject(world,labels[created],position,meshes[created],shapes[created],created==0 || created==5);
             if(created==5){Camera c;c.active=activeCamera(world)==Entity{};world.add(selectedEntity,c);}
-        }
+        };
+        if(created>=0)createObject(created);
         bool undoRequested=false,redoRequested=false;
         bool duplicateRequested=false,copyRequested=false,pasteRequested=false,parentRequested=false;
         const bool editAllowed=!playMode.active() && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
@@ -501,6 +498,29 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
+        }
+        if(ImGui::BeginMainMenuBar()) {
+            if(ImGui::BeginMenu("Windows")) {
+                for(int i=0;i<7;++i)ImGui::MenuItem(panelNames[i],nullptr,&panelOpen[i]);
+                ImGui::Separator();if(ImGui::MenuItem("Reset layout"))resetWorkspace=true;
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+        bool showAbout=false;
+        if(ImGui::BeginMainMenuBar()) {
+            if(ImGui::BeginMenu("Help")) {
+                if(ImGui::MenuItem("GitHub"))SDL_OpenURL("https://github.com/monsef64/LegacyEngine");
+                showAbout=ImGui::MenuItem("About");ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+        if(showAbout)ImGui::OpenPopup("About LegacyEngine");
+        if(ImGui::BeginPopupModal("About LegacyEngine",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("LegacyEngine");ImGui::TextUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
+            ImGui::TextUnformatted("SDL3 / OpenGL / Dear ImGui / ReactPhysics3D");
+            if(ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
         }
         // Let text widgets own editing shortcuts while typing. Global routing
         // otherwise makes shortcuts independent of which editor panel has focus.
@@ -599,8 +619,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             if(compactToolbar)ImGui::EndPopup();
         }
         ImGui::End();
-        bool hierarchyFocused=false;
-        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused)) {editor.finish(world);clicking=false;}
+        bool hierarchyFocused=false;int hierarchyCreate=-1;
+        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused,&hierarchyCreate)) {editor.finish(world);clicking=false;}
+        if(hierarchyCreate>=0)createObject(hierarchyCreate);
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
         drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging());
         scripts.componentOutput=componentScripts.messages();
@@ -672,7 +693,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         if (freeCamera && sceneHovered && !browser.dialog.pending() && !projectDialog.pending() && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(mouseX,mouseY) && !editor.dragging() && !ImGui::GetIO().WantCaptureKeyboard &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
-            const float speed = 5.0f;
+            const float speed = sceneCameraSpeed(SDL_GetModState(),cameraBoost);
             camera.move(static_cast<float>(keys[SDL_SCANCODE_W]) - keys[SDL_SCANCODE_S],
                         static_cast<float>(keys[SDL_SCANCODE_D]) - keys[SDL_SCANCODE_A],
                         static_cast<float>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],

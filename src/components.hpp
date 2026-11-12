@@ -8,6 +8,7 @@
 #include "ecs.hpp"
 #include "mesh.hpp"
 #include <string>
+#include <vector>
 
 // Human-readable label used by the level object list.
 struct ObjectName { std::string value; };
@@ -61,8 +62,14 @@ struct RigidBody {
     Vec3  angularVelocity;   // radians per second around each axis
 };
 
-// Asset path relative to the project Assets directory. One script per object.
-struct LuaScript { std::string path; bool enabled=true; };
+// Primary LegacyScript and additional attachments, all relative to project assets.
+struct ScriptAttachment { std::string path;bool enabled=true; };
+struct LuaScript { std::string path; bool enabled=true; std::vector<ScriptAttachment> additional; };
+inline std::vector<ScriptAttachment> scriptAttachments(const LuaScript& scripts) {
+    std::vector<ScriptAttachment> result;
+    if(!scripts.path.empty())result.push_back({scripts.path,scripts.enabled});
+    result.insert(result.end(),scripts.additional.begin(),scripts.additional.end());return result;
+}
 
 // Cameras look along local -Z; rotation lives in the GameObject Transform.
 struct Camera {

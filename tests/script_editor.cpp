@@ -17,6 +17,8 @@ int main()
     unsigned char* pixels; int width,height;
     io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
     ScriptEditor editor;
+    require(editor.source().empty(),"new editor has no example snippet");
+    editor.setSource("print(\"Hello from Lua!\")");
     auto frame=[&] { ImGui::NewFrame(); editor.draw(); ImGui::Render(); };
     frame(); frame();
     auto click=[&](float x,float y) {

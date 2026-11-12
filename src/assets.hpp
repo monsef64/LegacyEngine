@@ -15,7 +15,7 @@ public:
     static std::string extension(const std::filesystem::path& p) {
         auto e=p.extension().string();for(char& c:e)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return e;
     }
-    static bool script(const std::filesystem::path& p) {return extension(p)==".lua";}
+    static bool script(const std::filesystem::path& p) {return extension(p)==".ls" || extension(p)==".lua";}
     std::filesystem::path resolve(const std::string& relative) const {
         if(root.empty())throw std::runtime_error("No project asset root is configured");
         const std::filesystem::path p(relative);
@@ -55,16 +55,16 @@ public:
     }
     std::string readScript(const std::string& path) const {
         auto file=resolve(path);
-        if(!script(file) || std::filesystem::file_size(file)>64*1024)throw std::runtime_error("Expected a Lua asset, at most 64 KiB");
-        std::ifstream in(file,std::ios::binary);if(!in)throw std::runtime_error("Cannot read Lua asset");
+        if(!script(file) || std::filesystem::file_size(file)>64*1024)throw std::runtime_error("Expected a LegacyScript asset, at most 64 KiB");
+        std::ifstream in(file,std::ios::binary);if(!in)throw std::runtime_error("Cannot read LegacyScript asset");
         return {std::istreambuf_iterator<char>(in),std::istreambuf_iterator<char>()};
     }
     void writeScript(const std::string& path,std::string_view source) {
-        if(!script(path) || source.size()>64*1024)throw std::runtime_error("Invalid Lua asset");
+        if(!script(path) || source.size()>64*1024)throw std::runtime_error("Invalid LegacyScript asset");
         auto destination=resolve(path);std::filesystem::create_directories(destination.parent_path());
         auto temp=destination;temp+=".writing-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
         std::ofstream out(temp,std::ios::binary|std::ios::trunc);out.write(source.data(),source.size());out.close();
-        if(!out)throw std::runtime_error("Cannot save Lua asset");
+        if(!out)throw std::runtime_error("Cannot save LegacyScript asset");
         std::filesystem::rename(temp,destination);
     }
     // Save As copies the asset tree without changing existing project assets.
@@ -88,5 +88,10 @@ inline bool attachScriptAsset(World& world,Entity entity,const std::string& path
     if(!world.alive(entity) || !AssetManager::script(path))return false;
     if(std::filesystem::path(path).is_absolute())return false;
     for(const auto& part:std::filesystem::path(path))if(part=="..")return false;
-    world.add(entity,LuaScript{path,true});return true;
+    if(auto* scripts=world.tryGet<LuaScript>(entity)) {
+        for(const auto& entry:scriptAttachments(*scripts))if(entry.path==path)return true;
+        if(scripts->path.empty()){scripts->path=path;scripts->enabled=true;}
+        else if(scripts->additional.size()<63)scripts->additional.push_back({path,true});else return false;
+    } else world.add(entity,LuaScript{path,true,{}});
+    return true;
 }

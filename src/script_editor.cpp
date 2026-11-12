@@ -4,11 +4,7 @@
 #include <cctype>
 #include "lua_definitions.hpp"
 
-ScriptEditor::ScriptEditor()
-{
-    const char* example="-- Execute this snippet; output appears in the Lua Console.\nprint(\"Hello from Lua!\")\nfor i = 1, 3 do\n    print(\"Square\", i, i * i)\nend\n";
-    std::memcpy(source_.data(),example,std::strlen(example)+1);
-}
+ScriptEditor::ScriptEditor() = default;
 
 void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
 {

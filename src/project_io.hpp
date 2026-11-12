@@ -32,7 +32,7 @@ inline Transform readTransform(std::istream& in) {
 inline std::string encode(World& world,std::string_view source,const OrbitCamera& camera,const Meshes& meshes,std::string_view assetDirectory={}) {
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 4\n";
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 5\n";
     out<<std::quoted(std::string(source))<<'\n'<<std::quoted(std::string(assetDirectory))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
@@ -55,7 +55,11 @@ inline std::string encode(World& world,std::string_view source,const OrbitCamera
         if(auto* b=world.tryGet<RigidBody>(e)) {
             out<<b->mass<<' '<<b->useGravity<<' ';writeVec(out,b->linearVelocity);writeVec(out,b->angularVelocity);
         }
-        if(auto* script=world.tryGet<LuaScript>(e))out<<std::quoted(script->path)<<' '<<script->enabled<<' ';
+        if(auto* script=world.tryGet<LuaScript>(e)) {
+            require(script->additional.size()<=63);
+            out<<std::quoted(script->path)<<' '<<script->enabled<<' '<<script->additional.size()<<' ';
+            for(const auto& entry:script->additional)out<<std::quoted(entry.path)<<' '<<entry.enabled<<' ';
+        }
         if(auto* c=world.tryGet<Camera>(e)) {
             require(validCamera(*c));
             int target=-1;for(std::size_t i=0;i<entities.size();++i)if(entities[i]==c->targetEntity)target=static_cast<int>(i);
@@ -71,7 +75,7 @@ struct Loaded { World world; std::string source,assetDirectory; OrbitCamera came
 inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=4));
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=5));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
     if(version>=4) {
         in>>std::quoted(result.assetDirectory);
@@ -106,6 +110,15 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
             LuaScript script;in>>std::quoted(script.path)>>script.enabled;
             require(script.path.size()<=4096 && script.path.find('\0')==std::string::npos && !std::filesystem::path(script.path).is_absolute());
             for(const auto& part:std::filesystem::path(script.path))require(part!="..");
+            if(version>=5) {
+                int extras=0;in>>extras;require(extras>=0 && extras<=63);
+                for(int j=0;j<extras;++j) {
+                    ScriptAttachment entry;in>>std::quoted(entry.path)>>entry.enabled;
+                    require(entry.path.size()<=4096 && entry.path.find('\0')==std::string::npos && !std::filesystem::path(entry.path).is_absolute());
+                    for(const auto& part:std::filesystem::path(entry.path))require(part!="..");
+                    script.additional.push_back(entry);
+                }
+            }
             result.world.add(e,script);
         }
         if(mask&64) {

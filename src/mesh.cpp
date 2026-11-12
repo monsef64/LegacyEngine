@@ -105,8 +105,12 @@ MeshData makeCone(float radius,float height) {
 }
 
 MeshData makeCameraModel() {
-    MeshData result;
-    auto box=[&](Vec3 size,Vec3 offset){auto mesh=makeBox(size);for(auto vertex:mesh.vertices){vertex.position=vertex.position+offset;result.vertices.push_back(vertex);}};
-    box({.65f,.45f,.4f},{});box({.35f,.30f,.35f},{0,0,-.35f});box({.25f,.15f,.2f},{0,.30f,0});
-    return result;
+    MeshData mesh;mesh.topology=MeshData::Topology::Lines;
+    auto line=[&](Vec3 a,Vec3 b){mesh.vertices.push_back({a,{}});mesh.vertices.push_back({b,{}});};
+    Vec3 back[4]{{-.30f,-.22f,.20f},{.30f,-.22f,.20f},{.30f,.22f,.20f},{-.30f,.22f,.20f}};
+    Vec3 front[4]{{-.30f,-.22f,-.20f},{.30f,-.22f,-.20f},{.30f,.22f,-.20f},{-.30f,.22f,-.20f}};
+    Vec3 lens[4]{{-.48f,-.32f,-.85f},{.48f,-.32f,-.85f},{.48f,.32f,-.85f},{-.48f,.32f,-.85f}};
+    for(int i=0;i<4;++i){line(back[i],back[(i+1)%4]);line(front[i],front[(i+1)%4]);line(back[i],front[i]);line(front[i],lens[i]);line(lens[i],lens[(i+1)%4]);}
+    line({-.13f,.22f,0},{0,.42f,0});line({0,.42f,0},{.13f,.22f,0});
+    return mesh;
 }

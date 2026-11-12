@@ -4,19 +4,21 @@
 #include <imgui.h>
 
 // -1: nothing, 0: empty, 1..4: Capsule, Cone, Cube, Sphere.
+inline int drawCreateItems() {
+    int item=-1;
+    if(ImGui::MenuItem("Empty GameObject"))item=0;
+    if(ImGui::MenuItem("Camera"))item=5;
+    if(ImGui::BeginMenu("Shape")) {
+        const char* names[]{"Capsule","Cone","Cube","Sphere"};
+        for(int i=0;i<4;++i)if(ImGui::MenuItem(names[i]))item=i+1;
+        ImGui::EndMenu();
+    }
+    return item;
+}
 inline int drawCreateMenu() {
     int item=-1;
     if(ImGui::BeginMainMenuBar()) {
-        if(ImGui::BeginMenu("Create")) {
-            if(ImGui::MenuItem("Empty GameObject"))item=0;
-            if(ImGui::MenuItem("Camera"))item=5;
-            if(ImGui::BeginMenu("Shape")) {
-                const char* names[]{"Capsule","Cone","Cube","Sphere"};
-                for(int i=0;i<4;++i)if(ImGui::MenuItem(names[i]))item=i+1;
-                ImGui::EndMenu();
-            }
-            ImGui::EndMenu();
-        }
+        if(ImGui::BeginMenu("Create")){item=drawCreateItems();ImGui::EndMenu();}
         ImGui::EndMainMenuBar();
     }
     return item;
