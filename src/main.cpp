@@ -24,6 +24,7 @@
 #include "project_dialog.hpp"
 #include "project_document.hpp"
 #include "asset_browser.hpp"
+#include "audio_system.hpp"
 #include "script_components.hpp"
 #include "dock_workspace.hpp"
 #include "scene_surface.hpp"
@@ -269,6 +270,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
     ObjectClipboard clipboard;
     AssetBrowser browser;
     ScriptComponents componentScripts;
+    AudioSystem audio;
     SceneSurface sceneSurface,gameSurface;
     EditorRect sceneRect{};
     bool sceneHovered=false,resetWorkspace=false;
@@ -452,7 +454,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                 } else {
                     std::string source,assetDirectory;World loadedWorld;OrbitCamera loadedCamera;
                     if(ProjectIO::load(result->path,loadedWorld,source,loadedCamera,projectMeshes,projectError,&assetDirectory)) {
-                        componentScripts.stop();scripts.shutdown();world.restore(loadedWorld);camera=loadedCamera;
+                        audio.clear();componentScripts.stop();scripts.shutdown();world.restore(loadedWorld);camera=loadedCamera;
                         browser.setRoot(assetDirectory.empty()?existingProjectAssetsPath(result->path):std::filesystem::absolute(result->path).parent_path()/assetDirectory);
                         scripts.resetRuntime();scripts.setSource(source);
                         selectedEntity={};history=EditorHistory(world);physics.reset();
@@ -509,6 +511,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         }
         bool showAbout=false;
         if(ImGui::BeginMainMenuBar()) {
+            if(ImGui::MenuItem("Settings"))browser.settings.visible=true;
             if(ImGui::BeginMenu("Help")) {
                 if(ImGui::MenuItem("GitHub"))SDL_OpenURL("https://github.com/monsef64/LegacyEngine");
                 showAbout=ImGui::MenuItem("About");ImGui::EndMenu();
@@ -585,7 +588,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             editor.finish(world); clicking=false;
             editSelection=selectedEntity;
             history.commit(world,selectedEntity);
-            if (playMode.play(world)) { physics.reset(); scripts.setAssetContext(browser.openedScript,selectedEntity);scripts.startPlay();
+            if (playMode.play(world)) { physics.reset(); audio.start(world);scripts.setAssetContext(browser.openedScript,selectedEntity);scripts.startPlay();
                 const MeshHandle runtimeMeshes[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
                 componentScripts.start(world,browser.assets,runtimeMeshes); }
         }
@@ -598,7 +601,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         if (playbackButton("##Stop","Stop (F7)",PlaybackIcon::Stop) || (stopKey && playMode.active())) {
             editor.finish(world); clicking=false;
             // Run stop callbacks before restoring, so their edits are discarded too.
-            componentScripts.stop();scripts.shutdown();
+            audio.clear();componentScripts.stop();scripts.shutdown();
             playMode.stop(world);
             physics.reset(); scripts.resetRuntime();
             selectedEntity=world.alive(editSelection)?editSelection:Entity{};
@@ -620,14 +623,18 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         }
         ImGui::End();
         bool hierarchyFocused=false;int hierarchyCreate=-1;
-        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused,&hierarchyCreate)) {editor.finish(world);clicking=false;}
+        const std::string hierarchyLevelName=currentProject.empty()?"Untitled":std::filesystem::path(currentProject).stem().string();
+        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused,&hierarchyCreate,hierarchyLevelName.c_str())) {editor.finish(world);clicking=false;}
         if(hierarchyCreate>=0)createObject(hierarchyCreate);
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
         drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging());
         scripts.componentOutput=componentScripts.messages();
         scripts.setAssetContext(browser.openedScript,selectedEntity);
         scripts.draw(&layout,playMode.playing());
+        browser.projectFolder=currentProject.empty()?browser.assets.root:std::filesystem::absolute(currentProject).parent_path();
         browser.draw(window,world,selectedEntity,scripts,editAllowed,&history);
+        browser.settings.draw(browser.projectFolder);
+        if(!audio.error.empty()){ImGui::Begin("Audio errors");ImGui::TextWrapped("%s",audio.error.c_str());if(ImGui::Button("Dismiss"))audio.error.clear();ImGui::End();}
         ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false,sceneFocused=false;
         sceneHovered=false;sceneRect={};
         if(panelOpen[2]) {
@@ -702,10 +709,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         }
         if (playMode.playing()) {scripts.update(std::min(seconds,0.25f));componentScripts.update(std::min(seconds,0.25f));}
         updateHierarchy(world);
+        audio.update(world,browser.assets,playMode.playing());
         physics.update(world, playMode.playing()?seconds:0.0f, [&](float dt){ scripts.fixedUpdate(dt);componentScripts.fixedUpdate(dt);updateHierarchy(world); });
         updateHierarchy(world);
         updateCameras(world,playMode.playing()?std::min(seconds,.25f):0);
         updateHierarchy(world);
+        audio.update(world,browser.assets,playMode.playing());
         physics.update(world,0); // collider poses follow parent motion before picking next frame
 
         int width = 0;
@@ -753,7 +762,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         }
     }
     editor.finish(world);
-    componentScripts.stop();scripts.shutdown();
+    audio.clear();componentScripts.stop();scripts.shutdown();
     return !smokeTest || renderedFrames >= smokeFrames;
 }
 

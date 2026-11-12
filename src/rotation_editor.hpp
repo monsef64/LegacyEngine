@@ -19,5 +19,5 @@ struct RotationEditorState {
         const float similarity=std::abs(a.x*b.x+a.y*b.y+a.z*b.z+a.w*b.w);
         if(entity!=current || similarity<.9999999f){entity=current;angles=rotationToEuler(rotation);last=rotation;}
     }
-    Quat apply(Vec3 value) {angles=value;last=rotationFromEuler(value);return last;}
+    Quat apply(Vec3 value) {value={std::clamp(value.x,-360.0f,360.0f),std::clamp(value.y,-360.0f,360.0f),std::clamp(value.z,-360.0f,360.0f)};angles=value;last=rotationFromEuler(value);return last;}
 };

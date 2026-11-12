@@ -19,3 +19,8 @@ test('hover and signature help',()=>{
  assert.equal(f.signatureHelp(...input('unknown(')),null);
 });
 test('outline',()=>{assert.equal(f.symbols(...input('function onStart()\nend'))[0].name,'onStart');});
+
+test('audio methods and creation completion',()=>{
+ const result=f.completion(...input('audio:'));for(const name of ['play','stop','pause','resume','setPitch','setVolume','setPan','setDistance','setLooping','isPlaying','playOneShot','fadeIn','fadeOut','mute','unmute'])assert(result.some(x=>x.label===name));
+ assert(f.completion(...input('')).some(x=>x.label==='createAudioSource'));
+});

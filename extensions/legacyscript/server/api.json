@@ -1,5 +1,77 @@
 [
   {
+    "name": "createAudioSource",
+    "signature": "createAudioSource(owner=self, clipPath=nil) -> AudioSource"
+  },
+  {
+    "name": "AudioClip",
+    "signature": "AudioClip(projectRelativeWavPath) -> AudioClip path"
+  },
+  {
+    "name": "AudioSource",
+    "signature": "AudioSource - audio component type token"
+  },
+  {
+    "name": "play",
+    "signature": "audio:play() - restart assigned clip"
+  },
+  {
+    "name": "stop",
+    "signature": "audio:stop() - stop and rewind"
+  },
+  {
+    "name": "pause",
+    "signature": "audio:pause()"
+  },
+  {
+    "name": "resume",
+    "signature": "audio:resume()"
+  },
+  {
+    "name": "setPitch",
+    "signature": "audio:setPitch(pitch) -> clamped 0.1 to 4"
+  },
+  {
+    "name": "fadeIn",
+    "signature": "audio:fadeIn(seconds) - restart and fade from silence"
+  },
+  {
+    "name": "fadeOut",
+    "signature": "audio:fadeOut(seconds) - fade then stop"
+  },
+  {
+    "name": "setVolume",
+    "signature": "audio:setVolume(volume) -> clamped 0 to 1"
+  },
+  {
+    "name": "mute",
+    "signature": "audio:mute()"
+  },
+  {
+    "name": "unmute",
+    "signature": "audio:unmute()"
+  },
+  {
+    "name": "setLooping",
+    "signature": "audio:setLooping(enabled) -> boolean"
+  },
+  {
+    "name": "setPan",
+    "signature": "audio:setPan(pan) -> clamped -1 left to 1 right"
+  },
+  {
+    "name": "setDistance",
+    "signature": "audio:setDistance(distance) -> attenuation distance"
+  },
+  {
+    "name": "isPlaying",
+    "signature": "audio:isPlaying() -> boolean"
+  },
+  {
+    "name": "playOneShot",
+    "signature": "audio:playOneShot(AudioClip) - overlapping nonlooping clip"
+  },
+  {
     "name": "new",
     "signature": "GameObject.new(name) / Camera.new(name)"
   },

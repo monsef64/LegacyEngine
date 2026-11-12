@@ -30,6 +30,8 @@ private:
     void destroy(Entity e);
     void tick(const char* name,float dt);
     static int api(lua_State* state);
+    static int audioApi(lua_State* state);
+    static int audioMethod(lua_State* state);
     static int cameraApi(lua_State* state);
     static int objectApi(lua_State* state);
     static int componentTypeIndex(lua_State* state);

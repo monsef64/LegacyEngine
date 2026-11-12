@@ -7,7 +7,7 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
@@ -211,3 +211,30 @@ GameObject = nil
 ---@field getActive fun():CameraObject|nil
 ---@type CameraConstructor
 Camera = nil
+
+---@alias AudioClip string Project-relative WAV path
+---@class AudioSource
+---@field clip AudioClip
+---@field play fun(self:AudioSource)
+---@field stop fun(self:AudioSource)
+---@field pause fun(self:AudioSource)
+---@field resume fun(self:AudioSource)
+---@field setPitch fun(self:AudioSource,pitch:number):number
+---@field fadeIn fun(self:AudioSource,seconds:number)
+---@field fadeOut fun(self:AudioSource,seconds:number)
+---@field setVolume fun(self:AudioSource,volume:number):number
+---@field mute fun(self:AudioSource)
+---@field unmute fun(self:AudioSource)
+---@field setLooping fun(self:AudioSource,enabled:boolean):boolean
+---@field setPan fun(self:AudioSource,pan:number):number
+---@field setDistance fun(self:AudioSource,distance:number):number
+---@field isPlaying fun(self:AudioSource):boolean
+---@field playOneShot fun(self:AudioSource,clip:AudioClip)
+AudioSource = nil
+---@param path string Project-relative WAV asset
+---@return AudioClip
+function AudioClip(path) end
+---@param owner? GameObject Defaults to attached self
+---@param clip? AudioClip
+---@return AudioSource
+function createAudioSource(owner,clip) end

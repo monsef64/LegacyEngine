@@ -781,3 +781,74 @@ test && npm run package` in that directory, then use VS Code's **Install from
 VSIX** command. The repository associates `.ls` with `legacyscript`; install this
 extension to activate it. This initial LSP is engine-aware but does not yet offer
 full Lua type checking or diagnostics.
+
+### Editor settings, highlighting and Transform fields
+
+**Settings** on the menu bar opens **Editor → Code editor**. Internal mode uses
+the built-in Lua editor, now with colored Lua keywords, comments, strings,
+numbers and engine types. External mode opens the project directory in VS Code
+when selected or when double-clicking a script. Unsaved projects open their
+staging asset directory instead. VS Code must be installed with its `vscode://`
+URL handler registered. Settings are saved in SDL's per-user preferences folder.
+Transform fields explicitly show X/Y/Z; Inspector rotation input is clamped to
+**-360 through 360 degrees** (script quaternion/rotation APIs remain unrestricted).
+
+### AudioSource
+
+Add **AudioSource** via Inspector's **Add Component**. Import a WAV into Assets,
+then drag it onto **AudioClip (.wav)** or enter its project-relative path.
+Inspector includes volume, pitch, pan, distance, looping, mute, play-on-start,
+transport and one-second fade controls. Audio plays only while Play mode is
+running. Pause/Stop and scene restoration clear the device queue.
+
+```lua
+local audio
+function onStart()
+    audio = createAudioSource(self, AudioClip("music.wav"))
+    audio:setVolume(0.7)
+    audio:setPitch(1.0)
+    audio:setLooping(true)
+    audio:fadeIn(2)
+end
+
+-- Other supported calls:
+-- audio:play()          -- restarts the assigned clip
+-- audio:pause()
+-- audio:resume()
+-- audio:stop()          -- stops this source including its one-shots
+-- audio:fadeOut(1)      -- seconds, then stops
+-- audio:mute()
+-- audio:unmute()
+-- audio:setPan(-0.5)    -- -1 left to +1 right
+-- audio:setDistance(5)  -- explicit distance attenuation: 1 / (1 + distance)
+-- audio:isPlaying()
+-- audio:playOneShot(AudioClip("click.wav"))
+-- self:getComponent(AudioSource) returns the same component
+-- createAudioSource() defaults to the attached self; set audio.clip afterwards
+```
+
+Setters return their clamped value: volume 0–1, pitch 0.1–4, pan -1–1,
+distance 0–10000; setLooping returns the enabled flag. AudioClip is a validated-at-
+playback path, not an eagerly decoded resource. Clips are resolved inside the
+project assets, including traversal/symlink protection. This initial system uses
+SDL WAV decoding and a stereo 48kHz float mixer (linear pitch resampling, up to
+128 voices). MP3/OGG decoding and automatic 3D listener positioning are not yet
+supported. Distance is explicitly supplied, not inferred from transforms.
+Individual WAVs are limited to 32 MiB and the decoded cache to 256 MiB. Missing
+clips/device errors appear in the **Audio errors** window. Device tests use SDL's
+dummy driver; real-device listening and VS Code URI launching require manual
+platform validation. Project format 6 saves AudioSource configuration, while
+still accepting formats 1–5; transient playback cursors are not serialized.
+
+### Hierarchy search and level root
+
+Hierarchy starts with a read-only level root, named from the project filename
+(without `.legacy`), or **Untitled** before saving. It is presentation-only, not
+an ECS GameObject: it cannot be selected, renamed, dragged, deleted or parented.
+Its disclosure arrow only expands/collapses the displayed object list.
+
+The **Search** field performs a case-insensitive name substring search and keeps
+ancestors of matching objects visible. Searching expands the level root so
+results are visible. Clearing the search restores all rows without changing the
+scene hierarchy or selection. Object rows show line icons for Camera, AudioSource,
+mesh objects and empty GameObjects (in that priority order for combined components).

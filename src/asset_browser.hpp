@@ -1,5 +1,6 @@
 #pragma once
 #include "assets.hpp"
+#include "editor_settings.hpp"
 #include "editor_layout.hpp"
 #include "script_editor.hpp"
 #include "project_dialog.hpp"
@@ -32,6 +33,8 @@ public:
     bool gridMode() const{return grid_;}
     AssetManager assets;
     std::string selected,openedScript;
+    EditorSettings settings;
+    std::filesystem::path projectFolder;
     ProjectDialog dialog;
     void importFile(const std::string& path) {
         try{selected=assets.import(path);assets.error.clear();}catch(const std::exception& e){assets.error=e.what();}
@@ -75,7 +78,7 @@ public:
                     if(clicked) {
                         selected=file;
                         if(AssetManager::script(file) && ImGui::IsMouseDoubleClicked(0)) {
-                            try {scripts.setSource(assets.readScript(file));openedScript=file;panelOpen[3]=true;}
+                            try {if(settings.external)settings.openExternal(projectFolder.empty()?assets.root:projectFolder);else {scripts.setSource(assets.readScript(file));openedScript=file;panelOpen[3]=true;}}
                             catch(const std::exception& e){assets.error=e.what();}
                         }
                     }
@@ -132,6 +135,7 @@ public:
                             else {
                                 std::filesystem::rename(assets.resolve(selected),assets.resolve(relative));
                                 world.each<LuaScript>([&](Entity,LuaScript& s){if(s.path==selected)s.path=relative;for(auto& entry:s.additional)if(entry.path==selected)entry.path=relative;});
+                                world.each<AudioSource>([&](Entity,AudioSource& a){if(a.clip==selected)a.clip=relative;});
                                 if(openedScript==selected)openedScript=relative;
                                 selected=relative;
                                 ImGui::CloseCurrentPopup();
