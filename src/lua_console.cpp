@@ -134,3 +134,14 @@ void LuaConsole::fixedUpdate(float dt) { if(scene_){beginBudget();scene_->fixedU
 void LuaConsole::shutdown() {
     if(scene_){beginBudget();scene_->stop();endBudget();scene_.reset();}
 }
+
+bool LuaConsole::bindObject(Entity entity) {
+    if(!state_ || !scene_ || !world_->alive(entity))return false;
+    struct Bind { LuaScene* scene;Entity entity; } bind{scene_.get(),entity};
+    lua_pushcfunction(state_,+[](lua_State* L)->int {
+        auto* bind=static_cast<Bind*>(lua_touserdata(L,1));bind->scene->setSelf(bind->entity);return 0;
+    });
+    lua_pushlightuserdata(state_,&bind);
+    if(lua_pcall(state_,1,0,0)!=LUA_OK) { append(Kind::Error,lua_tostring(state_,-1));lua_pop(state_,1);return false; }
+    return true;
+}

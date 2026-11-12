@@ -19,6 +19,7 @@ inline std::string sceneSignature(World& world) {
     for(Entity e:world.entities()) {
         scalar(e.index);scalar(e.generation);
         component(e,ObjectName{},[&](const ObjectName& n){scalar(n.value.size());result+=n.value;});
+        component(e,LuaScript{},[&](const LuaScript& script){scalar(script.path.size());result+=script.path;scalar(script.enabled);});
         component(e,Transform{},transform);
         component(e,MeshRenderer{},[&](const MeshRenderer& m){scalar(m.mesh.id);vec(m.color);scalar(m.checkerboard);scalar(m.specular);});
         component(e,Collider{},[&](const Collider& c){vec(c.size);vec(c.center);scalar(c.friction);scalar(c.bounciness);scalar(c.shape);scalar(c.radius);scalar(c.height);});

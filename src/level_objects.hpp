@@ -4,6 +4,7 @@
 #include "ecs.hpp"
 #include "hierarchy.hpp"
 #include "editor_layout.hpp"
+#include "assets.hpp"
 #include <imgui.h>
 #include <algorithm>
 #include <charconv>
@@ -64,7 +65,7 @@ inline Entity copyLevelObject(World& sourceWorld, Entity source, World& world, b
         if (auto* original = sourceWorld.tryGet<T>(source)) { T data = *original; world.add(copy, data); }
     };
     component(Transform{}); component(MeshRenderer{}); component(Collider{});
-    component(RigidBody{}); component(ObjectName{});
+    component(RigidBody{}); component(ObjectName{}); component(LuaScript{});
     if(preserveParent)component(Parent{});
     if (auto* name = world.tryGet<ObjectName>(copy)) name->value = copiedObjectName(world,name->value);
     return copy;
@@ -101,11 +102,12 @@ inline void deleteLevelObject(World& world, Entity object) {
 // Returns true when selection changes. The caller can end any active gizmo gesture.
 inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr)
 {
+    if(dockedEditor && !panelOpen[0])return false;
     bool changed=false;
     if (!world.alive(selected) && selected!=Entity{}) { selected={}; changed=true; }
     if(panel)placeEditorPanel(*panel);
     else {ImGui::SetNextWindowPos(ImVec2(16,360),ImGuiCond_FirstUseEver);ImGui::SetNextWindowSize(ImVec2(250,240),ImGuiCond_FirstUseEver);}
-    if (ImGui::Begin(panel?"Hierarchy":"Level Objects",nullptr,panel?fixedPanelFlags:0)) {
+    if (beginEditorPanel(panel?"Hierarchy":"Level Objects",panel?fixedPanelFlags:0)) {
         const auto objects=levelObjects(world);
         ImGui::Text("Objects: %d",static_cast<int>(objects.size()));
         if (!selectionEnabled) ImGui::TextDisabled("Disable Spawn Shapes Mode to select");
@@ -156,6 +158,9 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
                 ImGui::TextUnformatted(object.name.c_str());ImGui::EndDragDropSource();
             }
             if(ImGui::BeginDragDropTarget()) {
+                if(const auto* asset=ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                    if(attachScriptAsset(world,object.entity,static_cast<const char*>(asset->Data)))changed=true;
+                }
                 if(const auto* payload=ImGui::AcceptDragDropPayload("LEVEL_OBJECT")) {
                     const Entity child=*static_cast<const Entity*>(payload->Data);
                     setParent(world,child,object.entity);

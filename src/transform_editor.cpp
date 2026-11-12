@@ -26,13 +26,13 @@ void toolButton(const char* id, const char* tooltip, TransformTool value, Transf
 }
 }
 
-void TransformEditor::draw(World& world, Entity entity, bool enabled, const OrbitCamera& camera, float aspect,const EditorRect* scene)
+void TransformEditor::draw(World& world, Entity entity, bool enabled, const OrbitCamera& camera, float aspect,const EditorRect* scene,ImDrawList* drawList)
 {
     const auto* viewport=ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(scene?ImVec2(scene->x+8,scene->y+scene->height-8):ImVec2(viewport->WorkPos.x+16,viewport->WorkPos.y+viewport->WorkSize.y-16),
                             ImGuiCond_Always,ImVec2(0,1));
     ImGui::Begin("Transform tools",nullptr,ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
+        ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
     const char* ids[]{"##move","##rotate","##scale"};
     const char* tips[]{"Move: drag an axis arrow", "Rotate: drag an axis ring", "Scale: drag an axis handle"};
     for (int i=0;i<3;++i) {
@@ -56,7 +56,7 @@ void TransformEditor::draw(World& world, Entity entity, bool enabled, const Orbi
     const ImGuizmo::OPERATION operations[]{ImGuizmo::TRANSLATE,ImGuizmo::ROTATE,ImGuizmo::SCALE};
     ImGuizmo::Enable(true);
     ImGuizmo::SetOrthographic(false);
-    ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
+    ImGuizmo::SetDrawlist(drawList?drawList:ImGui::GetBackgroundDrawList());
     ImGuizmo::SetRect(scene?scene->x:viewport->Pos.x,scene?scene->y:viewport->Pos.y,
                       scene?scene->width:viewport->Size.x,scene?scene->height:viewport->Size.y);
     const bool wasDragging=dragging_;

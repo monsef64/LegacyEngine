@@ -59,3 +59,6 @@ struct RigidBody {
     Vec3  linearVelocity;    // metres per second
     Vec3  angularVelocity;   // radians per second around each axis
 };
+
+// Asset path relative to the project Assets directory. One script per object.
+struct LuaScript { std::string path; bool enabled=true; };

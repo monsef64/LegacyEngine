@@ -7,12 +7,12 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName
+---@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onStart fun()|nil
 ---@field onUpdate fun(deltaTime:number)|nil
@@ -61,7 +61,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
 ---@param componentType ComponentType
@@ -70,7 +70,7 @@ function getComponent(gameObject,componentType) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript
 function addComponent(gameObject,componentType) end
 ---@param gameObject GameObject
 ---@param componentType ComponentType
@@ -102,3 +102,11 @@ BoxCollider = nil
 MeshRenderer = nil
 ---@type ComponentToken
 ObjectName = nil
+
+---@class LuaScript
+---@field path string Relative asset path under Assets
+---@field enabled boolean
+---@type ComponentToken
+LuaScript = nil
+---@type GameObject
+self = nil -- Provided in each attached Lua Script runtime.

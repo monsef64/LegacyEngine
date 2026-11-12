@@ -3,12 +3,14 @@
 #include "editor_layout.hpp"
 #include <array>
 #include <string>
+#include <vector>
 #include <algorithm>
 struct ImGuiInputTextCallbackData;
 
 class ScriptEditor {
 public:
     ScriptEditor();
+    std::vector<std::string> componentOutput;
     void draw(const EditorLayout* layout=nullptr, bool executionEnabled=true);
     void startPlay() { console_.reset(); console_.execute(source_.data()); }
     void resetRuntime() { console_.reset(); }

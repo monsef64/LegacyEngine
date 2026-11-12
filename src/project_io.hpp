@@ -31,13 +31,13 @@ inline Transform readTransform(std::istream& in) {
 inline std::string encode(World& world,std::string_view source,const OrbitCamera& camera,const Meshes& meshes) {
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 1\n";
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 2\n";
     out<<std::quoted(std::string(source))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
     for(Entity e:entities) {
         unsigned mask=(world.has<ObjectName>(e)?1:0)|(world.has<Transform>(e)?2:0)|
-            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0);
+            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0);
         int parent=-1;const Entity p=getParent(world,e);
         for(std::size_t i=0;i<entities.size();++i)if(entities[i]==p)parent=static_cast<int>(i);
         out<<mask<<' '<<parent<<' ';
@@ -54,6 +54,7 @@ inline std::string encode(World& world,std::string_view source,const OrbitCamera
         if(auto* b=world.tryGet<RigidBody>(e)) {
             out<<b->mass<<' '<<b->useGravity<<' ';writeVec(out,b->linearVelocity);writeVec(out,b->angularVelocity);
         }
+        if(auto* script=world.tryGet<LuaScript>(e))out<<std::quoted(script->path)<<' '<<script->enabled<<' ';
         out<<'\n';
     }
     auto text=out.str();require(text.size()<=maxBytes);return text;
@@ -62,7 +63,7 @@ struct Loaded { World world; std::string source; OrbitCamera camera; };
 inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && version==1);
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version==1 || version==2));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
     auto& camera=result.camera;camera.target=readVec(in);camera.yaw=number(in);camera.pitch=number(in);
     camera.distance=number(in);camera.fieldOfView=number(in);
@@ -71,7 +72,7 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
     std::vector<Entity> entities;std::vector<int> parents;
     for(int i=0;i<count;++i) {
         unsigned mask=0;int parent=-1;in>>mask>>parent;
-        require(bool(in) && mask<=31 && parent>=-1 && parent<count && parent!=i);
+        require(bool(in) && mask<=(version==1?31u:63u) && parent>=-1 && parent<count && parent!=i);
         const Entity e=result.world.create();entities.push_back(e);parents.push_back(parent);
         if(mask&1) {std::string name;in>>std::quoted(name);require(name.size()<=4096);result.world.add(e,ObjectName{name});}
         if(mask&2)result.world.add(e,readTransform(in));
@@ -87,6 +88,12 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
         if(mask&16) {
             RigidBody b;b.mass=number(in);in>>b.useGravity;b.linearVelocity=readVec(in);b.angularVelocity=readVec(in);
             require(b.mass>=0);result.world.add(e,b);
+        }
+        if(mask&32) {
+            LuaScript script;in>>std::quoted(script.path)>>script.enabled;
+            require(script.path.size()<=4096 && script.path.find('\0')==std::string::npos && !std::filesystem::path(script.path).is_absolute());
+            for(const auto& part:std::filesystem::path(script.path))require(part!="..");
+            result.world.add(e,script);
         }
         require(bool(in));
     }
