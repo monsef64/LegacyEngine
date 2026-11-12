@@ -9,6 +9,7 @@
 #include <imgui.h>
 #include <algorithm>
 #include <charconv>
+#include <cstdio>
 #include <limits>
 #include <string>
 #include <vector>
@@ -148,6 +149,10 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
     else {ImGui::SetNextWindowPos(ImVec2(16,360),ImGuiCond_FirstUseEver);ImGui::SetNextWindowSize(ImVec2(250,240),ImGuiCond_FirstUseEver);}
     if (beginEditorPanel(panel?"Hierarchy":"Level Objects",panel?fixedPanelFlags:0)) {
         if(focused)*focused=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        static Entity renameTarget;
+        static char renameName[256]{};
+        static bool renameFocus=false;
+        bool renameRequested=false;
         const auto objects=levelObjects(world);
         static ImGuiTextFilter search;
         search.Draw("Search",-60);
@@ -178,14 +183,18 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
             if(depth)ImGui::Indent(static_cast<float>(depth)*12);
             const auto iconPos=ImGui::GetCursorScreenPos();
             // Reserve pixels rather than spaces (font-dependent widths can overlap the icon).
-            if (ImGui::Selectable(("##object"+std::to_string(object.entity.index)).c_str(),selected==object.entity,0,ImVec2(0,std::max(20.0f,ImGui::GetTextLineHeight()+4)))) {
+            if (ImGui::Selectable(("##object"+std::to_string(object.entity.index)).c_str(),selected==object.entity,ImGuiSelectableFlags_AllowDoubleClick,ImVec2(0,std::max(20.0f,ImGui::GetTextLineHeight()+4)))) {
                 changed=selected!=object.entity;
                 selected=object.entity;
+            }
+            if(selectionEnabled && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                renameTarget=object.entity;renameRequested=true;
             }
             if (ImGui::BeginPopupContextItem("Object actions")) {
                 if (selected != object.entity) { selected = object.entity; changed = true; }
                 ImGui::TextUnformatted(object.name.c_str());
                 ImGui::Separator();
+                if(ImGui::MenuItem("Rename...","F2")){renameTarget=object.entity;renameRequested=true;}
                 if (ImGui::MenuItem("Duplicate")) {
                     selected = duplicateLevelObject(world, object.entity); changed = true;
                 }
@@ -233,12 +242,35 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
             ImGui::Unindent(8);
             ImGui::TreePop();
         }
-        ImGui::EndDisabled();
+        if(selectionEnabled && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+            !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+            !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId) && world.alive(selected) && ImGui::IsKeyPressed(ImGuiKey_F2,false)) {
+            renameTarget=selected;renameRequested=true;
+        }
+        if(renameRequested && world.alive(renameTarget)) {
+            const auto* name=world.tryGet<ObjectName>(renameTarget);
+            std::snprintf(renameName,sizeof(renameName),"%s",name?name->value.c_str():"Object");
+            ImGui::SetNextWindowPos(ImGui::GetMousePos(),ImGuiCond_Appearing);
+            ImGui::OpenPopup("Rename GameObject");renameFocus=true;
+        }
+        if(ImGui::BeginPopup("Rename GameObject",ImGuiWindowFlags_AlwaysAutoResize)) {
+            if(renameFocus){ImGui::SetKeyboardFocusHere();renameFocus=false;}
+            ImGui::SetNextItemWidth(220);
+            const bool enter=ImGui::InputText("##Name",renameName,sizeof(renameName),ImGuiInputTextFlags_EnterReturnsTrue|ImGuiInputTextFlags_AutoSelectAll);
+            if(enter || ImGui::Button("Rename")) {
+                if(world.alive(renameTarget) && std::string(renameName).find_first_not_of(" \t\r\n")!=std::string::npos) {
+                    world.add(renameTarget,ObjectName{renameName});changed=true;ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SameLine();if(ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
         if(createRequest && ImGui::BeginPopupContextWindow("Hierarchy empty actions",ImGuiPopupFlags_MouseButtonRight|ImGuiPopupFlags_NoOpenOverItems)) {
             if(ImGui::BeginMenu("Create")){int item=drawCreateItems();if(item>=0)*createRequest=item;ImGui::EndMenu();}
             ImGui::EndPopup();
         }
         ImGui::EndChild();
+        ImGui::EndDisabled();
     }
     ImGui::End();
     return changed;

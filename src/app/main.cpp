@@ -295,6 +295,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     float       pressY     = 0.0f;
     std::size_t clickCubes  = 0;     // how many cubes clicks have created
 
+    bool cameraLooking=false;
     bool screenshotSaved=false;
     unsigned renderedFrames = 0;
     constexpr unsigned smokeFrames = 120;
@@ -309,12 +310,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if(inputSettings.capture(event,browser.assets,input))continue;
+            if(event.type==SDL_EVENT_WINDOW_FOCUS_LOST ||
+                (event.type==SDL_EVENT_MOUSE_BUTTON_UP && event.button.button==SDL_BUTTON_RIGHT)) {
+                cameraLooking=false;SDL_SetWindowRelativeMouseMode(window,false);
+            }
             ImGui_ImplSDL3_ProcessEvent(&event);
             input.event(event);
             const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                 event.type == SDL_EVENT_MOUSE_BUTTON_UP || event.type == SDL_EVENT_MOUSE_MOTION ||
                 event.type == SDL_EVENT_MOUSE_WHEEL;
-            if (mouseEvent && (projectDialog.pending() || browser.dialog.pending() || (ImGui::GetIO().WantCaptureMouse && !sceneHovered) ||
+            if (mouseEvent && (projectDialog.pending() || browser.dialog.pending() || (ImGui::GetIO().WantCaptureMouse && !sceneHovered && !cameraLooking) ||
                 (!spawnMode && editor.capturesMouse()))) {
                 clicking = false;
                 continue;
@@ -334,6 +339,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             case SDL_EVENT_KEY_DOWN:
                 break; // Escape is reserved for UI cancellation, never application exit.
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                if(event.button.button==SDL_BUTTON_RIGHT && freeCamera && sceneHovered &&
+                    layout.scene.contains(event.button.x,event.button.y) && !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
+                    cameraLooking=SDL_SetWindowRelativeMouseMode(window,true);clicking=false;
+                }
                 if (event.button.button == SDL_BUTTON_LEFT) {
                     clicking = true;
                     pressX   = event.button.x;
@@ -349,7 +358,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 // cancels a click but never moves the camera or selects/spawns.
                 if (event.motion.state & SDL_BUTTON_RMASK) {
                     clicking = false;
-                    if (freeCamera && sceneHovered && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(event.motion.x,event.motion.y)) camera.look(event.motion.xrel, event.motion.yrel);
+                    if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) camera.look(event.motion.xrel, event.motion.yrel);
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
@@ -392,8 +401,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
                 // Dolly in freecam; the static view ignores all navigation input.
-                float mx=0,my=0;SDL_GetMouseState(&mx,&my);
-                if (freeCamera && sceneHovered && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(mx,my)) {
+                if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) {
                     if(SDL_GetModState()&SDL_KMOD_SHIFT)cameraBoost=adjustSceneCameraBoost(cameraBoost,event.wheel.y);
                     else camera.move(event.wheel.y,0,0,std::abs(event.wheel.y));
                 }
@@ -670,7 +678,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                         attachScriptAsset(world,selectedEntity,static_cast<const char*>(asset->Data));
                     ImGui::EndDragDropTarget();
                 }
-                editor.draw(world,selectedEntity,!spawnMode,camera,static_cast<float>(sceneSurface.width)/sceneSurface.height,&sceneRect,sceneDrawList);
+                if(editAllowed && (sceneFocused || sceneHovered) && !cameraLooking && !ImGui::GetIO().WantTextInput &&
+                    !ImGui::IsAnyItemActive() && !cameraModifiersHeld(SDL_GetModState()) &&
+                    !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId)) {
+                    if(ImGui::IsKeyPressed(ImGuiKey_W,false))editor.setTool(TransformTool::Move);
+                    if(ImGui::IsKeyPressed(ImGuiKey_E,false))editor.setTool(TransformTool::Rotate);
+                    if(ImGui::IsKeyPressed(ImGuiKey_R,false))editor.setTool(TransformTool::Scale);
+                }
+                editor.draw(world,selectedEntity,!spawnMode && !cameraLooking,camera,static_cast<float>(sceneSurface.width)/sceneSurface.height,&sceneRect,sceneDrawList);
                 if(editor.capturesMouse())clicking=false;
             }
             ImGui::End();ImGui::PopStyleVar();
@@ -715,8 +730,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         const float  seconds = static_cast<float>(ticks - lastTicks) * 1e-9f;
         lastTicks            = ticks;
 
-        float mouseX=0,mouseY=0;SDL_GetMouseState(&mouseX,&mouseY);
-        if (freeCamera && sceneHovered && !browser.dialog.pending() && !projectDialog.pending() && !cameraModifiersHeld(SDL_GetModState()) && layout.scene.contains(mouseX,mouseY) && !editor.dragging() && !ImGui::GetIO().WantCaptureKeyboard &&
+        if(cameraLooking && (!freeCamera || !sceneVisible || browser.dialog.pending() || projectDialog.pending() ||
+            !(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS))) {
+            cameraLooking=false;SDL_SetWindowRelativeMouseMode(window,false);
+        }
+        if (cameraLooking && !browser.dialog.pending() && !projectDialog.pending() && !cameraModifiersHeld(SDL_GetModState()) && !editor.dragging() && !ImGui::GetIO().WantTextInput &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             const float speed = sceneCameraSpeed(SDL_GetModState(),cameraBoost);

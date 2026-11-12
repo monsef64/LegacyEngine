@@ -189,7 +189,7 @@ jobs:
           cp build/_deps/lua-src/lua.h "$package/licenses/Lua.txt"
           cp third_party/roboto/LICENSE "$package/licenses/Roboto.txt"
           cp third_party/glad/LICENSE "$package/licenses/glad.txt"
-          cp third_party/dr_libs/LICENSE "$package/licenses/dr_libs.txt"
+          cp third_party/miniaudio/LICENSE "$package/licenses/miniaudio.txt"
           cp third_party/json/LICENSE.MIT "$package/licenses/nlohmann-json.txt"
           cp build/editor-screenshot.png "$package/"
           tar -czf "$package.tar.gz" "$package"

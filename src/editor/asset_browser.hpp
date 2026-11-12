@@ -44,6 +44,7 @@ public:
     void setRoot(const std::filesystem::path& root) {preview.stop();assets.root=root;currentFolder.clear();selected.clear();openedScript.clear();}
     void draw(SDL_Window* window,World& world,Entity selectedObject,ScriptEditor& scripts,bool editable,EditorHistory* history=nullptr) {
         if(auto result=dialog.poll()) {if(!result->error.empty())assets.error=result->error;else if(!result->path.empty())importFile(result->path);}
+        preview.update();
         if(dockedEditor && !panelOpen[5])return;
         if(beginEditorPanel("Assets")) {
             const bool shortcutFocus=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
@@ -92,7 +93,7 @@ public:
                         selected=file;
                         if(folderItem && ImGui::IsMouseDoubleClicked(0)){currentFolder=file;selected.clear();}
                         if(!folderItem && AssetManager::script(file) && ImGui::IsMouseDoubleClicked(0)) {
-                            try {if(settings.external)settings.openExternal(projectFolder.empty()?assets.root:projectFolder);else {scripts.setSource(assets.readScript(file));openedScript=file;panelOpen[3]=true;}}
+                            try {if(settings.external){if(!settings.openExternal(assets.resolve(file),true))assets.error=settings.error;}else {scripts.setSource(assets.readScript(file));openedScript=file;panelOpen[3]=true;}}
                             catch(const std::exception& e){assets.error=e.what();}
                         }
                     }
@@ -101,6 +102,7 @@ public:
                         fileIcon(file);ImGui::TextUnformatted(file.c_str());ImGui::EndDragDropSource();
                     }
                     if(!folderItem && ImGui::BeginPopupContextItem("Asset actions")) {
+                        selected=file;
                         if(ImGui::MenuItem("Attach LegacyScript to selected object",nullptr,false,world.alive(selectedObject) && AssetManager::script(file)))attachScriptAsset(world,selectedObject,file);
                         if(ImGui::MenuItem("Rename...","F2")) {selected=file;renameRequested_=true;}
                         if(ImGui::MenuItem("Move to Trash","Del")){selected=file;deleteRequested_=true;}
@@ -117,6 +119,9 @@ public:
                         else draw->AddTriangleFilled(ImVec2(position.x+8,position.y+5),ImVec2(position.x+8,position.y+19),ImVec2(position.x+19,position.y+12),IM_COL32_WHITE);
                         if(ImGui::IsItemHovered())ImGui::SetTooltip(active?"Stop preview":"Play preview");
                         ImGui::SetCursorScreenPos(cursor);
+                        // Submit an item after restoring layout: ImGui 1.92 rejects
+                        // SetCursorScreenPos extending a child/table without an item.
+                        ImGui::Dummy(ImVec2(0,0));
                     }
                     ImGui::PopID();
                 }
@@ -137,6 +142,7 @@ public:
                 }
                 if(renameRequested_){
                     std::snprintf(rename_,sizeof(rename_),"%s",std::filesystem::path(selected).filename().string().c_str());
+                    ImGui::SetNextWindowPos(ImGui::GetMousePos(),ImGuiCond_Appearing);
                     ImGui::OpenPopup("Rename asset");renameRequested_=false;renameFocus_=true;
                 }
                 if(deleteRequested_){
@@ -149,16 +155,17 @@ public:
                         } else assets.error=history->error;
                     } else assets.error="Asset deletion requires editor history";
                 }
-                if(ImGui::BeginPopupModal("Rename asset",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
+                if(ImGui::BeginPopup("Rename asset",ImGuiWindowFlags_AlwaysAutoResize)) {
                     if(renameFocus_){ImGui::SetKeyboardFocusHere();renameFocus_=false;}
-                    const bool renameEnter=ImGui::InputText("Name",rename_,sizeof(rename_),ImGuiInputTextFlags_EnterReturnsTrue);
+                    const bool renameEnter=ImGui::InputText("Name",rename_,sizeof(rename_),ImGuiInputTextFlags_EnterReturnsTrue|ImGuiInputTextFlags_AutoSelectAll);
                     if(ImGui::Button("Rename") || renameEnter) {
                         try {
                         std::filesystem::path leaf(rename_);
-                        if(leaf.empty() || leaf.has_parent_path() || leaf=="..")assets.error="Use a filename without directories";
+                        if(leaf.empty() || leaf.has_parent_path() || leaf==".." || leaf==".")assets.error="Use a filename without directories";
                         else {
                             auto relative=(std::filesystem::path(selected).parent_path()/leaf).generic_string();
-                            if(std::filesystem::exists(assets.resolve(relative)))assets.error="An asset with that name exists";
+                            if(relative==selected){ImGui::CloseCurrentPopup();}
+                            else if(std::filesystem::exists(assets.resolve(relative)))assets.error="An asset with that name exists";
                             else {
                                 std::filesystem::rename(assets.resolve(selected),assets.resolve(relative));
                                 world.each<LuaScript>([&](Entity,LuaScript& s){if(s.path==selected)s.path=relative;for(auto& entry:s.additional)if(entry.path==selected)entry.path=relative;});

@@ -43,9 +43,21 @@ int main(){
     EditorHistory history(world);a.volume=.2;history.commit(world,e);Entity selection;history.undo(world,selection);assert(world.get<AudioSource>(e).volume==.5f);
     const auto temp=std::filesystem::temp_directory_path()/("legacy-audio-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(temp);AssetManager assets;assets.root=temp;
-    // Minimal PCM mono WAV, converted by SDL to stereo float at 48kHz.
+    // Queue storage is bounded and rejects odd stereo sample counts atomically.
+    {AudioOutput output(true);
+     output.submit(std::vector<float>(96000,.1f));assert(output.queuedFrames()==48000);
+     bool rejected=false;try{output.submit({.1f,.1f});}catch(...){rejected=true;}assert(rejected);
+     output.clear();assert(output.queuedFrames()==0);
+     rejected=false;try{output.submit({.1f});}catch(...){rejected=true;}assert(rejected && output.queuedFrames()==0);
+     output.open();output.clear();}
+    // Minimal PCM mono WAV, converted by miniaudio to stereo float at 48kHz.
     std::ofstream wav(temp/"tone.wav",std::ios::binary);auto word=[&](unsigned v,int bytes){for(int i=0;i<bytes;++i)wav.put(char(v>>(8*i)));};
     wav.write("RIFF",4);word(36+9600,4);wav.write("WAVEfmt ",8);word(16,4);word(1,2);word(1,2);word(48000,4);word(96000,4);word(2,2);word(16,2);wav.write("data",4);word(9600,4);for(int i=0;i<4800;++i)word(1000,2);wav.close();
+    auto decoded=decodeAudioClip(assets,"tone.wav");
+    assert(decoded.size()==9600);
+    assert(std::abs(decoded[0]-1000.0f/32768)<.0001f && decoded[0]==decoded[1]);
+    {std::ofstream bad(temp/"bad.wav");bad<<"invalid";}
+    bool rejected=false;try{decodeAudioClip(assets,"bad.wav");}catch(...){rejected=true;}assert(rejected);
     auto& source=world.get<AudioSource>(e);source.pan=0;source.volume=1;source.pitch=1;source.looping=false;source.blend=0;source.clip="tone.wav";
     {AudioSystem mixer;
       world.remove<AudioListener>(e);source.play();
@@ -71,9 +83,9 @@ int main(){
       source.distance=0;receiver.position={0,0,1};assert(spatialAudioGains(source,&emitter,&receiver).left==0);
       source.stop();source.blend=0;world.get<AudioListener>(listener).enabled=true;
     }
-    SDL_SetHint(SDL_HINT_AUDIO_DRIVER,"dummy");
-    {AudioSystem system;auto& source=world.get<AudioSource>(e);source.playOnStart=true;source.looping=false;source.pitch=1;system.start(world);system.update(world,assets,true);assert(system.error.empty());assert(source.isPlaying());
+
+    {AudioSystem system(true);auto& source=world.get<AudioSource>(e);source.playOnStart=true;source.looping=false;source.pitch=1;system.start(world);system.update(world,assets,true);assert(system.error.empty());assert(source.isPlaying());
      source.pause();system.update(world,assets,false);assert(!source.isPlaying());source.resume();system.clear();source.stop();source.playOneShot("../bad.wav");system.update(world,assets,true);assert(!system.error.empty());system.clear();}
-    {AudioPreview preview;preview.toggle(assets,"tone.wav");assert(preview.error.empty() && preview.playing("tone.wav"));preview.toggle(assets,"tone.wav");assert(!preview.playing("tone.wav"));}
-    SDL_Quit();std::filesystem::remove_all(temp);
+    {AudioPreview preview(true);preview.toggle(assets,"tone.wav");assert(preview.error.empty() && preview.playing("tone.wav"));preview.toggle(assets,"tone.wav");assert(!preview.playing("tone.wav"));}
+    std::filesystem::remove_all(temp);
 }

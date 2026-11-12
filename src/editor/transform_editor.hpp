@@ -12,6 +12,7 @@
 class TransformEditor {
 public:
     bool capturesMouse() const { return hovered_ || dragging_; }
+    void setTool(TransformTool tool){if(!dragging_)tool_=tool;}
     bool dragging() const { return dragging_; }
     void finish(World& world)
     {

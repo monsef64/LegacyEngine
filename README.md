@@ -1,6 +1,6 @@
 # LegacyEngine
 
-A C++17 3D editor built with SDL3, OpenGL, Dear ImGui, ReactPhysics3D and Lua 5.4.
+A C++17 3D editor built with SDL3, OpenGL, Dear ImGui, ReactPhysics3D, miniaudio and Lua 5.4.
 LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lua.
 
 ![LegacyEngine editor: Scene viewport, Hierarchy, Inspector, Assets and scripting panels](docs/screenshot.png)
@@ -26,7 +26,7 @@ LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lu
 
 Requires a C++17 compiler, CMake 3.16+, Git and platform development libraries.
 CMake fetches SDL3 (if not installed), ReactPhysics3D, Dear ImGui, ImGuizmo and Lua.
-GLAD, the font, dr_mp3 and the JSON library are included under `third_party/`.
+GLAD, the font, miniaudio and the JSON library are included under `third_party/`.
 
 On Debian/Ubuntu, install the window/audio/OpenGL development dependencies used
 in [the engine workflow](.github/workflows/release.yml). Then:
@@ -98,8 +98,15 @@ Double-click folders in Assets, use **Up one folder** to return, and right-click
 empty space for **New Folder** or script/text creation. List/Grid icons are at the
 bottom-right. Hover WAV/MP3 assets for Play/Stop preview, independent of Play mode.
 
-Scene navigation: WASD/QE, right-drag look, Shift for faster movement and Shift+wheel
-to tune boosted speed. Ctrl/Alt/Super block camera navigation. Escape does not quit.
+Rename a Hierarchy GameObject with **F2** or a double-click. In Assets, use **F2**
+or right-click **Rename**. Both open a small popup at the mouse; Enter confirms
+and Escape cancels. Double-click a script to open that file in VS Code when the
+external editor setting is enabled.
+
+Scene navigation: hold **right mouse** to look and move with WASD/QE. The cursor
+is hidden during look and restored on release or focus loss. Shift moves faster;
+Shift+wheel while looking tunes boosted speed. Outside right-mouse look, **W/E/R**
+in Scene select Move/Rotate/Scale. Ctrl/Alt/Super block camera navigation. Escape does not quit.
 F5 starts Play, F6 pauses/resumes, F7 stops. Play-time changes are discarded on Stop.
 
 ## Projects
@@ -194,6 +201,12 @@ The first available gamepad is used, with a 0.15 dead zone.
 
 See [the API/type definitions](scripts/definitions/legacyengine.lua) and
 [the completion catalog](src/scripting/lua_definitions.hpp) for more signatures.
+
+Audio decoding and device playback use vendored miniaudio 0.11.23. Scene audio
+retains a deterministic main-thread mixer; the device callback consumes bounded
+stereo float PCM without accessing GameObjects. Asset previews have their own
+playback queue and do not require an AudioListener. WAV and MP3 decoding are
+provided by miniaudio; there is no separate dr_libs dependency.
 
 ## VS Code extension
 

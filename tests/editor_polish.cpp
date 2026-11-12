@@ -59,9 +59,12 @@ int main() {
     io.DisplaySize=ImVec2(1000,700);io.DeltaTime=1.0f/60;io.Fonts->Build();
     AssetBrowser browser;browser.assets.root=temp;ScriptEditor editor;assert(editor.source().empty());
     int request=-1;EditorRect hierarchy{500,20,400,500};
+    bool focusHierarchy=false,focusAssets=false;
     auto frame=[&] {
         ImGui::NewFrame();ImGui::SetNextWindowPos(ImVec2(20,20));ImGui::SetNextWindowSize(ImVec2(420,500));
+        if(focusAssets){ImGui::SetNextWindowFocus();focusAssets=false;}
         browser.draw(nullptr,world,e,editor,true,&history);
+        if(focusHierarchy){ImGui::SetNextWindowFocus();focusHierarchy=false;}
         drawLevelObjects(world,selection,true,&hierarchy,nullptr,&request);
         ImGui::Render();
     };
@@ -70,6 +73,20 @@ int main() {
     rightClick(700,430);assert(ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId));
     io.AddKeyEvent(ImGuiKey_Escape,true);frame();io.AddKeyEvent(ImGuiKey_Escape,false);frame();
     rightClick(200,450);assert(ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId));
+    io.AddKeyEvent(ImGuiKey_Escape,true);frame();io.AddKeyEvent(ImGuiKey_Escape,false);frame();
+    selection=child;focusHierarchy=true;frame();
+    io.AddKeyEvent(ImGuiKey_F2,true);frame();io.AddKeyEvent(ImGuiKey_F2,false);frame();
+    assert(ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId));
+    io.AddInputCharactersUTF8("Renamed Camera");frame();
+    io.AddKeyEvent(ImGuiKey_Enter,true);frame();io.AddKeyEvent(ImGuiKey_Enter,false);frame();
+    assert(world.get<ObjectName>(child).value=="Renamed Camera");
+    browser.selected="A.ls";focusAssets=true;frame();
+    io.AddKeyEvent(ImGuiKey_F2,true);frame();io.AddKeyEvent(ImGuiKey_F2,false);frame();
+    assert(ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId));
+    io.AddInputCharactersUTF8("Renamed.ls");frame();
+    io.AddKeyEvent(ImGuiKey_Enter,true);frame();io.AddKeyEvent(ImGuiKey_Enter,false);frame();
+    assert(browser.selected=="Renamed.ls" && std::filesystem::exists(temp/"Renamed.ls"));
+    assert(world.get<LuaScript>(e).path=="Renamed.ls");
     ImGui::DestroyContext();
     std::filesystem::remove_all(temp);
 }

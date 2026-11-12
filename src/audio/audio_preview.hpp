@@ -1,25 +1,35 @@
 #pragma once
 #include "audio/audio_clip.hpp"
-#include <SDL3/SDL.h>
+#include "audio/audio_output.hpp"
 class AudioPreview {
-    SDL_AudioStream* stream_=nullptr;
+    std::unique_ptr<AudioOutput> output_;
+    std::vector<float> samples_;
+    std::size_t cursor_=0;
+    bool nullDevice_=false;
+    void pump(){
+        if(!output_)return;
+        const auto queued=output_->queuedFrames();
+        const auto frames=queued<2400?std::min<std::size_t>(2400-queued,(samples_.size()-cursor_)/2):0;
+        if(frames){
+            output_->submit(std::vector<float>(samples_.begin()+cursor_,samples_.begin()+cursor_+frames*2));
+            cursor_+=frames*2;
+        }
+        if(cursor_==samples_.size() && output_->queuedFrames()==0)stop();
+    }
 public:
+    explicit AudioPreview(bool nullDevice=false):nullDevice_(nullDevice){}
     std::string path,error;
     ~AudioPreview(){stop();}
-    void stop(){if(stream_)SDL_DestroyAudioStream(stream_);stream_=nullptr;path.clear();}
-    bool playing(const std::string& asset){
-        if(stream_ && SDL_GetAudioStreamQueued(stream_)==0 && SDL_GetAudioStreamAvailable(stream_)==0)stop();
-        return stream_ && path==asset;
-    }
+    void stop(){output_.reset();samples_.clear();cursor_=0;path.clear();}
+    void update(){try{pump();}catch(const std::exception& e){stop();error=e.what();}}
+    bool playing(const std::string& asset){update();return output_ && path==asset;}
     void toggle(const AssetManager& assets,const std::string& asset){
         if(playing(asset)){stop();return;}stop();
         try{
-            auto samples=decodeAudioClip(assets,asset);
-            if(!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO))throw std::runtime_error(SDL_GetError());
-            SDL_AudioSpec spec{SDL_AUDIO_F32,2,48000};
-            stream_=SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,nullptr,nullptr);
-            if(!stream_ || !SDL_PutAudioStreamData(stream_,samples.data(),static_cast<int>(samples.size()*sizeof(float))) || !SDL_FlushAudioStream(stream_) || !SDL_ResumeAudioStreamDevice(stream_))throw std::runtime_error(SDL_GetError());
-            path=asset;error.clear();
+            samples_=decodeAudioClip(assets,asset);
+            output_=std::make_unique<AudioOutput>(nullDevice_);
+            path=asset;error.clear();pump();
+            if(output_)output_->open();
         }catch(const std::exception& e){stop();error=e.what();}
     }
 };
