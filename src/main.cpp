@@ -20,6 +20,7 @@
 #include "editor_layout.hpp"
 #include "inspector.hpp"
 #include "play_mode.hpp"
+#include "project_io.hpp"
 #include "editor_history.hpp"
 #include "playback_controls.hpp"
 #include "editor_theme.hpp"
@@ -254,6 +255,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
     Entity editSelection;
     TransformEditor editor;
     OrbitCamera camera;
+    const ProjectIO::Meshes projectMeshes{gridMesh,planeMesh,cubeMesh,sphereMesh,capsuleMesh,coneMesh};
+    std::array<char,1024> projectPath{};
+    std::strcpy(projectPath.data(),"project.legacy");
+    std::string currentProject,projectError,projectStatus;
+    bool savingProject=false;
+
     Uint64 lastTicks = SDL_GetTicksNS();
     bool   running   = true;
 
@@ -282,8 +289,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                 clicking = false;
                 continue;
             }
-            if (event.type == SDL_EVENT_KEY_DOWN && ImGui::GetIO().WantCaptureKeyboard &&
-                event.key.key != SDLK_ESCAPE) continue;
+            if (event.type == SDL_EVENT_KEY_DOWN && ImGui::GetIO().WantCaptureKeyboard) continue;
             switch (event.type) {
             case SDL_EVENT_WINDOW_FOCUS_LOST:
                 editor.finish(world);
@@ -293,10 +299,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                 running = false;
                 break;
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_ESCAPE) {
-                    running = false;
-                }
-                break;
+                break; // Escape is reserved for UI cancellation, never application exit.
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if (event.button.button == SDL_BUTTON_LEFT) {
                     clicking = true;
@@ -360,6 +363,59 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
+        bool openProject=false,saveProject=false,saveAsProject=false;
+        const bool projectEnabled=!playMode.active() && !editor.dragging();
+        if(ImGui::BeginMainMenuBar()) {
+            if(ImGui::BeginMenu("File")) {
+                openProject=ImGui::MenuItem("Open Project...","Ctrl+O",false,projectEnabled);
+                saveProject=ImGui::MenuItem("Save Project","Ctrl+S",false,projectEnabled);
+                saveAsProject=ImGui::MenuItem("Save Project As...","Ctrl+Shift+S",false,projectEnabled);
+                ImGui::EndMenu();
+            }
+            if(!projectStatus.empty()){ImGui::SameLine();ImGui::TextDisabled("%s",projectStatus.c_str());}
+            ImGui::EndMainMenuBar();
+        }
+        if(projectEnabled && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive()) {
+            openProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O,ImGuiInputFlags_RouteGlobal);
+            saveProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S,ImGuiInputFlags_RouteGlobal);
+            saveAsProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S,ImGuiInputFlags_RouteGlobal);
+        }
+        if(saveProject && !currentProject.empty()) {
+            if(ProjectIO::save(currentProject,world,scripts.source(),camera,projectMeshes,projectError))
+                projectStatus="Project saved";
+            else {savingProject=true;ImGui::OpenPopup("Project file");}
+        } else if(openProject || saveProject || saveAsProject) {
+            savingProject=!openProject;projectError.clear();ImGui::OpenPopup("Project file");
+        }
+        if(ImGui::BeginPopupModal("Project file",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted(savingProject?"Save project (.legacy)":"Open project (.legacy)");
+            ImGui::TextDisabled("Enter a full path, or a path relative to the working directory.");
+            if(!savingProject)ImGui::TextWrapped("Opening replaces the current scene and clears undo history. Save your work first.");
+            else ImGui::TextWrapped("Saving replaces an existing file at this path.");
+            ImGui::SetNextItemWidth(500);ImGui::InputText("Path",projectPath.data(),projectPath.size());
+            if(!projectError.empty())ImGui::TextWrapped("%s",projectError.c_str());
+            if(ImGui::Button(savingProject?"Save":"Open") && projectEnabled) {
+                bool success=false;
+                if(savingProject)success=ProjectIO::save(projectPath.data(),world,scripts.source(),camera,projectMeshes,projectError);
+                else {
+                    std::string source;World loadedWorld;OrbitCamera loadedCamera;
+                    success=ProjectIO::load(projectPath.data(),loadedWorld,source,loadedCamera,projectMeshes,projectError);
+                    if(success) {
+                        scripts.shutdown();world.restore(loadedWorld);camera=loadedCamera;
+                        scripts.resetRuntime();scripts.setSource(source);
+                        selectedEntity={};history=EditorHistory(world);physics.reset();
+                        clicking=false;spawnMode=false;
+                    }
+                }
+                if(success) {
+                    currentProject=projectPath.data();projectStatus=savingProject?"Project saved":"Project opened";
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SameLine();
+            if(ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
         const int created=drawCreateMenu();
         if(created>=0) {
             editor.finish(world);spawnMode=false;clicking=false;
