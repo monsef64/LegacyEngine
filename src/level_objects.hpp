@@ -29,18 +29,40 @@ inline std::vector<LevelObject> levelObjects(World& world)
 }
 
 // Copy values before adding components: pool growth can invalidate references.
-inline Entity duplicateLevelObject(World& world, Entity source) {
-    if (!world.alive(source)) return {};
+inline Entity copyLevelObject(World& sourceWorld, Entity source, World& world, bool preserveParent=false) {
+    if (!sourceWorld.alive(source)) return {};
     const Entity copy = world.create();
     auto component = [&](auto value) {
         using T = decltype(value);
-        if (auto* original = world.tryGet<T>(source)) { T data = *original; world.add(copy, data); }
+        if (auto* original = sourceWorld.tryGet<T>(source)) { T data = *original; world.add(copy, data); }
     };
     component(Transform{}); component(MeshRenderer{}); component(Collider{});
-    component(RigidBody{}); component(Parent{}); component(ObjectName{});
+    component(RigidBody{}); component(ObjectName{});
+    if(preserveParent)component(Parent{});
     if (auto* name = world.tryGet<ObjectName>(copy)) name->value += " (Copy)";
     return copy;
 }
+inline Entity duplicateLevelObject(World& world, Entity source) {
+    return copyLevelObject(world,source,world,true);
+}
+// Clipboard owns a detached copy, not a live reference to the source entity.
+class ObjectClipboard {
+public:
+    bool available() const { return data_ != nullptr; }
+    void copy(World& world, Entity source) {
+        if(!world.alive(source))return;
+        data_=std::make_unique<World>();
+        entity_=copyLevelObject(world,source,*data_);
+        // Copy suffix is applied when pasting, not while storing the clipboard.
+        if(auto* name=world.tryGet<ObjectName>(source))data_->add(entity_,*name);
+    }
+    Entity paste(World& world) {
+        return data_?copyLevelObject(*data_,entity_,world):Entity{};
+    }
+private:
+    std::unique_ptr<World> data_;
+    Entity entity_;
+};
 inline void deleteLevelObject(World& world, Entity object) {
     // Detach direct children, preserving their world-space poses.
     world.each<Parent>([&](Entity child, Parent& link) {
