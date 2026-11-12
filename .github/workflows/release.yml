@@ -6,6 +6,7 @@ name: Release
 #     result from the run's page.
 on:
   push:
+    branches: ["**"]
     tags: ["v*"]
     paths:
       - 'src/**'
