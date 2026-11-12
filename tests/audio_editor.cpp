@@ -1,10 +1,10 @@
-#include "audio_system.hpp"
-#include "audio_preview.hpp"
-#include "lua_console.hpp"
-#include "lua_highlight.hpp"
-#include "rotation_editor.hpp"
-#include "project_io.hpp"
-#include "editor_history.hpp"
+#include "audio/audio_system.hpp"
+#include "audio/audio_preview.hpp"
+#include "scripting/lua_console.hpp"
+#include "scripting/lua_highlight.hpp"
+#include "editor/rotation_editor.hpp"
+#include "project/project_io.hpp"
+#include "editor/editor_history.hpp"
 #include <cassert>
 int main(){
     RotationEditorState rotation;rotation.apply({900,-900,10000});assert(rotation.angles.x==360 && rotation.angles.y==-360 && rotation.angles.z==360);

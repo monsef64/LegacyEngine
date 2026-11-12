@@ -1,8 +1,8 @@
-#include "components.hpp"
-#include "physics.hpp"
-#include "collider_debug.hpp"
-#include "camera.hpp"
-#include "transform_edit.hpp"
+#include "core/components.hpp"
+#include "physics/physics.hpp"
+#include "physics/collider_debug.hpp"
+#include "scene/camera.hpp"
+#include "editor/transform_edit.hpp"
 
 #include <cmath>
 #include <cstdio>

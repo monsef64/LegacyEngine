@@ -5,13 +5,13 @@ on:
   push:
     paths:
       - 'extensions/legacyscript/**'
-      - 'src/lua_definitions.hpp'
+      - 'src/scripting/lua_definitions.hpp'
       - 'scripts/definitions/legacyengine.lua'
       - '.github/workflows/legacyscript.yml'
   pull_request:
     paths:
       - 'extensions/legacyscript/**'
-      - 'src/lua_definitions.hpp'
+      - 'src/scripting/lua_definitions.hpp'
       - 'scripts/definitions/legacyengine.lua'
       - '.github/workflows/legacyscript.yml'
 

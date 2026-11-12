@@ -1,5 +1,5 @@
-#include "project_io.hpp"
-#include "editor_history.hpp"
+#include "project/project_io.hpp"
+#include "editor/editor_history.hpp"
 #include <cassert>
 #include <limits>
 
@@ -18,6 +18,9 @@ int main() {
     OrbitCamera camera;camera.distance=42;camera.target={7,8,9};
     const std::string script="-- source\nprint(\"hello\\world\")\n";
     const auto text=encode(world,script,camera,meshes);
+    auto json=parseJson(text);assert(json.at("format")=="LegacyEngine" && json.at("version")==9 && json.at("objects").is_array());
+    assert(json.at("objects")[0].at("components").contains("Transform"));
+    Loaded legacy;decode(encodeLegacy(world,script,camera,meshes),legacy,meshes);assert(legacy.source==script);
     Loaded loaded;decode(text,loaded,meshes);
     assert(loaded.source==script && loaded.camera.distance==42);
     assert(encode(loaded.world,loaded.source,loaded.camera,meshes)==text);
@@ -25,10 +28,12 @@ int main() {
     Meshes remapped=meshes;remapped[5]=MeshHandle{999};
     Loaded portable;decode(text,portable,remapped);
     portable.world.each<MeshRenderer>([&](Entity,MeshRenderer& renderer){assert(renderer.mesh.id==999);});
-    const auto path=(std::filesystem::temp_directory_path()/
-        ("legacy-project-test-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())+".legacy")).string();
+    const auto path=((std::filesystem::temp_directory_path()/
+        ("legacy-project-test-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count())))/"Project.legacy").string();
     std::string error,source;OrbitCamera view;
     assert(save(path,world,script,camera,meshes,error));
+    auto savedJson=readJsonFile(path,maxBytes);assert(savedJson.at("assets")=="Assets" && !savedJson.contains("editorCamera") && savedJson.at("projectSettings")=="Settings/ProjectSettings.json");
+    auto settings=readJsonFile(std::filesystem::path(path).parent_path()/"Settings"/"ProjectSettings.json",64*1024);assert(settings.at("editorCamera").at("distance")==42);
     World other;other.add(other.create(),ObjectName{"Replace me"});
     assert(load(path,other,source,view,meshes,error));
     assert(encode(other,source,view,meshes)==text);
@@ -39,6 +44,8 @@ int main() {
     assert(sceneSignature(other)==signature && source==script);
     assert(!load(path+".missing",other,source,view,meshes,error));
     auto reject=[&](std::string bad){Loaded trial;bool failed=false;try{decode(bad,trial,meshes);}catch(...){failed=true;}assert(failed);};
+    auto invalidJson=json;invalidJson["objects"][0]["parent"]=4294967296ULL;reject(invalidJson.dump());
+    invalidJson=json;invalidJson["objects"][0]["components"]["Transform"]["position"]={1,2};reject(invalidJson.dump());
     reject("LegacyEngineProject 9\n");reject(text.substr(0,text.size()/2));reject(text+"junk");
     // Parent cycle, invalid mesh and non-finite numeric values.
     reject("LegacyEngineProject 1\n\"\"\n0 0 0 0 0 10 1\n2\n2 1 0 0 0 0 0 0 1 1 1 1\n2 0 0 0 0 0 0 0 1 1 1 1\n");
@@ -46,5 +53,5 @@ int main() {
     assert(!save(path,world,script,camera,meshes,error));
     // Failed save left the original file intact.
     {std::ifstream in(path);std::string header;std::getline(in,header);assert(header=="LegacyEngineProject 1");}
-    std::filesystem::remove(path);
+    std::filesystem::remove_all(std::filesystem::path(path).parent_path());
 }

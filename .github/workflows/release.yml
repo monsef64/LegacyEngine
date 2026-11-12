@@ -6,8 +6,29 @@ name: Release
 #     result from the run's page.
 on:
   push:
+    branches: ["**"]
     tags: ["v*"]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'third_party/**'
+      - 'CMakeLists.txt'
+      - 'scripts/**'
+      - '.github/workflows/release.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'third_party/**'
+      - 'CMakeLists.txt'
+      - 'scripts/**'
+      - '.github/workflows/release.yml'
   workflow_dispatch:
+    inputs:
+      update_screenshot:
+        description: Commit the captured screenshot to the selected branch
+        type: boolean
+        default: false
 
 permissions:
   contents: write # needed to create the release
@@ -42,7 +63,7 @@ jobs:
             libdbus-1-dev libibus-1.0-dev libudev-dev libusb-1.0-0-dev
             libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-dev libsndio-dev
             libfribidi-dev libthai-dev liburing-dev
-            xvfb xauth libgl1-mesa-dri
+            xvfb xauth libgl1-mesa-dri python3-pil
           )
           sources="$RUNNER_TEMP/legacy-ubuntu.list"
           apt_options=(
@@ -99,7 +120,7 @@ jobs:
           done
 
       - name: Build
-        run: cmake --build build
+        run: cmake --build build --parallel 2
 
       - name: Regression tests
         timeout-minutes: 5
@@ -114,6 +135,36 @@ jobs:
         run: |
           xvfb-run -a -s "-screen 0 1280x720x24" \
             timeout -k 5s 60s build/LegacyEngine --smoke-test
+
+      - name: Capture current editor screenshot
+        timeout-minutes: 2
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x900x24" \
+            timeout -k 5s 60s build/LegacyEngine --screenshot build/editor-screenshot.bmp
+          python3 -c "from PIL import Image; Image.open('build/editor-screenshot.bmp').save('build/editor-screenshot.png')"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: editor-screenshot
+          path: build/editor-screenshot.png
+          if-no-files-found: error
+
+      - name: Update README screenshot on this branch
+        if: github.event_name == 'workflow_dispatch' && inputs.update_screenshot && github.ref_type == 'branch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/editor-screenshot.png docs/screenshot.png
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshot.png
+          if ! git diff --cached --quiet; then
+            git commit -m "Refresh editor screenshot from graphical build"
+            git -c 'credential.helper=!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f' \
+              push origin "HEAD:$GITHUB_REF_NAME"
+          fi
 
       # README.md says which glibc the binary needs. The number depends on what
       # is linked into the binary, so show it on the page of the run.
@@ -138,6 +189,9 @@ jobs:
           cp build/_deps/lua-src/lua.h "$package/licenses/Lua.txt"
           cp third_party/roboto/LICENSE "$package/licenses/Roboto.txt"
           cp third_party/glad/LICENSE "$package/licenses/glad.txt"
+          cp third_party/dr_libs/LICENSE "$package/licenses/dr_libs.txt"
+          cp third_party/json/LICENSE.MIT "$package/licenses/nlohmann-json.txt"
+          cp build/editor-screenshot.png "$package/"
           tar -czf "$package.tar.gz" "$package"
 
           echo "PACKAGE=$package" >> "$GITHUB_ENV"

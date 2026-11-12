@@ -1,8 +1,8 @@
-#include "editor_layout.hpp"
-#include "inspector.hpp"
-#include "create_menu.hpp"
-#include "script_editor.hpp"
-#include "physics.hpp"
+#include "editor/editor_layout.hpp"
+#include "editor/inspector.hpp"
+#include "editor/create_menu.hpp"
+#include "editor/script_editor.hpp"
+#include "physics/physics.hpp"
 #include <imgui_internal.h>
 #include <cstdio>
 #include <cstdlib>

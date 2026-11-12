@@ -1,11 +1,11 @@
-#include "rotation_editor.hpp"
-#include "asset_browser.hpp"
-#include "editor_input.hpp"
-#include "script_components.hpp"
-#include "project_io.hpp"
-#include "editor_history.hpp"
-#include "level_objects.hpp"
-#include "mesh.hpp"
+#include "editor/rotation_editor.hpp"
+#include "editor/asset_browser.hpp"
+#include "editor/editor_input.hpp"
+#include "scripting/script_components.hpp"
+#include "project/project_io.hpp"
+#include "editor/editor_history.hpp"
+#include "editor/level_objects.hpp"
+#include "rendering/mesh.hpp"
 #include <cassert>
 
 int main() {

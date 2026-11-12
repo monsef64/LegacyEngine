@@ -1,5 +1,5 @@
-#include "asset_browser.hpp"
-#include "level_objects.hpp"
+#include "editor/asset_browser.hpp"
+#include "editor/level_objects.hpp"
 #include <cassert>
 
 int main() {

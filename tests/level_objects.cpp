@@ -1,4 +1,4 @@
-#include "level_objects.hpp"
+#include "editor/level_objects.hpp"
 #include <cstdio>
 #include <cstdlib>
 

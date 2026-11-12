@@ -1,6 +1,6 @@
-#include "editor_input.hpp"
-#include "project_document.hpp"
-#include "play_mode.hpp"
+#include "editor/editor_input.hpp"
+#include "project/project_document.hpp"
+#include "editor/play_mode.hpp"
 #include <cassert>
 
 int main() {

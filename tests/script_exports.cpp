@@ -1,10 +1,10 @@
-#include "script_exports.hpp"
-#include "script_components.hpp"
-#include "script_editor.hpp"
-#include "project_io.hpp"
-#include "editor_history.hpp"
-#include "level_objects.hpp"
-#include "audio_preview.hpp"
+#include "scripting/script_exports.hpp"
+#include "scripting/script_components.hpp"
+#include "editor/script_editor.hpp"
+#include "project/project_io.hpp"
+#include "editor/editor_history.hpp"
+#include "editor/level_objects.hpp"
+#include "audio/audio_preview.hpp"
 #include <cassert>
 int main(){
     const std::string source=R"(

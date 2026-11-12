@@ -5,7 +5,7 @@
   },
   {
     "name": "AudioClip",
-    "signature": "AudioClip(projectRelativeWavPath) -> AudioClip path"
+    "signature": "AudioClip(projectRelativeAudioPath) -> AudioClip path"
   },
   {
     "name": "AudioListener",
@@ -82,6 +82,94 @@
   {
     "name": "playOneShot",
     "signature": "audio:playOneShot(AudioClip) - overlapping nonlooping clip"
+  },
+  {
+    "name": "isKeyPressed",
+    "signature": "isKeyPressed(keyNameOrScancode) -> boolean"
+  },
+  {
+    "name": "isKeyDown",
+    "signature": "isKeyDown(keyNameOrScancode) -> boolean"
+  },
+  {
+    "name": "isKeyReleased",
+    "signature": "isKeyReleased(keyNameOrScancode) -> boolean"
+  },
+  {
+    "name": "isMouseButtonPressed",
+    "signature": "isMouseButtonPressed(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "isMouseButtonDown",
+    "signature": "isMouseButtonDown(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "isMouseButtonReleased",
+    "signature": "isMouseButtonReleased(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "getMousePosition",
+    "signature": "getMousePosition() -> {x,y} window pixels"
+  },
+  {
+    "name": "getMouseDelta",
+    "signature": "getMouseDelta() -> {x,y} relative pixels this frame"
+  },
+  {
+    "name": "getMouseWheelDelta",
+    "signature": "getMouseWheelDelta() -> {x,y} wheel units this frame"
+  },
+  {
+    "name": "getInputAxis",
+    "signature": "getInputAxis(negativeButton,positiveButton) -> -1 to 1"
+  },
+  {
+    "name": "getInputVector",
+    "signature": "getInputVector(leftButton,rightButton,downButton,upButton) -> normalized {x,y}"
+  },
+  {
+    "name": "isGamepadButtonPressed",
+    "signature": "isGamepadButtonPressed(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "isGamepadButtonDown",
+    "signature": "isGamepadButtonDown(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "getGamepadAxis",
+    "signature": "getGamepadAxis(axisNameOrNumber) -> -1 to 1"
+  },
+  {
+    "name": "getGamepadStick",
+    "signature": "getGamepadStick(leftOrRight) -> {x,y}"
+  },
+  {
+    "name": "isButtonPressed",
+    "signature": "isButtonPressed(projectButtonName) -> boolean"
+  },
+  {
+    "name": "isButtonReleased",
+    "signature": "isButtonReleased(projectButtonName) -> boolean"
+  },
+  {
+    "name": "isButtonDown",
+    "signature": "isButtonDown(projectButtonName) -> boolean"
+  },
+  {
+    "name": "debug",
+    "signature": "debug - safe logging only; no Lua debug introspection"
+  },
+  {
+    "name": "log",
+    "signature": "debug.log(...) - write a normal message"
+  },
+  {
+    "name": "error",
+    "signature": "debug.error(...) - write an error without throwing"
+  },
+  {
+    "name": "warning",
+    "signature": "debug.warning(...) - write a warning"
   },
   {
     "name": "new",

@@ -1,4 +1,4 @@
-#include "lua_console.hpp"
+#include "scripting/lua_console.hpp"
 #include <cstdio>
 #include <cstdlib>
 
@@ -16,6 +16,7 @@ int main()
     using Kind=LuaConsole::Kind;
     LuaConsole console;
     require(console.ready(),"runtime starts");
+    require(console.lines().empty(),"runtime starts without ready banner");
     console.clear();
     require(console.execute("local value = 42"),"silent script succeeds");
     require(console.lines().empty(),"silent scripts produce no execution banners");
@@ -34,7 +35,9 @@ int main()
     require(contains(console,Kind::Error,"broken") && contains(console,Kind::Error,"stack traceback"),"runtime traceback captured");
     require(!console.execute("error({})"),"non-string errors handled");
     require(console.execute("print('recovered')"),"errors do not poison future executions");
-    require(console.execute("assert(io == nil and os == nil and package == nil and require == nil and debug == nil and coroutine == nil and load == nil and loadfile == nil and dofile == nil and pcall == nil and xpcall == nil and setmetatable == nil)"),"host access and budget bypass APIs omitted");
+    require(console.execute("debug.log('Log', 42); debug.warning('Careful'); debug.error('Failure'); print('Still running')"),"logging does not throw");
+    require(contains(console,Kind::Warning,"Careful") && contains(console,Kind::Error,"Failure") && contains(console,Kind::Output,"Still running"),"debug severities routed correctly");
+    require(console.execute("assert(io == nil and os == nil and package == nil and require == nil and type(debug) == 'table' and debug.getregistry == nil and debug.sethook == nil and coroutine == nil and load == nil and loadfile == nil and dofile == nil and pcall == nil and xpcall == nil and setmetatable == nil)"),"host access and budget bypass APIs omitted");
     require(!console.execute("while true do end"),"infinite loop interrupted");
     require(contains(console,Kind::Error,"instruction limit"),"execution limit reported");
     require(!console.execute("local x=string.rep('x', 100000000)"),"memory allocation bounded");

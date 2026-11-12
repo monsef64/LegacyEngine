@@ -30,3 +30,12 @@ test('Inspector exported field completion and hover',()=>{
  const result=f.completion(...input(text));assert(result.some(x=>x.label==='target' && x.detail.includes('GameObject')));assert(result.some(x=>x.label==='speed'));
  assert.match(f.hover(...input(text+'target')).contents.value,/GameObject/);
 });
+
+test('input APIs are suggested with signatures',()=>{
+ const result=f.completion(...input(''));
+ for(const name of ['isKeyPressed','isKeyDown','isKeyReleased','isMouseButtonPressed','isMouseButtonDown','isMouseButtonReleased','getMousePosition','getMouseDelta','getMouseWheelDelta','getInputAxis','getInputVector','isGamepadButtonPressed','isGamepadButtonDown','getGamepadAxis','getGamepadStick','isButtonPressed','isButtonReleased','isButtonDown'])assert(result.some(x=>x.label===name && x.detail));
+});
+
+test('debug exposes only safe logging methods',()=>{
+ assert.deepEqual(f.completion(...input('debug.')).map(x=>x.label).sort(),['error','log','warning']);
+});

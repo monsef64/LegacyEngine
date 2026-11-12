@@ -1,6 +1,6 @@
-#include "lua_console.hpp"
-#include "lua_definitions.hpp"
-#include "physics.hpp"
+#include "scripting/lua_console.hpp"
+#include "scripting/lua_definitions.hpp"
+#include "physics/physics.hpp"
 #include <cstdio>
 #include <cstdlib>
 

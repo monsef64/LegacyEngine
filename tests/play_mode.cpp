@@ -1,6 +1,6 @@
-#include "play_mode.hpp"
-#include "level_objects.hpp"
-#include "physics.hpp"
+#include "editor/play_mode.hpp"
+#include "editor/level_objects.hpp"
+#include "physics/physics.hpp"
 #include <cassert>
 
 struct Extra { std::string value; };
