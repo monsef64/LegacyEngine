@@ -75,12 +75,22 @@ int main() {
     copiedWorld.destroy(source);
     Entity pasted=clipboard.paste(copiedWorld);
     assert(copiedWorld.get<Transform>(pasted).position.x==2);
-    assert(copiedWorld.get<ObjectName>(pasted).value=="Copied (Copy)");
+    assert(copiedWorld.get<ObjectName>(pasted).value=="Copied (3)");
     assert(getParent(copiedWorld,pasted)==Entity{});
     assert(copiedWorld.has<RigidBody>(pasted) && copiedWorld.has<Collider>(pasted));
     copiedWorld.get<Collider>(pasted).radius=9;
     Entity again=clipboard.paste(copiedWorld);
     assert(copiedWorld.get<Collider>(again).radius==0.5f);
+    assert(copiedWorld.get<ObjectName>(duplicate).value=="Copied (2)");
+    assert(copiedWorld.get<ObjectName>(again).value=="Copied (4)");
+    Entity next=duplicateLevelObject(copiedWorld,duplicate);
+    assert(copiedWorld.get<ObjectName>(next).value=="Copied (5)");
+    clipboard.copy(copiedWorld,next);
+    Entity sixth=clipboard.paste(copiedWorld);
+    assert(copiedWorld.get<ObjectName>(sixth).value=="Copied (6)");
+    assert(copiedObjectName(copiedWorld,"Other (2)")=="Other (3)");
+    assert(copiedObjectName(copiedWorld,"Other (text)")=="Other (text) (2)");
+    assert(copiedObjectName(copiedWorld,"")==" (2)");
     // Icon controls generate geometry without requiring Unicode font glyphs.
     ImGui::CreateContext();auto& io=ImGui::GetIO();
     io.DisplaySize=ImVec2(800,600);io.DeltaTime=1.0f/60;

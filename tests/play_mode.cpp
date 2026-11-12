@@ -27,7 +27,7 @@ int main() {
     assert(world.get<Transform>(parent).position.y==paused);
     mode.pause(); assert(mode.playing());
     Entity copy=duplicateLevelObject(world,parent);
-    assert(world.get<ObjectName>(copy).value=="Original (Copy)");
+    assert(world.get<ObjectName>(copy).value=="Original (2)");
     world.get<Collider>(copy).friction=0.9f;
     assert(world.get<Collider>(parent).friction==0.5f);
     deleteLevelObject(world,parent);

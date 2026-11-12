@@ -531,3 +531,7 @@ Saves are validated and written to a temporary sibling file before replacing
 the destination, so serialization/write failures do not truncate an existing
 project. Errors are shown in the path dialog. Version 1 limits projects to
 10,000 objects, 16 MiB total, and 64 KiB of Lua source.
+
+Duplicate and Paste use numbered names: `GameObject` becomes `GameObject (2)`,
+and copying `GameObject (2)` produces `GameObject (3)`. Existing scene names are
+skipped so repeated duplicates/pastes do not create naming collisions.

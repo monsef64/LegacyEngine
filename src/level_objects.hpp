@@ -6,6 +6,8 @@
 #include "editor_layout.hpp"
 #include <imgui.h>
 #include <algorithm>
+#include <charconv>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -28,6 +30,31 @@ inline std::vector<LevelObject> levelObjects(World& world)
     return objects;
 }
 
+inline std::string copiedObjectName(World& world, const std::string& original) {
+    std::string base=original;
+    std::uint64_t next=2;
+    const auto start=original.rfind(" (");
+    if(start!=std::string::npos && original.back()==')') {
+        std::uint64_t number=0;
+        const char* first=original.data()+start+2;
+        const char* last=original.data()+original.size()-1;
+        const auto parsed=std::from_chars(first,last,number);
+        if(parsed.ec==std::errc{} && parsed.ptr==last && number>=1 &&
+           number<std::numeric_limits<std::uint64_t>::max()) {
+            base=original.substr(0,start);next=number+1;
+        }
+    }
+    std::unordered_set<std::string> used;
+    world.each<ObjectName>([&](Entity,ObjectName& name){used.insert(name.value);});
+    for(;;) {
+        std::string candidate=base+" ("+std::to_string(next)+")";
+        if(!used.count(candidate))return candidate;
+        if(next==std::numeric_limits<std::uint64_t>::max()) {
+            base=original;next=2;
+        } else ++next;
+    }
+}
+
 // Copy values before adding components: pool growth can invalidate references.
 inline Entity copyLevelObject(World& sourceWorld, Entity source, World& world, bool preserveParent=false) {
     if (!sourceWorld.alive(source)) return {};
@@ -39,7 +66,7 @@ inline Entity copyLevelObject(World& sourceWorld, Entity source, World& world, b
     component(Transform{}); component(MeshRenderer{}); component(Collider{});
     component(RigidBody{}); component(ObjectName{});
     if(preserveParent)component(Parent{});
-    if (auto* name = world.tryGet<ObjectName>(copy)) name->value += " (Copy)";
+    if (auto* name = world.tryGet<ObjectName>(copy)) name->value = copiedObjectName(world,name->value);
     return copy;
 }
 inline Entity duplicateLevelObject(World& world, Entity source) {
