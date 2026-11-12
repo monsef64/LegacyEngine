@@ -40,7 +40,7 @@ int main(){
     io.AddInputCharactersUTF8("Renamed");frame();
     require(world.get<ObjectName>(object).value=="Renamed","Inspector edits live object name");
     io.AddKeyEvent(ImGuiKey_Enter,true);frame();io.AddKeyEvent(ImGuiKey_Enter,false);frame();
-    io.AddMousePosEvent(layout.inspector.x+30,layout.inspector.y+105);frame();
+    io.AddMousePosEvent(layout.inspector.x+30,layout.inspector.y+125);frame();
     io.AddKeyEvent(ImGuiMod_Ctrl,true);frame();
     io.AddMouseButtonEvent(0,true);frame();io.AddMouseButtonEvent(0,false);frame();
     io.AddKeyEvent(ImGuiKey_A,true);frame();io.AddKeyEvent(ImGuiKey_A,false);io.AddKeyEvent(ImGuiMod_Ctrl,false);frame();

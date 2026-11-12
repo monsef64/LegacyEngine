@@ -47,6 +47,14 @@ int main() {
     assert(loaded.world.get<LuaScript>(e).additional[0].path=="B.ls");
     assert(!loaded.world.get<LuaScript>(e).additional[0].enabled);
     assert(AssetManager::script("hello.ls") && AssetManager::script("old.lua"));
+    auto parent=world.create();world.add(parent,ObjectName{"Group"});world.add(parent,Transform{});
+    auto child=world.create();world.add(child,ObjectName{"Main Camera"});world.add(child,Transform{});setParent(world,child,parent);
+    const auto beforeSearch=world.entities().size();
+    auto matches=hierarchyMatches(world,levelObjects(world),"CAMERA");
+    assert(matches.count(hierarchyKey(child)) && matches.count(hierarchyKey(parent)));
+    assert(!matches.count(hierarchyKey(e)));
+    assert(hierarchyMatches(world,levelObjects(world),"no-such-name").empty());
+    assert(world.entities().size()==beforeSearch);
     ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;
     io.DisplaySize=ImVec2(1000,700);io.DeltaTime=1.0f/60;io.Fonts->Build();
     AssetBrowser browser;browser.assets.root=temp;ScriptEditor editor;assert(editor.source().empty());

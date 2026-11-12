@@ -21,6 +21,7 @@ inline std::string sceneSignature(World& world) {
         scalar(e.index);scalar(e.generation);
         component(e,ObjectName{},[&](const ObjectName& n){scalar(n.value.size());result+=n.value;});
         component(e,LuaScript{},[&](const LuaScript& script){scalar(script.path.size());result+=script.path;scalar(script.enabled);scalar(script.additional.size());for(const auto& entry:script.additional){scalar(entry.path.size());result+=entry.path;scalar(entry.enabled);}});
+        component(e,AudioSource{},[&](const AudioSource& a){scalar(a.clip.size());result+=a.clip;scalar(a.volume);scalar(a.pitch);scalar(a.pan);scalar(a.distance);scalar(a.looping);scalar(a.muted);scalar(a.playOnStart);});
         component(e,Camera{},[&](const Camera& c){
             scalar(c.active);scalar(c.orthographic);scalar(c.fieldOfView);scalar(c.nearClip);scalar(c.farClip);scalar(c.orthographicSize);
             scalar(c.viewportX);scalar(c.viewportY);scalar(c.viewportWidth);scalar(c.viewportHeight);

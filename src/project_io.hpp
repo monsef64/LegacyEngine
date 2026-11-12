@@ -32,13 +32,13 @@ inline Transform readTransform(std::istream& in) {
 inline std::string encode(World& world,std::string_view source,const OrbitCamera& camera,const Meshes& meshes,std::string_view assetDirectory={}) {
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 5\n";
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 6\n";
     out<<std::quoted(std::string(source))<<'\n'<<std::quoted(std::string(assetDirectory))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
     for(Entity e:entities) {
         unsigned mask=(world.has<ObjectName>(e)?1:0)|(world.has<Transform>(e)?2:0)|
-            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0)|(world.has<Camera>(e)?64:0);
+            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0)|(world.has<Camera>(e)?64:0)|(world.has<AudioSource>(e)?128:0);
         int parent=-1;const Entity p=getParent(world,e);
         for(std::size_t i=0;i<entities.size();++i)if(entities[i]==p)parent=static_cast<int>(i);
         out<<mask<<' '<<parent<<' ';
@@ -67,6 +67,7 @@ inline std::string encode(World& world,std::string_view source,const OrbitCamera
                 <<c->viewportX<<' '<<c->viewportY<<' '<<c->viewportWidth<<' '<<c->viewportHeight<<' '<<target<<' ';
             writeVec(out,c->target);writeVec(out,c->followOffset);out<<c->tracking<<' '<<c->following<<' ';
         }
+        if(auto* a=world.tryGet<AudioSource>(e))out<<std::quoted(a->clip)<<' '<<a->volume<<' '<<a->pitch<<' '<<a->pan<<' '<<a->distance<<' '<<a->looping<<' '<<a->muted<<' '<<a->playOnStart<<' ';
         out<<'\n';
     }
     auto text=out.str();require(text.size()<=maxBytes);return text;
@@ -75,7 +76,7 @@ struct Loaded { World world; std::string source,assetDirectory; OrbitCamera came
 inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=5));
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=6));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
     if(version>=4) {
         in>>std::quoted(result.assetDirectory);
@@ -89,7 +90,7 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
     std::vector<Entity> entities;std::vector<int> parents,cameraTargets;
     for(int i=0;i<count;++i) {
         unsigned mask=0;int parent=-1;in>>mask>>parent;
-        require(bool(in) && mask<=(version==1?31u:version==2?63u:127u) && parent>=-1 && parent<count && parent!=i);
+        require(bool(in) && mask<=(version==1?31u:version==2?63u:version<6?127u:255u) && parent>=-1 && parent<count && parent!=i);
         const Entity e=result.world.create();entities.push_back(e);parents.push_back(parent);cameraTargets.push_back(-1);
         if(mask&1) {std::string name;in>>std::quoted(name);require(name.size()<=4096);result.world.add(e,ObjectName{name});}
         if(mask&2)result.world.add(e,readTransform(in));
@@ -128,6 +129,9 @@ inline void decode(const std::string& text,Loaded& result,const Meshes& meshes) 
             in>>cameraTargets.back();require(cameraTargets.back()>=-1 && cameraTargets.back()<count && cameraTargets.back()!=i);
             c.target=readVec(in);c.followOffset=readVec(in);in>>c.tracking>>c.following;require(validCamera(c));result.world.add(e,c);
         }
+        if(mask&128){AudioSource a;in>>std::quoted(a.clip);require(a.clip.size()<=4096 && a.clip.find('\0')==std::string::npos && !std::filesystem::path(a.clip).is_absolute());for(const auto& part:std::filesystem::path(a.clip))require(part!="..");
+            a.volume=number(in);a.pitch=number(in);a.pan=number(in);a.distance=number(in);in>>a.looping>>a.muted>>a.playOnStart;
+            require(a.volume>=0 && a.volume<=1 && a.pitch>=.1f && a.pitch<=4 && a.pan>=-1 && a.pan<=1 && a.distance>=0);result.world.add(e,a);}
         require(bool(in));
     }
     for(int i=0;i<count;++i)if(cameraTargets[i]>=0) {

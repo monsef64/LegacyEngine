@@ -12,6 +12,8 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <cctype>
+#include <unordered_set>
 
 struct LevelObject {
     Entity entity;
@@ -66,7 +68,8 @@ inline Entity copyLevelObject(World& sourceWorld, Entity source, World& world, b
         if (auto* original = sourceWorld.tryGet<T>(source)) { T data = *original; world.add(copy, data); }
     };
     component(Transform{}); component(MeshRenderer{}); component(Collider{});
-    component(RigidBody{}); component(ObjectName{}); component(LuaScript{}); component(Camera{});
+    component(AudioSource{});component(RigidBody{}); component(ObjectName{}); component(LuaScript{}); component(Camera{});
+    if(auto* audio=world.tryGet<AudioSource>(copy))audio->stop();
     if(auto* camera=world.tryGet<Camera>(copy))camera->active=false;
     if(preserveParent)component(Parent{});
     if (auto* name = world.tryGet<ObjectName>(copy)) name->value = copiedObjectName(world,name->value);
@@ -101,8 +104,37 @@ inline void deleteLevelObject(World& world, Entity object) {
     world.destroy(object);
 }
 
+// Search includes ancestors but never mutates the ECS hierarchy.
+inline std::unordered_set<std::uint64_t> hierarchyMatches(World& world,const std::vector<LevelObject>& objects,std::string query) {
+    auto lower=[](std::string text){for(char& c:text)c=static_cast<char>(std::tolower(static_cast<unsigned char>(c)));return text;};
+    query=lower(query);std::unordered_set<std::uint64_t> visible;
+    for(const auto& object:objects)if(query.empty() || lower(object.name).find(query)!=std::string::npos){
+        Entity e=object.entity;
+        for(std::size_t depth=0;depth<=objects.size() && world.alive(e);++depth){
+            const auto key=(std::uint64_t(e.generation)<<32)|e.index;
+            if(!visible.insert(key).second)break;
+            e=getParent(world,e);
+        }
+    }return visible;
+}
+inline std::uint64_t hierarchyKey(Entity e){return (std::uint64_t(e.generation)<<32)|e.index;}
+inline void hierarchyIcon(World& world,Entity e,ImVec2 p) {
+    auto* draw=ImGui::GetWindowDrawList();const auto color=ImGui::GetColorU32(ImGuiCol_TextDisabled);
+    auto at=[&](float x,float y){return ImVec2(p.x+x,p.y+y);};
+    if(world.has<Camera>(e)){
+        draw->AddRect(at(1,4),at(10,12),color,1);draw->AddTriangle(at(10,6),at(15,3),at(15,13),color);
+    }else if(world.has<AudioSource>(e)){
+        draw->AddRect(at(1,6),at(5,11),color);draw->AddTriangle(at(5,6),at(10,2),at(10,15),color);
+        draw->AddLine(at(13,4),at(15,8),color);draw->AddLine(at(15,8),at(13,13),color);
+    }else if(world.has<MeshRenderer>(e)){
+        draw->AddQuad(at(1,4),at(8,1),at(15,4),at(8,8),color);
+        draw->AddLine(at(1,4),at(1,12),color);draw->AddLine(at(15,4),at(15,12),color);
+        draw->AddLine(at(1,12),at(8,16),color);draw->AddLine(at(15,12),at(8,16),color);draw->AddLine(at(8,8),at(8,16),color);
+    }else{draw->AddRect(at(2,2),at(14,14),color,2);draw->AddLine(at(5,8),at(11,8),color);draw->AddLine(at(8,5),at(8,11),color);}
+}
+
 // Returns true when selection changes. The caller can end any active gizmo gesture.
-inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr,bool* focused=nullptr,int* createRequest=nullptr)
+inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr,bool* focused=nullptr,int* createRequest=nullptr,const char* levelName="Untitled")
 {
     if(focused)*focused=false;
     if(dockedEditor && !panelOpen[0])return false;
@@ -113,7 +145,10 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
     if (beginEditorPanel(panel?"Hierarchy":"Level Objects",panel?fixedPanelFlags:0)) {
         if(focused)*focused=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         const auto objects=levelObjects(world);
-        ImGui::Text("Objects: %d",static_cast<int>(objects.size()));
+        static ImGuiTextFilter search;
+        search.Draw("Search",-60);
+        const auto visible=hierarchyMatches(world,objects,search.InputBuf);
+
         if (!selectionEnabled) ImGui::TextDisabled("Disable Spawn Shapes Mode to select");
         ImGui::BeginDisabled(!selectionEnabled);
         if (ImGui::Button("Clear selection")) { selected={}; changed=true; }
@@ -134,11 +169,13 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
         ImGui::Separator();
         ImGui::BeginChild("Objects",ImVec2(0,0));
         auto row=[&](auto&& self,const LevelObject& object,int depth)->void {
-            if (!world.alive(object.entity)) return;
+            if (!world.alive(object.entity) || !visible.count(hierarchyKey(object.entity))) return;
             ImGui::PushID(static_cast<int>(object.entity.index));
             ImGui::PushID(static_cast<int>(object.entity.generation));
             if(depth)ImGui::Indent(static_cast<float>(depth)*12);
-            if (ImGui::Selectable(object.name.c_str(),selected==object.entity)) {
+            const auto iconPos=ImGui::GetCursorScreenPos();
+            const std::string rowLabel="     "+object.name;
+            if (ImGui::Selectable(rowLabel.c_str(),selected==object.entity)) {
                 changed=selected!=object.entity;
                 selected=object.entity;
             }
@@ -171,12 +208,25 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
                 }
                 ImGui::EndDragDropTarget();
             }
+            hierarchyIcon(world,object.entity,iconPos);
             if(depth)ImGui::Unindent(static_cast<float>(depth)*12);
             ImGui::PopID();ImGui::PopID();
             if(depth<128)for(const auto& child:objects)
                 if(getParent(world,child.entity)==object.entity)self(self,child,depth+1);
         };
-        for(const auto& object:objects)if(getParent(world,object.entity)==Entity{})row(row,object,0);
+        // This presentation-only root is not selectable, editable, or a drag/drop target.
+        ImGui::SetNextItemOpen(true,search.InputBuf[0]?ImGuiCond_Always:ImGuiCond_Once);
+        const auto rootPosition=ImGui::GetCursorScreenPos();
+        const bool rootOpen=ImGui::TreeNodeEx("##LevelRoot",ImGuiTreeNodeFlags_SpanAvailWidth,"    %s",levelName);
+        auto* rootDraw=ImGui::GetWindowDrawList();
+        rootDraw->AddQuad(ImVec2(rootPosition.x+22,rootPosition.y+3),ImVec2(rootPosition.x+28,rootPosition.y),ImVec2(rootPosition.x+34,rootPosition.y+3),ImVec2(rootPosition.x+28,rootPosition.y+7),ImGui::GetColorU32(ImGuiCol_Text));
+        rootDraw->AddLine(ImVec2(rootPosition.x+22,rootPosition.y+7),ImVec2(rootPosition.x+28,rootPosition.y+11),ImGui::GetColorU32(ImGuiCol_Text));
+        rootDraw->AddLine(ImVec2(rootPosition.x+28,rootPosition.y+11),ImVec2(rootPosition.x+34,rootPosition.y+7),ImGui::GetColorU32(ImGuiCol_Text));
+        if(rootOpen){
+            for(const auto& object:objects)if(getParent(world,object.entity)==Entity{})row(row,object,0);
+            if(visible.empty() && search.InputBuf[0])ImGui::TextDisabled("No matching objects");
+            ImGui::TreePop();
+        }
         ImGui::EndDisabled();
         if(createRequest && ImGui::BeginPopupContextWindow("Hierarchy empty actions",ImGuiPopupFlags_MouseButtonRight|ImGuiPopupFlags_NoOpenOverItems)) {
             if(ImGui::BeginMenu("Create")){int item=drawCreateItems();if(item>=0)*createRequest=item;ImGui::EndMenu();}

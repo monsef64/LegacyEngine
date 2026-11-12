@@ -92,5 +92,23 @@
   "CameraConstructor": {
     "new": "fun(name:string):CameraObject",
     "getActive": "fun():CameraObject|nil"
+  },
+  "AudioSource": {
+    "clip": "AudioClip",
+    "play": "fun(self:AudioSource)",
+    "stop": "fun(self:AudioSource)",
+    "pause": "fun(self:AudioSource)",
+    "resume": "fun(self:AudioSource)",
+    "setPitch": "fun(self:AudioSource,pitch:number):number",
+    "fadeIn": "fun(self:AudioSource,seconds:number)",
+    "fadeOut": "fun(self:AudioSource,seconds:number)",
+    "setVolume": "fun(self:AudioSource,volume:number):number",
+    "mute": "fun(self:AudioSource)",
+    "unmute": "fun(self:AudioSource)",
+    "setLooping": "fun(self:AudioSource,enabled:boolean):boolean",
+    "setPan": "fun(self:AudioSource,pan:number):number",
+    "setDistance": "fun(self:AudioSource,distance:number):number",
+    "isPlaying": "fun(self:AudioSource):boolean",
+    "playOneShot": "fun(self:AudioSource,clip:AudioClip)"
   }
 }

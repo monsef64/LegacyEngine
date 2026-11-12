@@ -1,5 +1,7 @@
 #include "script_editor.hpp"
 #include <imgui.h>
+#include <imgui_internal.h>
+#include "lua_highlight.hpp"
 #include <cstring>
 #include <cctype>
 #include "lua_definitions.hpp"
@@ -27,9 +29,31 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
         ImGui::EndDisabled();
         if(ownerError_)ImGui::TextWrapped("Select a GameObject with this script attached before executing it.");
         ImGui::TextDisabled("Lua 5.4 | Tab: complete API names | output below");
+        const auto sourceID=ImGui::GetID("##source");
         ImGui::InputTextMultiline("##source",source_.data(),source_.size(),ImVec2(-1,-1),
                                  ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackAlways,
                                  completion,this);
+        // Color tokens over the native input rendering; keep its caret, selection and undo.
+        auto* parent=ImGui::GetCurrentWindow();
+        for(auto* child:parent->DC.ChildWindows)if(child->ChildId==sourceID){
+            auto* state=ImGui::GetInputTextState(sourceID);
+            auto origin=child->DC.CursorStartPos;
+            if(state)origin.x-=state->Scroll.x;
+            auto* draw=child->DrawList;draw->PushClipRect(child->InnerClipRect.Min,child->InnerClipRect.Max,true);
+            std::string_view text(source_.data());
+            ImU32 colors[]{ImGui::GetColorU32(ImGuiCol_Text),IM_COL32(195,140,245,255),IM_COL32(210,180,125,255),IM_COL32(105,165,110,255),IM_COL32(120,200,190,255),IM_COL32(110,175,240,255)};
+            float x=origin.x,y=origin.y;
+            for(auto token:luaTokens(text)){
+                auto pos=token.begin;
+                while(pos<token.end){auto end=text.find('\n',pos);if(end==text.npos || end>token.end)end=token.end;
+                    if(token.kind!=LuaToken::Plain && y+ImGui::GetFontSize()>=child->InnerClipRect.Min.y && y<=child->InnerClipRect.Max.y)
+                        draw->AddText(ImVec2(x,y),colors[token.kind],text.data()+pos,text.data()+end);
+                    x+=ImGui::CalcTextSize(text.data()+pos,text.data()+end).x;
+                    pos=end;if(pos<token.end && text[pos]=='\n'){++pos;x=origin.x;y+=ImGui::GetFontSize();}
+                }
+            }
+            draw->PopClipRect();break;
+        }
         if (ImGui::IsItemActive() && !completionPrefix_.empty()) {
             bool opened=false;
             for (const auto& def:luaDefinitions) {

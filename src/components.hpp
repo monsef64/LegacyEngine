@@ -5,6 +5,7 @@
 #pragma once
 
 #include "math.hpp"
+#include "audio_source.hpp"
 #include "ecs.hpp"
 #include "mesh.hpp"
 #include <string>

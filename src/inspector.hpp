@@ -9,8 +9,14 @@
 #include <cmath>
 
 inline bool editVector(const char* label,Vec3& value,float speed=0.05f,float minimum=-1000000,float maximum=1000000) {
-    float v[]{value.x,value.y,value.z};
-    if(!ImGui::DragFloat3(label,v,speed,minimum,maximum,"%.3f",ImGuiSliderFlags_AlwaysClamp))return false;
+    ImGui::PushID(label);ImGui::TextUnformatted(label);
+    float v[]{value.x,value.y,value.z};bool changed=false;
+    const char* axes[]{"X","Y","Z"};
+    const float axisWidth=std::max(20.0f,(ImGui::GetContentRegionAvail().x-90)/3);
+    for(int i=0;i<3;++i){if(i)ImGui::SameLine();ImGui::TextUnformatted(axes[i]);ImGui::SameLine();ImGui::PushID(i);
+        ImGui::SetNextItemWidth(axisWidth);changed|=ImGui::DragFloat("##axis",&v[i],speed,minimum,maximum,"%.3f",ImGuiSliderFlags_AlwaysClamp);
+        ImGui::PopID();}
+    ImGui::PopID();if(!changed)return false;
     for(float n:v)if(!std::isfinite(n))return false;
     value={v[0],v[1],v[2]};return true;
 }
@@ -40,11 +46,8 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 editVector("Position",t->position);
                 static RotationEditorState rotationState;
                 rotationState.sync(selected,t->rotation);
-                float rotation[]{rotationState.angles.x,rotationState.angles.y,rotationState.angles.z};
-                if(ImGui::DragFloat3("Rotation (deg)",rotation,.5f,-36000,36000,"%.1f",ImGuiSliderFlags_AlwaysClamp)) {
-                    if(std::isfinite(rotation[0]) && std::isfinite(rotation[1]) && std::isfinite(rotation[2]))
-                        t->rotation=rotationState.apply({rotation[0],rotation[1],rotation[2]});
-                }
+                Vec3 rotation=rotationState.angles;
+                if(editVector("Rotation (deg)",rotation,.5f,-360,360))t->rotation=rotationState.apply(rotation);
                 const auto* c=world.tryGet<Collider>(selected);
                 if(c && c->shape!=ColliderShape::Box) {
                     float size=t->scale.x;
@@ -109,6 +112,22 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 if(ImGui::Button("Clear camera target")){camera->tracking=false;camera->following=false;camera->targetEntity={};}
                 if(ImGui::Button("Remove Camera"))world.remove<Camera>(selected);
             }
+            if(auto* a=world.tryGet<AudioSource>(selected);a && componentHeader("AudioSource")) {
+                char clip[4097];std::snprintf(clip,sizeof(clip),"%s",a->clip.c_str());
+                if(ImGui::InputText("AudioClip (.wav)",clip,sizeof(clip)))a->clip=clip;
+                if(ImGui::BeginDragDropTarget()){if(auto* payload=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string path=static_cast<const char*>(payload->Data);if(AssetManager::extension(path)==".wav")a->clip=path;}ImGui::EndDragDropTarget();}
+                ImGui::SliderFloat("Volume",&a->volume,0,1,"%.2f",ImGuiSliderFlags_AlwaysClamp);ImGui::SliderFloat("Pitch",&a->pitch,.1f,4,"%.2f",ImGuiSliderFlags_AlwaysClamp);
+                ImGui::SliderFloat("Pan",&a->pan,-1,1,"%.2f",ImGuiSliderFlags_AlwaysClamp);ImGui::DragFloat("Distance",&a->distance,.1f,0,10000,"%.2f",ImGuiSliderFlags_AlwaysClamp);
+                ImGui::Checkbox("Looping",&a->looping);ImGui::Checkbox("Mute",&a->muted);ImGui::Checkbox("Play on start",&a->playOnStart);
+                if(ImGui::Button("Play audio"))a->play();
+                ImGui::SameLine();if(ImGui::Button("Stop audio"))a->stop();
+                if(ImGui::Button("Pause audio"))a->pause();
+                ImGui::SameLine();if(ImGui::Button("Resume audio"))a->resume();
+                if(ImGui::Button("Fade in (1s)"))a->fadeIn(1);
+                ImGui::SameLine();if(ImGui::Button("Fade out (1s)"))a->fadeOut(1);
+                ImGui::TextUnformatted(a->isPlaying()?"Playing":a->state==AudioSource::State::Paused?"Paused":"Stopped");
+                if(ImGui::Button("Remove AudioSource"))world.remove<AudioSource>(selected);
+            }
             if(auto* scripts=world.tryGet<LuaScript>(selected);scripts && componentHeader("LegacyScripts")) {
                 int remove=-1;
                 auto row=[&](std::string& path,bool& enabled,int index) {
@@ -134,6 +153,7 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
             }
             if(ImGui::Button("Add Component"))ImGui::OpenPopup("AddComponent");
             if(ImGui::BeginPopup("AddComponent")) {
+                if(!world.has<AudioSource>(selected) && ImGui::MenuItem("AudioSource"))world.add(selected,AudioSource{});
                 if(!world.has<Transform>(selected) && ImGui::MenuItem("Transform"))world.add(selected,Transform{});
                 if(!world.has<MeshRenderer>(selected) && ImGui::MenuItem("MeshRenderer"))world.add(selected,MeshRenderer{meshes[0]});
                 if(!world.has<Collider>(selected) && ImGui::MenuItem("Collider"))world.add(selected,Collider{});
