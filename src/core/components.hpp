@@ -147,3 +147,18 @@ struct PrefabInstance {
 struct DestroyAfter {
     float seconds = 0;
 };
+
+// Dynamic upright capsule controller. Commands are applied at fixed physics steps.
+struct CharacterController {
+    float speed = 4.5f, sprintMultiplier = 1.7f, jumpSpeed = 6, groundProbe = .12f;
+    bool canMove = true, canJump = true, canSprint = true;
+    bool isGrounded = false, isJumping = false, isMoving = false, isSprinting = false;
+    Vec3 movement;
+    bool sprintRequested = false, jumpRequested = false;
+};
+struct FPSCamera {
+    bool isFreecam = true, mouseLook = true;
+    float sensitivity = .12f, speed = 6;
+    float yaw = 0, pitch = 0;
+    bool initialized = false;
+};

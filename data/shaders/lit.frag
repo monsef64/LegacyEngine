@@ -13,6 +13,7 @@ uniform sampler2DArrayShadow uShadowTexture;
 uniform float uSpecular;
 uniform vec3 uCameraPosition, uColor;
 uniform int uLightCount;
+uniform bool uSoftShadows;
 uniform vec4 uLightPosition[16];  // xyz, type
 uniform vec4 uLightColor[16];     // rgb * intensity, range
 uniform vec4 uLightDirection[16]; // xyz, outer cone cosine
@@ -72,7 +73,7 @@ float mapVisibility(int i, int layer, vec3 normal, vec3 toLight, vec3 worldDx, v
     bias += .5 * dot(abs(gradient), texel / scale);
     float depth = p.z - bias;
     vec2 center = p.xy * scale;
-    if (scale < .3) {
+    if (!uSoftShadows || scale < .3) {
         return shadowTap(center, layer, depth, center, gradient, scale, texel);
     }
     vec2 coord = center / texel + .5;

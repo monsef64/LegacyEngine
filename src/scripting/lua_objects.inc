@@ -23,10 +23,15 @@ int LuaScene::objectApi(lua_State* L) {
     if(op==11){lua_pushboolean(L,isActive(*h.world,h.entity));return 1;}
     auto* transform=h.world->tryGet<Transform>(h.entity);
     if(!transform)return luaL_error(L,"GameObject has no Transform");
+    if(op>=20 && op<=25) {
+        const Vec3 axes[]{{0,0,-1},{0,0,1},{1,0,0},{-1,0,0},{0,1,0},{0,-1,0}};
+        pushVector(L,rotateVector(transform->rotation,axes[op-20]));return 1;
+    }
     switch(op) {
     case 0:transform->position=vectorArgument(L,2);break;
     case 1:pushVector(L,transform->position);return 1;
     case 2:transform->rotation=rotationArgument(L,2);
+        if(auto* fps=h.world->tryGet<FPSCamera>(h.entity))fps->initialized=false;
         if(auto* camera=h.world->tryGet<Camera>(h.entity)){camera->tracking=false;camera->following=false;}break;
     case 3: {
         auto q=transform->rotation;pushVector(L,{q.x,q.y,q.z});lua_pushnumber(L,q.w);lua_setfield(L,-2,"w");return 1;

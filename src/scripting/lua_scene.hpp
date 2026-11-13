@@ -81,6 +81,8 @@ class LuaScene {
     static int audioMethod(lua_State* state);
     static int cameraApi(lua_State* state);
     static int objectApi(lua_State* state);
+    static int gameplayMethod(lua_State* state);
+    static int fpsCameraMethod(lua_State* state);
     static int componentTypeIndex(lua_State* state);
     static int objectMethod(lua_State* state);
     static int objectIndex(lua_State* state);

@@ -75,11 +75,19 @@ template <class T> inline bool componentHeader(World& world, Entity entity, cons
         if constexpr (std::is_same_v<T, Transform>) {
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
                       !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) &&
-                      !world.has<SpotLight>(entity);
+                      !world.has<SpotLight>(entity) && !world.has<CharacterController>(entity) &&
+                      !world.has<FPSCamera>(entity);
+        }
+        if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
+            allowed = !world.has<CharacterController>(entity);
+        }
+        if constexpr (std::is_same_v<T, Camera>) {
+            allowed = !world.has<FPSCamera>(entity);
         }
         remove = ImGui::MenuItem("Remove component", nullptr, false, allowed);
         if (!allowed) {
-            ImGui::TextDisabled("Remove Camera / AudioListener / lights first");
+            ImGui::TextDisabled(
+                "Remove dependent Camera / listener / lights / controller / FPSCamera first");
         }
         ImGui::EndPopup();
     }
@@ -121,6 +129,12 @@ template <class T> inline bool componentHeader(World& world, Entity entity, cons
         if constexpr (std::is_same_v<T, Skybox>) {
             type = 12;
         }
+        if constexpr (std::is_same_v<T, CharacterController>) {
+            type = 13;
+        }
+        if constexpr (std::is_same_v<T, FPSCamera>) {
+            type = 14;
+        }
         EditorComponentPayload payload{entity, type};
         ImGui::SetDragDropPayload("EDITOR_COMPONENT", &payload, sizeof(payload));
         ImGui::TextUnformatted(name);
@@ -145,7 +159,9 @@ inline void drawScriptExports(World& world, std::vector<ScriptField>& fields) {
                                  "DirectionalLight",
                                  "PointLight",
                                  "SpotLight",
-                                 "Skybox"};
+                                 "Skybox",
+                                 "CharacterController",
+                                 "FPSCamera"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -195,7 +211,7 @@ inline void drawScriptExports(World& world, std::vector<ScriptField>& fields) {
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 13 &&
+                        if (target.type >= 0 && target.type < 15 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -773,10 +789,57 @@ inline void drawInspector(World& world,
                 }
                 ImGui::EndDragDropTarget();
             }
+            if (auto* c = world.tryGet<CharacterController>(selected);
+                c && componentHeader<CharacterController>(world, selected, "CharacterController")) {
+                ImGui::DragFloat(
+                    "Move speed", &c->speed, .1f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                ImGui::DragFloat("Sprint multiplier",
+                                 &c->sprintMultiplier,
+                                 .05f,
+                                 1,
+                                 10,
+                                 "%.2f",
+                                 ImGuiSliderFlags_AlwaysClamp);
+                ImGui::DragFloat(
+                    "Jump speed", &c->jumpSpeed, .1f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                ImGui::Checkbox("Can move", &c->canMove);
+                ImGui::Checkbox("Can jump", &c->canJump);
+                ImGui::Checkbox("Can sprint", &c->canSprint);
+                ImGui::Text("Grounded: %s | Moving: %s | Jumping: %s | Sprinting: %s",
+                            c->isGrounded ? "yes" : "no",
+                            c->isMoving ? "yes" : "no",
+                            c->isJumping ? "yes" : "no",
+                            c->isSprinting ? "yes" : "no");
+                ImGui::TextWrapped(
+                    "Requires Transform, Collider and dynamic RigidBody. Capsule center is the object's origin. Movement is controlled by scripts.");
+            }
+            if (auto* f = world.tryGet<FPSCamera>(selected);
+                f && componentHeader<FPSCamera>(world, selected, "FPSCamera")) {
+                ImGui::Checkbox("Freecam", &f->isFreecam);
+                ImGui::Checkbox("Mouse look", &f->mouseLook);
+                ImGui::DragFloat("Look sensitivity",
+                                 &f->sensitivity,
+                                 .01f,
+                                 .01f,
+                                 5,
+                                 "%.2f",
+                                 ImGuiSliderFlags_AlwaysClamp);
+                ImGui::DragFloat(
+                    "Freecam speed", &f->speed, .1f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                ImGui::TextWrapped(
+                    "Inherits Camera settings. An unparented freecam uses WASD, Q/E while Game input is focused. Mouse look requires a locked cursor.");
+            }
             if (ImGui::Button("Add Component")) {
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<CharacterController>(selected) &&
+                    ImGui::MenuItem("CharacterController")) {
+                    addCharacterController(world, selected);
+                }
+                if (!world.has<FPSCamera>(selected) && ImGui::MenuItem("FPSCamera")) {
+                    addFPSCamera(world, selected);
+                }
                 if (world.has<Transform>(selected)) {
                     if (!world.has<DirectionalLight>(selected) &&
                         ImGui::MenuItem("DirectionalLight")) {

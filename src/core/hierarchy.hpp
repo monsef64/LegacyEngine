@@ -167,3 +167,34 @@ inline void destroyHierarchy(World& world, Entity root) {
         world.destroy(*it);
     }
 }
+
+inline void addCharacterController(World& world, Entity entity) {
+    if (!world.has<Transform>(entity)) {
+        world.add(entity, Transform{});
+    }
+    if (!world.has<Collider>(entity)) {
+        Collider capsule;
+        capsule.shape = ColliderShape::Capsule;
+        capsule.radius = .35f;
+        capsule.height = 1.1f;
+        capsule.friction = 0;
+        world.add(entity, capsule);
+    }
+    if (!world.has<RigidBody>(entity)) {
+        world.add(entity, RigidBody{});
+    }
+    if (!world.has<CharacterController>(entity)) {
+        world.add(entity, CharacterController{});
+    }
+}
+inline void addFPSCamera(World& world, Entity entity) {
+    if (!world.has<Transform>(entity)) {
+        world.add(entity, Transform{});
+    }
+    if (!world.has<Camera>(entity)) {
+        world.add(entity, Camera{});
+    }
+    if (!world.has<FPSCamera>(entity)) {
+        world.add(entity, FPSCamera{});
+    }
+}

@@ -1,5 +1,61 @@
 [
   {
+    "name": "CharacterController",
+    "signature": "CharacterController - upright capsule movement, grounded jumping and sprinting"
+  },
+  {
+    "name": "FPSCamera",
+    "signature": "FPSCamera - Camera extension with native mouse look and optional freecam movement"
+  },
+  {
+    "name": "move",
+    "signature": "controller:move(x,z) - persistent local direction; forward is negative Z, no deltaTime multiplication"
+  },
+  {
+    "name": "jump",
+    "signature": "controller:jump() - request a grounded jump if canJump"
+  },
+  {
+    "name": "sprint",
+    "signature": "controller:sprint(enabled=true) - request sprint if canSprint and moving"
+  },
+  {
+    "name": "linkToCharacter",
+    "signature": "fps:linkToCharacter(characterController, offset) - parent using local position offset"
+  },
+  {
+    "name": "setIsFreecam",
+    "signature": "fps:setIsFreecam(enabled) - allow unparented free movement"
+  },
+  {
+    "name": "getIsFreecam",
+    "signature": "fps:getIsFreecam() -> boolean"
+  },
+  {
+    "name": "getForward",
+    "signature": "object:getForward() -> world-space normalized local -Z direction"
+  },
+  {
+    "name": "getBackward",
+    "signature": "object:getBackward() -> world-space normalized local +Z direction"
+  },
+  {
+    "name": "getRight",
+    "signature": "object:getRight() -> world-space normalized local +X direction"
+  },
+  {
+    "name": "getLeft",
+    "signature": "object:getLeft() -> world-space normalized local -X direction"
+  },
+  {
+    "name": "getUp",
+    "signature": "object:getUp() -> world-space normalized local +Y direction"
+  },
+  {
+    "name": "getDown",
+    "signature": "object:getDown() -> world-space normalized local -Y direction"
+  },
+  {
     "name": "spawn",
     "signature": "spawn(prefabPathOrGameObject, position, rotation) -> new GameObject root"
   },

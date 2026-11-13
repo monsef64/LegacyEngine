@@ -230,9 +230,12 @@ class AssetBrowser {
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s", (assets.root / currentFolder).string().c_str());
             }
-            if (!currentFolder.empty() && ImGui::Button("Up one folder")) {
+            if (!currentFolder.empty() && ImGui::ArrowButton("##UpFolder", ImGuiDir_Up)) {
                 currentFolder = std::filesystem::path(currentFolder).parent_path().generic_string();
                 selected.clear();
+            }
+            if (!currentFolder.empty() && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Up one folder");
             }
             ImGui::BeginDisabled(!editable || dialog.pending());
             ImGui::SetCursorPosX(

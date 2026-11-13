@@ -90,6 +90,7 @@ class Renderer {
                   const Mat4& viewProjection,
                   Vec3 color,
                   float opacity = 1.0f);
+    int softShadowLocation_ = -1;
     ShadowSettings shadowSettings_;
     int shadowAtlasResolution_ = 0;
     int cascadeCountLocations_[16]{}, cascadeSplitLocations_[16]{}, shadowViewLocation_ = -1;

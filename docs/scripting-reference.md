@@ -1509,6 +1509,72 @@ local object = self
 object:destroy()
 ```
 
+### GameObject.getForward
+
+`getForward(self:GameObject):Vec3 World-space local -Z axis`
+
+- `object:getForward() -> world-space normalized local -Z direction`
+
+```lua
+local object = self
+object:getForward()
+```
+
+### GameObject.getBackward
+
+`getBackward(self:GameObject):Vec3 World-space local +Z axis`
+
+- `object:getBackward() -> world-space normalized local +Z direction`
+
+```lua
+local object = self
+object:getBackward()
+```
+
+### GameObject.getRight
+
+`getRight(self:GameObject):Vec3 World-space local +X axis`
+
+- `object:getRight() -> world-space normalized local +X direction`
+
+```lua
+local object = self
+object:getRight()
+```
+
+### GameObject.getLeft
+
+`getLeft(self:GameObject):Vec3 World-space local -X axis`
+
+- `object:getLeft() -> world-space normalized local -X direction`
+
+```lua
+local object = self
+object:getLeft()
+```
+
+### GameObject.getUp
+
+`getUp(self:GameObject):Vec3 World-space local +Y axis`
+
+- `object:getUp() -> world-space normalized local +Y direction`
+
+```lua
+local object = self
+object:getUp()
+```
+
+### GameObject.getDown
+
+`getDown(self:GameObject):Vec3 World-space local -Y axis`
+
+- `object:getDown() -> world-space normalized local -Y direction`
+
+```lua
+local object = self
+object:getDown()
+```
+
 ## MeshRenderer
 
 ### MeshRenderer.setMaterial
@@ -2362,6 +2428,88 @@ local component = self:getComponent(Skybox) or self:addComponent(Skybox)
 component:setTextures("Sky/right.png", "Sky/left.png", "Sky/top.png", "Sky/bottom.png", "Sky/front.png", "Sky/back.png")
 ```
 
+## CharacterController
+
+### CharacterController.move
+
+`move(self:CharacterController,x:number,z:number) Local horizontal direction; normalized above unit length; persists until replaced`
+
+Sets persistent local X/Z input, clamped to unit length. Call move(0,0) to stop. Applied by fixed physics steps; do not multiply by deltaTime. Requires Transform, Collider and dynamic RigidBody (added automatically). Upright rotation is locked against physics torque. State flags update on fixed steps.
+
+- `controller:move(x,z) - persistent local direction; forward is negative Z, no deltaTime multiplication`
+
+```lua
+local component = self:getComponent(CharacterController) or self:addComponent(CharacterController)
+component:move(0, -1)
+```
+
+### CharacterController.jump
+
+`jump(self:CharacterController) Queue one jump; applied only when grounded and canJump`
+
+Queues one grounded jump. Requests while airborne or canJump=false are discarded; holding a button does not automatically retrigger unless your script requests another jump. isJumping means airborne and ascending, not falling.
+
+- `controller:jump() - request a grounded jump if canJump`
+
+```lua
+local component = self:getComponent(CharacterController) or self:addComponent(CharacterController)
+component:jump()
+```
+
+### CharacterController.sprint
+
+`sprint(self:CharacterController,enabled:boolean) Set sprint intent; omitted means true`
+
+Stores sprint intent; true when omitted. isSprinting requires canMove, canSprint and nonzero movement input.
+
+- `controller:sprint(enabled=true) - request sprint if canSprint and moving`
+
+```lua
+local component = self:getComponent(CharacterController) or self:addComponent(CharacterController)
+component:sprint(true)
+```
+
+## FPSCamera
+
+### FPSCamera.linkToCharacter
+
+`linkToCharacter(self:FPSCamera,character:CharacterController|GameObject,offset:Vec3) Parent to character using local position offset`
+
+Accepts a CharacterController component or its GameObject. Parents the camera and sets its parent-local position offset, default (0,0.7,0). Mouse yaw turns the character, while pitch stays local and clamps to +/-89 degrees. Existing Camera APIs remain available on the camera GameObject; FPSCamera also forwards Camera settings and methods.
+
+- `fps:linkToCharacter(characterController, offset) - parent using local position offset`
+
+```lua
+local character = self:getComponent(CharacterController) or self:addComponent(CharacterController)
+local camera = Camera.new("Player FPS Camera")
+local fps = camera:addComponent(FPSCamera)
+fps:linkToCharacter(character, {x=0,y=0.7,z=0})
+```
+
+### FPSCamera.setIsFreecam
+
+`setIsFreecam(self:FPSCamera,enabled:boolean)`
+
+Unparented FPS cameras with isFreecam=true use native WASD and Q/E movement while Game input is focused. False disables translation, not mouse look. Parented FPS cameras never translate freely. Mouse look requires a locked cursor; mouseLook=false leaves rotation to scripts.
+
+- `fps:setIsFreecam(enabled) - allow unparented free movement`
+
+```lua
+local component = self:getComponent(FPSCamera) or self:addComponent(FPSCamera)
+component:setIsFreecam(false)
+```
+
+### FPSCamera.getIsFreecam
+
+`getIsFreecam(self:FPSCamera):boolean`
+
+- `fps:getIsFreecam() -> boolean`
+
+```lua
+local component = self:getComponent(FPSCamera) or self:addComponent(FPSCamera)
+component:getIsFreecam()
+```
+
 ## Component fields and type tokens
 
 Component type names such as `Transform`, `Skybox`, `PointLight` and `AudioSource`
@@ -2537,6 +2685,36 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `back` | `Texture +Z` |
 | `cubemap` | `string Project-relative .cubemap asset` |
 | `hdr` | `Texture Radiance .hdr equirectangular panorama` |
+
+### CharacterController fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `speed` | `number Metres per second; default 4.5` |
+| `sprintMultiplier` | `number At least 1; default 1.7` |
+| `jumpSpeed` | `number Upward launch velocity; default 6` |
+| `groundProbe` | `number Distance below capsule feet; default 0.12` |
+| `canMove` | `boolean Writable movement gate` |
+| `canJump` | `boolean Writable jump gate` |
+| `canSprint` | `boolean Writable sprint gate` |
+| `isGrounded` | `boolean Read-only, updated at fixed physics steps` |
+| `isJumping` | `boolean Read-only, airborne and ascending` |
+| `isMoving` | `boolean Read-only, permitted nonzero movement command` |
+| `isSprinting` | `boolean Read-only, moving with permitted sprint command` |
+
+### FPSCamera fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `fieldOfView` | `number Inherited Camera field` |
+| `nearClip` | `number Inherited Camera field` |
+| `farClip` | `number Inherited Camera field` |
+| `orthographic` | `boolean Inherited Camera field` |
+| `active` | `boolean Inherited Camera field` |
+| `isFreecam` | `boolean Writable; only unparented cameras can translate freely` |
+| `mouseLook` | `boolean Writable; native mouse look while cursor is locked` |
+| `speed` | `number Freecam metres per second` |
+| `sensitivity` | `number Degrees per mouse pixel` |
 
 ## Skybox1 to Skybox2 transition
 

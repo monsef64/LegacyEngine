@@ -7,7 +7,7 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
@@ -530,3 +530,43 @@ function spawn(source,position,rotation) end
 ---@param object GameObject
 ---@param delay? number Nonnegative, defaults to zero
 function destroy(object,delay) end
+
+---@class GameObject
+---@field getForward fun(self:GameObject):Vec3 World-space local -Z axis
+---@field getBackward fun(self:GameObject):Vec3 World-space local +Z axis
+---@field getRight fun(self:GameObject):Vec3 World-space local +X axis
+---@field getLeft fun(self:GameObject):Vec3 World-space local -X axis
+---@field getUp fun(self:GameObject):Vec3 World-space local +Y axis
+---@field getDown fun(self:GameObject):Vec3 World-space local -Y axis
+---@class CharacterController
+---@field speed number Metres per second; default 4.5
+---@field sprintMultiplier number At least 1; default 1.7
+---@field jumpSpeed number Upward launch velocity; default 6
+---@field groundProbe number Distance below capsule feet; default 0.12
+---@field canMove boolean Writable movement gate
+---@field canJump boolean Writable jump gate
+---@field canSprint boolean Writable sprint gate
+---@field isGrounded boolean Read-only, updated at fixed physics steps
+---@field isJumping boolean Read-only, airborne and ascending
+---@field isMoving boolean Read-only, permitted nonzero movement command
+---@field isSprinting boolean Read-only, moving with permitted sprint command
+---@field move fun(self:CharacterController,x:number,z:number) Local horizontal direction; normalized above unit length; persists until replaced
+---@field jump fun(self:CharacterController) Queue one jump; applied only when grounded and canJump
+---@field sprint fun(self:CharacterController,enabled:boolean) Set sprint intent; omitted means true
+---@type ComponentToken
+CharacterController = nil
+---@class FPSCamera: CameraObject
+---@field fieldOfView number Inherited Camera field
+---@field nearClip number Inherited Camera field
+---@field farClip number Inherited Camera field
+---@field orthographic boolean Inherited Camera field
+---@field active boolean Inherited Camera field
+---@field isFreecam boolean Writable; only unparented cameras can translate freely
+---@field mouseLook boolean Writable; native mouse look while cursor is locked
+---@field speed number Freecam metres per second
+---@field sensitivity number Degrees per mouse pixel
+---@field linkToCharacter fun(self:FPSCamera,character:CharacterController|GameObject,offset:Vec3) Parent to character using local position offset
+---@field setIsFreecam fun(self:FPSCamera,enabled:boolean)
+---@field getIsFreecam fun(self:FPSCamera):boolean
+---@type ComponentToken
+FPSCamera = nil

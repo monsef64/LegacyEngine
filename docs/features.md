@@ -60,3 +60,8 @@ search has an `x` clear button.
 
 Deleting a parent GameObject deletes its entire subtree, including inactive children.
 Unparent children first to preserve them; editor Undo restores the deleted hierarchy.
+
+- Foldable, multi-select Hierarchy with group delete/reparent and blank-space unparent drops.
+- Hard/Soft project shadow filtering, independent of CSM/single-map mode and resolution.
+- Scripted upright capsule CharacterController and FPSCamera components, creation menus,
+  persisted configuration, direction helpers and a [first-person example](first-person.md).

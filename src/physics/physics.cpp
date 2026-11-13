@@ -525,6 +525,11 @@ void Physics::update(World& world, float seconds, const std::function<void(float
             body.visited = true;
             if (isUsable(transform, boxCollider, rigidBody)) {
                 impl.follow(body, transform, boxCollider, rigidBody);
+                if (body.body) {
+                    body.body->setAngularLockAxisFactor(world.has<CharacterController>(entity)
+                                                            ? rp3d::Vector3(0, 0, 0)
+                                                            : rp3d::Vector3(1, 1, 1));
+                }
                 body.reported = false;
             } else {
                 // Left out, and left alone, until game code has repaired it.

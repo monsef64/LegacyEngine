@@ -75,3 +75,14 @@ can still lose detail, and point-shadow face boundaries are clamped rather than
 filtered across faces. Use tighter coverage or High quality where detail matters.
 The optional local graphical regression executable checks all three light types with real OpenGL pixel comparisons for shadow
 toggles, moving casters and moving lights; no hardware FPS claim is implied.
+
+## Hard and soft shadows
+
+Project Settings > Rendering > **Shadow filtering** selects **Hard** (one nearest
+depth comparison) or **Soft (PCF)** (the existing quality-dependent tent filter).
+This applies to directional CSM, single-map directional, point and spot shadows.
+It is independent of shadow-map resolution and supports save/load and undo/redo.
+Existing projects default to Soft. Cascade transitions still blend in Hard mode;
+Soft is filtered shadow mapping, not physically sized area-light penumbrae.
+Backface culling is already enabled for solid meshes, including mirrored-winding
+handling; no additional culling system is required.
