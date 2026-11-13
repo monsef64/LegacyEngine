@@ -126,5 +126,38 @@
     "log": "fun(...:any)",
     "error": "fun(...:any)",
     "warning": "fun(...:any)"
+  },
+  "DirectionalLight": {
+    "color": "Vec3",
+    "intensity": "number",
+    "enabled": "boolean",
+    "shadows": "boolean",
+    "range": "number",
+    "innerAngle": "number",
+    "outerAngle": "number",
+    "shadowDistance": "number",
+    "shadowBias": "number"
+  },
+  "PointLight": {
+    "color": "Vec3",
+    "intensity": "number",
+    "enabled": "boolean",
+    "shadows": "boolean",
+    "range": "number",
+    "innerAngle": "number",
+    "outerAngle": "number",
+    "shadowDistance": "number",
+    "shadowBias": "number"
+  },
+  "SpotLight": {
+    "color": "Vec3",
+    "intensity": "number",
+    "enabled": "boolean",
+    "shadows": "boolean",
+    "range": "number",
+    "innerAngle": "number",
+    "outerAngle": "number",
+    "shadowDistance": "number",
+    "shadowBias": "number"
   }
 }

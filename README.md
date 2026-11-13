@@ -13,6 +13,7 @@ LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lu
 - Physics colliders and rigid bodies, parenting, duplication, clipboard, Undo/Redo.
 - Play, Pause/Resume and Stop with restoration of the edit-time scene.
 - Hierarchy search, object icons and a read-only level root named after the project.
+- Dynamic directional, point and spot lights with bounded shadow maps and PCF filtering.
 - Camera projection, tracking/following, shake and screen/world conversion APIs.
 - AudioSource and AudioListener, WAV/MP3 playback, looping, pitch, volume, pan,
   Spatial Blend, range attenuation, fades and one-shots.
@@ -108,6 +109,56 @@ is hidden during look and restored on release or focus loss. Shift moves faster;
 Shift+wheel while looking tunes boosted speed. Outside right-mouse look, **W/E/R**
 in Scene select Move/Rotate/Scale. Ctrl/Alt/Super block camera navigation. Escape does not quit.
 F5 starts Play, F6 pauses/resumes, F7 stops. Play-time changes are discarded on Stop.
+
+## Dynamic lighting and shadows
+
+Use **Create > Light > Directional Light / Point Light / Spot Light**, or add a
+light component in the Inspector. All three update from their owning Transform
+and component settings every frame, in both Scene and Game views. Directional and
+spot lights emit along local **-Z**; rotate the object to aim them. The starter
+scene includes a directional light. Older projects without lights receive only
+ambient illumination until a light is added.
+
+Inspector controls include enabled state, color, intensity, shadow casting and
+bias, plus range for local lights and inner/outer half-cone angles for spots.
+Directional **Shadow coverage** is the world-space half extent around each view;
+objects outside that region still receive light but are not shadowed by that map.
+Lights survive save/load, duplication, undo/redo and Play/Stop restoration.
+
+```lua
+local lamp = GameObject.new("Moving spotlight")
+lamp:setPosition(0, 6, 3)
+lamp:setRotation(-65, 0, 0)
+local light = lamp:addComponent(SpotLight)
+light.intensity = 4
+light.range = 25
+light.innerAngle = 20
+light.outerAngle = 35
+light.shadows = true
+-- Move/rotate lamp or change light properties from onUpdate for dynamic lighting.
+```
+
+The renderer uses a bounded OpenGL 3.3 forward-lighting path rather than introducing
+a second rendering framework. Its cost controls are:
+
+- Up to **16 active lights per view**, directional lights first, then local lights
+  prioritized by distance relative to range; off-frustum local lights are culled.
+- A persistent **12-layer, 1024×1024 depth texture array** (approximately 48 MiB).
+  Directional/spot shadows cost one layer; point shadows cost six faces. Shadow
+  budgets follow the same priority order; excess lights still illuminate without
+  shadows. Disable shadows on fill lights to reserve budget for key lights.
+- Shadow-caster sphere/frustum culling, cached mesh bounds/uniform locations, and
+  model matrices prepared once per view. Wire geometry does not cast shadows.
+- 3×3 PCF filtering and adjustable slope-aware bias; directional coverage is
+  texel-snapped to reduce shimmering.
+
+Shadow maps are refreshed for each rendered view, so moving lights **and** moving
+casters update immediately. This is not clustered rendering, cascaded directional
+shadows, baked lighting, global illumination or unlimited lights. Two visible
+Scene/Game views incur separate shadow passes. Point shadows are more expensive;
+profile your target scenes/hardware and tune range, coverage and shadow toggles.
+CI checks all three light types with real OpenGL pixel comparisons for shadow
+toggles, moving casters and moving lights; no hardware FPS claim is implied.
 
 ## Projects
 

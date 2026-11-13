@@ -8,6 +8,18 @@
     "signature": "AudioClip(projectRelativeAudioPath) -> AudioClip path"
   },
   {
+    "name": "DirectionalLight",
+    "signature": "DirectionalLight - dynamic directional illumination and shadows"
+  },
+  {
+    "name": "PointLight",
+    "signature": "PointLight - dynamic omnidirectional light with range and six shadow faces"
+  },
+  {
+    "name": "SpotLight",
+    "signature": "SpotLight - dynamic cone light with innerAngle and outerAngle in degrees"
+  },
+  {
     "name": "AudioListener",
     "signature": "AudioListener - receives sound at its GameObject world position; pause() disables reception, start() enables it"
   },

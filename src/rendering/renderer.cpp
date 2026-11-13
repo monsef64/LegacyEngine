@@ -1,5 +1,6 @@
 #include "physics/collider_debug.hpp"
 #include "audio/audio_gizmo.hpp"
+#include "lighting/lighting.hpp"
 #include "rendering/renderer.hpp"
 
 #include "core/components.hpp"
@@ -9,6 +10,7 @@
 #include <SDL3/SDL.h>
 
 #include <cstddef>
+#include <array>
 
 namespace {
 
@@ -60,26 +62,64 @@ const char* const kLitFragmentShader = R"glsl(#version 330 core
 in vec3 vNormal;
 in vec3 vWorldPosition;
 in vec2 vCheckerUV;
-
 uniform bool uCheckerboard;
 uniform sampler2D uCheckerTexture;
+uniform sampler2DArray uShadowTexture;
 uniform float uSpecular;
-uniform vec3 uCameraPosition;
-uniform vec3 uColor;
-uniform vec3 uLightDirection; // unit vector pointing towards the light
-
+uniform vec3 uCameraPosition,uColor;
+uniform int uLightCount;
+uniform vec4 uLightPosition[16]; // xyz, type
+uniform vec4 uLightColor[16]; // rgb * intensity, range
+uniform vec4 uLightDirection[16]; // xyz, outer cone cosine
+uniform vec4 uLightShadow[16]; // layer, bias, inner cone cosine, unused
+uniform mat4 uShadowMatrix[12];
 out vec4 fragColor;
-
-void main()
-{
-    vec3 normal = normalize(vNormal);
-    float diffuse = max(dot(normal, uLightDirection), 0.0);
-    vec3 albedo = uColor;
-    if (uCheckerboard) albedo *= texture(uCheckerTexture, vCheckerUV).rgb;
-    vec3 viewDirection = normalize(uCameraPosition - vWorldPosition);
-    vec3 halfway = normalize(uLightDirection + viewDirection);
-    float highlight = diffuse > 0.0 ? pow(max(dot(normal, halfway), 0.0), 64.0) : 0.0;
-    fragColor = vec4(albedo * (0.35 + 0.65 * diffuse) + vec3(uSpecular * highlight), 1.0);
+int cubeFace(vec3 d){
+    vec3 a=abs(d);
+    if(a.x>=a.y && a.x>=a.z)return d.x>=0.0?0:1;
+    if(a.y>=a.z)return d.y>=0.0?2:3;
+    return d.z>=0.0?4:5;
+}
+float visibility(int i,vec3 normal,vec3 toLight){
+    int layer=int(uLightShadow[i].x);
+    if(layer<0)return 1.0;
+    if(int(uLightPosition[i].w)==1)layer+=cubeFace(vWorldPosition-uLightPosition[i].xyz);
+    vec4 projected=uShadowMatrix[layer]*vec4(vWorldPosition,1.0);
+    if(projected.w<=0.0)return 1.0;
+    vec3 p=projected.xyz/projected.w*.5+.5;
+    if(any(lessThan(p,vec3(0.0))) || any(greaterThan(p,vec3(1.0))))return 1.0;
+    float bias=uLightShadow[i].y*(1.0+2.0*(1.0-max(dot(normal,toLight),0.0)));
+    float sum=0.0;
+    vec2 texel=1.0/vec2(textureSize(uShadowTexture,0).xy);
+    for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)
+        sum+=(p.z-bias<=texture(uShadowTexture,vec3(p.xy+vec2(x,y)*texel,float(layer))).r)?1.0:0.0;
+    return sum/9.0;
+}
+void main(){
+    vec3 normal=normalize(vNormal);
+    vec3 albedo=uColor;
+    if(uCheckerboard)albedo*=texture(uCheckerTexture,vCheckerUV).rgb;
+    vec3 viewDirection=normalize(uCameraPosition-vWorldPosition);
+    vec3 result=albedo*.12;
+    for(int i=0;i<uLightCount;++i){
+        int type=int(uLightPosition[i].w);
+        vec3 delta=uLightPosition[i].xyz-vWorldPosition;
+        float dist=length(delta),attenuation=1.0;
+        vec3 toLight=-uLightDirection[i].xyz;
+        if(type!=0){
+            if(dist>=uLightColor[i].w)continue;
+            toLight=delta/max(dist,.0001);
+            float falloff=max(1.0-dist*dist/(uLightColor[i].w*uLightColor[i].w),0.0);
+            attenuation=falloff*falloff/(1.0+.09*dist+.032*dist*dist);
+            if(type==2)attenuation*=smoothstep(uLightDirection[i].w,uLightShadow[i].z,dot(-toLight,uLightDirection[i].xyz));
+        }
+        float diffuse=max(dot(normal,toLight),0.0);
+        if(diffuse<=0.0 || attenuation<=0.0)continue;
+        vec3 halfDirection=normalize(toLight+viewDirection);
+        float specular=uSpecular*pow(max(dot(normal,halfDirection),0.0),64.0);
+        result+=(albedo*diffuse+vec3(specular))*uLightColor[i].rgb*attenuation*visibility(i,normal,toLight);
+    }
+    fragColor=vec4(result,1.0);
 }
 )glsl";
 
@@ -159,7 +199,14 @@ bool Renderer::init()
     litModelViewProjection_   = glGetUniformLocation(litProgram_, "uModelViewProjection");
     litNormalMatrix_          = glGetUniformLocation(litProgram_, "uNormalMatrix");
     litColor_                 = glGetUniformLocation(litProgram_, "uColor");
-    litLightDirection_        = glGetUniformLocation(litProgram_, "uLightDirection");
+
+    lightCountLocation_=glGetUniformLocation(litProgram_,"uLightCount");
+    shadowSamplerLocation_=glGetUniformLocation(litProgram_,"uShadowTexture");
+    const char* lightNames[]{"uLightPosition","uLightColor","uLightDirection","uLightShadow"};
+    for(int i=0;i<Lighting::maxLights;++i)for(int field=0;field<4;++field)
+        lightLocations_[i][field]=glGetUniformLocation(litProgram_,(std::string(lightNames[field])+"["+std::to_string(i)+"]").c_str());
+    for(int i=0;i<Lighting::maxShadowLayers;++i)
+        shadowMatrixLocations_[i]=glGetUniformLocation(litProgram_,("uShadowMatrix["+std::to_string(i)+"]").c_str());
 
     // Small generated texture: no external asset paths, with mipmaps to reduce
     // shimmer at distance and nearest magnification for crisp checker edges.
@@ -193,6 +240,8 @@ void Renderer::shutdown()
         glDeleteVertexArrays(1, &mesh.vertexArray);
     }
     meshes_.clear();
+    glDeleteTextures(1,&shadowTexture_);glDeleteFramebuffers(1,&shadowFramebuffer_);
+    shadowTexture_=shadowFramebuffer_=0;
     glDeleteTextures(1, &checkerTexture_);
     checkerTexture_ = 0;
     glDeleteBuffers(1, &colliderVertexBuffer_);
@@ -209,6 +258,7 @@ MeshHandle Renderer::createMesh(const MeshData& data)
 {
     GpuMesh mesh;
     mesh.vertexCount = static_cast<int>(data.vertices.size());
+    for(const auto& vertex:data.vertices)mesh.radius=std::max(mesh.radius,std::sqrt(dot(vertex.position,vertex.position)));
     mesh.lines       = data.topology == MeshData::Topology::Lines;
 
     glGenVertexArrays(1, &mesh.vertexArray);
@@ -241,12 +291,12 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
     glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Light from the far side places a visible floor highlight in the starting view.
-    const Vec3 lightDirection = normalize(Vec3{-0.4f, 1.0f, -0.6f});
+    prepareLighting(world,viewProjection,cameraPosition);
+    glViewport(x,y,width,height);
     glUseProgram(litProgram_);
-    glUniform3f(litLightDirection_, lightDirection.x, lightDirection.y, lightDirection.z);
     glUniform3f(litCameraPosition_, cameraPosition.x, cameraPosition.y, cameraPosition.z);
     glUniform1i(litCheckerTexture_, 0);
+    glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D_ARRAY,shadowTexture_);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, checkerTexture_);
 
@@ -255,6 +305,8 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
                 return; // no mesh to draw
             }
             const GpuMesh& mesh = meshes_[renderer.mesh.id];
+            const float bound=mesh.radius*std::max({std::abs(transform.scale.x),std::abs(transform.scale.y),std::abs(transform.scale.z)});
+            if(!Lighting::visibleSphere(viewProjection,transform.position,bound))return;
 
             const Mat4 model =
                 transformMatrix(transform.position, transform.rotation, transform.scale);
@@ -333,4 +385,67 @@ void Renderer::drawWire(const MeshData& wire,const Transform& transform,const Ma
     glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(wire.vertices.size()));
     if (depthTest) glEnable(GL_DEPTH_TEST);
     glBindVertexArray(0);
+}
+
+void Renderer::prepareLighting(World& world,const Mat4& viewProjection,Vec3 cameraPosition){
+    auto lights=Lighting::gather(world,viewProjection,cameraPosition);
+    GLint framebuffer=0,readFramebuffer=0,frontFace=GL_CCW;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING,&framebuffer);glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&readFramebuffer);glGetIntegerv(GL_FRONT_FACE,&frontFace);
+    bool needsShadows=false;for(const auto& l:lights)needsShadows|=l.shadowLayer>=0;
+    if(needsShadows && !shadowTexture_){
+        glGenTextures(1,&shadowTexture_);glBindTexture(GL_TEXTURE_2D_ARRAY,shadowTexture_);
+        glTexImage3D(GL_TEXTURE_2D_ARRAY,0,GL_DEPTH_COMPONENT24,Lighting::shadowResolution,Lighting::shadowResolution,Lighting::maxShadowLayers,0,GL_DEPTH_COMPONENT,GL_FLOAT,nullptr);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_BORDER);
+        const float border[]{1,1,1,1};glTexParameterfv(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_BORDER_COLOR,border);
+        glGenFramebuffers(1,&shadowFramebuffer_);
+    }
+    struct Caster{const GpuMesh* mesh;Mat4 model;Vec3 position;float radius;bool mirrored;};
+    std::vector<Caster> casters;
+    if(needsShadows)world.each<Transform,MeshRenderer>([&](Entity e,const Transform& t,const MeshRenderer& r){
+        if(world.has<Camera>(e) || r.mesh.id>=meshes_.size())return;
+        const auto& mesh=meshes_[r.mesh.id];if(mesh.lines)return;
+        casters.push_back({&mesh,transformMatrix(t.position,t.rotation,t.scale),t.position,
+            mesh.radius*std::max({std::abs(t.scale.x),std::abs(t.scale.y),std::abs(t.scale.z)}),t.scale.x*t.scale.y*t.scale.z<0});
+    });
+    std::array<Mat4,Lighting::maxShadowLayers> matrices{};
+    if(needsShadows){
+        glBindFramebuffer(GL_FRAMEBUFFER,shadowFramebuffer_);glDrawBuffer(GL_NONE);glReadBuffer(GL_NONE);
+        glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,shadowTexture_,0,0);
+        if(glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER)!=GL_FRAMEBUFFER_COMPLETE){
+            SDL_LogError(SDL_LOG_CATEGORY_RENDER,"Shadow framebuffer incomplete; rendering lights without shadows");
+            for(auto& l:lights)l.shadowLayer=-1;
+        }
+        glUseProgram(unlitProgram_);glViewport(0,0,Lighting::shadowResolution,Lighting::shadowResolution);
+        glPolygonOffset(2,4);
+        for(const auto& light:lights)if(light.shadowLayer>=0){
+            for(int face=0;face<(light.type==1?6:1);++face){
+                const int layer=light.shadowLayer+face;
+                const Mat4 vp=Lighting::shadowMatrix(light,cameraPosition,face);matrices[layer]=vp;
+                glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,shadowTexture_,0,layer);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                for(const auto& caster:casters){
+                    if(!Lighting::visibleSphere(vp,caster.position,caster.radius))continue;
+                    const Mat4 mvp=multiply(vp,caster.model);
+                    glUniformMatrix4fv(unlitModelViewProjection_,1,GL_FALSE,mvp.m);
+                    glFrontFace(caster.mirrored?GL_CW:GL_CCW);
+                    glBindVertexArray(caster.mesh->vertexArray);glDrawArrays(GL_TRIANGLES,0,caster.mesh->vertexCount);
+                }
+            }
+        }
+        glPolygonOffset(1,1);glFrontFace(frontFace);glBindVertexArray(0);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER,framebuffer);glBindFramebuffer(GL_READ_FRAMEBUFFER,readFramebuffer);
+    }
+    glUseProgram(litProgram_);
+    glUniform1i(lightCountLocation_,static_cast<int>(lights.size()));glUniform1i(shadowSamplerLocation_,1);
+    for(std::size_t i=0;i<lights.size();++i){
+        const auto& l=lights[i];const auto& s=l.settings;
+        glUniform4f(lightLocations_[i][0],l.position.x,l.position.y,l.position.z,float(l.type));
+        glUniform4f(lightLocations_[i][1],s.color.x*s.intensity,s.color.y*s.intensity,s.color.z*s.intensity,s.range);
+        glUniform4f(lightLocations_[i][2],l.direction.x,l.direction.y,l.direction.z,std::cos(s.outerAngle*kPi/180));
+        glUniform4f(lightLocations_[i][3],float(l.shadowLayer),s.shadowBias,std::cos(s.innerAngle*kPi/180),0);
+    }
+    for(int i=0;i<Lighting::maxShadowLayers;++i)glUniformMatrix4fv(shadowMatrixLocations_[i],1,GL_FALSE,matrices[i].m);
 }

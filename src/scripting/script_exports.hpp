@@ -6,7 +6,7 @@
 #include <cctype>
 #include <filesystem>
 inline bool exportReferenceType(const std::string& type){
-    return type=="GameObject" || type=="Transform" || type=="RigidBody" || type=="Collider" || type=="MeshRenderer" || type=="ObjectName" || type=="LuaScript" || type=="Camera" || type=="AudioSource" || type=="AudioListener";
+    return type=="GameObject" || type=="Transform" || type=="RigidBody" || type=="Collider" || type=="MeshRenderer" || type=="ObjectName" || type=="LuaScript" || type=="Camera" || type=="AudioSource" || type=="AudioListener" || type=="DirectionalLight" || type=="PointLight" || type=="SpotLight";
 }
 inline bool exportAssetType(const std::string& type){return type=="Asset" || type=="AudioClip";}
 inline bool exportType(const std::string& type){return exportReferenceType(type)||exportAssetType(type)||type=="number"||type=="boolean"||type=="string";}
@@ -41,7 +41,7 @@ inline bool exportHasComponent(World& world,Entity e,const std::string& type){
     if(!world.alive(e))return false;
     if(type=="GameObject")return true;
 #define EXPORT_COMPONENT(T) if(type==#T)return world.has<T>(e)
-    EXPORT_COMPONENT(Transform);EXPORT_COMPONENT(RigidBody);EXPORT_COMPONENT(Collider);EXPORT_COMPONENT(MeshRenderer);EXPORT_COMPONENT(ObjectName);EXPORT_COMPONENT(LuaScript);EXPORT_COMPONENT(Camera);EXPORT_COMPONENT(AudioSource);EXPORT_COMPONENT(AudioListener);
+    EXPORT_COMPONENT(Transform);EXPORT_COMPONENT(RigidBody);EXPORT_COMPONENT(Collider);EXPORT_COMPONENT(MeshRenderer);EXPORT_COMPONENT(ObjectName);EXPORT_COMPONENT(LuaScript);EXPORT_COMPONENT(Camera);EXPORT_COMPONENT(AudioSource);EXPORT_COMPONENT(AudioListener);EXPORT_COMPONENT(DirectionalLight);EXPORT_COMPONENT(PointLight);EXPORT_COMPONENT(SpotLight);
 #undef EXPORT_COMPONENT
     return false;
 }

@@ -228,6 +228,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     const MeshHandle cubeMesh  = renderer.createMesh(makeBox({kCubeSize, kCubeSize, kCubeSize}));
 
     // The grid is only drawn.
+    const Entity sun=world.create();world.add(sun,ObjectName{"Directional Light"});
+    Transform sunTransform;sunTransform.rotation=rotationFromEuler({-55,-30,0});
+    world.add(sun,sunTransform);world.add(sun,DirectionalLight{});
     const Entity grid = world.create();
     world.add(grid, ObjectName{"Grid"});
     world.add(grid, Transform{});
@@ -495,13 +498,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         const int created=drawCreateMenu();
         auto createObject=[&](int created) {
             editor.finish(world);spawnMode=false;clicking=false;
-            const char* labels[]{"Empty GameObject","Capsule","Cone","Cube","Sphere","Camera","Audio Source"};
+            const char* labels[]{"Empty GameObject","Capsule","Cone","Cube","Sphere","Camera","Audio Source","Directional Light","Point Light","Spot Light"};
             const MeshHandle meshes[]{MeshHandle{},capsuleMesh,coneMesh,cubeMesh,sphereMesh,MeshHandle{},MeshHandle{}};
             const ColliderShape shapes[]{ColliderShape::Box,ColliderShape::Capsule,ColliderShape::Cone,ColliderShape::Box,ColliderShape::Sphere,ColliderShape::Box,ColliderShape::Box};
             Vec3 position=camera.target;
             position.y=std::max(position.y,created==1?1.0f:created==0?0.0f:0.5f);
             if(created>0 && created<5)position=findRoom(physics,position,shapes[created]);
-            selectedEntity=createLevelObject(world,labels[created],position,meshes[created],shapes[created],created==0 || created>=5);
+            selectedEntity=createLevelObject(world,labels[created],position,created<7?meshes[created]:MeshHandle{},created<7?shapes[created]:ColliderShape::Box,created==0 || created>=5);
+            if(created==7)world.add(selectedEntity,DirectionalLight{});
+            if(created==8)world.add(selectedEntity,PointLight{});
+            if(created==9)world.add(selectedEntity,SpotLight{});
             if(created==6)world.add(selectedEntity,AudioSource{});
             if(created==5){Camera c;c.active=activeCamera(world)==Entity{};world.add(selectedEntity,c);}
         };
