@@ -35,7 +35,19 @@
 ---@field height number
 ---@field friction number
 ---@field bounciness number
+-- Texture exports are project-relative PNG/JPEG/BMP/TGA asset paths, not loaders.
+---@alias Texture string
 ---@class MeshRenderer
+---@field material string Project-relative .mat asset path; empty uses inline Diffuse
+---@field setMaterial fun(self:MeshRenderer,path:string) Assign an asset, reset instance overrides
+---@field setMaterialColor fun(self:MeshRenderer,r:number,g:number,b:number)
+---@field setMaterialTexture fun(self:MeshRenderer,texture:Texture|nil)
+---@field setMaterialNormalMap fun(self:MeshRenderer,texture:Texture|nil)
+---@field setMaterialShader fun(self:MeshRenderer,shader:string) Diffuse or Bumped Diffuse
+---@field setMaterialNormalStrength fun(self:MeshRenderer,value:number)
+---@field setMaterialTiling fun(self:MeshRenderer,x:number,y:number)
+---@field setMaterialSpecular fun(self:MeshRenderer,value:number)
+---@field resetMaterialOverrides fun(self:MeshRenderer)
 ---@field mesh 'Cube'|'Sphere'|'Capsule'|'Cone'
 ---@field color Vec3
 ---@field checkerboard boolean

@@ -60,7 +60,7 @@ Field field(lua_State* L,const Component& c,const char* key) {
     case 0:{auto& v=h.world->get<Transform>(h.entity); FIELD(position,Vec);FIELD(rotation,Quat);FIELD(scale,Vec);break;}
     case 1:{auto& v=h.world->get<RigidBody>(h.entity); FIELD(mass,Number);FIELD(useGravity,Boolean);FIELD(linearVelocity,Vec);FIELD(angularVelocity,Vec);break;}
     case 2:{auto& v=h.world->get<Collider>(h.entity); FIELD(size,Vec);FIELD(center,Vec);FIELD(friction,Number);FIELD(bounciness,Number);FIELD(radius,Number);FIELD(height,Number);FIELD(shape,Shape);break;}
-    case 3:{auto& v=h.world->get<MeshRenderer>(h.entity); FIELD(color,Vec);FIELD(checkerboard,Boolean);FIELD(specular,Number);FIELD(mesh,Mesh);break;}
+    case 3:{auto& v=h.world->get<MeshRenderer>(h.entity); FIELD(color,Vec);FIELD(checkerboard,Boolean);FIELD(specular,Number);FIELD(mesh,Mesh);FIELD(material,String);break;}
     case 4:{auto& v=h.world->get<ObjectName>(h.entity); FIELD(value,String);break;}
     case 5:{auto& v=h.world->get<LuaScript>(h.entity); FIELD(path,String);FIELD(enabled,Boolean);break;}
     case 8:{auto& v=h.world->get<AudioListener>(h.entity);FIELD(enabled,Boolean);break;}
@@ -300,6 +300,11 @@ int LuaScene::objectNewIndex(lua_State* L) {
 }
 int LuaScene::componentIndex(lua_State* L) {
     const auto c=*static_cast<Component*>(luaL_checkudata(L,1,"Component"));const char* key=luaL_checkstring(L,2);
+    if(c.type==3){
+        if(!c.object.world->alive(c.object.entity) || !has(c.object,3))return luaL_error(L,"MeshRenderer no longer exists");
+        const char* methods[]{"setMaterial","setMaterialColor","setMaterialTexture","setMaterialNormalMap","setMaterialShader","setMaterialNormalStrength","setMaterialTiling","setMaterialSpecular","resetMaterialOverrides"};
+        for(int i=0;i<9;++i)if(!std::strcmp(key,methods[i])){lua_pushvalue(L,1);lua_pushinteger(L,i);lua_pushcclosure(L,materialMethod,2);return 1;}
+    }
     if(c.type>=9 && c.type<=11){
         const char* methods[]{"setColor","setIntensity","setRange","setEnabled","setShadows","setShadowQuality","setSpotAngles"};
         for(int i=0;i<7;++i)if(!std::strcmp(key,methods[i])){lua_pushvalue(L,1);lua_pushinteger(L,i);lua_pushcclosure(L,lightMethod,2);return 1;}
@@ -331,6 +336,11 @@ int LuaScene::componentNewIndex(lua_State* L) {
     const auto c=*static_cast<Component*>(luaL_checkudata(L,1,"Component"));
     if(c.type==7){if(!c.object.world->alive(c.object.entity) || !c.object.world->has<AudioSource>(c.object.entity))return luaL_error(L,"AudioSource no longer exists");
         if(!std::strcmp(luaL_checkstring(L,2),"clip")){c.object.world->get<AudioSource>(c.object.entity).clip=luaL_checkstring(L,3);return 0;}return luaL_error(L,"Use AudioSource setter methods");}
+    if(c.type==3 && !std::strcmp(luaL_checkstring(L,2),"material")){
+        if(!c.object.world->alive(c.object.entity) || !has(c.object,3))return luaL_error(L,"MeshRenderer no longer exists");
+        std::string path=luaL_checkstring(L,3);if(!path.empty() && (!materialPathValid(path) || std::filesystem::path(path).extension()!=".mat"))return luaL_error(L,"Expected project .mat path");
+        auto& r=c.object.world->get<MeshRenderer>(c.object.entity);r.material=path;r.materialOverrides=0;return 0;
+    }
     const Field f=field(L,c,luaL_checkstring(L,2));
     if(c.type==6 && !std::strcmp(lua_tostring(L,2),"active")) {
         luaL_checktype(L,3,LUA_TBOOLEAN);
@@ -438,6 +448,22 @@ int LuaScene::audioApi(lua_State* L) {
     if(!lua_isnoneornil(L,2))self.world_.get<AudioSource>(h.entity).clip=luaL_checkstring(L,2);
     component(L,h,7);return 1;
 }
+int LuaScene::materialMethod(lua_State* L){
+    const auto c=*static_cast<Component*>(luaL_checkudata(L,lua_upvalueindex(1),"Component"));
+    if(!c.object.world->alive(c.object.entity) || !has(c.object,3))return luaL_error(L,"MeshRenderer no longer exists");
+    auto& r=c.object.world->get<MeshRenderer>(c.object.entity);if(luaL_testudata(L,1,"Component"))lua_remove(L,1);
+    const int op=int(lua_tointeger(L,lua_upvalueindex(2)));auto edited=r.materialValues;unsigned mask=r.materialOverrides;
+    if(op==0){std::string path=luaL_checkstring(L,1);if(!path.empty() && (!materialPathValid(path) || std::filesystem::path(path).extension()!=".mat"))return luaL_error(L,"Expected project .mat path");r.material=path;r.materialOverrides=0;return 0;}
+    if(op==1){edited.color={number(L,1),number(L,2),number(L,3)};mask|=MaterialColor;}
+    if(op==2){edited.texture=lua_isnil(L,1)?"":luaL_checkstring(L,1);mask|=MaterialTexture;}
+    if(op==3){edited.normalMap=lua_isnil(L,1)?"":luaL_checkstring(L,1);mask|=MaterialNormal;}
+    if(op==4){const char* shader=luaL_checkstring(L,1);if(std::strcmp(shader,"Diffuse") && std::strcmp(shader,"Bumped Diffuse"))return luaL_error(L,"Expected Diffuse or Bumped Diffuse");edited.shader=!std::strcmp(shader,"Bumped Diffuse");mask|=MaterialShader;}
+    if(op==5){edited.normalStrength=number(L,1);mask|=MaterialStrength;}
+    if(op==6){edited.tilingX=number(L,1);edited.tilingY=number(L,2);mask|=MaterialTiling;}
+    if(op==7){edited.specular=number(L,1);mask|=MaterialSpecular;}
+    if(op==8){r.materialOverrides=0;return 0;}
+    if(!validMaterial(edited))return luaL_error(L,"Invalid material properties or texture path");r.materialValues=edited;r.materialOverrides=mask;return 0;
+}
 int LuaScene::lightMethod(lua_State* L){
     const auto c=*static_cast<Component*>(luaL_checkudata(L,lua_upvalueindex(1),"Component"));
     if(!c.object.world->alive(c.object.entity) || !has(c.object,c.type))return luaL_error(L,"Light no longer exists");
@@ -483,6 +509,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields){
         if(!exportName(field.name))continue;
         if(field.type=="number")lua_pushnumber(state_,field.number);
         else if(field.type=="boolean")lua_pushboolean(state_,field.boolean);
+        else if(field.type=="Texture" && !materialTexturePath(field.text))lua_pushnil(state_);
         else if(field.type=="string" || exportAssetType(field.type))lua_pushlstring(state_,field.text.data(),field.text.size());
         else if(exportHasComponent(world_,field.entity,field.type)){
             if(field.type=="GameObject")pushObject(field.entity);

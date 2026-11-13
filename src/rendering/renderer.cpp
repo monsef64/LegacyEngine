@@ -39,6 +39,7 @@ void main()
 const char* const kLitVertexShader = R"glsl(#version 330 core
 layout(location = 0) in vec3 aPosition;
 layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aUV;
 
 uniform mat4 uModelViewProjection;
 uniform mat3 uNormalMatrix;
@@ -47,6 +48,7 @@ uniform mat4 uModel;
 out vec3 vNormal;
 out vec3 vWorldPosition;
 out vec2 vCheckerUV;
+out vec2 vUV;
 
 void main()
 {
@@ -54,6 +56,7 @@ void main()
     vWorldPosition = (uModel * vec4(aPosition, 1.0)).xyz;
     // A 2x2 repeat covers 2 metres: each texel is one checker square.
     vCheckerUV = aPosition.xz * 0.5;
+    vUV=aUV;
     gl_Position = uModelViewProjection * vec4(aPosition, 1.0);
 }
 )glsl";
@@ -62,6 +65,11 @@ const char* const kLitFragmentShader = R"glsl(#version 330 core
 in vec3 vNormal;
 in vec3 vWorldPosition;
 in vec2 vCheckerUV;
+in vec2 vUV;
+uniform sampler2D uMaterialTexture,uNormalTexture;
+uniform bool uHasMaterialTexture,uBumped;
+uniform float uNormalStrength;
+uniform vec2 uTiling;
 uniform bool uCheckerboard;
 uniform sampler2D uCheckerTexture;
 uniform sampler2DArrayShadow uShadowTexture;
@@ -137,8 +145,25 @@ float visibility(int i,vec3 normal,vec3 toLight,vec3 worldDx,vec3 worldDy){
 }
 void main(){
     vec3 worldDx=dFdx(vWorldPosition),worldDy=dFdy(vWorldPosition);
+    vec2 uv=vUV*uTiling;
+    vec2 uvDx=dFdx(uv),uvDy=dFdy(uv);
     vec3 normal=normalize(vNormal);
+    if(uBumped){
+        float det=uvDx.x*uvDy.y-uvDx.y*uvDy.x;
+        if(abs(det)>1e-10){
+            vec3 t=(worldDx*uvDy.y-worldDy*uvDx.y)/det;
+            vec3 b=(-worldDx*uvDy.x+worldDy*uvDx.x)/det;
+            t-=normal*dot(normal,t);
+            if(dot(t,t)>1e-10){
+                t=normalize(t);b=normalize(cross(normal,t))*sign(dot(cross(normal,t),b));
+                vec3 mapped=textureGrad(uNormalTexture,uv,uvDx,uvDy).xyz*2.0-1.0;mapped.xy*=uNormalStrength;
+                vec3 n=t*mapped.x+b*mapped.y+normal*mapped.z;
+                if(dot(n,n)>1e-10)normal=normalize(n);
+            }
+        }
+    }
     vec3 albedo=uColor;
+    if(uHasMaterialTexture)albedo*=texture(uMaterialTexture,uv).rgb;
     if(uCheckerboard)albedo*=texture(uCheckerTexture,vCheckerUV).rgb;
     vec3 viewDirection=normalize(uCameraPosition-vWorldPosition);
     vec3 result=albedo*.12;
@@ -249,6 +274,9 @@ bool Renderer::init()
     for(int i=0;i<Lighting::maxShadowLayers;++i)
         shadowMatrixLocations_[i]=glGetUniformLocation(litProgram_,("uShadowMatrix["+std::to_string(i)+"]").c_str());
 
+    litTexture_=glGetUniformLocation(litProgram_,"uMaterialTexture");litNormalTexture_=glGetUniformLocation(litProgram_,"uNormalTexture");
+    litHasTexture_=glGetUniformLocation(litProgram_,"uHasMaterialTexture");litBumped_=glGetUniformLocation(litProgram_,"uBumped");
+    litStrength_=glGetUniformLocation(litProgram_,"uNormalStrength");litTiling_=glGetUniformLocation(litProgram_,"uTiling");
     // Small generated texture: no external asset paths, with mipmaps to reduce
     // shimmer at distance and nearest magnification for crisp checker edges.
     const unsigned char checks[]{0,0,0,255,255,255,255,255,255,0,0,0};
@@ -276,6 +304,7 @@ bool Renderer::init()
 
 void Renderer::shutdown()
 {
+    materialTextures_.clear();materialCache_.clear();
     for (GpuMesh& mesh : meshes_) {
         glDeleteBuffers(1, &mesh.vertexBuffer);
         glDeleteVertexArrays(1, &mesh.vertexArray);
@@ -319,6 +348,7 @@ MeshHandle Renderer::createMesh(const MeshData& data)
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           reinterpret_cast<const void*>(offsetof(Vertex, normal)));
 
+    glEnableVertexAttribArray(2);glVertexAttribPointer(2,2,GL_FLOAT,GL_FALSE,sizeof(Vertex),reinterpret_cast<const void*>(offsetof(Vertex,u)));
     glBindVertexArray(0);
 
     meshes_.push_back(mesh);
@@ -327,6 +357,7 @@ MeshHandle Renderer::createMesh(const MeshData& data)
 
 void Renderer::draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition, int x, int y, bool editorView)
 {
+    materialTextures_.beginFrame();
     glDisable(GL_SCISSOR_TEST);
     glViewport(x, y, width, height);
     glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
@@ -369,10 +400,19 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
                 glUseProgram(litProgram_);
                 glUniformMatrix4fv(litModel_, 1, GL_FALSE, model.m);
                 glUniform1i(litCheckerboard_, renderer.checkerboard ? 1 : 0);
-                glUniform1f(litSpecular_, renderer.specular);
+                MaterialProperties material;material.color=renderer.color;material.specular=renderer.specular;
+                if(!renderer.material.empty())try{material=materialCache_.get(materialAssets_,renderer.material);}catch(const std::exception& e){materialError=e.what();}
+                material=applyMaterialOverrides(material,renderer.materialValues,renderer.materialOverrides);
+                if(!validMaterial(material)){materialError="Invalid material overrides";material=MaterialProperties{};}
+                const auto texture=materialTextures_.get(materialAssets_,material.texture,materialError);
+                const auto normal=material.shader==1?materialTextures_.get(materialAssets_,material.normalMap,materialError):0;
+                glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,texture);glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D,normal);glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,checkerTexture_);
+                glUniform1i(litTexture_,2);glUniform1i(litNormalTexture_,3);glUniform1i(litHasTexture_,texture!=0);glUniform1i(litBumped_,normal!=0);
+                glUniform1f(litStrength_,material.normalStrength);glUniform2f(litTiling_,material.tilingX,material.tilingY);
+                glUniform1f(litSpecular_,material.specular);
                 glUniformMatrix4fv(litModelViewProjection_, 1, GL_FALSE, modelViewProjection.m);
                 glUniformMatrix3fv(litNormalMatrix_, 1, GL_FALSE, normals.m);
-                glUniform3f(litColor_, renderer.color.x, renderer.color.y, renderer.color.z);
+                glUniform3f(litColor_,material.color.x,material.color.y,material.color.z);
             }
 
             glBindVertexArray(mesh.vertexArray);

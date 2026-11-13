@@ -52,6 +52,16 @@
     "bounciness": "number"
   },
   "MeshRenderer": {
+    "material": "string Project-relative .mat asset path; empty uses inline Diffuse",
+    "setMaterial": "fun(self:MeshRenderer,path:string) Assign an asset, reset instance overrides",
+    "setMaterialColor": "fun(self:MeshRenderer,r:number,g:number,b:number)",
+    "setMaterialTexture": "fun(self:MeshRenderer,texture:Texture|nil)",
+    "setMaterialNormalMap": "fun(self:MeshRenderer,texture:Texture|nil)",
+    "setMaterialShader": "fun(self:MeshRenderer,shader:string) Diffuse or Bumped Diffuse",
+    "setMaterialNormalStrength": "fun(self:MeshRenderer,value:number)",
+    "setMaterialTiling": "fun(self:MeshRenderer,x:number,y:number)",
+    "setMaterialSpecular": "fun(self:MeshRenderer,value:number)",
+    "resetMaterialOverrides": "fun(self:MeshRenderer)",
     "mesh": "'Cube'|'Sphere'|'Capsule'|'Cone'",
     "color": "Vec3",
     "checkerboard": "boolean",

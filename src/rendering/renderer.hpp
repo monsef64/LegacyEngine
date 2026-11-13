@@ -6,11 +6,15 @@
 #include "core/components.hpp"
 #include "core/math.hpp"
 #include "rendering/mesh.hpp"
+#include "materials/material_io.hpp"
+#include "rendering/material_textures.hpp"
 
 #include <vector>
 
 class Renderer {
 public:
+    std::string materialError;
+    void setAssetRoot(const std::filesystem::path& root){if(materialAssets_.root!=root){materialCache_.clear();materialTextures_.clear();materialAssets_.root=root;materialError.clear();}}
     // Call once, after the window's OpenGL context has been created. Returns
     // false, with the reason logged, if OpenGL cannot be set up.
     bool init();
@@ -33,6 +37,10 @@ public:
     void drawAudioSource(const Transform& transform,const AudioSource& source,const Mat4& viewProjection);
 
 private:
+    AssetManager materialAssets_;
+    MaterialAssetCache materialCache_;
+    MaterialTextureCache materialTextures_;
+    int litTexture_=-1,litNormalTexture_=-1,litHasTexture_=-1,litBumped_=-1,litStrength_=-1,litTiling_=-1;
     void drawWire(const MeshData& wire,const Transform& transform,const Mat4& viewProjection,Vec3 color);
     int lightCountLocation_=-1,shadowSamplerLocation_=-1;
     int lightLocations_[16][4]{},shadowMatrixLocations_[12]{};

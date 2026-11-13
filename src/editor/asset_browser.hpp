@@ -9,12 +9,14 @@
 #include "platform/system_trash.hpp"
 #include "project/project_assets.hpp"
 #include "assets/texture_preview.hpp"
+#include "materials/material_io.hpp"
 
 // Font Awesome Free Solid glyphs, merged into the embedded editor font.
 inline const char* assetIcon(const std::string& path,bool folder=false){
     if(folder)return "\xef\x81\xbb"; // folder
     auto ext=AssetManager::extension(path);
     if(ext==".ls" || ext==".lua")return "\xef\x87\x89"; // file-code
+    if(ext==".mat")return "\xef\x94\xbf"; // palette
     if(textureAsset(path))return "\xef\x80\xbe"; // image
     if(ext==".obj" || ext==".fbx" || ext==".gltf" || ext==".glb")return "\xef\x86\xb2"; // cube
     if(ext==".wav" || ext==".mp3" || ext==".ogg")return "\xef\x80\x81"; // music
@@ -139,6 +141,7 @@ public:
                 if(ImGui::BeginPopupContextWindow("Assets empty actions",ImGuiPopupFlags_MouseButtonRight|ImGuiPopupFlags_NoOpenOverItems)) {
                     if(ImGui::MenuItem("New Folder"))createFolder();
                     if(ImGui::BeginMenu("Create")) {
+                        if(ImGui::MenuItem("Material (.mat)"))try{selected=createMaterial(assets,currentFolder);}catch(const std::exception& e){assets.error=e.what();}
                         if(ImGui::MenuItem("LegacyScript (.ls)"))createFile(".ls");
                         if(ImGui::MenuItem("Text file (.txt)"))createFile(".txt");
                         ImGui::EndMenu();
@@ -179,6 +182,8 @@ public:
                                 std::filesystem::rename(assets.resolve(selected),assets.resolve(relative));
                                 world.each<LuaScript>([&](Entity,LuaScript& s){if(s.path==selected)s.path=relative;for(auto& entry:s.additional)if(entry.path==selected)entry.path=relative;});
                                 world.each<LuaScript>([&](Entity,LuaScript& scripts){auto rename=[&](std::vector<ScriptField>& fields){for(auto& field:fields)if(exportAssetType(field.type) && field.text==selected)field.text=relative;};rename(scripts.fields);for(auto& extra:scripts.additional)rename(extra.fields);});
+                                world.each<MeshRenderer>([&](Entity,MeshRenderer& r){if(r.material==selected)r.material=relative;if(r.materialValues.texture==selected)r.materialValues.texture=relative;if(r.materialValues.normalMap==selected)r.materialValues.normalMap=relative;});
+                                for(const auto& file:assets.files())if(materialAsset(file))try{auto p=loadMaterial(assets,file);bool changed=false;if(p.texture==selected){p.texture=relative;changed=true;}if(p.normalMap==selected){p.normalMap=relative;changed=true;}if(changed)saveMaterial(assets,file,p);}catch(...){}
                                 world.each<AudioSource>([&](Entity,AudioSource& a){if(a.clip==selected)a.clip=relative;});
                                 if(openedScript==selected)openedScript=relative;
                                 selected=relative;

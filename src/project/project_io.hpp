@@ -35,7 +35,7 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
     auto entityIndex=[&](Entity target){int index=-1;for(std::size_t i=0;i<entities.size();++i)if(entities[i]==target)index=static_cast<int>(i);return index;};
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 10\n";
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 11\n";
     out<<std::quoted(std::string(source))<<'\n'<<std::quoted(std::string(assetDirectory))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
@@ -55,6 +55,8 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
         if(auto* m=world.tryGet<MeshRenderer>(e)) {
             int mesh=-1;for(int i=0;i<6;++i)if(meshes[i].id==m->mesh.id)mesh=i;
             require(mesh>=0);out<<mesh<<' ';writeVec(out,m->color);out<<m->checkerboard<<' '<<m->specular<<' ';
+            require(m->material.empty() || materialAsset(m->material));require(m->materialOverrides<=127 && validMaterial(m->materialValues));
+            out<<std::quoted(m->material)<<' '<<m->materialOverrides<<' '<<std::quoted(materialJson(m->materialValues).dump())<<' ';
         }
         if(auto* c=world.tryGet<Collider>(e)) {
             writeVec(out,c->size);writeVec(out,c->center);
@@ -90,7 +92,7 @@ struct Loaded { World world; std::string source,assetDirectory; OrbitCamera came
 inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=10));
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=11));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
     if(version>=4) {
         in>>std::quoted(result.assetDirectory);
@@ -117,7 +119,9 @@ inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& me
         if(mask&2)result.world.add(e,readTransform(in));
         if(mask&4) {
             int mesh=-1;in>>mesh;require(mesh>=0 && mesh<6);
-            MeshRenderer m;m.mesh=meshes[mesh];m.color=readVec(in);in>>m.checkerboard;m.specular=number(in);result.world.add(e,m);
+            MeshRenderer m;m.mesh=meshes[mesh];m.color=readVec(in);in>>m.checkerboard;m.specular=number(in);
+            if(version>=11){std::string values;in>>std::quoted(m.material)>>m.materialOverrides>>std::quoted(values);require(values.size()<=64*1024 && m.materialOverrides<=127 && (m.material.empty() || materialAsset(m.material)));m.materialValues=parseMaterial(parseJson(values));}
+            result.world.add(e,m);
         }
         if(mask&8) {
             Collider c;c.size=readVec(in);c.center=readVec(in);c.friction=number(in);c.bounciness=number(in);

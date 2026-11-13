@@ -68,6 +68,17 @@ int main(){
     TexturePreviewCache previews;previews.beginFrame(assets);const auto texture=previews.texture(assets,"red.tga");assert(texture!=0);
     glBindTexture(GL_TEXTURE_2D,texture);TextureThumbnail pixels;glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels.pixels.data());
     assert(pixels.pixels[0]==255 && pixels.pixels[3]==255 && glGetError()==GL_NO_ERROR);
-    bool cacheHit=false;loadTextureThumbnail(assets,"red.tga",&cacheHit);assert(cacheHit);previews.clear();std::filesystem::remove_all(temp);
+    bool cacheHit=false;loadTextureThumbnail(assets,"red.tga",&cacheHit);assert(cacheHit);previews.clear();
+    renderer.setAssetRoot(assets.root);
+    MaterialProperties material;material.texture="red.tga";saveMaterial(assets,"Test.mat",material);
+    const auto plain=read();world.get<MeshRenderer>(box).material="Test.mat";world.get<MeshRenderer>(floor).material="Test.mat";
+    const auto textured=read();assert(difference(plain,textured)>1000);
+    auto& mesh=world.get<MeshRenderer>(floor);mesh.materialValues.normalMap="normal.tga";mesh.materialValues.shader=1;mesh.materialOverrides=MaterialNormal|MaterialShader;
+    {std::ofstream image(assets.root/"normal.tga",std::ios::binary);unsigned char header[18]{};header[2]=2;header[12]=2;header[14]=2;header[16]=24;image.write(reinterpret_cast<char*>(header),18);for(int i=0;i<4;++i){image.put(char(192));image.put(char(128));image.put(char(240));}}
+    DirectionalLight lit;lit.shadows=false;world.add(lamp,lit);
+    mesh.materialOverrides=0;const auto diffuse=read();mesh.materialOverrides=MaterialNormal|MaterialShader;const auto bumped=read();assert(difference(diffuse,bumped)>100);
+    assert(renderer.materialError.empty());
+    mesh.materialValues.texture="missing.png";mesh.materialOverrides|=MaterialTexture;read();assert(!renderer.materialError.empty());
+    std::filesystem::remove_all(temp);
     renderer.shutdown();SDL_GL_DestroyContext(context);SDL_DestroyWindow(window);SDL_Quit();
 }

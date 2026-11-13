@@ -32,7 +32,8 @@ inline std::string sceneSignature(World& world) {
             scalar(c.targetEntity.index);scalar(c.targetEntity.generation);vec(c.target);vec(c.followOffset);scalar(c.tracking);scalar(c.following);
         });
         component(e,Transform{},transform);
-        component(e,MeshRenderer{},[&](const MeshRenderer& m){scalar(m.mesh.id);vec(m.color);scalar(m.checkerboard);scalar(m.specular);});
+        component(e,MeshRenderer{},[&](const MeshRenderer& m){scalar(m.mesh.id);vec(m.color);scalar(m.checkerboard);scalar(m.specular);scalar(m.material.size());result+=m.material;scalar(m.materialOverrides);const auto& p=m.materialValues;
+            scalar(p.shader);vec(p.color);scalar(p.texture.size());result+=p.texture;scalar(p.normalMap.size());result+=p.normalMap;scalar(p.normalStrength);scalar(p.tilingX);scalar(p.tilingY);scalar(p.specular);});
         component(e,Collider{},[&](const Collider& c){vec(c.size);vec(c.center);scalar(c.friction);scalar(c.bounciness);scalar(c.shape);scalar(c.radius);scalar(c.height);});
         component(e,RigidBody{},[&](const RigidBody& b){scalar(b.mass);scalar(b.useGravity);vec(b.linearVelocity);vec(b.angularVelocity);});
         component(e,Parent{},[&](const Parent& p){scalar(p.entity.index);scalar(p.entity.generation);transform(p.previous);});

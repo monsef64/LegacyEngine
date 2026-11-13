@@ -17,7 +17,7 @@ inline std::vector<LuaToken> luaTokens(std::string_view s){
         else if(std::isalpha(static_cast<unsigned char>(s[i]))||s[i]=='_'){++i;while(i<s.size() && (std::isalnum(static_cast<unsigned char>(s[i]))||s[i]=='_'))++i;
             auto word=s.substr(begin,i-begin);std::string_view keys=" and break do else elseif end false for function goto if in local nil not or repeat return then true until while ";
             if(keys.find(" "+std::string(word)+" ")!=keys.npos)kind=LuaToken::Keyword;
-            else if(word=="self"||word=="Camera"||word=="GameObject"||word=="AudioSource"||word=="AudioClip"||word=="DirectionalLight"||word=="PointLight"||word=="SpotLight")kind=LuaToken::Api;
+            else if(word=="self"||word=="Camera"||word=="GameObject"||word=="AudioSource"||word=="AudioClip"||word=="Texture"||word=="DirectionalLight"||word=="PointLight"||word=="SpotLight")kind=LuaToken::Api;
         }else ++i;
         tokens.push_back({begin,i,kind});
     }return tokens;
