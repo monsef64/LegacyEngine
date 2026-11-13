@@ -17,13 +17,13 @@ inline void updateCharacterControllers(World& world, Physics& physics) {
                     ? collider.radius * std::abs(t.scale.y)
                     : collider.size.y * .5f * std::abs(t.scale.y);
             const Vec3 origin = t.position + rotateVector(t.rotation, collider.center * t.scale);
-            auto groundHits = physics.raycastAll(
-                {origin, {0, -1, 0}}, halfHeight + c.groundProbe, [&](Entity target) {
+            RayHit groundHit;
+            const bool grounded = physics.raycast(
+                {origin, {0, -1, 0}}, halfHeight + c.groundProbe, groundHit, [&](Entity target) {
                     return target != e && world.has<Collider>(target) &&
                            !world.get<Collider>(target).isTrigger;
                 });
-            c.isGrounded = body.linearVelocity.y <= .1f && !groundHits.empty() &&
-                           groundHits.front().normal.y > .55f;
+            c.isGrounded = body.linearVelocity.y <= .1f && grounded && groundHit.normal.y > .55f;
             Vec3 direction = rotateVector(t.rotation, c.movement);
             direction.y = 0;
             const float length = std::sqrt(dot(direction, direction));
