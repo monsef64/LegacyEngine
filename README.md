@@ -486,3 +486,10 @@ The top bar's **Debug** menu has two session-only toggles (off by default):
 
 These options do not change the scene or saved project. Without an active camera,
 the Game view continues to show only its centered no-camera message.
+
+## License
+
+LegacyEngine and the LegacyScript extension are licensed under the
+**GNU General Public License, version 2 only** (`GPL-2.0-only`). See [LICENSE](LICENSE)
+for the full terms. Third-party dependencies, fonts, and other vendored assets
+retain their respective licenses and notices.
