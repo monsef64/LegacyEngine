@@ -433,7 +433,7 @@ Select a GameObject and choose **Add Component → Skybox**. Its **Skybox type**
   by gamma correction for display; it is not clamped to an LDR input texture.
 
 **Skybox color** multiplies the texture (white preserves its color). Disable the
-component to turn it off. The first enabled Skybox in entity order supplies the
+component to turn it off. The first enabled Skybox in component iteration order supplies the
 background in Scene and Game views; disable it to select another. With no enabled
 Skybox, the existing clear background remains. Missing or invalid images produce
 an error and a solid tint fallback. Each encoded image is limited to 64 MiB;
