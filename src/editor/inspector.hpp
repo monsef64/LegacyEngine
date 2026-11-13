@@ -315,14 +315,12 @@ inline void drawInspector(World& world,
             if (ImGui::Checkbox("Active", &objectActive)) {
                 setObjectActive(world, selected, objectActive);
             }
-            auto* objectName = world.tryGet<ObjectName>(selected);
-            char name[257];
-            std::snprintf(name, sizeof(name), "%s", objectName ? objectName->value.c_str() : "");
-            if (ImGui::InputText("Name", name, sizeof(name))) {
-                world.add(selected, ObjectName{name});
-            }
+            const float layerWidth = std::min(180.0f, ImGui::GetContentRegionAvail().x * .5f);
+            ImGui::SameLine(std::max(ImGui::GetCursorPosX(),
+                                     ImGui::GetWindowContentRegionMax().x - layerWidth));
+            ImGui::SetNextItemWidth(layerWidth);
             int layer = LayerSettings::effective(world, selected);
-            if (ImGui::BeginCombo("Layer", LayerSettings::names[layer].c_str())) {
+            if (ImGui::BeginCombo("##Layer", LayerSettings::names[layer].c_str())) {
                 for (int i = 0; i < 32; ++i) {
                     if (!LayerSettings::names[i].empty() &&
                         ImGui::Selectable(LayerSettings::names[i].c_str(), layer == i)) {
@@ -330,6 +328,15 @@ inline void drawInspector(World& world,
                     }
                 }
                 ImGui::EndCombo();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("GameObject layer");
+            }
+            auto* objectName = world.tryGet<ObjectName>(selected);
+            char name[257];
+            std::snprintf(name, sizeof(name), "%s", objectName ? objectName->value.c_str() : "");
+            if (ImGui::InputText("Name", name, sizeof(name))) {
+                world.add(selected, ObjectName{name});
             }
             const Entity parent = getParent(world, selected);
             const auto* parentName = world.tryGet<ObjectName>(parent);
@@ -436,16 +443,6 @@ inline void drawInspector(World& world,
                     if (assets) {
                         static std::string materialError;
                         try {
-                            static std::filesystem::path listedRoot;
-                            static std::vector<std::string> materialFiles;
-                            static std::chrono::steady_clock::time_point listedAt;
-                            auto now = std::chrono::steady_clock::now();
-                            if (listedRoot != assets->root ||
-                                now - listedAt > std::chrono::seconds(1)) {
-                                materialFiles = assets->files();
-                                listedRoot = assets->root;
-                                listedAt = now;
-                            }
                             if (assetPicker(
                                     "Material", r->material, assets, [](const std::string& file) {
                                         return materialAsset(file);
@@ -831,13 +828,6 @@ inline void drawInspector(World& world,
                     } else if (remove > 0) {
                         scripts->additional.erase(scripts->additional.begin() + remove - 1);
                     }
-                }
-                ImGui::Button("Drop LegacyScript (.ls) here", ImVec2(-1, 32));
-                if (ImGui::BeginDragDropTarget()) {
-                    if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                        attachScriptAsset(world, selected, static_cast<const char*>(asset->Data));
-                    }
-                    ImGui::EndDragDropTarget();
                 }
                 if (auto* c = world.tryGet<CharacterController>(selected);
                     componentID == 13 && c &&

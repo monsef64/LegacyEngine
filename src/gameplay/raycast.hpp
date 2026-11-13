@@ -23,14 +23,22 @@ queryScene(World& world, Physics& physics, Entity owner, const Raycast& query) {
     for (int i = 0; i < count; ++i) {
         float angle = count == 1 ? 0 : radians(-query.angle * .5f + query.angle * i / (count - 1));
         const auto direction = rotateVector(pose.rotation, {std::sin(angle), 0, -std::cos(angle)});
-        for (auto hit : physics.raycastAll({origin, direction}, query.distance, filter)) {
+        auto remember = [&](const RayHit& hit) {
             auto key = std::make_pair(hit.entity.index, hit.entity.generation);
             auto found = hits.find(key);
             if (found == hits.end() || found->second.distance > hit.distance) {
                 hits[key] = hit;
             }
-            if (query.type == 1) {
-                break;
+        };
+        if (query.type == 1) {
+            RayHit hit;
+            if (physics.raycast({origin, direction}, query.distance, hit, filter)) {
+                remember(hit);
+            }
+        } else {
+            for (const auto& hit :
+                 physics.raycastAll({origin, direction}, query.distance, filter)) {
+                remember(hit);
             }
         }
     }

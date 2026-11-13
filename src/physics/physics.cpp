@@ -346,6 +346,7 @@ struct Physics::Impl {
     void build(Body& body, const Box* box, const RigidBody* rigidBody) {
         release(body);
         body.body = world->createRigidBody(toRp3d(body.current));
+        body.body->setUserData(&body);
 
         body.hasBox = box != nullptr;
         body.box = box ? *box : Box{};
@@ -537,7 +538,13 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                 }
                 if (body.body) {
                     if (body.collider) {
-                        body.collider->setIsTrigger(boxCollider && boxCollider->isTrigger);
+                        const bool trigger = boxCollider && boxCollider->isTrigger;
+                        if (body.collider->getIsTrigger() != trigger) {
+                            body.collider->setIsTrigger(trigger);
+                            if (!trigger) {
+                                body.collider->setIsSimulationCollider(true);
+                            }
+                        }
                     }
                     if (rigidBody) {
                         const auto desired = rigidBody->isKinematic ? rp3d::BodyType::KINEMATIC
@@ -681,6 +688,12 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                 if (pairs.count(key)) {
                     continue;
                 }
+                // Most trigger/body pairs are far apart. The exact overlap query
+                // builds a collision snapshot, so reject disjoint bounds first.
+                if (!a->second.collider->getWorldAABB().testCollision(
+                        b->second.collider->getWorldAABB())) {
+                    continue;
+                }
                 if (impl.world->testOverlap(a->second.body, b->second.body)) {
                     auto x = a->second.entity, y = b->second.entity;
                     pairs[key] = {x, y};
@@ -710,34 +723,64 @@ std::vector<RayHit> Physics::raycastAll(const Ray& ray,
         !std::isfinite(maxDistance) || maxDistance <= 0) {
         return hits;
     }
-    for (const auto& entry : impl_->bodies) {
-        const auto& body = entry.second;
-        if (!body.body || !body.collider || (filter && !filter(body.entity))) {
-            continue;
+    // Let the physics broad phase prune distant colliders instead of ray-testing
+    // every body (especially expensive for each ray in a line-of-sight fan).
+    struct Callback final : rp3d::RaycastCallback {
+        std::vector<RayHit>& hits;
+        const std::function<bool(Entity)>& filter;
+        float range;
+        Callback(std::vector<RayHit>& h, const std::function<bool(Entity)>& f, float r)
+            : hits(h), filter(f), range(r) {}
+        rp3d::decimal notifyRaycastHit(const rp3d::RaycastInfo& info) override {
+            const auto* body = static_cast<const Impl::Body*>(info.body->getUserData());
+            if (body && (!filter || filter(body->entity))) {
+                hits.push_back({body->entity,
+                                toVec3(info.worldPoint),
+                                toVec3(info.worldNormal),
+                                float(info.hitFraction) * range});
+            }
+            return 1; // Keep all hits; ignored layers never clip the query.
         }
-        rp3d::RaycastInfo info;
-        if (body.collider->raycast(
-                rp3d::Ray(toRp3d(ray.origin),
-                          toRp3d(ray.origin + direction * std::min(maxDistance, kLargestNumber))),
-                info)) {
-            hits.push_back({body.entity,
-                            toVec3(info.worldPoint),
-                            toVec3(info.worldNormal),
-                            float(info.hitFraction) * std::min(maxDistance, kLargestNumber)});
-        }
-    }
+    } callback(hits, filter, std::min(maxDistance, kLargestNumber));
+    impl_->world->raycast(
+        rp3d::Ray(toRp3d(ray.origin), toRp3d(ray.origin + direction * callback.range)), &callback);
     std::sort(hits.begin(), hits.end(), [](const auto& a, const auto& b) {
         return a.distance < b.distance;
     });
     return hits;
 }
-bool Physics::raycast(const Ray& ray, float distance, RayHit& hit) const {
-    auto hits = raycastAll(ray, distance);
-    if (hits.empty()) {
+bool Physics::raycast(const Ray& ray,
+                      float distance,
+                      RayHit& hit,
+                      const std::function<bool(Entity)>& filter) const {
+    const auto direction = normalize(ray.direction);
+    if (!isUsable(ray.origin) || !isUsable(direction) || direction == Vec3{} ||
+        !std::isfinite(distance) || distance <= 0) {
         return false;
     }
-    hit = hits.front();
-    return true;
+    struct Callback final : rp3d::RaycastCallback {
+        RayHit& hit;
+        const std::function<bool(Entity)>& filter;
+        float range;
+        bool found = false;
+        Callback(RayHit& h, const std::function<bool(Entity)>& f, float r)
+            : hit(h), filter(f), range(r) {}
+        rp3d::decimal notifyRaycastHit(const rp3d::RaycastInfo& info) override {
+            const auto* body = static_cast<const Impl::Body*>(info.body->getUserData());
+            if (!body || (filter && !filter(body->entity))) {
+                return -1;
+            }
+            hit = {body->entity,
+                   toVec3(info.worldPoint),
+                   toVec3(info.worldNormal),
+                   float(info.hitFraction) * range};
+            found = true;
+            return info.hitFraction; // Clip traversal to the closest accepted hit.
+        }
+    } callback(hit, filter, std::min(distance, kLargestNumber));
+    impl_->world->raycast(
+        rp3d::Ray(toRp3d(ray.origin), toRp3d(ray.origin + direction * callback.range)), &callback);
+    return callback.found;
 }
 std::vector<RayHit>
 Physics::overlapSphere(Vec3 origin, float radius, const std::function<bool(Entity)>& filter) const {

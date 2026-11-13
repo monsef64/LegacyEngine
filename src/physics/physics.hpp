@@ -61,7 +61,10 @@ class Physics {
     // metres: what is under the mouse pointer, for example (see
     // OrbitCamera::rayThrough()). Returns false, and leaves `hit` alone, if it
     // meets none. A collider that the ray starts inside of does not count.
-    bool raycast(const Ray& ray, float maxDistance, RayHit& hit) const;
+    bool raycast(const Ray& ray,
+                 float maxDistance,
+                 RayHit& hit,
+                 const std::function<bool(Entity)>& filter = {}) const;
 
     // Whether a box would reach into a Collider, or touch one: whether
     // there is no room for a new object, for example. `center` is the middle
