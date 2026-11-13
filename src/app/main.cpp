@@ -12,6 +12,7 @@
 #include "core/ecs.hpp"
 #include "rendering/mesh.hpp"
 #include "physics/physics.hpp"
+#include "physics/collider_debug.hpp"
 #include "rendering/renderer.hpp"
 #include "platform/engine_log.hpp"
 #include "editor/transform_editor.hpp"
@@ -340,6 +341,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 clicking = false;
                 break;
             case SDL_EVENT_QUIT:
+                SDL_Log("Shutdown requested: SDL quit event");
                 running = false;
                 break;
             case SDL_EVENT_KEY_DOWN:
@@ -429,7 +431,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 openProject=ImGui::MenuItem("Open Project...","Ctrl+O",false,projectEnabled);
                 saveProject=ImGui::MenuItem("Save Project","Ctrl+S",false,projectEnabled);
                 saveAsProject=ImGui::MenuItem("Save Project As...","Ctrl+Shift+S",false,projectEnabled);
-                ImGui::Separator();if(ImGui::MenuItem("Quit"))running=false;
+                ImGui::Separator();if(ImGui::MenuItem("Quit")){SDL_Log("Shutdown requested: File > Quit");running=false;}
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
@@ -681,9 +683,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         terminalErrors.report("Editor settings",browser.settings.error);
         terminalErrors.report("Input settings",inputSettings.error);
         terminalErrors.report("History",history.error);
-        if(!renderer.skyboxError().empty()){ImGui::Begin("Skybox errors");ImGui::TextWrapped("%s",renderer.skyboxError().c_str());ImGui::End();}
-        if(!renderer.materialError.empty()){ImGui::Begin("Material errors");ImGui::TextWrapped("%s",renderer.materialError.c_str());if(ImGui::Button("Dismiss"))renderer.materialError.clear();ImGui::End();}
-        if(!audio.error.empty()){ImGui::Begin("Audio errors");ImGui::TextWrapped("%s",audio.error.c_str());if(ImGui::Button("Dismiss"))audio.error.clear();ImGui::End();}
         ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false,sceneFocused=false;
         sceneHovered=false;sceneRect={};
         if(panelOpen[2]) {
@@ -751,6 +750,23 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             ImGui::End();ImGui::PopStyleVar();
         }
         if(!sceneVisible) {editor.finish(world);layout.scene={};}
+        if(editAllowed && sceneVisible && (hierarchyFocused || sceneFocused) && !cameraLooking &&
+            !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+            !cameraModifiersHeld(SDL_GetModState()) && !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId) &&
+            ImGui::IsKeyPressed(ImGuiKey_F,false)) {
+            if(const auto* transform=world.tryGet<Transform>(selectedEntity)){
+                editor.finish(world);clicking=false;
+                const auto& scale=transform->scale;
+                float radius=std::max({std::abs(scale.x),std::abs(scale.y),std::abs(scale.z),1.0f});
+                Vec3 centre=transform->position;
+                if(const auto* collider=world.tryGet<Collider>(selectedEntity)){
+                    const auto bounds=colliderWireframe(*collider,scale);
+                    radius=.25f;
+                    for(const auto& vertex:bounds.vertices)radius=std::max(radius,std::sqrt(dot(vertex.position,vertex.position)));
+                }
+                camera.focus(centre,radius,sceneRect.width/sceneRect.height);
+            }
+        }
         if(editAllowed && (hierarchyFocused || sceneFocused) && world.alive(selectedEntity) &&
             !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
             !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId) && ImGui::IsKeyPressed(ImGuiKey_Delete,false)) {
@@ -850,7 +866,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         SDL_GL_SwapWindow(window);
         if (width > 0 && height > 0) {
             ++renderedFrames;
-            if ((smokeTest || screenshotPath) && renderedFrames >= smokeFrames) running = false;
+            if ((smokeTest || screenshotPath) && renderedFrames >= smokeFrames){SDL_Log("Shutdown requested: completed %u automated frames",renderedFrames);running = false;}
         }
     }
     editor.finish(world);
@@ -866,6 +882,7 @@ int engineMain(int argc, char** argv)
         else if(std::strcmp(argv[i],"--screenshot")==0 && i+1<argc)screenshotPath=argv[++i];
         else { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Unknown argument: %s", argv[i]); return 1; }
     }
+    SDL_Log("Run mode: %s",smokeTest?"smoke test (120 frames)":screenshotPath?"screenshot (120 frames)":"interactive editor");
     SDL_Log("Initializing SDL video");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not start SDL: %s", SDL_GetError());

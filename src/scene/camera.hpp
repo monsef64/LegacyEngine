@@ -18,6 +18,18 @@ struct OrbitCamera {
         return target + direction * distance;
     }
 
+    // Frame a world-space bounding sphere while preserving viewing direction.
+    void focus(Vec3 centre,float radius=1.0f,float aspect=1.0f)
+    {
+        if(!std::isfinite(centre.x) || !std::isfinite(centre.y) || !std::isfinite(centre.z) ||
+           !std::isfinite(radius) || !std::isfinite(aspect) || aspect<=0)return;
+        const float halfVertical=std::clamp(fieldOfView*.5f,radians(1.0f),radians(89.0f));
+        const float halfHorizontal=std::atan(std::tan(halfVertical)*aspect);
+        const float halfAngle=std::max(radians(1.0f),std::min(halfVertical,halfHorizontal));
+        target=centre;
+        distance=std::clamp(std::max(radius,.25f)*1.2f/std::sin(halfAngle),2.0f,150.0f);
+    }
+
     // Free-look rotates about the eye, unlike orbiting about the target.
     void look(float dx, float dy)
     {
