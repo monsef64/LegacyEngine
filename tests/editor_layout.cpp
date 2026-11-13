@@ -1,5 +1,6 @@
 #include "editor/editor_layout.hpp"
 #include "editor/dock_workspace.hpp"
+#include "scene/editor_grid.hpp"
 #include "editor/scene_orientation.hpp"
 #include "editor/inspector.hpp"
 #include "editor/create_menu.hpp"
@@ -11,6 +12,8 @@
 
 static void require(bool ok,const char* text){if(!ok){std::fprintf(stderr,"FAIL: %s\n",text);std::exit(1);}}
 int main(){
+    GridSettings grid;require(grid.valid(),"default grid settings valid");grid.cells=0;require(!grid.valid(),"grid size is bounded");grid.cells=512;grid.spacing=.01f;grid.plane=2;require(grid.valid(),"grid supports alternate planes and spacing");grid.color.x=2;require(!grid.valid(),"grid color validated");
+
     for(ImVec2 size:{ImVec2(800,600),ImVec2(1280,720),ImVec2(1920,1080)}) {
         const auto l=EditorLayout::calculate(size.x,size.y,20);
         require(l.hierarchy.x+l.hierarchy.width==l.scene.x,"hierarchy touches scene without overlap");
@@ -82,6 +85,9 @@ int main(){
     require(scene->DockId==game->DockId && assets->DockId==console->DockId,"Scene/Game and Assets/Console share tabs");
     require(assets->Pos.x<scene->Pos.x && assets->Pos.y>hierarchy->Pos.y,"assets spans below hierarchy and scene");
     require(inspector->Pos.x>scene->Pos.x && inspector->Size.y>scene->Size.y,"Inspector occupies full right column");
+    const auto* tabs=assets->DockNode->TabBar;
+    require(tabs && tabs->Tabs.Size==3,"three bottom workspace tabs");
+    require(tabs->Tabs[0].ID==assets->TabId && tabs->Tabs[1].ID==ImGui::FindWindowByName("Script Editor")->TabId && tabs->Tabs[2].ID==console->TabId,"bottom order Assets Script Editor Console");
     OrbitCamera orientation;
     ImGui::NewFrame();ImGui::Begin("Orientation test");drawSceneOrientation(orientation,{0,0,400,300},true);ImGui::End();ImGui::Render();
     ImGui::DestroyContext();dockedEditor=false;

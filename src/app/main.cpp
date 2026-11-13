@@ -1,52 +1,52 @@
-// LegacyEngine - a small 3D editor with an ordinary 1 m cube above a
-// 16 x 16 m plane, on a 32 x 32 m grid.
-// A click in spawn mode puts a new shape under the mouse pointer.
+#include <cctype>
+// LegacyEngine - Scene editing and runtime orchestration.
 //
 // World conventions:
 //   * 1 unit = 1 metre
 //   * +Y is up, the ground is the XZ plane (y = 0)
 //   * right-handed coordinates (the OpenGL convention)
 
-#include "scene/camera.hpp"
+#include "audio/audio_system.hpp"
 #include "core/components.hpp"
 #include "core/ecs.hpp"
-#include "rendering/mesh.hpp"
-#include "physics/physics.hpp"
-#include "physics/collider_debug.hpp"
-#include "rendering/renderer.hpp"
-#include "platform/engine_log.hpp"
-#include "editor/profiler_window.hpp"
-#include "levels/level_system.hpp"
-#include "project/rendering_settings.hpp"
-#include "editor/transform_editor.hpp"
-#include "editor/script_editor.hpp"
-#include "editor/level_objects.hpp"
-#include "editor/create_menu.hpp"
-#include "editor/editor_layout.hpp"
-#include "editor/inspector.hpp"
-#include "editor/play_mode.hpp"
-#include "project/project_io.hpp"
-#include "platform/project_dialog.hpp"
-#include "project/project_document.hpp"
 #include "editor/asset_browser.hpp"
-#include "audio/audio_system.hpp"
-#include "scripting/script_components.hpp"
+#include "editor/create_menu.hpp"
 #include "editor/dock_workspace.hpp"
-#include "editor/scene_orientation.hpp"
-#include "rendering/scene_surface.hpp"
-#include "scene/scene_camera.hpp"
-#include "editor/editor_input.hpp"
 #include "editor/editor_history.hpp"
-#include "editor/playback_controls.hpp"
+#include "editor/editor_input.hpp"
+#include "editor/editor_layout.hpp"
 #include "editor/editor_theme.hpp"
 #include "editor/input_settings.hpp"
+#include "editor/inspector.hpp"
+#include "editor/level_objects.hpp"
+#include "editor/play_mode.hpp"
+#include "editor/playback_controls.hpp"
+#include "editor/profiler_window.hpp"
+#include "editor/scene_orientation.hpp"
+#include "editor/script_editor.hpp"
+#include "editor/transform_editor.hpp"
+#include "levels/level_system.hpp"
+#include "physics/collider_debug.hpp"
+#include "physics/physics.hpp"
+#include "platform/engine_log.hpp"
+#include "platform/project_dialog.hpp"
+#include "project/project_document.hpp"
+#include "project/project_io.hpp"
+#include "project/rendering_settings.hpp"
+#include "rendering/mesh.hpp"
+#include "rendering/renderer.hpp"
+#include "rendering/scene_surface.hpp"
+#include "scene/camera.hpp"
+#include "scene/scene_camera.hpp"
+#include "scene/skybox_transition.hpp"
+#include "scripting/script_components.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
 #include <imgui.h>
-#include <imgui_impl_sdl3.h>
 #include <imgui_impl_opengl3.h>
+#include <imgui_impl_sdl3.h>
 
 #include <algorithm>
 #include <cmath>
@@ -58,23 +58,13 @@
 // Scene description
 // ---------------------------------------------------------------------------
 
-constexpr int   kGridCells = 32;    // grid blocks per side
-constexpr float kCellSize  = 1.0f; // metres per grid block
+constexpr int kGridCells = 32;      // grid blocks per side
+constexpr float kCellSize = 1.0f;   // metres per grid block
 constexpr float kPlaneSize = 16.0f; // metres per side of the plane
-constexpr float kCubeSize  = 1.0f; // metres per edge of a cube
+constexpr float kCubeSize = 1.0f;   // metres per edge of a cube
 
 // Where the centre of the first cube is before it falls.
 constexpr Vec3 kCubeStart = {0.0f, 1.0f, 0.0f};
-
-// The cubes that clicks create take these colours in turn.
-constexpr Vec3 kClickColors[] = {
-    {0.20f, 0.45f, 0.90f}, // blue
-    {0.25f, 0.70f, 0.35f}, // green
-    {0.95f, 0.80f, 0.25f}, // yellow
-    {0.85f, 0.25f, 0.25f}, // red
-    {0.60f, 0.40f, 0.90f}, // purple
-    {0.20f, 0.75f, 0.75f}, // turquoise
-};
 
 // A press of the left mouse button is a click as long as the pointer stays
 // within this distance of where it went down. Further away it is a drag.
@@ -86,8 +76,8 @@ constexpr float kClickReach = 100.0f;
 // Where there is no room for a new cube, room is looked for beside the spot
 // and above it: this many metres further away at each try, for this many
 // tries.
-constexpr float kRoomStep  = 0.02f;
-constexpr int   kRoomSteps = 250;
+constexpr float kRoomStep = 0.02f;
+constexpr int kRoomSteps = 250;
 
 // ---------------------------------------------------------------------------
 // The cubes that clicks create
@@ -95,24 +85,31 @@ constexpr int   kRoomSteps = 250;
 
 // The ray from the camera through a mouse position. Returns false while the
 // window has no size (it is minimised, say).
-static bool mouseRay(SDL_Window* window, const OrbitCamera& camera, float x, float y, Ray& ray,const EditorRect& scene)
-{
+static bool mouseRay(SDL_Window* window,
+                     const OrbitCamera& camera,
+                     float x,
+                     float y,
+                     Ray& ray,
+                     const EditorRect& scene) {
     // Mouse positions are counted in the units of the window's size, which are
     // not pixels on a high-density display. The shape of the picture comes
     // from its size in pixels, as it does for drawing.
-    int windowWidth  = 0;
+    int windowWidth = 0;
     int windowHeight = 0;
-    int width        = 0;
-    int height       = 0;
+    int width = 0;
+    int height = 0;
     SDL_GetWindowSize(window, &windowWidth, &windowHeight);
     SDL_GetWindowSizeInPixels(window, &width, &height);
     if (windowWidth <= 0 || windowHeight <= 0 || width <= 0 || height <= 0) {
         return false;
     }
-    if(!scene.contains(x,y) || scene.width<=0 || scene.height<=0)return false;
-    const auto pixels=scenePixels(scene,windowWidth,windowHeight,width,height);
-    ray = camera.rayThrough((x*width/windowWidth-pixels.x)/pixels.width,
-                           (y*height/windowHeight-pixels.top)/pixels.height,pixels.aspect());
+    if (!scene.contains(x, y) || scene.width <= 0 || scene.height <= 0) {
+        return false;
+    }
+    const auto pixels = scenePixels(scene, windowWidth, windowHeight, width, height);
+    ray = camera.rayThrough((x * width / windowWidth - pixels.x) / pixels.width,
+                            (y * height / windowHeight - pixels.top) / pixels.height,
+                            pixels.aspect());
     return true;
 }
 
@@ -120,19 +117,22 @@ static bool mouseRay(SDL_Window* window, const OrbitCamera& camera, float x, flo
 // nothing is in the way there. If something is, the nearest place where
 // nothing is: beside `center`, no further away than a cube is wide, or above
 // it.
-static Vec3 findRoom(const Physics& physics, Vec3 center, ColliderShape shape = ColliderShape::Box)
-{
+static Vec3
+findRoom(const Physics& physics, Vec3 center, ColliderShape shape = ColliderShape::Box) {
     // Things that rest on each other touch, and reach into each other by up to
     // a centimetre. Neither is in the way, so room is looked for with a cube
     // that is that much smaller on every side.
     const float inner = kCubeSize - 2.0f * 0.01f;
-    const Vec3  size  = {inner, shape == ColliderShape::Capsule ? inner + 1.0f : inner, inner};
+    const Vec3 size = {inner, shape == ColliderShape::Capsule ? inner + 1.0f : inner, inner};
     if (!physics.checkBox(center, size)) {
         return center;
     }
 
     static const Vec3 kWays[] = {
-        {1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f},
+        {1.0f, 0.0f, 0.0f},
+        {-1.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f},
+        {0.0f, 0.0f, -1.0f},
         {0.0f, 1.0f, 0.0f}, // up, but never down: that is where the ground is
     };
     for (int step = 1; step <= kRoomSteps; ++step) {
@@ -150,56 +150,13 @@ static Vec3 findRoom(const Physics& physics, Vec3 center, ColliderShape shape = 
     return center; // no room anywhere near: the physics pushes things apart
 }
 
-// Where the centre of a new cube goes, given the ray from the camera through
-// the mouse pointer: the cube rests against the spot under the pointer if it
-// has room there, and as near to it as it has room if not.
-static Vec3 placeForCube(const Physics& physics, const OrbitCamera& camera, const Ray& ray,
-                         ColliderShape shape = ColliderShape::Box)
-{
-    // The spot under the pointer. With nothing else under it, it is the point
-    // of the ray that is as far from the camera as the point the camera looks
-    // at...
-    float reach    = kClickReach;
-    float distance = std::min(camera.distance, kClickReach);
-    Vec3  normal   = {0.0f, 1.0f, 0.0f}; // which way the surface faces there
-
-    // ...but usually the ray comes down to the ground (y = 0)...
-    if (ray.origin.y > 0.0f && ray.direction.y < 0.0f) {
-        const float toGround = ray.origin.y / -ray.direction.y;
-        if (toGround <= kClickReach) {
-            reach    = toGround;
-            distance = toGround;
-        }
-    }
-
-    // ...or meets something solid before it does.
-    RayHit hit;
-    if (physics.raycast(ray, reach, hit)) {
-        distance = hit.distance;
-        normal   = hit.normal;
-    }
-
-    // A cube that is not turned reaches this far from its centre towards a
-    // surface that faces `normal`. With its centre that far out, it touches
-    // the surface without reaching into it.
-    const float half      = kCubeSize * 0.5f;
-    const float toSurface = shape == ColliderShape::Box
-        ? (std::abs(normal.x) + std::abs(normal.y) + std::abs(normal.z)) * half
-        : half + (shape == ColliderShape::Capsule ? 0.5f * std::abs(normal.y) : 0.0f);
-    Vec3        center    = ray.origin + ray.direction * distance + normal * toSurface;
-    center.y              = std::max(center.y, shape == ColliderShape::Capsule ? 1.0f : half); // on the ground, not in it
-
-    return findRoom(physics, center, shape);
-}
-
 // ---------------------------------------------------------------------------
 // Window
 // ---------------------------------------------------------------------------
 
 // Creates the window together with an OpenGL 3.3 core context. On failure both
 // outputs are null and SDL_GetError() describes the problem.
-static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& context)
-{
+static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& context) {
     SDL_GL_ResetAttributes();
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -209,7 +166,9 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, multisamples > 0 ? 1 : 0);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, multisamples);
 
-    window = SDL_CreateWindow("LegacyEngine", 1280, 720,
+    window = SDL_CreateWindow("LegacyEngine",
+                              1280,
+                              720,
                               SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED |
                                   SDL_WINDOW_HIGH_PIXEL_DENSITY);
     context = window ? SDL_GL_CreateContext(window) : nullptr;
@@ -223,151 +182,198 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
 // The scene and the main loop
 // ---------------------------------------------------------------------------
 
-static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
-{
-    World   world;
+static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
+    World world;
     Physics physics;
 
     // Meshes are created once and can be shared by any number of entities.
-    const MeshHandle gridMesh  = renderer.createMesh(makeGrid(kGridCells, kCellSize));
+    const MeshHandle gridMesh = renderer.createMesh(makeGrid(kGridCells, kCellSize));
     const MeshHandle planeMesh = renderer.createMesh(makePlane(kPlaneSize, kPlaneSize));
-    const MeshHandle cubeMesh  = renderer.createMesh(makeBox({kCubeSize, kCubeSize, kCubeSize}));
+    const MeshHandle cubeMesh = renderer.createMesh(makeBox({kCubeSize, kCubeSize, kCubeSize}));
 
-    // The grid is only drawn.
-    const Entity sun=world.create();world.add(sun,ObjectName{"Directional Light"});
-    Transform sunTransform;sunTransform.rotation=rotationFromEuler({-55,-30,0});
-    world.add(sun,sunTransform);world.add(sun,DirectionalLight{});
-    const Entity grid = world.create();
-    world.add(grid, ObjectName{"Grid"});
-    world.add(grid, Transform{});
-    world.add(grid, MeshRenderer{gridMesh, {0.55f, 0.58f, 0.62f}});
-
-    // The plane is drawn and is solid. It has no thickness, and a collider
-    // that thin would let fast objects slip through between two simulation
-    // steps, so its collider is a 1 m thick slab whose top is the plane.
-    const Entity plane = world.create();
-    world.add(plane, ObjectName{"Plane"});
-    world.add(plane, Transform{});
-    world.add(plane, MeshRenderer{planeMesh, {1.0f, 1.0f, 1.0f}, true, 0.65f});
-    world.add(plane, BoxCollider{{kPlaneSize, 1.0f, kPlaneSize}, {0.0f, -0.5f, 0.0f}});
-
-    // An ordinary initial cube, with the same physics as other spawned shapes.
+    // Default illumination; editor grid is not scene content.
+    const Entity sun = world.create();
+    world.add(sun, ObjectName{"Directional Light"});
+    Transform sunTransform;
+    sunTransform.rotation = rotationFromEuler({-55, -30, 0});
+    world.add(sun, sunTransform);
+    world.add(sun, DirectionalLight{});
+    // An ordinary initial cube, with the same physics as other created shapes.
     const Entity cube = world.create();
     world.add(cube, ObjectName{"Cube"});
     world.add(cube, Transform{kCubeStart});
     world.add(cube, MeshRenderer{cubeMesh, {0.90f, 0.47f, 0.13f}});
     world.add(cube, BoxCollider{{kCubeSize, kCubeSize, kCubeSize}});
-    world.add(cube,RigidBody{});
+    world.add(cube, RigidBody{});
 
     const MeshHandle sphereMesh = renderer.createMesh(makeSphere(0.5f));
     const MeshHandle capsuleMesh = renderer.createMesh(makeCapsule(0.5f, 1.0f));
-    const MeshHandle coneMesh = renderer.createMesh(makeCone(0.5f,1.0f));
+    const MeshHandle coneMesh = renderer.createMesh(makeCone(0.5f, 1.0f));
     // Exercise both the editor-only camera model and active Game render path in CI.
-    if(smokeTest) {
-        const Entity testCamera=world.create();Transform pose{{3,2,6}};aimCamera(pose,{0,.5f,0});
-        world.add(testCamera,ObjectName{"Smoke Camera"});world.add(testCamera,pose);
-        Camera c;c.active=true;world.add(testCamera,c);
+    if (smokeTest) {
+        const Entity testCamera = world.create();
+        Transform pose{{3, 2, 6}};
+        aimCamera(pose, {0, .5f, 0});
+        world.add(testCamera, ObjectName{"Smoke Camera"});
+        world.add(testCamera, pose);
+        Camera c;
+        c.active = true;
+        world.add(testCamera, c);
     }
-    ColliderShape selected = ColliderShape::Box;
-    bool spawnMode = false;
     bool freeCamera = true;
-    float cameraBoost=3.0f;
-    float cameraSpeed=5.0f;
+    float cameraBoost = 3.0f;
+    float cameraSpeed = 5.0f;
     Entity selectedEntity;
     ScriptEditor scripts;
-    scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh,planeMesh);
+    scripts.bindWorld(world, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
     EditorHistory history(world);
     PlayMode playMode;
     ObjectClipboard clipboard;
     AssetBrowser browser;
     ScriptComponents componentScripts;
     AudioSystem audio;
-    SceneSurface sceneSurface,gameSurface;
+    SceneSurface sceneSurface, gameSurface;
     EditorRect sceneRect{};
-    bool sceneHovered=false,resetWorkspace=false;
+    bool sceneHovered = false, resetWorkspace = false;
     Entity editSelection;
     TransformEditor editor;
     OrbitCamera camera;
-    const ProjectIO::Meshes projectMeshes{gridMesh,planeMesh,cubeMesh,sphereMesh,capsuleMesh,coneMesh};
-    LevelSystem levels(projectMeshes);levels.setRoot(browser.assets.root);LevelSystem::active=&levels;
+    const ProjectIO::Meshes projectMeshes{
+        gridMesh, planeMesh, cubeMesh, sphereMesh, capsuleMesh, coneMesh};
+    LevelSystem levels(projectMeshes);
+    levels.setRoot(browser.assets.root);
+    LevelSystem::active = &levels;
     RenderingSettings renderingSettings;
-    std::string editLevelName,editSource;
+    std::string editLevelName, editSource, editScriptPath, embeddedLegacySource, editLegacySource;
     OrbitCamera editCamera;
     EditorHistory editHistory(world);
-    bool renameLevelPopup=false;char renameLevelName[129]{};
-    bool newLevelPopup=false;char newLevelName[129]="New Level";
+    bool renameLevelPopup = false;
+    char renameLevelName[129]{};
+    bool newLevelPopup = false;
+    char newLevelName[129] = "New Level";
     ProjectDialog projectDialog;
-    std::string currentProject,projectError,savedProjectState,lastWindowTitle;
-    bool projectDirty=true;
-    InputState input;input.window=window;InputSettings inputSettings;
+    std::string currentProject, projectError, savedProjectState, lastWindowTitle;
+    bool projectDirty = true;
+    InputState input;
+    input.window = window;
+    InputSettings inputSettings;
     EngineLog::Errors terminalErrors;
-    bool gameHovered=false,gameFocused=false;
-    bool showFPS=false,showGameColliders=false,showProfiler=false;
-    FrameProfiler profiler;activeProfiler=&profiler;
+    bool gameHovered = false, gameFocused = false;
+    bool showFPS = false, showGameColliders = false, showProfiler = false;
+    FrameProfiler profiler;
+    activeProfiler = &profiler;
     Uint64 lastTicks = SDL_GetTicksNS();
-    bool   running   = true;
+    bool running = true;
 
     // The left mouse button does two things. Pressed and released in one
-    // place, it is a click, which spawns or selects. Moving away cancels
+    // place, it is a click, which selects. Moving away cancels
     // the click; camera navigation uses the right button and keyboard.
-    bool        clicking   = false; // the button is down and this may still be a click
-    float       pressX     = 0.0f;  // where the button went down
-    float       pressY     = 0.0f;
-    std::size_t clickCubes  = 0;     // how many cubes clicks have created
+    bool clicking = false; // the button is down and this may still be a click
+    float pressX = 0.0f;   // where the button went down
+    float pressY = 0.0f;
 
-    bool cameraLooking=false,orientationInteracting=false;
+    bool cameraLooking = false, orientationInteracting = false;
     unsigned renderedFrames = 0;
     constexpr unsigned smokeFrames = 120;
     while (running) {
         profiler.begin(showProfiler);
-        int windowWidth=1,windowHeight=1;
-        SDL_GetWindowSize(window,&windowWidth,&windowHeight);
-        EditorLayout layout=EditorLayout::calculate(static_cast<float>(windowWidth),static_cast<float>(windowHeight),std::max(20.0f,ImGui::GetFrameHeight()));
-        layout.scene=sceneRect;
-        inputSettings.load(browser.assets,input);
+        int windowWidth = 1, windowHeight = 1;
+        SDL_GetWindowSize(window, &windowWidth, &windowHeight);
+        EditorLayout layout = EditorLayout::calculate(static_cast<float>(windowWidth),
+                                                      static_cast<float>(windowHeight),
+                                                      std::max(20.0f, ImGui::GetFrameHeight()));
+        layout.scene = sceneRect;
+        inputSettings.load(browser.assets, input);
         renderingSettings.load(browser.assets);
-        if(levels.root()!=browser.assets.root)levels.setRoot(browser.assets.root);
-        if(auto transition=levels.poll()){
-            levels.suspended=true;
-            editor.finish(world);audio.clear();componentScripts.stop();scripts.shutdown();input.releaseMouse();
-            world.restore(transition->level->world);camera=transition->level->camera;
-            scripts.resetRuntime();scripts.setSource(transition->level->source);
-            selectedEntity={};history=EditorHistory(world);physics.reset();clicking=false;spawnMode=false;
-            try{levels.commit(transition->name,!playMode.active());}catch(const std::exception& error){levels.error=error.what();}
-            levels.suspended=false;
-            if(playMode.active()){
-                audio.start(world);scripts.setAssetContext("",{});scripts.startPlay();
-                const MeshHandle runtimeMeshes[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};componentScripts.start(world,browser.assets,runtimeMeshes,planeMesh);
+        if (levels.root() != browser.assets.root) {
+            levels.setRoot(browser.assets.root);
+        }
+        if (auto transition = levels.poll()) {
+            levels.suspended = true;
+            editor.finish(world);
+            audio.clear();
+            componentScripts.stop();
+            scripts.shutdown();
+            input.releaseMouse();
+            LuaConsole::clearEvents();
+            world.restore(transition->level->world);
+            embeddedLegacySource = transition->level->source;
+            camera = transition->level->camera;
+            scripts.resetRuntime();
+            browser.openedScript.clear();
+            scripts.setAssetContext("", {});
+            scripts.setSource("");
+            selectedEntity = {};
+            history = EditorHistory(world);
+            physics.reset();
+            clicking = false;
+            try {
+                levels.commit(transition->name, !playMode.active());
+            } catch (const std::exception& error) {
+                levels.error = error.what();
+            }
+            levels.suspended = false;
+            if (playMode.active()) {
+                audio.start(world);
+                scripts.setAssetContext("", {});
+                scripts.startPlay();
+                const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
+                componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
+                if (!transition->name.empty()) {
+                    LuaConsole::postEvent("onLevelLoaded", {transition->name});
+                }
             }
         }
-        input.enabled=(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS) && playMode.playing() && (gameFocused || sceneHovered || input.mouseLocked) && !ImGui::GetIO().WantTextInput && !inputSettings.visible;
-        input.mouseEnabled=gameHovered || sceneHovered || input.mouseLocked;input.beginFrame();
+        if (auto failure = levels.takeFailure()) {
+            LuaConsole::postEvent("onLevelFailedToLoad",
+                                  {failure->name, failure->error.substr(0, 4096)});
+        }
+        input.enabled = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
+                        playMode.playing() && (gameFocused || sceneHovered || input.mouseLocked) &&
+                        !ImGui::GetIO().WantTextInput && !inputSettings.visible;
+        input.mouseEnabled = gameHovered || sceneHovered || input.mouseLocked;
+        input.beginFrame();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if(inputSettings.capture(event,browser.assets,input))continue;
-            if(event.type==SDL_EVENT_WINDOW_FOCUS_LOST ||
-                (cameraLooking && event.type==SDL_EVENT_MOUSE_BUTTON_UP && event.button.button==SDL_BUTTON_RIGHT)) {
-                cameraLooking=false;SDL_SetWindowRelativeMouseMode(window,false);
+            if (inputSettings.capture(event, browser.assets, input)) {
+                continue;
+            }
+            if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST ||
+                (cameraLooking && event.type == SDL_EVENT_MOUSE_BUTTON_UP &&
+                 event.button.button == SDL_BUTTON_RIGHT)) {
+                cameraLooking = false;
+                SDL_SetWindowRelativeMouseMode(window, false);
             }
             ImGui_ImplSDL3_ProcessEvent(&event);
             input.event(event);
             const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                event.type == SDL_EVENT_MOUSE_BUTTON_UP || event.type == SDL_EVENT_MOUSE_MOTION ||
-                event.type == SDL_EVENT_MOUSE_WHEEL;
-            float pointerX=0,pointerY=0;SDL_GetMouseState(&pointerX,&pointerY);
-            if(mouseEvent && !cameraLooking && (orientationInteracting ||
-                (sceneHovered && layout.scene.width>=100 && layout.scene.height>=100 && orientationRect(layout.scene).contains(pointerX,pointerY)))){
-                clicking=false;continue;
-            }
-            if (mouseEvent && (projectDialog.pending() || browser.dialog.pending() || (ImGui::GetIO().WantCaptureMouse && !sceneHovered && !cameraLooking) ||
-                (!spawnMode && editor.capturesMouse() && !(SDL_GetModState()&SDL_KMOD_ALT)))) {
+                                    event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
+                                    event.type == SDL_EVENT_MOUSE_MOTION ||
+                                    event.type == SDL_EVENT_MOUSE_WHEEL;
+            float pointerX = 0, pointerY = 0;
+            SDL_GetMouseState(&pointerX, &pointerY);
+            if (mouseEvent && !cameraLooking &&
+                (orientationInteracting ||
+                 (sceneHovered && layout.scene.width >= 100 && layout.scene.height >= 100 &&
+                  orientationRect(layout.scene).contains(pointerX, pointerY)))) {
                 clicking = false;
                 continue;
             }
-            if (event.type == SDL_EVENT_KEY_DOWN && ImGui::GetIO().WantCaptureKeyboard) continue;
+            if (mouseEvent &&
+                (projectDialog.pending() || browser.dialog.pending() ||
+                 (ImGui::GetIO().WantCaptureMouse && !sceneHovered && !cameraLooking) ||
+                 (editor.capturesMouse() && !(SDL_GetModState() & SDL_KMOD_ALT)))) {
+                clicking = false;
+                continue;
+            }
+            if (event.type == SDL_EVENT_KEY_DOWN && ImGui::GetIO().WantCaptureKeyboard) {
+                continue;
+            }
             switch (event.type) {
             case SDL_EVENT_DROP_FILE:
-                if(!playMode.active() && event.drop.data)browser.importFile(event.drop.data);
+                if (!playMode.active() && event.drop.data) {
+                    browser.importFile(event.drop.data);
+                }
                 break;
             case SDL_EVENT_WINDOW_FOCUS_LOST:
                 editor.finish(world);
@@ -380,14 +386,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
             case SDL_EVENT_KEY_DOWN:
                 break; // Escape is reserved for UI cancellation, never application exit.
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                if(event.button.button==SDL_BUTTON_RIGHT && !playMode.active() && freeCamera && sceneHovered &&
-                    layout.scene.contains(event.button.x,event.button.y) && !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
-                    cameraLooking=SDL_SetWindowRelativeMouseMode(window,true);clicking=false;
+                if (event.button.button == SDL_BUTTON_RIGHT && !playMode.active() && freeCamera &&
+                    sceneHovered && layout.scene.contains(event.button.x, event.button.y) &&
+                    !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
+                    cameraLooking = SDL_SetWindowRelativeMouseMode(window, true);
+                    clicking = false;
                 }
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    clicking = !(SDL_GetModState()&SDL_KMOD_ALT);
-                    pressX   = event.button.x;
-                    pressY   = event.button.y;
+                    clicking = !(SDL_GetModState() & SDL_KMOD_ALT);
+                    pressX = event.button.x;
+                    pressY = event.button.y;
                 }
                 break;
             case SDL_EVENT_MOUSE_MOTION:
@@ -396,62 +404,72 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
                     clicking = false; // too far for a click: a drag from here on
                 }
                 // Right-drag looks around from the camera's position. Left-drag
-                // cancels a click but never moves the camera or selects/spawns.
-                if(!playMode.active() && sceneHovered && !editor.dragging() &&
-                   (event.motion.state&SDL_BUTTON_LMASK) && (SDL_GetModState()&SDL_KMOD_ALT) &&
-                   !(SDL_GetModState()&(SDL_KMOD_CTRL|SDL_KMOD_GUI))){
-                    clicking=false;
-                    if(const auto* t=world.tryGet<Transform>(selectedEntity))camera.orbit(t->position,event.motion.xrel,event.motion.yrel);
+                // cancels a click but never moves the camera or selects.
+                if (!playMode.active() && sceneHovered && !editor.dragging() &&
+                    (event.motion.state & SDL_BUTTON_LMASK) && (SDL_GetModState() & SDL_KMOD_ALT) &&
+                    !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) {
+                    clicking = false;
+                    if (const auto* t = world.tryGet<Transform>(selectedEntity)) {
+                        camera.orbit(t->position, event.motion.xrel, event.motion.yrel);
+                    }
                 }
                 if (event.motion.state & SDL_BUTTON_RMASK) {
                     clicking = false;
-                    if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) camera.look(event.motion.xrel, event.motion.yrel);
+                    if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) {
+                        camera.look(event.motion.xrel, event.motion.yrel);
+                    }
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
                 if (event.button.button == SDL_BUTTON_LEFT && clicking) {
                     clicking = false;
 
-                    // A scene click either spawns or selects, never both.
+                    // Scene clicks only select; object creation belongs to Create menus.
                     Ray ray;
-                    if (mouseRay(window, camera, event.button.x, event.button.y, ray,layout.scene)) {
-                        if (!spawnMode) {
+                    if (mouseRay(
+                            window, camera, event.button.x, event.button.y, ray, layout.scene)) {
+                        {
                             RayHit hit;
-                            const bool found=physics.raycast(ray,kClickReach,hit);
-                            selectedEntity=found?hit.entity:Entity{};
-                            float closest=found?hit.distance:kClickReach;
-                            world.each<Camera,Transform>([&](Entity e,Camera&,Transform& t){
-                                const auto offset=ray.origin-t.position;
-                                const float radius=1.1f*std::max({std::abs(t.scale.x),std::abs(t.scale.y),std::abs(t.scale.z)});
-                                const float b=dot(offset,ray.direction),disc=b*b-dot(offset,offset)+radius*radius;
-                                if(disc>=0){float distance=-b-std::sqrt(disc);if(distance<0)distance=-b+std::sqrt(disc);
-                                    if(distance>=0 && distance<closest){closest=distance;selectedEntity=e;}}
+                            const bool found = physics.raycast(ray, kClickReach, hit);
+                            selectedEntity = found ? hit.entity : Entity{};
+                            float closest = found ? hit.distance : kClickReach;
+                            world.each<Camera, Transform>([&](Entity e, Camera&, Transform& t) {
+                                const auto offset = ray.origin - t.position;
+                                const float radius = 1.1f * std::max({std::abs(t.scale.x),
+                                                                      std::abs(t.scale.y),
+                                                                      std::abs(t.scale.z)});
+                                const float b = dot(offset, ray.direction),
+                                            disc = b * b - dot(offset, offset) + radius * radius;
+                                if (disc >= 0) {
+                                    float distance = -b - std::sqrt(disc);
+                                    if (distance < 0) {
+                                        distance = -b + std::sqrt(disc);
+                                    }
+                                    if (distance >= 0 && distance < closest) {
+                                        closest = distance;
+                                        selectedEntity = e;
+                                    }
+                                }
                             });
                             break;
                         }
-                        const MeshHandle mesh = selected == ColliderShape::Box ? cubeMesh :
-                            (selected == ColliderShape::Sphere ? sphereMesh : selected==ColliderShape::Capsule?capsuleMesh:coneMesh);
-                        Vec3 center = placeForCube(physics, camera, ray, selected);
-                        const Entity object = world.create();
-                        const char* shapeName=selected==ColliderShape::Box ? "Cube" :
-                            (selected==ColliderShape::Sphere ? "Sphere" : selected==ColliderShape::Capsule?"Capsule":"Cone");
-                        world.add(object,ObjectName{std::string(shapeName)+" "+std::to_string(clickCubes+1)});
-                        world.add(object, Transform{center});
-                        world.add(object, MeshRenderer{mesh, kClickColors[clickCubes % std::size(kClickColors)]});
-                        Collider collider;
-                        collider.shape = selected;
-                        world.add(object, collider);
-                        world.add(object, RigidBody{});
-                        ++clickCubes;
                     }
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
-                if(!playMode.active() && freeCamera && (sceneHovered || cameraLooking) && !cameraModifiersHeld(SDL_GetModState()) && !ImGui::GetIO().WantTextInput){
-                    if(cameraLooking){
-                        if(SDL_GetModState()&SDL_KMOD_SHIFT)cameraBoost=adjustSceneCameraBoost(cameraBoost,event.wheel.y);
-                        else cameraSpeed=std::clamp(cameraSpeed*std::pow(1.2f,event.wheel.y),.1f,500.0f);
-                    }else{camera.zoom(event.wheel.y);camera.pan(-event.wheel.x);}
+                if (!playMode.active() && freeCamera && (sceneHovered || cameraLooking) &&
+                    !cameraModifiersHeld(SDL_GetModState()) && !ImGui::GetIO().WantTextInput) {
+                    if (cameraLooking) {
+                        if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                            cameraBoost = adjustSceneCameraBoost(cameraBoost, event.wheel.y);
+                        } else {
+                            cameraSpeed = std::clamp(
+                                cameraSpeed * std::pow(1.2f, event.wheel.y), .1f, 500.0f);
+                        }
+                    } else {
+                        camera.zoom(event.wheel.y);
+                        camera.pan(-event.wheel.x);
+                    }
                 }
                 break;
             }
@@ -464,450 +482,856 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
-        bool openProject=false,saveProject=false,saveAsProject=false;
-        const bool projectEnabled=!levels.busy() && !playMode.active() && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
+        bool openProject = false, saveProject = false, saveAsProject = false;
+        const bool projectEnabled = !levels.busy() && !playMode.active() && !editor.dragging() &&
+                                    !projectDialog.pending() && !browser.dialog.pending();
         profiler.checkpoint(ProfilePart::Events);
-        if(ImGui::BeginMainMenuBar()) {
-            if(ImGui::BeginMenu("File")) {
-                openProject=ImGui::MenuItem("Open Project...","Ctrl+O",false,projectEnabled);
-                saveProject=ImGui::MenuItem("Save Project","Ctrl+S",false,projectEnabled);
-                saveAsProject=ImGui::MenuItem("Save Project As...","Ctrl+Shift+S",false,projectEnabled);
-                ImGui::Separator();if(ImGui::MenuItem("Quit")){SDL_Log("Shutdown requested: File > Quit");running=false;}
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("File")) {
+                openProject = ImGui::MenuItem("Open Project...", "Ctrl+O", false, projectEnabled);
+                saveProject = ImGui::MenuItem("Save Project", "Ctrl+S", false, projectEnabled);
+                saveAsProject =
+                    ImGui::MenuItem("Save Project As...", "Ctrl+Shift+S", false, projectEnabled);
+                ImGui::Separator();
+                if (ImGui::MenuItem("New Level...", nullptr, false, projectEnabled)) {
+                    newLevelPopup = true;
+                }
+                if (ImGui::MenuItem("Save Level", nullptr, false, projectEnabled)) {
+                    try {
+                        scripts.saveFile(browser.assets);
+                        levels.saveCurrent(world, embeddedLegacySource, camera);
+                    } catch (const std::exception& e) {
+                        levels.error = e.what();
+                    }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Quit")) {
+                    SDL_Log("Shutdown requested: File > Quit");
+                    running = false;
+                }
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
         }
-        if(projectEnabled && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive()) {
-            openProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O,ImGuiInputFlags_RouteGlobal);
-            saveProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S,ImGuiInputFlags_RouteGlobal);
-            saveAsProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S,ImGuiInputFlags_RouteGlobal);
+        if (projectEnabled && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive()) {
+            openProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
+            saveProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteGlobal);
+            saveAsProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S,
+                                             ImGuiInputFlags_RouteGlobal);
         }
-        auto saveTo=[&](const std::string& path) {
-            auto assetRoot=projectAssetsPath(path);
-            try { levels.saveCurrent(world,scripts.source(),camera);
+        auto saveTo = [&](const std::string& path) {
+            auto assetRoot = projectAssetsPath(path);
+            try {
+                scripts.saveFile(browser.assets);
+                levels.saveCurrent(world, embeddedLegacySource, camera);
                 browser.assets.copyTo(assetRoot);
-                AssetManager destination;destination.root=assetRoot;
+                AssetManager destination;
+                destination.root = assetRoot;
                 renderingSettings.save(destination);
-                inputSettings.save(destination,input);if(!inputSettings.error.empty())throw std::runtime_error(inputSettings.error);
+                inputSettings.save(destination, input);
+                if (!inputSettings.error.empty()) {
+                    throw std::runtime_error(inputSettings.error);
+                }
+            } catch (const std::exception& e) {
+                projectError = e.what();
+                return;
             }
-            catch(const std::exception& e){projectError=e.what();return;}
-            if(ProjectIO::save(path,world,scripts.source(),camera,projectMeshes,projectError)) {
-                if(std::filesystem::weakly_canonical(browser.assets.root)!=std::filesystem::weakly_canonical(assetRoot))
-                    history=EditorHistory(world,selectedEntity); // Old Trash receipts belong to the previous project root.
-                browser.assets.root=assetRoot;
-                currentProject=path;
-                savedProjectState=projectContentState(world,scripts.source(),camera);
-                projectDirty=false;
+            if (ProjectIO::save(
+                    path, world, embeddedLegacySource, camera, projectMeshes, projectError)) {
+                if (std::filesystem::weakly_canonical(browser.assets.root) !=
+                    std::filesystem::weakly_canonical(assetRoot)) {
+                    history = EditorHistory(
+                        world,
+                        selectedEntity); // Old Trash receipts belong to the previous project root.
+                }
+                browser.assets.root = assetRoot;
+                currentProject = path;
+                savedProjectState = projectContentState(world, {}, camera);
+                projectDirty = false;
             }
         };
-        if(projectEnabled) {
-            if(saveProject && !currentProject.empty())saveTo(currentProject);
-            else if(openProject || saveProject || saveAsProject) {
-                bool proceed=true;
-                if(openProject && projectDirty) {
+        if (projectEnabled) {
+            if (saveProject && !currentProject.empty()) {
+                saveTo(currentProject);
+            } else if (openProject || saveProject || saveAsProject) {
+                bool proceed = true;
+                if (openProject && projectDirty) {
                     const SDL_MessageBoxButtonData buttons[]{
-                        {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT,0,"Cancel"},
-                        {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT,1,"Open project"}};
-                    const SDL_MessageBoxData box{SDL_MESSAGEBOX_WARNING,window,"Unsaved project",
-                        "Opening another project replaces unsaved changes. Continue?",2,buttons,nullptr};
-                    int button=0;
-                    proceed=SDL_ShowMessageBox(&box,&button) && button==1;
+                        {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel"},
+                        {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Open project"}};
+                    const SDL_MessageBoxData box{
+                        SDL_MESSAGEBOX_WARNING,
+                        window,
+                        "Unsaved project",
+                        "Opening another project replaces unsaved changes. Continue?",
+                        2,
+                        buttons,
+                        nullptr};
+                    int button = 0;
+                    proceed = SDL_ShowMessageBox(&box, &button) && button == 1;
                 }
-                if(proceed)projectDialog.show(window,!openProject,currentProject);
+                if (proceed) {
+                    projectDialog.show(window, !openProject, currentProject);
+                }
             }
         }
-        if(auto result=projectDialog.poll()) {
-            if(!result->error.empty())projectError=result->error;
-            else if(!result->path.empty()) {
-                if(result->saving) {
-                    auto path=std::filesystem::path(result->path);
-                    if(!path.has_extension())path+=".legacy";
+        if (auto result = projectDialog.poll()) {
+            if (!result->error.empty()) {
+                projectError = result->error;
+            } else if (!result->path.empty()) {
+                if (result->saving) {
+                    auto path = std::filesystem::path(result->path);
+                    if (!path.has_extension()) {
+                        path += ".legacy";
+                    }
                     saveTo(path.string());
                 } else {
-                    std::string source,assetDirectory;World loadedWorld;OrbitCamera loadedCamera;
-                    if(ProjectIO::load(result->path,loadedWorld,source,loadedCamera,projectMeshes,projectError,&assetDirectory)) {
-                        audio.clear();componentScripts.stop();scripts.shutdown();world.restore(loadedWorld);camera=loadedCamera;
-                        browser.setRoot(assetDirectory.empty()?existingProjectAssetsPath(result->path):std::filesystem::absolute(result->path).parent_path()/assetDirectory);
-                        levels.setRoot(browser.assets.root);if(!levels.current().empty())levels.load();
-                        scripts.resetRuntime();scripts.setSource(source);
-                        selectedEntity={};history=EditorHistory(world);physics.reset();
-                        clicking=false;spawnMode=false;currentProject=result->path;
-                        savedProjectState=projectContentState(world,scripts.source(),camera);
-                        projectDirty=false;
+                    std::string source, assetDirectory;
+                    World loadedWorld;
+                    OrbitCamera loadedCamera;
+                    if (ProjectIO::load(result->path,
+                                        loadedWorld,
+                                        source,
+                                        loadedCamera,
+                                        projectMeshes,
+                                        projectError,
+                                        &assetDirectory)) {
+                        audio.clear();
+                        componentScripts.stop();
+                        scripts.shutdown();
+                        world.restore(loadedWorld);
+                        camera = loadedCamera;
+                        browser.setRoot(
+                            assetDirectory.empty()
+                                ? existingProjectAssetsPath(result->path)
+                                : std::filesystem::absolute(result->path).parent_path() /
+                                      assetDirectory);
+                        levels.setRoot(browser.assets.root);
+                        if (!levels.current().empty()) {
+                            levels.load();
+                        }
+                        scripts.resetRuntime();
+                        scripts.setSource("");
+                        embeddedLegacySource = source;
+                        selectedEntity = {};
+                        history = EditorHistory(world);
+                        physics.reset();
+                        clicking = false;
+                        currentProject = result->path;
+                        savedProjectState = projectContentState(world, {}, camera);
+                        projectDirty = false;
                     }
                 }
             }
         }
-        if(!projectError.empty()) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Project: %s",projectError.c_str());
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,"Project error",projectError.c_str(),window);
+        if (!projectError.empty()) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Project: %s", projectError.c_str());
+            SDL_ShowSimpleMessageBox(
+                SDL_MESSAGEBOX_ERROR, "Project error", projectError.c_str(), window);
             projectError.clear();
         }
-        drawWorkspace(layout.toolbar,resetWorkspace);
+        drawWorkspace(layout.toolbar, resetWorkspace);
         ImGui::BeginDisabled(projectDialog.pending() || browser.dialog.pending());
-        const int created=drawCreateMenu();
-        auto createObject=[&](int created) {
-            editor.finish(world);spawnMode=false;clicking=false;
-            if(created<0 || created>11)return;
-            const ColliderShape shapes[]{ColliderShape::Box,ColliderShape::Capsule,ColliderShape::Cone,ColliderShape::Box,ColliderShape::Sphere};
-            Vec3 position=camera.target;
-            position.y=std::max(position.y,created==1?1.0f:created==0?0.0f:0.5f);
-            if(created>0 && created<5)position=findRoom(physics,position,shapes[created]);
-            selectedEntity=createEditorObject(world,created,position,cubeMesh,sphereMesh,capsuleMesh,coneMesh,planeMesh);
+        const int created = drawCreateMenu();
+        auto createObject = [&](int created) {
+            editor.finish(world);
+            clicking = false;
+            if (created < 0 || created > 11) {
+                return;
+            }
+            const ColliderShape shapes[]{ColliderShape::Box,
+                                         ColliderShape::Capsule,
+                                         ColliderShape::Cone,
+                                         ColliderShape::Box,
+                                         ColliderShape::Sphere};
+            Vec3 position = camera.target;
+            position.y = std::max(position.y, created == 1 ? 1.0f : created == 0 ? 0.0f : 0.5f);
+            if (created > 0 && created < 5) {
+                position = findRoom(physics, position, shapes[created]);
+            }
+            selectedEntity = createEditorObject(
+                world, created, position, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
         };
-        if(created>=0)createObject(created);
-        bool undoRequested=false,redoRequested=false;
-        bool duplicateRequested=false,copyRequested=false,pasteRequested=false,parentRequested=false;
-        const bool editAllowed=!playMode.active() && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
-        const bool objectSelected=world.alive(selectedEntity);
-        if(ImGui::BeginMainMenuBar()) {
-            if(ImGui::BeginMenu("Edit")) {
-                undoRequested=ImGui::MenuItem("Undo","Ctrl+Z",false,editAllowed && history.canUndo());
-                redoRequested=ImGui::MenuItem("Redo","Ctrl+Y / Ctrl+Shift+Z",false,editAllowed && history.canRedo());
+        if (created >= 0) {
+            createObject(created);
+        }
+        bool undoRequested = false, redoRequested = false;
+        bool duplicateRequested = false, copyRequested = false, pasteRequested = false,
+             parentRequested = false;
+        const bool editAllowed = !playMode.active() && !editor.dragging() &&
+                                 !projectDialog.pending() && !browser.dialog.pending();
+        const bool objectSelected = world.alive(selectedEntity);
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("Edit")) {
+                undoRequested =
+                    ImGui::MenuItem("Undo", "Ctrl+Z", false, editAllowed && history.canUndo());
+                redoRequested = ImGui::MenuItem(
+                    "Redo", "Ctrl+Y / Ctrl+Shift+Z", false, editAllowed && history.canRedo());
                 ImGui::Separator();
-                duplicateRequested=ImGui::MenuItem("Duplicate","Ctrl+D",false,editAllowed && objectSelected);
-                copyRequested=ImGui::MenuItem("Copy","Ctrl+C",false,editAllowed && objectSelected);
-                pasteRequested=ImGui::MenuItem("Paste","Ctrl+V",false,editAllowed && clipboard.available());
-                parentRequested=ImGui::MenuItem("Parent / Unparent","Ctrl+P",false,editAllowed && objectSelected);
+                duplicateRequested =
+                    ImGui::MenuItem("Duplicate", "Ctrl+D", false, editAllowed && objectSelected);
+                copyRequested =
+                    ImGui::MenuItem("Copy", "Ctrl+C", false, editAllowed && objectSelected);
+                pasteRequested =
+                    ImGui::MenuItem("Paste", "Ctrl+V", false, editAllowed && clipboard.available());
+                parentRequested = ImGui::MenuItem(
+                    "Parent / Unparent", "Ctrl+P", false, editAllowed && objectSelected);
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
         }
-        if(ImGui::BeginMainMenuBar()) {
-            if(ImGui::BeginMenu("Windows")) {
-                for(int i=0;i<7;++i)ImGui::MenuItem(panelNames[i],nullptr,&panelOpen[i]);
-                ImGui::Separator();if(ImGui::MenuItem("Reset layout"))resetWorkspace=true;
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("Windows")) {
+                for (int i = 0; i < 7; ++i) {
+                    ImGui::MenuItem(panelNames[i], nullptr, &panelOpen[i]);
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Reset layout")) {
+                    resetWorkspace = true;
+                }
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
         }
-        bool showAbout=false;
-        if(ImGui::BeginMainMenuBar()) {
-            if(ImGui::BeginMenu("Project")){
-                if(ImGui::MenuItem("Input Settings"))inputSettings.visible=true;
-                if(ImGui::BeginMenu("Project Settings")){if(ImGui::MenuItem("Rendering"))renderingSettings.visible=true;ImGui::EndMenu();}
-                if(ImGui::BeginMenu("Levels",!playMode.active() && !levels.busy() && !projectDialog.pending())){
-                    if(ImGui::MenuItem("New Level..."))newLevelPopup=true;
-                    if(ImGui::MenuItem("Save Current Level"))try{levels.saveCurrent(world,scripts.source(),camera);}catch(const std::exception& e){levels.error=e.what();}
+        bool showAbout = false;
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("Project")) {
+                if (ImGui::MenuItem("Input Settings")) {
+                    inputSettings.visible = true;
+                }
+                if (ImGui::BeginMenu("Project Settings")) {
+                    if (ImGui::MenuItem("Rendering")) {
+                        renderingSettings.visible = true;
+                    }
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Levels",
+                                     !playMode.active() && !levels.busy() &&
+                                         !projectDialog.pending())) {
+                    if (ImGui::MenuItem("New Level...")) {
+                        newLevelPopup = true;
+                    }
+                    if (ImGui::MenuItem("Save Current Level")) {
+                        try {
+                            scripts.saveFile(browser.assets);
+                            levels.saveCurrent(world, embeddedLegacySource, camera);
+                        } catch (const std::exception& e) {
+                            levels.error = e.what();
+                        }
+                    }
                     ImGui::Separator();
-                    for(const auto name:std::vector<std::string>(levels.names()))if(ImGui::MenuItem(name.c_str(),nullptr,name==levels.current()))try{
-                        levels.saveCurrent(world,scripts.source(),camera);levels.load(name);
-                    }catch(const std::exception& e){levels.error=e.what();}
+                    for (const auto& name : std::vector<std::string>(levels.names())) {
+                        if (ImGui::MenuItem(name.c_str(), nullptr, name == levels.current())) {
+                            try {
+                                scripts.saveFile(browser.assets);
+                                levels.saveCurrent(world, embeddedLegacySource, camera);
+                                levels.load(name);
+                            } catch (const std::exception& e) {
+                                levels.error = e.what();
+                            }
+                        }
+                    }
                     ImGui::EndMenu();
                 }
                 ImGui::EndMenu();
             }
-            if(ImGui::BeginMenu("Settings")){if(ImGui::MenuItem("Editor Settings"))browser.settings.visible=true;ImGui::EndMenu();}
-            if(ImGui::BeginMenu("Debug")) {
-                ImGui::MenuItem("Show FPS",nullptr,&showFPS);
-                ImGui::MenuItem("Profiler",nullptr,&showProfiler);
-                ImGui::MenuItem("Show Game Colliders",nullptr,&showGameColliders);
+            if (ImGui::BeginMenu("Settings")) {
+                if (ImGui::MenuItem("Editor Settings")) {
+                    browser.settings.visible = true;
+                }
                 ImGui::EndMenu();
             }
-            if(ImGui::BeginMenu("Help")) {
-                if(ImGui::MenuItem("GitHub"))SDL_OpenURL("https://github.com/monsef64/LegacyEngine");
-                showAbout=ImGui::MenuItem("About");ImGui::EndMenu();
+            if (ImGui::BeginMenu("Debug")) {
+                ImGui::MenuItem("Show FPS", nullptr, &showFPS);
+                ImGui::MenuItem("Profiler", nullptr, &showProfiler);
+                ImGui::MenuItem("Show Game Colliders", nullptr, &showGameColliders);
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Help")) {
+                auto openManual = [&](const char* page) {
+                    // Release packages place docs beside the executable, independent of project
+                    // cwd.
+                    const char* base = SDL_GetBasePath();
+                    auto path = std::filesystem::path(base ? base : ".") / "docs" / page;
+                    if (!std::filesystem::is_regular_file(path)) {
+                        SDL_LogError(
+                            SDL_LOG_CATEGORY_APPLICATION,
+                            "%s",
+                            "Offline documentation missing. Build docs with python docs/build.py --output build/docs.");
+                        return;
+                    }
+                    auto raw = std::filesystem::absolute(path).generic_string();
+                    std::string url = "file://";
+                    if (raw.empty() || raw.front() != '/') {
+                        url += '/';
+                    }
+                    for (unsigned char c : raw) {
+                        if (std::isalnum(c) || c == '/' || c == ':' || c == '-' || c == '_' ||
+                            c == '.' || c == '~') {
+                            url += static_cast<char>(c);
+                        } else {
+                            const char* hex = "0123456789ABCDEF";
+                            url += '%';
+                            url += hex[c >> 4];
+                            url += hex[c & 15];
+                        }
+                    }
+                    if (!SDL_OpenURL(url.c_str())) {
+                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
+                    }
+                };
+                if (ImGui::MenuItem("Documentation")) {
+                    openManual("index.html");
+                }
+                if (ImGui::MenuItem("Scripting Reference")) {
+                    openManual("scripting-reference.html");
+                }
+                if (ImGui::MenuItem("GitHub")) {
+                    SDL_OpenURL("https://github.com/monsef64/LegacyEngine");
+                }
+                showAbout = ImGui::MenuItem("About");
+                ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
         }
-        if(renameLevelPopup){
-            std::snprintf(renameLevelName,sizeof(renameLevelName),"%s",levels.current().empty()?"Main":levels.current().c_str());
-            ImGui::OpenPopup("Rename Level");renameLevelPopup=false;
+        if (renameLevelPopup) {
+            std::snprintf(renameLevelName,
+                          sizeof(renameLevelName),
+                          "%s",
+                          levels.current().empty() ? "Main" : levels.current().c_str());
+            ImGui::OpenPopup("Rename Level");
+            renameLevelPopup = false;
         }
-        if(ImGui::BeginPopupModal("Rename Level",nullptr,ImGuiWindowFlags_AlwaysAutoResize)){
-            const bool enter=ImGui::InputText("Name",renameLevelName,sizeof(renameLevelName),ImGuiInputTextFlags_EnterReturnsTrue);
-            if(ImGui::Button("Rename") || enter)try{levels.saveCurrent(world,scripts.source(),camera);levels.renameCurrent(renameLevelName);ImGui::CloseCurrentPopup();}catch(const std::exception& e){levels.error=e.what();}
-            ImGui::SameLine();if(ImGui::Button("Cancel"))ImGui::CloseCurrentPopup();
-            if(!levels.error.empty())ImGui::TextWrapped("%s",levels.error.c_str());
-            ImGui::EndPopup();
-        }
-        if(newLevelPopup){ImGui::OpenPopup("New Level");newLevelPopup=false;}
-        if(ImGui::BeginPopupModal("New Level",nullptr,ImGuiWindowFlags_AlwaysAutoResize)){
-            ImGui::TextUnformatted("The current level is saved before creating an empty level.");
-            ImGui::InputText("Name",newLevelName,sizeof(newLevelName));
-            if(ImGui::Button("Create"))try{levels.saveCurrent(world,scripts.source(),camera);levels.create(newLevelName);levels.load(newLevelName);ImGui::CloseCurrentPopup();}catch(const std::exception& e){levels.error=e.what();}
-            ImGui::SameLine();if(ImGui::Button("Cancel"))ImGui::CloseCurrentPopup();
-            if(!levels.error.empty())ImGui::TextWrapped("%s",levels.error.c_str());
-            ImGui::EndPopup();
-        }
-        if(renderingSettings.visible){
-            if(ImGui::Begin("Project Settings",&renderingSettings.visible)){
-                ImGui::SeparatorText("Rendering");
-                if(ImGui::Checkbox("Enable VSync",&renderingSettings.vsync)){
-                    renderingSettings.apply();try{renderingSettings.save(browser.assets);}catch(const std::exception& e){renderingSettings.error=e.what();}
+        if (ImGui::BeginPopupModal("Rename Level", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            const bool enter = ImGui::InputText("Name",
+                                                renameLevelName,
+                                                sizeof(renameLevelName),
+                                                ImGuiInputTextFlags_EnterReturnsTrue);
+            if (ImGui::Button("Rename") || enter) {
+                try {
+                    scripts.saveFile(browser.assets);
+                    levels.saveCurrent(world, embeddedLegacySource, camera);
+                    levels.renameCurrent(renameLevelName);
+                    ImGui::CloseCurrentPopup();
+                } catch (const std::exception& e) {
+                    levels.error = e.what();
                 }
-                int interval=0;if(SDL_GL_GetSwapInterval(&interval))ImGui::Text("Driver swap interval: %d",interval);
-                ImGui::TextWrapped("Disable VSync to measure uncapped performance. Use Debug > Profiler to distinguish rendering cost from presentation wait.");
-                if(!renderingSettings.error.empty())ImGui::TextWrapped("%s",renderingSettings.error.c_str());
-            }ImGui::End();
-        }
-        if(showAbout)ImGui::OpenPopup("About LegacyEngine");
-        if(ImGui::BeginPopupModal("About LegacyEngine",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextUnformatted("LegacyEngine");ImGui::TextUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
-            ImGui::TextUnformatted("SDL3 / OpenGL / Dear ImGui / ReactPhysics3D");
-            if(ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                ImGui::CloseCurrentPopup();
+            }
+            if (!levels.error.empty()) {
+                ImGui::TextWrapped("%s", levels.error.c_str());
+            }
             ImGui::EndPopup();
         }
-        drawProfiler(profiler,showProfiler);
+        if (newLevelPopup) {
+            ImGui::OpenPopup("New Level");
+            newLevelPopup = false;
+        }
+        if (ImGui::BeginPopupModal("New Level", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("The current level is saved before creating an empty level.");
+            ImGui::InputText("Name", newLevelName, sizeof(newLevelName));
+            if (ImGui::Button("Create")) {
+                try {
+                    scripts.saveFile(browser.assets);
+                    levels.saveCurrent(world, embeddedLegacySource, camera);
+                    levels.create(newLevelName);
+                    levels.load(newLevelName);
+                    ImGui::CloseCurrentPopup();
+                } catch (const std::exception& e) {
+                    levels.error = e.what();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                ImGui::CloseCurrentPopup();
+            }
+            if (!levels.error.empty()) {
+                ImGui::TextWrapped("%s", levels.error.c_str());
+            }
+            ImGui::EndPopup();
+        }
+        if (renderingSettings.visible) {
+            if (ImGui::Begin("Project Settings", &renderingSettings.visible)) {
+                ImGui::SeparatorText("Rendering");
+                if (ImGui::Checkbox("Enable VSync", &renderingSettings.vsync)) {
+                    renderingSettings.apply();
+                    try {
+                        renderingSettings.save(browser.assets);
+                    } catch (const std::exception& e) {
+                        renderingSettings.error = e.what();
+                    }
+                }
+                int interval = 0;
+                if (SDL_GL_GetSwapInterval(&interval)) {
+                    ImGui::Text("Driver swap interval: %d", interval);
+                }
+                ImGui::TextWrapped(
+                    "Disable VSync to measure uncapped performance. Use Debug > Profiler to distinguish rendering cost from presentation wait.");
+                if (!renderingSettings.error.empty()) {
+                    ImGui::TextWrapped("%s", renderingSettings.error.c_str());
+                }
+            }
+            ImGui::End();
+        }
+        if (showAbout) {
+            ImGui::OpenPopup("About LegacyEngine");
+        }
+        if (ImGui::BeginPopupModal(
+                "About LegacyEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("LegacyEngine");
+            ImGui::TextUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
+            ImGui::TextUnformatted("SDL3 / OpenGL / Dear ImGui / ReactPhysics3D");
+            if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        drawProfiler(profiler, showProfiler);
         // Let text widgets own editing shortcuts while typing. Global routing
         // otherwise makes shortcuts independent of which editor panel has focus.
-        if(editAllowed && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive()) {
-            const auto flags=ImGuiInputFlags_RouteGlobal;
-            undoRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z,flags);
-            redoRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y,flags) ||
-                ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z,flags);
-            duplicateRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_D,flags);
-            copyRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C,flags);
-            pasteRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_V,flags);
-            parentRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_P,flags);
+        if (editAllowed && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive()) {
+            const auto flags = ImGuiInputFlags_RouteGlobal;
+            undoRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z, flags);
+            redoRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y, flags) ||
+                             ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z, flags);
+            duplicateRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_D, flags);
+            copyRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C, flags);
+            pasteRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_V, flags);
+            parentRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_P, flags);
         }
-        ImGui::SetNextWindowPos(ImVec2(layout.toolbar.x,layout.toolbar.y));
-        ImGui::SetNextWindowSize(ImVec2(layout.toolbar.width,layout.toolbar.height));
-        ImGui::Begin("Scene controls",nullptr,fixedPanelFlags | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoDocking);
-        if(editAllowed) {
-            if(copyRequested && objectSelected)clipboard.copy(world,selectedEntity);
-            if((duplicateRequested && objectSelected) || (pasteRequested && clipboard.available())) {
-                editor.finish(world);clicking=false;spawnMode=false;
-                history.commit(world,selectedEntity);
-                selectedEntity=duplicateRequested?duplicateLevelObject(world,selectedEntity):clipboard.paste(world);
-                history.commit(world,selectedEntity);
+        ImGui::SetNextWindowPos(ImVec2(layout.toolbar.x, layout.toolbar.y));
+        ImGui::SetNextWindowSize(ImVec2(layout.toolbar.width, layout.toolbar.height));
+        ImGui::Begin("Scene controls",
+                     nullptr,
+                     fixedPanelFlags | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoDocking);
+        if (editAllowed) {
+            if (copyRequested && objectSelected) {
+                clipboard.copy(world, selectedEntity);
             }
-            if(parentRequested && objectSelected) {
-                editor.finish(world);clicking=false;
-                if(getParent(world,selectedEntity)!=Entity{}) {
-                    history.commit(world,selectedEntity);
-                    setParent(world,selectedEntity,{});history.commit(world,selectedEntity);
-                } else ImGui::OpenPopup("Choose parent");
+            if ((duplicateRequested && objectSelected) ||
+                (pasteRequested && clipboard.available())) {
+                editor.finish(world);
+                clicking = false;
+                history.commit(world, selectedEntity);
+                selectedEntity = duplicateRequested ? duplicateLevelObject(world, selectedEntity)
+                                                    : clipboard.paste(world);
+                history.commit(world, selectedEntity);
+            }
+            if (parentRequested && objectSelected) {
+                editor.finish(world);
+                clicking = false;
+                if (getParent(world, selectedEntity) != Entity{}) {
+                    history.commit(world, selectedEntity);
+                    setParent(world, selectedEntity, {});
+                    history.commit(world, selectedEntity);
+                } else {
+                    ImGui::OpenPopup("Choose parent");
+                }
             }
         }
-        if(ImGui::BeginPopup("Choose parent")) {
+        if (ImGui::BeginPopup("Choose parent")) {
             ImGui::TextUnformatted("Choose parent for selected GameObject");
             ImGui::Separator();
-            for(const auto& object:levelObjects(world)) {
-                if(!editAllowed || !canParent(world,selectedEntity,object.entity))continue;
+            for (const auto& object : levelObjects(world)) {
+                if (!editAllowed || !canParent(world, selectedEntity, object.entity)) {
+                    continue;
+                }
                 ImGui::PushID(static_cast<int>(object.entity.index));
-                if(ImGui::Selectable(object.name.c_str())) {
-                    history.commit(world,selectedEntity);
-                    setParent(world,selectedEntity,object.entity);history.commit(world,selectedEntity);
+                if (ImGui::Selectable(object.name.c_str())) {
+                    history.commit(world, selectedEntity);
+                    setParent(world, selectedEntity, object.entity);
+                    history.commit(world, selectedEntity);
                 }
                 ImGui::PopID();
             }
             ImGui::EndPopup();
         }
         if ((undoRequested || redoRequested) && !playMode.active()) {
-            editor.finish(world);clicking=false;
-            history.commit(world,selectedEntity);
-            const bool restored=undoRequested?history.undo(world,selectedEntity):history.redo(world,selectedEntity);
-            if(restored)physics.reset();
-            else if(!history.error.empty()){projectError=history.error;history.error.clear();}
+            editor.finish(world);
+            clicking = false;
+            history.commit(world, selectedEntity);
+            const bool restored = undoRequested ? history.undo(world, selectedEntity)
+                                                : history.redo(world, selectedEntity);
+            if (restored) {
+                physics.reset();
+            } else if (!history.error.empty()) {
+                projectError = history.error;
+                history.error.clear();
+            }
         }
-        const bool playbackKeys=!ImGui::GetIO().WantTextInput && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
-        const bool playKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F5,ImGuiInputFlags_RouteGlobal);
-        const bool pauseKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F6,ImGuiInputFlags_RouteGlobal);
-        const bool stopKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F7,ImGuiInputFlags_RouteGlobal);
-        const float playbackWidth=90+2*ImGui::GetStyle().ItemSpacing.x;
-        ImGui::SetCursorPosX((layout.toolbar.width-playbackWidth)*0.5f);
+        const bool playbackKeys = !ImGui::GetIO().WantTextInput && !editor.dragging() &&
+                                  !projectDialog.pending() && !browser.dialog.pending();
+        const bool playKey =
+            playbackKeys && ImGui::Shortcut(ImGuiKey_F5, ImGuiInputFlags_RouteGlobal);
+        const bool pauseKey =
+            playbackKeys && ImGui::Shortcut(ImGuiKey_F6, ImGuiInputFlags_RouteGlobal);
+        const bool stopKey =
+            playbackKeys && ImGui::Shortcut(ImGuiKey_F7, ImGuiInputFlags_RouteGlobal);
+        const float playbackWidth = 90 + 2 * ImGui::GetStyle().ItemSpacing.x;
+        ImGui::SetCursorPosX((layout.toolbar.width - playbackWidth) * 0.5f);
         ImGui::BeginDisabled(playMode.active() || levels.busy());
-        if (playbackButton("##Play","Play (F5)",PlaybackIcon::Play,playMode.active()) || (playKey && !playMode.active() && !levels.busy())) {
-            editor.finish(world); clicking=false;
-            try{levels.saveCurrent(world,scripts.source(),camera);}catch(const std::exception& e){levels.error=e.what();}
-            editSelection=selectedEntity;editLevelName=levels.current();editSource=scripts.source();editCamera=camera;
-            history.commit(world,selectedEntity);editHistory=std::move(history);history=EditorHistory(world,selectedEntity);
-            if (playMode.play(world)) { physics.reset(); audio.start(world);scripts.setAssetContext(browser.openedScript,selectedEntity);scripts.startPlay();
-                const MeshHandle runtimeMeshes[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
-                componentScripts.start(world,browser.assets,runtimeMeshes,planeMesh); }
+        if (playbackButton("##Play", "Play (F5)", PlaybackIcon::Play, playMode.active()) ||
+            (playKey && !playMode.active() && !levels.busy())) {
+            editor.finish(world);
+            clicking = false;
+            try {
+                scripts.saveFile(browser.assets);
+                levels.saveCurrent(world, embeddedLegacySource, camera);
+            } catch (const std::exception& e) {
+                levels.error = e.what();
+            }
+            editSelection = selectedEntity;
+            editLevelName = levels.current();
+            editSource = scripts.source();
+            editScriptPath = browser.openedScript;
+            editLegacySource = embeddedLegacySource;
+            editCamera = camera;
+            history.commit(world, selectedEntity);
+            editHistory = std::move(history);
+            history = EditorHistory(world, selectedEntity);
+            if (playMode.play(world)) {
+                physics.reset();
+                audio.start(world);
+                scripts.setAssetContext(browser.openedScript, selectedEntity);
+                scripts.startPlay();
+                const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
+                componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
+                LuaConsole::postEvent("onLevelLoaded", {levels.current()});
+            }
         }
-        ImGui::EndDisabled(); ImGui::SameLine();
-        ImGui::BeginDisabled(!playMode.active());
-        if (playbackButton("##Pause",playMode.state()==PlayMode::State::Paused?"Resume (F6)":"Pause (F6)",PlaybackIcon::Pause,playMode.state()==PlayMode::State::Paused) || (pauseKey && playMode.active())) {
-            editor.finish(world); clicking=false; playMode.pause();if(!playMode.playing())input.releaseMouse();
-        }
-        ImGui::SameLine();
-        if (playbackButton("##Stop","Stop (F7)",PlaybackIcon::Stop) || (stopKey && playMode.active())) {
-            editor.finish(world); clicking=false;
-            // Run stop callbacks before restoring, so their edits are discarded too.
-            levels.suspended=true;levels.cancel();
-            audio.clear();componentScripts.stop();scripts.shutdown();
-            playMode.stop(world);input.releaseMouse();
-            physics.reset();scripts.resetRuntime();scripts.setSource(editSource);camera=editCamera;history=std::move(editHistory);
-            levels.commit(editLevelName,false);levels.suspended=false;
-            selectedEntity=world.alive(editSelection)?editSelection:Entity{};
-        }
-        ImGui::EndDisabled(); ImGui::SameLine();
-        const bool compactToolbar=layout.toolbar.width<1000;
-        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),layout.toolbar.width-(compactToolbar?125.0f:370.0f)));
-        if(compactToolbar && ImGui::Button("Scene options")) ImGui::OpenPopup("Scene options popup");
-        if(!compactToolbar || ImGui::BeginPopup("Scene options popup")) {
-        if(ImGui::Checkbox("Spawn Mode",&spawnMode)){editor.finish(world);selectedEntity={};clicking=false;}
-        ImGui::SameLine();
-        if(ImGui::Checkbox("Freecam",&freeCamera))clicking=false;
-        ImGui::SameLine();
-        const char* names[]{"Cube","Sphere","Capsule","Cone"};int shape=static_cast<int>(selected);
-        ImGui::SetNextItemWidth(100);ImGui::BeginDisabled(!spawnMode);
-        if(ImGui::Combo("Shape",&shape,names,4))selected=static_cast<ColliderShape>(shape);
         ImGui::EndDisabled();
-            if(compactToolbar)ImGui::EndPopup();
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!playMode.active());
+        if (playbackButton("##Pause",
+                           playMode.state() == PlayMode::State::Paused ? "Resume (F6)"
+                                                                       : "Pause (F6)",
+                           PlaybackIcon::Pause,
+                           playMode.state() == PlayMode::State::Paused) ||
+            (pauseKey && playMode.active())) {
+            editor.finish(world);
+            clicking = false;
+            playMode.pause();
+            if (!playMode.playing()) {
+                input.releaseMouse();
+            }
+        }
+        ImGui::SameLine();
+        if (playbackButton("##Stop", "Stop (F7)", PlaybackIcon::Stop) ||
+            (stopKey && playMode.active())) {
+            editor.finish(world);
+            clicking = false;
+            // Run stop callbacks before restoring, so their edits are discarded too.
+            levels.suspended = true;
+            levels.cancel();
+            LuaConsole::clearEvents();
+            audio.clear();
+            componentScripts.stop();
+            scripts.shutdown();
+            LuaConsole::clearEvents();
+            playMode.stop(world);
+            input.releaseMouse();
+            physics.reset();
+            scripts.resetRuntime();
+            scripts.setSource(editSource);
+            embeddedLegacySource = editLegacySource;
+            browser.openedScript = editScriptPath;
+            scripts.setAssetContext(editScriptPath, editSelection);
+            camera = editCamera;
+            history = std::move(editHistory);
+            levels.commit(editLevelName, false);
+            levels.suspended = false;
+            selectedEntity = world.alive(editSelection) ? editSelection : Entity{};
+        }
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        const bool compactToolbar = layout.toolbar.width < 1000;
+        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),
+                                      layout.toolbar.width - (compactToolbar ? 125.0f : 370.0f)));
+        if (compactToolbar && ImGui::Button("Scene options")) {
+            ImGui::OpenPopup("Scene options popup");
+        }
+        if (!compactToolbar || ImGui::BeginPopup("Scene options popup")) {
+            if (ImGui::Checkbox("Freecam", &freeCamera)) {
+                clicking = false;
+            }
+            if (compactToolbar) {
+                ImGui::EndPopup();
+            }
         }
         ImGui::End();
-        bool hierarchyFocused=false;int hierarchyCreate=-1;
-        const std::string hierarchyLevelName=!levels.current().empty()?levels.current():currentProject.empty()?"Untitled":std::filesystem::path(currentProject).stem().string();
-        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused,&hierarchyCreate,hierarchyLevelName.c_str(),editAllowed?&renameLevelPopup:nullptr)) {editor.finish(world);clicking=false;}
-        if(hierarchyCreate>=0)createObject(hierarchyCreate);
-        const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh,planeMesh};
-        drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging(),&browser.assets,5);
-        scripts.componentOutput=componentScripts.messages();
-        scripts.setAssetContext(browser.openedScript,selectedEntity);
-        scripts.draw(&layout,playMode.playing());
-        browser.projectFolder=currentProject.empty()?browser.assets.root:std::filesystem::absolute(currentProject).parent_path();
-        browser.draw(window,world,selectedEntity,scripts,editAllowed,&history);
+        bool hierarchyFocused = false;
+        int hierarchyCreate = -1;
+        const std::string hierarchyLevelName =
+            !levels.current().empty() ? levels.current()
+            : currentProject.empty()  ? "Untitled"
+                                      : std::filesystem::path(currentProject).stem().string();
+        if (drawLevelObjects(world,
+                             selectedEntity,
+                             true,
+                             &layout.hierarchy,
+                             &hierarchyFocused,
+                             &hierarchyCreate,
+                             hierarchyLevelName.c_str(),
+                             editAllowed ? &renameLevelPopup : nullptr)) {
+            editor.finish(world);
+            clicking = false;
+        }
+        if (hierarchyCreate >= 0) {
+            createObject(hierarchyCreate);
+        }
+        const MeshHandle meshOptions[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh};
+        drawInspector(world,
+                      selectedEntity,
+                      layout.inspector,
+                      meshOptions,
+                      editor.dragging(),
+                      &browser.assets,
+                      5);
+        scripts.componentOutput = componentScripts.messages();
+        scripts.setAssetContext(browser.openedScript, selectedEntity);
+        scripts.draw(&layout, playMode.playing(), &browser.assets, &browser.openedScript);
+        browser.projectFolder = currentProject.empty()
+                                    ? browser.assets.root
+                                    : std::filesystem::absolute(currentProject).parent_path();
+        browser.draw(window, world, selectedEntity, scripts, editAllowed, &history);
         browser.settings.draw(browser.projectFolder);
-        inputSettings.draw(browser.assets,input,editAllowed);
-        terminalErrors.report("Skybox",renderer.skyboxError());
-        terminalErrors.report("Material",renderer.materialError);
-        terminalErrors.report("Audio",audio.error);
-        terminalErrors.report("Assets",browser.assets.error);
-        terminalErrors.report("Asset preview",browser.preview.error);
-        terminalErrors.report("Editor settings",browser.settings.error);
-        terminalErrors.report("Input settings",inputSettings.error);
-        terminalErrors.report("History",history.error);
-        terminalErrors.report("Levels",levels.error);
-        terminalErrors.report("Rendering settings",renderingSettings.error);
-        ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false,sceneFocused=false;
-        sceneHovered=false;sceneRect={};orientationInteracting=false;
-        if(panelOpen[2]) {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
-            if(beginEditorPanel("Scene")) {
-                sceneFocused=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-                const auto pos=ImGui::GetCursorScreenPos(),size=ImGui::GetContentRegionAvail();
-                sceneRect={pos.x,pos.y,std::max(size.x,1.0f),std::max(size.y,1.0f)};
-                layout.scene=sceneRect;sceneVisible=true;sceneDrawList=ImGui::GetWindowDrawList();
-                int dw=0,dh=0;SDL_GetWindowSizeInPixels(window,&dw,&dh);
-                auto pixels=scenePixels(sceneRect,windowWidth,windowHeight,dw,dh);
-                sceneSurface.resize(pixels.width,pixels.height);
-                ImGui::Image(static_cast<ImTextureID>(sceneSurface.texture),ImVec2(sceneRect.width,sceneRect.height),ImVec2(0,1),ImVec2(1,0));
-                sceneHovered=ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && ImGui::IsItemHovered();
-                if(ImGui::BeginDragDropTarget()) {
-                    if(const auto* asset=ImGui::AcceptDragDropPayload("ASSET_PATH"))
-                        attachScriptAsset(world,selectedEntity,static_cast<const char*>(asset->Data));
+        inputSettings.draw(browser.assets, input, editAllowed);
+        terminalErrors.report("Skybox", renderer.skyboxError());
+        terminalErrors.report("Material", renderer.materialError);
+        terminalErrors.report("Audio", audio.error);
+        terminalErrors.report("Assets", browser.assets.error);
+        terminalErrors.report("Asset preview", browser.preview.error);
+        terminalErrors.report("Editor settings", browser.settings.error);
+        terminalErrors.report("Input settings", inputSettings.error);
+        terminalErrors.report("History", history.error);
+        terminalErrors.report("Levels", levels.error);
+        terminalErrors.report("Rendering settings", renderingSettings.error);
+        ImDrawList* sceneDrawList = nullptr;
+        bool sceneVisible = false, sceneFocused = false;
+        sceneHovered = false;
+        sceneRect = {};
+        orientationInteracting = false;
+        if (panelOpen[2]) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            if (beginEditorPanel("Scene")) {
+                sceneFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+                const auto pos = ImGui::GetCursorScreenPos(), size = ImGui::GetContentRegionAvail();
+                sceneRect = {pos.x, pos.y, std::max(size.x, 1.0f), std::max(size.y, 1.0f)};
+                layout.scene = sceneRect;
+                sceneVisible = true;
+                sceneDrawList = ImGui::GetWindowDrawList();
+                int dw = 0, dh = 0;
+                SDL_GetWindowSizeInPixels(window, &dw, &dh);
+                auto pixels = scenePixels(sceneRect, windowWidth, windowHeight, dw, dh);
+                sceneSurface.resize(pixels.width, pixels.height);
+                ImGui::Image(static_cast<ImTextureID>(sceneSurface.texture),
+                             ImVec2(sceneRect.width, sceneRect.height),
+                             ImVec2(0, 1),
+                             ImVec2(1, 0));
+                sceneHovered =
+                    ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && ImGui::IsItemHovered();
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                        attachScriptAsset(
+                            world, selectedEntity, static_cast<const char*>(asset->Data));
+                    }
                     ImGui::EndDragDropTarget();
                 }
-                if(editAllowed && (sceneFocused || sceneHovered) && !cameraLooking && !ImGui::GetIO().WantTextInput &&
-                    !ImGui::IsAnyItemActive() && !cameraModifiersHeld(SDL_GetModState()) &&
-                    !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId)) {
-                    if(ImGui::IsKeyPressed(ImGuiKey_W,false))editor.setTool(TransformTool::Move);
-                    if(ImGui::IsKeyPressed(ImGuiKey_E,false))editor.setTool(TransformTool::Rotate);
-                    if(ImGui::IsKeyPressed(ImGuiKey_R,false))editor.setTool(TransformTool::Scale);
+                if (editAllowed && (sceneFocused || sceneHovered) && !cameraLooking &&
+                    !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+                    !cameraModifiersHeld(SDL_GetModState()) &&
+                    !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+                    if (ImGui::IsKeyPressed(ImGuiKey_W, false)) {
+                        editor.setTool(TransformTool::Move);
+                    }
+                    if (ImGui::IsKeyPressed(ImGuiKey_E, false)) {
+                        editor.setTool(TransformTool::Rotate);
+                    }
+                    if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+                        editor.setTool(TransformTool::Scale);
+                    }
                 }
-                orientationInteracting=drawSceneOrientation(camera,sceneRect,editAllowed && !cameraLooking && !editor.dragging());
-                editor.draw(world,selectedEntity,!orientationInteracting && !spawnMode && !cameraLooking && !(SDL_GetModState()&SDL_KMOD_ALT),camera,static_cast<float>(sceneSurface.width)/sceneSurface.height,&sceneRect,sceneDrawList);
-                if(editor.capturesMouse() || orientationInteracting)clicking=false;
+                orientationInteracting = drawSceneOrientation(
+                    camera, sceneRect, editAllowed && !cameraLooking && !editor.dragging());
+                editor.draw(world,
+                            selectedEntity,
+                            !orientationInteracting && !cameraLooking &&
+                                !(SDL_GetModState() & SDL_KMOD_ALT),
+                            camera,
+                            static_cast<float>(sceneSurface.width) / sceneSurface.height,
+                            &sceneRect,
+                            sceneDrawList);
+                if (editor.capturesMouse() || orientationInteracting) {
+                    clicking = false;
+                }
             }
-            ImGui::End();ImGui::PopStyleVar();
+            ImGui::End();
+            ImGui::PopStyleVar();
         }
-        bool gameVisible=false;
-        gameHovered=false;gameFocused=false;
-        if(panelOpen[6]) {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
-            if(smokeTest && renderedFrames==0)ImGui::SetNextWindowFocus();
-            if(beginEditorPanel("Game")) {
-                gameHovered=ImGui::IsWindowHovered();gameFocused=ImGui::IsWindowFocused();
-                const auto active=activeCamera(world);
-                if(active==Entity{}) {
-                    const char* message="No active camera available";
-                    const auto size=ImGui::GetContentRegionAvail();
-                    const auto textSize=ImGui::CalcTextSize(message);
-                    const auto origin=ImGui::GetCursorPos();
-                    ImGui::SetCursorPos(ImVec2(origin.x+std::max(0.0f,(size.x-textSize.x)*0.5f),
-                                              origin.y+std::max(0.0f,(size.y-textSize.y)*0.5f)));
+        bool gameVisible = false;
+        gameHovered = false;
+        gameFocused = false;
+        if (panelOpen[6]) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            if (smokeTest && renderedFrames == 0) {
+                ImGui::SetNextWindowFocus();
+            }
+            if (beginEditorPanel("Game")) {
+                gameHovered = ImGui::IsWindowHovered();
+                gameFocused = ImGui::IsWindowFocused();
+                const auto active = activeCamera(world);
+                if (active == Entity{}) {
+                    const char* message = "No active camera available";
+                    const auto size = ImGui::GetContentRegionAvail();
+                    const auto textSize = ImGui::CalcTextSize(message);
+                    const auto origin = ImGui::GetCursorPos();
+                    ImGui::SetCursorPos(
+                        ImVec2(origin.x + std::max(0.0f, (size.x - textSize.x) * 0.5f),
+                               origin.y + std::max(0.0f, (size.y - textSize.y) * 0.5f)));
                     ImGui::TextUnformatted(message);
-                }
-                else {
-                    auto size=ImGui::GetContentRegionAvail();size.x=std::max(size.x,1.0f);size.y=std::max(size.y,1.0f);
-                    int dw=0,dh=0;SDL_GetWindowSizeInPixels(window,&dw,&dh);
-                    gameSurface.resize(static_cast<int>(size.x*dw/std::max(windowWidth,1)),static_cast<int>(size.y*dh/std::max(windowHeight,1)));
-                    world.each<Camera>([&](Entity,Camera& c){c.aspect=static_cast<float>(gameSurface.width)/gameSurface.height;});
-                    ImGui::Image(static_cast<ImTextureID>(gameSurface.texture),size,ImVec2(0,1),ImVec2(1,0));gameVisible=true;
-                    if(showFPS){
-                        const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
-                        char label[64];std::snprintf(label,sizeof(label),"FPS: %.0f",ImGui::GetIO().Framerate);
-                        const auto text=ImGui::CalcTextSize(label);const ImVec2 position(a.x+8,a.y+8);
-                        auto* draw=ImGui::GetWindowDrawList();draw->PushClipRect(a,b,true);
-                        draw->AddRectFilled(ImVec2(position.x-4,position.y-3),ImVec2(position.x+text.x+4,position.y+text.y+3),IM_COL32(0,0,0,180),3);
-                        draw->AddText(position,IM_COL32(255,255,255,255),label);draw->PopClipRect();
+                } else {
+                    auto size = ImGui::GetContentRegionAvail();
+                    size.x = std::max(size.x, 1.0f);
+                    size.y = std::max(size.y, 1.0f);
+                    int dw = 0, dh = 0;
+                    SDL_GetWindowSizeInPixels(window, &dw, &dh);
+                    gameSurface.resize(static_cast<int>(size.x * dw / std::max(windowWidth, 1)),
+                                       static_cast<int>(size.y * dh / std::max(windowHeight, 1)));
+                    world.each<Camera>([&](Entity, Camera& c) {
+                        c.aspect = static_cast<float>(gameSurface.width) / gameSurface.height;
+                    });
+                    ImGui::Image(static_cast<ImTextureID>(gameSurface.texture),
+                                 size,
+                                 ImVec2(0, 1),
+                                 ImVec2(1, 0));
+                    gameVisible = true;
+                    if (showFPS) {
+                        const auto a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+                        char label[64];
+                        std::snprintf(label, sizeof(label), "FPS: %.0f", ImGui::GetIO().Framerate);
+                        const auto text = ImGui::CalcTextSize(label);
+                        const ImVec2 position(a.x + 8, a.y + 8);
+                        auto* draw = ImGui::GetWindowDrawList();
+                        draw->PushClipRect(a, b, true);
+                        draw->AddRectFilled(
+                            ImVec2(position.x - 4, position.y - 3),
+                            ImVec2(position.x + text.x + 4, position.y + text.y + 3),
+                            IM_COL32(0, 0, 0, 180),
+                            3);
+                        draw->AddText(position, IM_COL32(255, 255, 255, 255), label);
+                        draw->PopClipRect();
                     }
                 }
             }
-            ImGui::End();ImGui::PopStyleVar();
+            ImGui::End();
+            ImGui::PopStyleVar();
         }
-        if(!sceneVisible) {editor.finish(world);layout.scene={};}
-        if(editAllowed && sceneVisible && (hierarchyFocused || sceneFocused) && !cameraLooking &&
+        if (!sceneVisible) {
+            editor.finish(world);
+            layout.scene = {};
+        }
+        if (editAllowed && sceneVisible && (hierarchyFocused || sceneFocused) && !cameraLooking &&
             !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
-            !cameraModifiersHeld(SDL_GetModState()) && !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId) &&
-            ImGui::IsKeyPressed(ImGuiKey_F,false)) {
-            if(const auto* transform=world.tryGet<Transform>(selectedEntity)){
-                editor.finish(world);clicking=false;
-                const auto& scale=transform->scale;
-                float radius=std::max({std::abs(scale.x),std::abs(scale.y),std::abs(scale.z),1.0f});
-                Vec3 centre=transform->position;
-                if(const auto* collider=world.tryGet<Collider>(selectedEntity)){
-                    const auto bounds=colliderWireframe(*collider,scale);
-                    radius=.25f;
-                    for(const auto& vertex:bounds.vertices)radius=std::max(radius,std::sqrt(dot(vertex.position,vertex.position)));
+            !cameraModifiersHeld(SDL_GetModState()) &&
+            !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) &&
+            ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+            if (const auto* transform = world.tryGet<Transform>(selectedEntity)) {
+                editor.finish(world);
+                clicking = false;
+                const auto& scale = transform->scale;
+                float radius =
+                    std::max({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z), 1.0f});
+                Vec3 centre = transform->position;
+                if (const auto* collider = world.tryGet<Collider>(selectedEntity)) {
+                    const auto bounds = colliderWireframe(*collider, scale);
+                    radius = .25f;
+                    for (const auto& vertex : bounds.vertices) {
+                        radius = std::max(radius, std::sqrt(dot(vertex.position, vertex.position)));
+                    }
                 }
-                camera.focus(centre,radius,sceneRect.width/sceneRect.height);
+                camera.focus(centre, radius, sceneRect.width / sceneRect.height);
             }
         }
-        if(editAllowed && (hierarchyFocused || sceneFocused) && world.alive(selectedEntity) &&
+        if (editAllowed && (hierarchyFocused || sceneFocused) && world.alive(selectedEntity) &&
             !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
-            !ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId) && ImGui::IsKeyPressed(ImGuiKey_Delete,false)) {
-            editor.finish(world);clicking=false;history.commit(world,selectedEntity);
-            deleteLevelObject(world,selectedEntity);selectedEntity={};
-            history.commit(world,selectedEntity);physics.reset();
+            !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) &&
+            ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+            editor.finish(world);
+            clicking = false;
+            history.commit(world, selectedEntity);
+            deleteLevelObject(world, selectedEntity);
+            selectedEntity = {};
+            history.commit(world, selectedEntity);
+            physics.reset();
         }
         if (!playMode.active()) {
             updateHierarchy(world);
-            history.observe(world,selectedEntity,editor.dragging() || ImGui::IsAnyItemActive() ||
-                ImGui::IsMouseDown(ImGuiMouseButton_Left));
+            history.observe(world,
+                            selectedEntity,
+                            editor.dragging() || ImGui::IsAnyItemActive() ||
+                                ImGui::IsMouseDown(ImGuiMouseButton_Left));
         }
         ImGui::EndDisabled();
-        if(renderedFrames==0)ImGui::SetWindowFocus("Assets");
+        if (renderedFrames == 0) {
+            ImGui::SetWindowFocus("Assets");
+        }
         ImGui::Render();
         finishEditorTheme(ImGui::GetDrawData());
         profiler.checkpoint(ProfilePart::Editor);
 
         // The time that has passed since the previous frame.
-        const Uint64 ticks   = SDL_GetTicksNS();
-        const float  seconds = static_cast<float>(ticks - lastTicks) * 1e-9f;
-        lastTicks            = ticks;
+        const Uint64 ticks = SDL_GetTicksNS();
+        const float seconds = static_cast<float>(ticks - lastTicks) * 1e-9f;
+        lastTicks = ticks;
 
-        if(cameraLooking && (!freeCamera || !sceneVisible || browser.dialog.pending() || projectDialog.pending() ||
-            !(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS))) {
-            cameraLooking=false;SDL_SetWindowRelativeMouseMode(window,false);
+        if (cameraLooking &&
+            (!freeCamera || !sceneVisible || browser.dialog.pending() || projectDialog.pending() ||
+             !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS))) {
+            cameraLooking = false;
+            SDL_SetWindowRelativeMouseMode(window, false);
         }
-        if (cameraLooking && !browser.dialog.pending() && !projectDialog.pending() && !cameraModifiersHeld(SDL_GetModState()) && !editor.dragging() && !ImGui::GetIO().WantTextInput &&
+        if (cameraLooking && !browser.dialog.pending() && !projectDialog.pending() &&
+            !cameraModifiersHeld(SDL_GetModState()) && !editor.dragging() &&
+            !ImGui::GetIO().WantTextInput &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
-            const float speed = cameraSpeed*(SDL_GetModState()&SDL_KMOD_SHIFT?cameraBoost:1.0f);
+            const float speed =
+                cameraSpeed * (SDL_GetModState() & SDL_KMOD_SHIFT ? cameraBoost : 1.0f);
             camera.move(static_cast<float>(keys[SDL_SCANCODE_W]) - keys[SDL_SCANCODE_S],
                         static_cast<float>(keys[SDL_SCANCODE_D]) - keys[SDL_SCANCODE_A],
                         static_cast<float>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],
                         speed * std::min(seconds, 0.1f));
         }
         profiler.checkpoint(ProfilePart::Other);
-        if (playMode.playing()) {scripts.update(std::min(seconds,0.25f));componentScripts.update(std::min(seconds,0.25f));}
+        if (playMode.playing()) {
+            scripts.update(std::min(seconds, 0.25f));
+            componentScripts.update(std::min(seconds, 0.25f));
+        }
         profiler.checkpoint(ProfilePart::Scripts);
+        LuaConsole::dispatchEvents();
+        renderer.setAssetRoot(browser.assets.root);
+        renderer.updateSkyboxFades(world, playMode.playing() ? std::min(seconds, .25f) : 0.0f);
         updateHierarchy(world);
         profiler.checkpoint(ProfilePart::Hierarchy);
-        physics.update(world, playMode.playing()?seconds:0.0f, [&](float dt){ scripts.fixedUpdate(dt);componentScripts.fixedUpdate(dt);updateHierarchy(world); });
+        physics.update(world, playMode.playing() ? seconds : 0.0f, [&](float dt) {
+            scripts.fixedUpdate(dt);
+            componentScripts.fixedUpdate(dt);
+            updateHierarchy(world);
+        });
         profiler.checkpoint(ProfilePart::Physics);
         updateHierarchy(world);
         profiler.checkpoint(ProfilePart::Hierarchy);
-        updateCameras(world,playMode.playing()?std::min(seconds,.25f):0);
+        updateCameras(world, playMode.playing() ? std::min(seconds, .25f) : 0);
         updateHierarchy(world);
-        if(!(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS))input.releaseMouse();
+        if (!(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
+            input.releaseMouse();
+        }
         profiler.checkpoint(ProfilePart::Cameras);
-        audio.update(world,browser.assets,playMode.playing());
-        physics.update(world,0); // collider poses follow parent motion before picking next frame
+        audio.update(world, browser.assets, playMode.playing());
+        physics.update(world, 0); // collider poses follow parent motion before picking next frame
 
         profiler.checkpoint(ProfilePart::Audio);
         int width = 0;
@@ -915,76 +1339,130 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
         SDL_GetWindowSizeInPixels(window, &width, &height);
         renderer.setAssetRoot(browser.assets.root);
         if (width > 0 && height > 0) {
-            if(sceneVisible) {
-            glBindFramebuffer(GL_FRAMEBUFFER,sceneSurface.framebuffer);
-            const float aspect=static_cast<float>(sceneSurface.width)/sceneSurface.height;
-            const Mat4 viewProjection = camera.viewProjection(aspect);
-            renderer.draw(world, viewProjection, sceneSurface.width, sceneSurface.height, camera.position());
-            if(browser.settings.alwaysShowColliders)world.each<Transform,Collider>([&](Entity e,const Transform& t,const Collider& c){
-                if(e!=selectedEntity)renderer.drawCollider(t,c,viewProjection,.25f);
-            });
-            if (!spawnMode && world.alive(selectedEntity)) {
-                const auto* transform = world.tryGet<Transform>(selectedEntity);
-                const auto* collider = world.tryGet<Collider>(selectedEntity);
-                if (transform && collider) renderer.drawCollider(*transform, *collider, viewProjection);
-                const auto* audioSource=world.tryGet<AudioSource>(selectedEntity);
-                if(transform && audioSource)renderer.drawAudioSource(*transform,*audioSource,viewProjection);
-                if(transform)if(const auto* selectedCamera=world.tryGet<Camera>(selectedEntity))renderer.drawCamera(*transform,*selectedCamera,viewProjection);
-            } else {
-                selectedEntity = {};
-            }
+            if (sceneVisible) {
+                glBindFramebuffer(GL_FRAMEBUFFER, sceneSurface.framebuffer);
+                const float aspect = static_cast<float>(sceneSurface.width) / sceneSurface.height;
+                const Mat4 viewProjection = camera.viewProjection(aspect);
+                renderer.draw(world,
+                              viewProjection,
+                              sceneSurface.width,
+                              sceneSurface.height,
+                              camera.position());
+                renderer.drawEditorGrid(browser.settings.grid, viewProjection);
+                if (browser.settings.alwaysShowColliders) {
+                    world.each<Transform, Collider>(
+                        [&](Entity e, const Transform& t, const Collider& c) {
+                            if (e != selectedEntity) {
+                                renderer.drawCollider(t, c, viewProjection, .25f);
+                            }
+                        });
+                }
+                if (world.alive(selectedEntity)) {
+                    const auto* transform = world.tryGet<Transform>(selectedEntity);
+                    const auto* collider = world.tryGet<Collider>(selectedEntity);
+                    if (transform && collider) {
+                        renderer.drawCollider(*transform, *collider, viewProjection);
+                    }
+                    const auto* audioSource = world.tryGet<AudioSource>(selectedEntity);
+                    if (transform && audioSource) {
+                        renderer.drawAudioSource(*transform, *audioSource, viewProjection);
+                    }
+                    if (transform) {
+                        if (const auto* selectedCamera = world.tryGet<Camera>(selectedEntity)) {
+                            renderer.drawCamera(*transform, *selectedCamera, viewProjection);
+                        }
+                    }
+                } else {
+                    selectedEntity = {};
+                }
             }
             profiler.checkpoint(ProfilePart::Scene);
-            if(gameVisible && activeCamera(world)!=Entity{}) {
-                const auto e=activeCamera(world);const auto& c=world.get<Camera>(e);const auto& t=world.get<Transform>(e);
-                glBindFramebuffer(GL_FRAMEBUFFER,gameSurface.framebuffer);
+            if (gameVisible && activeCamera(world) != Entity{}) {
+                const auto e = activeCamera(world);
+                const auto& c = world.get<Camera>(e);
+                const auto& t = world.get<Transform>(e);
+                glBindFramebuffer(GL_FRAMEBUFFER, gameSurface.framebuffer);
                 try {
-                    const int x=static_cast<int>(c.viewportX*gameSurface.width),y=static_cast<int>((1-c.viewportY-c.viewportHeight)*gameSurface.height);
-                    const auto gameVP=cameraMatrix(t,c);
-                    renderer.draw(world,gameVP,std::max(1,static_cast<int>(c.viewportWidth*gameSurface.width)),std::max(1,static_cast<int>(c.viewportHeight*gameSurface.height)),cameraEye(t,c),x,y,false);
-                    if(showGameColliders)world.each<Transform,Collider>([&](Entity,const Transform& transform,const Collider& collider){renderer.drawCollider(transform,collider,gameVP);});
-                    terminalErrors.report("Game rendering","");
-                }catch(const std::exception& error){terminalErrors.report("Game rendering",error.what());glClearColor(.1f,.1f,.1f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);}
+                    const int x = static_cast<int>(c.viewportX * gameSurface.width),
+                              y = static_cast<int>((1 - c.viewportY - c.viewportHeight) *
+                                                   gameSurface.height);
+                    const auto gameVP = cameraMatrix(t, c);
+                    renderer.draw(
+                        world,
+                        gameVP,
+                        std::max(1, static_cast<int>(c.viewportWidth * gameSurface.width)),
+                        std::max(1, static_cast<int>(c.viewportHeight * gameSurface.height)),
+                        cameraEye(t, c),
+                        x,
+                        y,
+                        false);
+                    if (showGameColliders) {
+                        world.each<Transform, Collider>(
+                            [&](Entity, const Transform& transform, const Collider& collider) {
+                                renderer.drawCollider(transform, collider, gameVP);
+                            });
+                    }
+                    terminalErrors.report("Game rendering", "");
+                } catch (const std::exception& error) {
+                    terminalErrors.report("Game rendering", error.what());
+                    glClearColor(.1f, .1f, .1f, 1);
+                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                }
             }
             profiler.checkpoint(ProfilePart::Game);
-            glBindFramebuffer(GL_FRAMEBUFFER,0);glViewport(0,0,width,height);
-            glDisable(GL_SCISSOR_TEST);glClearColor(.07f,.08f,.10f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, width, height);
+            glDisable(GL_SCISSOR_TEST);
+            glClearColor(.07f, .08f, .10f, 1);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
             profiler.checkpoint(ProfilePart::UI);
         }
 
         // Compare persisted content, not history depth: Undo back to the saved
         // state clears the marker, while Lua/camera edits also mark it dirty.
-        if(!playMode.active() && !editor.dragging()) {
-            projectDirty=currentProject.empty() ||
-                projectContentState(world,scripts.source(),camera)!=savedProjectState;
+        if (!playMode.active() && !editor.dragging()) {
+            projectDirty = currentProject.empty() ||
+                           projectContentState(world, {}, camera) != savedProjectState;
         }
-        const std::string title=projectWindowTitle(currentProject,projectDirty);
-        if(title!=lastWindowTitle){SDL_SetWindowTitle(window,title.c_str());lastWindowTitle=title;}
+        const std::string title = projectWindowTitle(currentProject, projectDirty);
+        if (title != lastWindowTitle) {
+            SDL_SetWindowTitle(window, title.c_str());
+            lastWindowTitle = title;
+        }
         profiler.checkpoint(ProfilePart::Other);
         SDL_GL_SwapWindow(window);
         profiler.checkpoint(ProfilePart::Present);
         profiler.end();
         if (width > 0 && height > 0) {
             ++renderedFrames;
-            if (smokeTest && renderedFrames >= smokeFrames){SDL_Log("Shutdown requested: completed %u automated frames",renderedFrames);running = false;}
+            if (smokeTest && renderedFrames >= smokeFrames) {
+                SDL_Log("Shutdown requested: completed %u automated frames", renderedFrames);
+                running = false;
+            }
         }
     }
-    levels.suspended=true;
-    activeProfiler=nullptr;
+    levels.suspended = true;
+    activeProfiler = nullptr;
     editor.finish(world);
-    audio.clear();componentScripts.stop();scripts.shutdown();input.releaseMouse();
+    audio.clear();
+    componentScripts.stop();
+    scripts.shutdown();
+    input.releaseMouse();
     return (!smokeTest || renderedFrames >= smokeFrames);
 }
 
-int engineMain(int argc, char** argv)
-{
+int engineMain(int argc, char** argv) {
     bool smokeTest = false;
-    for (int i=1; i<argc; ++i) {
-        if (std::strcmp(argv[i], "--smoke-test") == 0) smokeTest = true;
-        else { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Unknown argument: %s", argv[i]); return 1; }
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--smoke-test") == 0) {
+            smokeTest = true;
+        } else {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unknown argument: %s", argv[i]);
+            return 1;
+        }
     }
-    SDL_Log("Run mode: %s",smokeTest?"smoke test (120 frames)":"interactive editor");
+    SDL_Log("Run mode: %s", smokeTest ? "smoke test (120 frames)" : "interactive editor");
     SDL_Log("Initializing SDL video");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not start SDL: %s", SDL_GetError());
@@ -993,7 +1471,7 @@ int engineMain(int argc, char** argv)
 
     // Prefer 4x anti-aliasing so the grid lines look smooth, but not every
     // driver offers it: fall back to a plain framebuffer.
-    SDL_Window*   window  = nullptr;
+    SDL_Window* window = nullptr;
     SDL_GLContext context = nullptr;
     createWindow(4, window, context);
     if (!context) {
@@ -1001,7 +1479,8 @@ int engineMain(int argc, char** argv)
     }
     if (!context) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "Could not create an OpenGL 3.3 window: %s", SDL_GetError());
+                     "Could not create an OpenGL 3.3 window: %s",
+                     SDL_GetError());
         SDL_Quit();
         return 1;
     }
@@ -1011,14 +1490,21 @@ int engineMain(int argc, char** argv)
     // If the renderer cannot start, the reason is already logged: skip the
     // loop and exit with an error.
     SDL_Log("Initializing renderer");
-    Renderer   renderer;
+    Renderer renderer;
     const bool rendererReady = renderer.init();
     bool runSucceeded = false;
     if (rendererReady) {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        dockedEditor=true;
+        ImGui::GetIO().ConfigDebugHighlightIdConflicts = false;
+        GImGui->ErrorCallback = +[](ImGuiContext*, void*, const char* message) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "ImGui: %s", message);
+        };
+        ImGui::GetIO().ConfigErrorRecoveryEnableTooltip = false;
+        ImGui::GetIO().ConfigErrorRecoveryEnableAssert = false;
+        ImGui::GetIO().ConfigErrorRecoveryEnableDebugLog = true;
+        dockedEditor = true;
         ImGui::GetIO().IniFilename = "legacy-layout.ini";
         applyEditorTheme();
         if (!ImGui_ImplSDL3_InitForOpenGL(window, context) ||
@@ -1042,18 +1528,28 @@ int engineMain(int argc, char** argv)
     SDL_GL_DestroyContext(context);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    if (smokeTest && runSucceeded) SDL_Log("Smoke test passed: rendered 120 frames and shut down cleanly");
+    if (smokeTest && runSucceeded) {
+        SDL_Log("Smoke test passed: rendered 120 frames and shut down cleanly");
+    }
     return rendererReady && runSucceeded ? 0 : 1;
 }
 
-int main(int argc,char** argv){
+int main(int argc, char** argv) {
     EngineLog::initialize();
     SDL_Log("Starting LegacyEngine");
-    int result=1;
-    try{result=engineMain(argc,argv);}
-    catch(const std::exception& error){SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION,"Unhandled exception: %s",error.what());}
-    catch(...){SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION,"Unhandled non-standard exception");}
-    if(result==0)SDL_Log("LegacyEngine shut down cleanly");
-    else SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"LegacyEngine exited with error code %d",result);
+    int result = 1;
+    try {
+        result = engineMain(argc, argv);
+    } catch (const std::exception& error) {
+        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Unhandled exception: %s", error.what());
+    } catch (...) {
+        SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "Unhandled non-standard exception");
+    }
+    if (result == 0) {
+        SDL_Log("LegacyEngine shut down cleanly");
+    } else {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION, "LegacyEngine exited with error code %d", result);
+    }
     return result;
 }

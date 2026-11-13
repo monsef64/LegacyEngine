@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '../../..');
 const text = fs.readFileSync(path.join(root, 'src/scripting/lua_definitions.hpp'), 'utf8');
-const api = [...text.matchAll(/\{"([^"]+)","([^"]+)"\}/g)].map(m => ({ name: m[1], signature: m[2] }));
+const api = [...text.matchAll(/\{\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\}/g)].map(m => ({ name: m[1], signature: m[2] }));
 fs.writeFileSync(path.join(__dirname, '../server/api.json'), JSON.stringify(api, null, 2) + '\n');
 const definitions = fs.readFileSync(path.join(root, 'scripts/definitions/legacyengine.lua'), 'utf8');
 const members = {};let owner = '';

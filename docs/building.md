@@ -34,3 +34,18 @@ archives include it. Keep that directory beside the engine when moving binaries;
 shader files are loaded from the executable's directory, not the working directory.
 Missing shader data is reported as an initialization/render error. Edit these
 files and rebuild to refresh the runtime copy; no C++ shader strings are maintained.
+
+## Offline scripting reference
+
+The release engine package includes `docs/index.html` and
+`docs/scripting-reference.html`. Open **Help > Documentation** or
+**Help > Scripting Reference** in the engine; both work offline and locate the
+manual beside the executable, even after opening a project elsewhere.
+
+For a local build, install `docs/requirements.txt` then run
+`python docs/build.py --output build/docs` beside `build/LegacyEngine`.
+If changing scripting APIs, update `scripts/definitions/legacyengine.lua` and
+`docs/generate_reference.py` examples, then run
+`python docs/generate_reference.py`. Documentation tests reject a stale reference
+or an API without an example. The release workflow builds the complete HTML site,
+includes it in the engine package, and publishes a standalone docs ZIP.

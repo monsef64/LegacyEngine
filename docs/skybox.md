@@ -53,3 +53,35 @@ end
 exports now also accept `.hdr` for skyboxes, still without a texture-loading API.
 Use `setHDR(nil)` or `setFace(name, nil)` to clear a slot. The scripting methods
 and properties are included in `.ls` editor/VS Code completion.
+
+## Smooth scripted crossfades
+
+Create a second Skybox GameObject, configure its six textures or HDR panorama,
+and disable it until needed. During Play:
+
+```lua
+function onStart()
+    local destination = GameObject.find("Evening Sky")
+    fadeSkybox(destination, 0.5)
+    -- Equivalent when you have the active component:
+    -- self:getComponent(Skybox):fadeTo(destination, 0.5)
+end
+```
+
+`fadeSkybox(destination, speed)` uses the first enabled skybox as the source.
+`sourceSky:fadeTo(destination, speed)` selects the source explicitly. Destination
+may be a GameObject or Skybox component. Speed is normalized progress per second:
+`0.5` takes two seconds, `2` takes half a second. Values must be finite and positive
+(up to 1000). Smoothstep easing avoids abrupt start/stop; separate cached renderers
+blend the source and destination images, including transitions between HDR and
+six-face skies. This is a visual crossfade, not dynamic environment lighting.
+
+At completion the source is disabled and the destination is enabled. Neither
+component's textures, colors or identity is overwritten, so you can fade back.
+Use `fadeSkybox(skybox1, skybox2, speed)` to specify both objects explicitly.
+Rendering uses snapshots captured at fade start; avoid editing either sky during
+a transition. Deleting the destination or removing its Skybox cancels the fade
+and retains the source. Only one skybox fade may run in a world at a time.
+The effect pauses with Play and is discarded on Stop. Destination assets are prepared before progress advances. Failed decoding cancels
+the pending transition, keeps the source sky, and reports the error through
+existing skybox diagnostics. Use valid, imported textures.

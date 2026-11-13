@@ -1,5 +1,6 @@
 // Explicit graphical integration test, run under Xvfb in CI (not headless CTest).
 #include "rendering/renderer.hpp"
+#include "scene/skybox_transition.hpp"
 #include "editor/rotation_editor.hpp"
 #include "scripting/lua_console.hpp"
 #include "input/input.hpp"
@@ -133,9 +134,16 @@ int main(){
     sky.color={.5f,1,1};auto tinted=skyRead({},{1,0,0});assert(tinted[0]>=126 && tinted[0]<=129);sky.color={1,1,1};
     {std::ofstream hdr(assets.root/"studio.hdr",std::ios::binary);hdr<<"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 2 +X 2\n";for(int i=0;i<4;++i){hdr.put(char(128));hdr.put(char(128));hdr.put(char(128));hdr.put(char(129));}}
     sky.type=1;sky.hdr="studio.hdr";auto hdrPixel=skyRead({},{0,0,-1});for(auto c:hdrPixel)assert(c>=184 && c<=188);assert(renderer.skyboxError().empty());
+    auto targetSky=skyWorld.create();Skybox destination=sky;destination.color={0,0,0};destination.enabled=false;skyWorld.add(targetSky,destination);
+    assert(beginSkyboxFade(skyWorld,skyEntity,targetSky,1)==nullptr);updateSkyboxTransitions(skyWorld,.5f);
+    auto halfSky=skyRead({},{0,0,-1});for(auto c:halfSky)assert(c>=91 && c<=95);
+    assert(!glIsEnabled(GL_BLEND));
+    updateSkyboxTransitions(skyWorld,.5f);auto blackSky=skyRead({},{0,0,-1});for(auto c:blackSky)assert(c<=1);
+    assert(!skyWorld.get<Skybox>(skyEntity).enabled && skyWorld.get<Skybox>(targetSky).enabled);
+    skyWorld.get<Skybox>(targetSky).color={1,1,1};
     auto foreground=skyWorld.create();skyWorld.add(foreground,Transform{{0,0,-3}});skyWorld.add(foreground,MeshRenderer{cube,{1,0,0}});
     auto objectPixel=skyRead({},{0,0,-1});assert(objectPixel[1]<10 && objectPixel[2]<10);skyWorld.destroy(foreground);
-    sky.enabled=false;auto disabled=skyRead({},{0,0,-1});assert(disabled[0]<40 && disabled[1]<40);
+    skyWorld.get<Skybox>(targetSky).enabled=false;auto disabled=skyRead({},{0,0,-1});assert(disabled[0]<40 && disabled[1]<40);
     std::filesystem::remove_all(temp);
     renderer.shutdown();SDL_GL_DestroyContext(context);SDL_DestroyWindow(window);SDL_Quit();
 }

@@ -4,18 +4,20 @@
 
 #pragma once
 
+#include "audio/audio_source.hpp"
+#include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "lighting/light.hpp"
 #include "materials/material.hpp"
-#include "audio/audio_source.hpp"
-#include "core/ecs.hpp"
 #include "rendering/mesh.hpp"
 #include "rendering/skybox.hpp"
 #include <string>
 #include <vector>
 
 // Human-readable label used by the level object list.
-struct ObjectName { std::string value; };
+struct ObjectName {
+    std::string value;
+};
 
 // Where the entity is, how it is turned and how big it is.
 struct Transform {
@@ -26,13 +28,13 @@ struct Transform {
 
 // Draws a mesh at the entity's Transform.
 struct MeshRenderer {
-    MeshHandle mesh;                     // from Renderer::createMesh()
-    Vec3       color = {1.0f, 1.0f, 1.0f}; // red, green and blue, each from 0 to 1
-    bool       checkerboard = false;         // repeating 1 m squares in local XZ
-    float      specular = 0.0f;              // highlight strength (0 is matte)
-    std::string material; // project-relative .mat; empty uses legacy Diffuse values
+    MeshHandle mesh;                 // from Renderer::createMesh()
+    Vec3 color = {1.0f, 1.0f, 1.0f}; // red, green and blue, each from 0 to 1
+    bool checkerboard = false;       // repeating 1 m squares in local XZ
+    float specular = 0.0f;           // highlight strength (0 is matte)
+    std::string material;            // project-relative .mat; empty uses legacy Diffuse values
     MaterialProperties materialValues;
-    unsigned materialOverrides=0; // per-instance script overrides; never edits shared asset
+    unsigned materialOverrides = 0; // per-instance script overrides; never edits shared asset
 };
 
 enum class ColliderShape { Box, Sphere, Capsule, Cone };
@@ -43,13 +45,14 @@ enum class ColliderShape { Box, Sphere, Capsule, Cone };
 // On its own, a collider makes an obstacle that never moves by itself (a floor,
 // a wall). Add a RigidBody as well for an object that falls and gets pushed.
 struct Collider {
-    Vec3  size = {1.0f, 1.0f, 1.0f}; // metres, before the Transform's scale
-    Vec3  center;                    // of the box, measured from the entity's origin
-    float friction   = 0.5f;         // 0 slides like ice, 1 grips
-    float bounciness = 0.0f;         // 0 does not bounce, 1 bounces back all the way
+    Vec3 size = {1.0f, 1.0f, 1.0f}; // metres, before the Transform's scale
+    Vec3 center;                    // of the box, measured from the entity's origin
+    float friction = 0.5f;          // 0 slides like ice, 1 grips
+    float bounciness = 0.0f;        // 0 does not bounce, 1 bounces back all the way
     ColliderShape shape = ColliderShape::Box;
     // Sphere: radius. Capsule: radius and distance between hemisphere centres, along Y.
-    // Use uniform Transform scale for round shapes (non-uniform scales use the largest radial scale).
+    // Use uniform Transform scale for round shapes (non-uniform scales use the largest radial
+    // scale).
     float radius = 0.5f;
     float height = 1.0f;
 };
@@ -63,35 +66,51 @@ using BoxCollider = Collider;
 // Game code stays in charge: assign to the Transform or to the velocities below
 // and the simulation carries on from the new values.
 struct RigidBody {
-    float mass       = 1.0f; // kilograms; at 0, gravity and pushes do not move it
-    bool  useGravity = true; // switch off to keep it floating
-    Vec3  linearVelocity;    // metres per second
-    Vec3  angularVelocity;   // radians per second around each axis
+    float mass = 1.0f;      // kilograms; at 0, gravity and pushes do not move it
+    bool useGravity = true; // switch off to keep it floating
+    Vec3 linearVelocity;    // metres per second
+    Vec3 angularVelocity;   // radians per second around each axis
 };
 
 // Primary LegacyScript and additional attachments, all relative to project assets.
 struct ScriptField {
-    std::string name,type,text;
-    float number=0;bool boolean=false;
+    std::string name, type, text;
+    float number = 0;
+    bool boolean = false;
     Entity entity{};
 };
-struct EditorComponentPayload {Entity entity;int type;};
-struct ScriptAttachment { std::string path;bool enabled=true;std::vector<ScriptField> fields; };
-struct LuaScript { std::string path; bool enabled=true; std::vector<ScriptAttachment> additional;std::vector<ScriptField> fields; };
+struct EditorComponentPayload {
+    Entity entity;
+    int type;
+};
+struct ScriptAttachment {
+    std::string path;
+    bool enabled = true;
+    std::vector<ScriptField> fields;
+};
+struct LuaScript {
+    std::string path;
+    bool enabled = true;
+    std::vector<ScriptAttachment> additional;
+    std::vector<ScriptField> fields;
+};
 inline std::vector<ScriptAttachment> scriptAttachments(const LuaScript& scripts) {
     std::vector<ScriptAttachment> result;
-    if(!scripts.path.empty())result.push_back({scripts.path,scripts.enabled,scripts.fields});
-    result.insert(result.end(),scripts.additional.begin(),scripts.additional.end());return result;
+    if (!scripts.path.empty()) {
+        result.push_back({scripts.path, scripts.enabled, scripts.fields});
+    }
+    result.insert(result.end(), scripts.additional.begin(), scripts.additional.end());
+    return result;
 }
 
 // Cameras look along local -Z; rotation lives in the GameObject Transform.
 struct Camera {
-    bool active=false, orthographic=false;
-    float fieldOfView=60, nearClip=.1f, farClip=1000, orthographicSize=10;
-    float viewportX=0,viewportY=0,viewportWidth=1,viewportHeight=1;
+    bool active = false, orthographic = false;
+    float fieldOfView = 60, nearClip = .1f, farClip = 1000, orthographicSize = 10;
+    float viewportX = 0, viewportY = 0, viewportWidth = 1, viewportHeight = 1;
     Entity targetEntity{}; // generation-safe target, or a fixed world-space point
-    Vec3 target,followOffset;
-    bool tracking=false,following=false;
-    float shakeIntensity=0,shakeRemaining=0,shakePhase=0;
-    float aspect=16.0f/9; // Current Game viewport aspect, supplied by the editor.
+    Vec3 target, followOffset;
+    bool tracking = false, following = false;
+    float shakeIntensity = 0, shakeRemaining = 0, shakePhase = 0;
+    float aspect = 16.0f / 9; // Current Game viewport aspect, supplied by the editor.
 };

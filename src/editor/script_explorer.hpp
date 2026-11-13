@@ -1,0 +1,55 @@
+#pragma once
+#include "assets/assets.hpp"
+#include <imgui.h>
+#include <map>
+#include <optional>
+
+struct ScriptTree {
+    std::map<std::string, ScriptTree> folders;
+    std::vector<std::string> files;
+    void add(const std::filesystem::path& path) {
+        auto it = path.begin();
+        if (it == path.end()) {
+            return;
+        }
+        const auto first = it->string();
+        ++it;
+        if (it == path.end()) {
+            files.push_back(first);
+            return;
+        }
+        std::filesystem::path rest;
+        for (; it != path.end(); ++it) {
+            rest /= *it;
+        }
+        folders[first].add(rest);
+    }
+    std::optional<std::string> draw(const std::string& selected,
+                                    const std::string& prefix = "") const {
+        std::optional<std::string> result;
+        for (const auto& [name, folder] : folders) {
+            if (ImGui::TreeNode(name.c_str())) {
+                if (auto chosen = folder.draw(selected, prefix + name + "/")) {
+                    result = chosen;
+                }
+                ImGui::TreePop();
+            }
+        }
+        for (const auto& name : files) {
+            const auto path = prefix + name;
+            if (ImGui::Selectable(name.c_str(), selected == path)) {
+                result = path;
+            }
+        }
+        return result;
+    }
+};
+inline ScriptTree buildScriptTree(const AssetManager& assets) {
+    ScriptTree tree;
+    for (const auto& file : assets.files()) {
+        if (AssetManager::script(file)) {
+            tree.add(file);
+        }
+    }
+    return tree;
+}

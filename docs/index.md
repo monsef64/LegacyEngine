@@ -1,5 +1,8 @@
 # LegacyEngine documentation
 
+[Complete Scripting Reference: every function, method and event with examples](scripting-reference.md)
+
+
 LegacyEngine is a C++17 3D editor with LegacyScript scripting, built on SDL3 and OpenGL.
 
 ![LegacyEngine editor](screenshot.png)

@@ -13,7 +13,7 @@
 struct Vertex {
     Vec3 position;
     Vec3 normal; // unit vector pointing away from the surface; lighting needs it
-    float u=0,v=0;
+    float u = 0, v = 0;
 };
 
 struct MeshData {
@@ -22,7 +22,7 @@ struct MeshData {
         Lines,     // every two vertices form one line, drawn in a flat colour
     };
 
-    Topology            topology = Topology::Triangles;
+    Topology topology = Topology::Triangles;
     std::vector<Vertex> vertices;
 };
 
@@ -52,10 +52,10 @@ MeshData makeCapsule(float radius, float height);
 constexpr int kConeSegments = 32;
 MeshData makeCone(float radius, float height);
 inline std::vector<Vec3> coneHullVertices() {
-    std::vector<Vec3> vertices{{0,0.5f,0}};
-    for(int i=0;i<kConeSegments;++i) {
-        const float a=2*kPi*i/kConeSegments;
-        vertices.push_back({0.5f*std::cos(a),-0.5f,0.5f*std::sin(a)});
+    std::vector<Vec3> vertices{{0, 0.5f, 0}};
+    for (int i = 0; i < kConeSegments; ++i) {
+        const float a = 2 * kPi * i / kConeSegments;
+        vertices.push_back({0.5f * std::cos(a), -0.5f, 0.5f * std::sin(a)});
     }
     return vertices;
 }

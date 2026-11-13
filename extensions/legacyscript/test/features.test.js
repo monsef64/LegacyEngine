@@ -73,3 +73,10 @@ test('level transition globals have completion and hover',()=>{
   assert(result.some(x=>x.label===name));assert(f.hover(...input(name)));
  }
 });
+test('custom events, level callbacks and skybox fades are discoverable',()=>{
+ const result=f.completion(...input(''));
+ for(const name of ['on','off','emit','onLevelLoaded','onLevelFailedToLoad','fadeSkybox']){
+  assert(result.some(x=>x.label===name));assert(f.hover(...input(name)));
+ }
+ assert(f.completion(...input('self:getComponent(Skybox):')).some(x=>x.label==='fadeTo'));
+});
