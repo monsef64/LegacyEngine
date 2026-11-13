@@ -80,3 +80,10 @@ test('custom events, level callbacks and skybox fades are discoverable',()=>{
  }
  assert(f.completion(...input('self:getComponent(Skybox):')).some(x=>x.label==='fadeTo'));
 });
+
+test('activity, waits, mouse and audio events are discoverable',()=>{
+ const globals=f.completion(...input(''));
+ for(const name of ['wait','waitForSeconds','onMouseDown','onMouseUp','onMouseEnter','onMouseExit','onMouseOver','onAudioStarted','onAudioFinished','onAudioPaused','onAudioResumed','onAudioStopped'])assert(globals.some(x=>x.label===name));
+ const methods=f.completion(...input('self:'));for(const name of ['setActive','isActive'])assert(methods.some(x=>x.label===name));
+ const audio=f.completion(...input('local audio = self:getComponent(AudioSource)\naudio.'));assert(audio.some(x=>x.label==='onAudioFinished'));
+});

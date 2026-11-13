@@ -12,6 +12,11 @@ extern "C" {
 #include <cstring>
 
 namespace {
+struct AudioWaitToken {
+    World* world;
+    Entity entity;
+    int event;
+};
 struct Handle {
     LuaScene* scene;
     World* world;
@@ -333,6 +338,16 @@ LuaScene::LuaScene(lua_State* L,
             lua_setglobal(L, "BoxCollider");
         }
         lua_setglobal(L, types[i]);
+    }
+    luaL_newmetatable(L, "AudioWaitToken");
+    lua_pushliteral(L, "Audio event");
+    lua_setfield(L, -2, "__metatable");
+    lua_pop(L, 1);
+    for (int seconds = 0; seconds < 2; ++seconds) {
+        lua_pushlightuserdata(L, this);
+        lua_pushboolean(L, seconds);
+        lua_pushcclosure(L, waitAPI, 2);
+        lua_setglobal(L, seconds ? "waitForSeconds" : "wait");
     }
     lua_pushlightuserdata(L, this);
     lua_pushcclosure(L, audioApi, 1);
@@ -680,7 +695,9 @@ int LuaScene::objectIndex(lua_State* L) {
         const char* name;
         int operation;
     };
-    const Method objectMethods[]{{"setPosition", 200},
+    const Method objectMethods[]{{"setActive", 210},
+                                 {"isActive", 211},
+                                 {"setPosition", 200},
                                  {"getPosition", 201},
                                  {"setRotation", 202},
                                  {"getRotation", 203},
@@ -834,6 +851,18 @@ int LuaScene::componentIndex(lua_State* L) {
         return 1;
     }
     if (c.type == 7) {
+        for (int event = 0; event < 5; ++event) {
+            if (!std::strcmp(key, AudioSource::eventNames[event])) {
+                if (!c.object.world->has<AudioSource>(c.object.entity)) {
+                    return luaL_error(L, "AudioSource no longer exists");
+                }
+                auto* token =
+                    static_cast<AudioWaitToken*>(lua_newuserdatauv(L, sizeof(AudioWaitToken), 0));
+                *token = {c.object.world, c.object.entity, event};
+                luaL_setmetatable(L, "AudioWaitToken");
+                return 1;
+            }
+        }
         if (!c.object.world->alive(c.object.entity) ||
             !c.object.world->has<AudioSource>(c.object.entity)) {
             return luaL_error(L, "AudioSource no longer exists");
@@ -1067,9 +1096,38 @@ int LuaScene::vectorNewIndex(lua_State* L) {
     *coordinate(f, i) = number(L, 3);
     return 0;
 }
+void LuaScene::resume(Task& task, int arguments) {
+    auto* main = state_;
+    auto* previous = currentTask_;
+    state_ = task.thread;
+    currentTask_ = &task;
+    int results = 0;
+    int status = lua_resume(task.thread, main, arguments, &results);
+    state_ = main;
+    currentTask_ = previous;
+    if (status != LUA_OK && status != LUA_YIELD) {
+        luaL_traceback(main, task.thread, lua_tostring(task.thread, -1), 1);
+        error_(lua_tostring(main, -1));
+        lua_pop(main, 1);
+        active_ = false;
+    }
+    if (status != LUA_YIELD) {
+        task.seconds = -1;
+    }
+    lua_settop(task.thread, 0);
+}
 void LuaScene::call(const char* name, int reference, float dt, bool delta) {
+    if (tasks_.size() >= 128) {
+        error_("Too many waiting callbacks");
+        active_ = false;
+        return;
+    }
+    for (const auto& task : tasks_) {
+        if (task.callback == name && task.objectReference == reference && task.seconds >= 0) {
+            return;
+        }
+    }
     const int base = lua_gettop(state_);
-    lua_pushcfunction(state_, trace);
     if (reference == LUA_NOREF) {
         lua_getglobal(state_, name);
     } else {
@@ -1083,17 +1141,118 @@ void LuaScene::call(const char* name, int reference, float dt, bool delta) {
         lua_settop(state_, base);
         return;
     }
+    auto* thread = lua_newthread(state_);
+    int ref = luaL_ref(state_, LUA_REGISTRYINDEX);
+    lua_xmove(state_, thread, 1);
     if (delta) {
-        lua_pushnumber(state_, dt);
+        lua_pushnumber(thread, dt);
     }
-    if (lua_pcall(state_, delta ? 1 : 0, 0, base + 1) != LUA_OK) {
-        const char* e = lua_tostring(state_, -1);
-        error_(e ? e : "Lua callback error");
-        active_ = false;
+    tasks_.push_back({thread, ref, reference, name});
+    auto it = std::prev(tasks_.end());
+    it->owner = selfEntity_;
+    if (reference != LUA_NOREF) {
+        for (const auto& entry : entries_) {
+            if (entry.reference == reference) {
+                it->owner = entry.entity;
+                break;
+            }
+        }
+    }
+    resume(*it, delta ? 1 : 0);
+    if (it->seconds < 0) {
+        luaL_unref(state_, LUA_REGISTRYINDEX, it->reference);
+        tasks_.erase(it);
     }
     lua_settop(state_, base);
 }
+void LuaScene::advanceTasks(float dt) {
+    const auto count = tasks_.size();
+    auto it = tasks_.begin();
+    for (std::size_t i = 0; i < count && it != tasks_.end(); ++i) {
+        auto current = it++;
+        if (current->owner != Entity{}) {
+            if (!world_.alive(current->owner)) {
+                luaL_unref(state_, LUA_REGISTRYINDEX, current->reference);
+                tasks_.erase(current);
+                continue;
+            }
+            if (!isActive(world_, current->owner)) {
+                continue;
+            }
+        }
+        bool ready = false;
+        if (current->audioEvent >= 0) {
+            auto* audio = world_.tryGet<AudioSource>(current->audioEntity);
+            if (!audio) {
+                luaL_unref(state_, LUA_REGISTRYINDEX, current->reference);
+                tasks_.erase(current);
+                continue;
+            }
+            ready = audio->eventSequence[current->audioEvent] != current->sequence;
+        } else {
+            current->seconds -= std::max(0.f, dt);
+            ready = current->seconds <= 0;
+        }
+        if (ready) {
+            current->seconds = 0;
+            current->audioEvent = -1;
+            resume(*current, 0);
+        }
+        if (current->seconds < 0) {
+            luaL_unref(state_, LUA_REGISTRYINDEX, current->reference);
+            tasks_.erase(current);
+        }
+        if (!active_) {
+            break;
+        }
+    }
+}
+int LuaScene::waitAPI(lua_State* L) {
+    auto& scene = *static_cast<LuaScene*>(lua_touserdata(L, lua_upvalueindex(1)));
+    if (!scene.currentTask_ || scene.stopping_ || scene.currentTask_->callback == "onDestroy") {
+        return luaL_error(L, "wait is only supported inside running lifecycle/object callbacks");
+    }
+    if (lua_toboolean(L, lua_upvalueindex(2))) {
+        float seconds = number(L, 1);
+        if (seconds < 0 || seconds > 86400) {
+            return luaL_error(L, "Wait seconds must be between 0 and 86400");
+        }
+        scene.currentTask_->seconds = seconds;
+    } else {
+        // Event tokens are opaque, generation-safe AudioSource references.
+        auto* token = static_cast<struct AudioWaitToken*>(luaL_checkudata(L, 1, "AudioWaitToken"));
+        if (token->world != &scene.world_) {
+            return luaL_error(L, "Audio event belongs to another world");
+        }
+        auto* audio = scene.world_.tryGet<AudioSource>(token->entity);
+        if (!audio) {
+            return luaL_error(L, "AudioSource no longer exists");
+        }
+        scene.currentTask_->audioEntity = token->entity;
+        scene.currentTask_->audioEvent = token->event;
+        scene.currentTask_->sequence = audio->eventSequence[token->event];
+    }
+    return lua_yield(L, 0);
+}
+void LuaScene::objectEvent(Entity entity, const char* name) {
+    if (!active_ || !isActive(world_, entity)) {
+        return;
+    }
+    if (selfEntity_ == entity) {
+        call(name, LUA_NOREF, 0, false);
+    }
+    const auto count = entries_.size();
+    for (std::size_t i = 0; i < count && active_; ++i) {
+        if (entries_[i].entity == entity && !entries_[i].destroying) {
+            call(name, entries_[i].reference, 0, false);
+        }
+    }
+}
 void LuaScene::start() {
+    for (auto& task : tasks_) {
+        luaL_unref(state_, LUA_REGISTRYINDEX, task.reference);
+    }
+    tasks_.clear();
     started_ = true;
     active_ = true;
     call("onStart", LUA_NOREF, 0, false);
@@ -1123,7 +1282,7 @@ void LuaScene::tick(const char* name, float dt) {
     }
     if (active_) {
         for (std::size_t i = 0; i < count && active_; ++i) {
-            if (entries_[i].destroying || !world_.alive(entries_[i].entity) ||
+            if (entries_[i].destroying || !isActive(world_, entries_[i].entity) ||
                 entries_[i].started) {
                 continue;
             }
@@ -1134,7 +1293,7 @@ void LuaScene::tick(const char* name, float dt) {
             call(name, LUA_NOREF, dt, true);
         }
         for (std::size_t i = 0; i < count && active_; ++i) {
-            if (entries_[i].destroying || !world_.alive(entries_[i].entity)) {
+            if (entries_[i].destroying || !isActive(world_, entries_[i].entity)) {
                 continue;
             }
             call(name, entries_[i].reference, dt, true);
@@ -1150,10 +1309,19 @@ void LuaScene::tick(const char* name, float dt) {
     }
 }
 void LuaScene::update(float dt) {
+    if (selfEntity_ != Entity{} && !isActive(world_, selfEntity_)) {
+        return;
+    }
+    if (active_) {
+        advanceTasks(dt);
+    }
     tick("onUpdate", dt);
     updateHierarchy(world_);
 }
 void LuaScene::fixedUpdate(float dt) {
+    if (selfEntity_ != Entity{} && !isActive(world_, selfEntity_)) {
+        return;
+    }
     tick("onFixedUpdate", dt);
     updateHierarchy(world_);
 }
@@ -1178,10 +1346,15 @@ void LuaScene::stop() {
         luaL_unref(state_, LUA_REGISTRYINDEX, entries_[i].reference);
     }
     entries_.clear();
+    for (auto& task : tasks_) {
+        luaL_unref(state_, LUA_REGISTRYINDEX, task.reference);
+    }
+    tasks_.clear();
     stopping_ = false;
 }
 
 void LuaScene::setSelf(Entity entity) {
+    selfEntity_ = entity;
     pushObject(entity);
     lua_setglobal(state_, "self");
 }

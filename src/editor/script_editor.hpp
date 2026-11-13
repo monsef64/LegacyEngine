@@ -122,6 +122,9 @@ class ScriptEditor {
     std::string_view source() const {
         return source_.data();
     }
+    LuaConsole& console() {
+        return console_;
+    }
     const LuaConsole& console() const {
         return console_;
     }

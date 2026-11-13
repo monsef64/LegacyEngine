@@ -35,12 +35,57 @@ See [LegacyScript guide](scripting.md), [input/audio details](audio-input.md),
   4096-byte strings. Check the boolean returned by `emit` and remove unneeded listeners.
 - Level transition functions return acceptance and an optional error, not completion.
 - Lifecycle failures stop the failing script. Errors retain source filename/line and traceback.
+- Mouse callbacks target the nearest active Collider under the Game camera in the Game view.
+  Enter/Exit track hover, Over runs every playing frame, Down targets a left press and
+  Up targets the object that received Down, even if released outside it.
+- Audio callbacks target scripts attached to the AudioSource owner. Finished means natural
+  primary-clip completion, not pause, explicit stop, fade-out stop or one-shot completion.
+- `waitForSeconds` and `wait(audio.onAudioFinished)` suspend lifecycle/object callbacks only.
+  Do not use them at file top-level, in custom event listeners or onDestroy. Each callback
+  has at most one pending invocation. Other callbacks keep running; Play pause or object
+  deactivation freezes timers, and Stop cancels waits. Audio waits observe the next event,
+  not one that happened before subscribing. A looping clip never naturally finishes.
+- `self:setActive(false)` hides an object, disables its physics/audio and pauses attached
+  script updates/events/waits. Parents propagate inactivity; another active script or the
+  Inspector can reactivate it. State persists in project/level saves and undo history.
 - `debug.error()` logs without throwing. Memory/instruction limits still apply.
 
 The sandbox also exposes Lua 5.4 base, table, string, math and utf8 computation libraries.
 It does not expose filesystem/process/module loading, coroutines, pcall/xpcall or the
 standard introspection debug library. Those standard computation-library APIs are not
 engine functions; this reference covers the engine-owned API.
+
+## Callback and wait quick guide
+
+| API | Where to define / call it | Requirement |
+| --- | --- | --- |
+| `onMouseDown/Up/Enter/Exit/Over()` | Global function in the target object’s attached script, or `object.onMouseDown = function() ... end` | Active Collider and Game camera |
+| `onAudioStarted/Finished/Paused/Resumed/Stopped()` | Global function in the AudioSource owner’s attached script, or object callback | AudioSource on that owner |
+| `waitForSeconds(seconds)` | Inside a running lifecycle/object callback | Finite 0–86400 seconds |
+| `wait(audio.onAudioFinished)` | Inside a running lifecycle/object callback | Live AudioSource; next event only |
+
+AudioSource event properties are opaque `AudioEvent` tokens. Define the callback as
+`function onAudioFinished() ... end`; pass `audio.onAudioFinished` to `wait` without
+parentheses. Do not assign a function to the AudioSource event property.
+
+Waits are not supported at file top-level, in custom/level event listeners, or in
+`onDestroy`. Play pause and object inactivity freeze timer progress. The engine allows
+at most 128 pending callbacks per runtime and coalesces repeated invocations of the
+same waiting callback. Shutdown/reset cancels continuations; variables survive a pause.
+
+```lua
+function onStart()
+    local audio = self:getComponent(AudioSource)
+    if not audio then return end
+    waitForSeconds(5)
+    audio:play()
+    wait(audio.onAudioFinished)
+    debug.log("Continue after natural playback completion")
+end
+```
+
+For complete setup and troubleshooting, see [mouse and audio events](audio-input.md#gameobject-mouse-callbacks)
+and [object activity and waits](scripting.md#object-activity-mouseaudio-callbacks-and-waits).
 
 ## Global functions and callbacks
 
@@ -896,6 +941,159 @@ evening:setEnabled(false)
 fadeSkybox(skybox1, skybox2, 0.5)
 ```
 
+### onMouseDown
+
+`onMouseDown() - targeted GameObject callback`
+
+Runs on the nearest active Collider hit by a left-button press in Game. Requires an active Game camera; this is object picking, not a global input hook.
+
+```lua
+function onMouseDown()
+    debug.log("onMouseDown", self:getName())
+end
+```
+
+### onMouseUp
+
+`onMouseUp() - targeted GameObject callback`
+
+Runs on the object that received the matching Down, even if the pointer has moved off it. No callback is delivered after the object is destroyed or inactive.
+
+```lua
+function onMouseUp()
+    debug.log("onMouseUp", self:getName())
+end
+```
+
+### onMouseEnter
+
+`onMouseEnter() - targeted GameObject callback`
+
+Runs once when the hovered Collider changes to this object. Picking uses the active camera viewport; a locked cursor uses its center.
+
+```lua
+function onMouseEnter()
+    debug.log("onMouseEnter", self:getName())
+end
+```
+
+### onMouseExit
+
+`onMouseExit() - targeted GameObject callback`
+
+Runs when hover leaves this active object, including moving out of Game. Deactivated objects do not receive callbacks.
+
+```lua
+function onMouseExit()
+    debug.log("onMouseExit", self:getName())
+end
+```
+
+### onMouseOver
+
+`onMouseOver() - targeted GameObject callback`
+
+Runs every playing frame while this object is the nearest active Collider under the Game pointer. It does not require a pressed button.
+
+```lua
+function onMouseOver()
+    debug.log("onMouseOver", self:getName())
+end
+```
+
+### onAudioStarted
+
+`onAudioStarted() - targeted GameObject callback`
+
+Runs on scripts attached to the AudioSource owner after play/fadeIn starts or restarts the primary clip. One-shots do not produce this primary-clip event.
+
+```lua
+function onAudioStarted()
+    debug.log("onAudioStarted", self:getName())
+end
+```
+
+### onAudioFinished
+
+`onAudioFinished() - targeted GameObject callback`
+
+Runs on the AudioSource owner when its non-looping primary clip reaches its natural end. Explicit stop, fade-out stop, decode failure and one-shot completion do not count.
+
+```lua
+function onAudioFinished()
+    debug.log("onAudioFinished", self:getName())
+end
+```
+
+### onAudioPaused
+
+`onAudioPaused() - targeted GameObject callback`
+
+Runs on the AudioSource owner when pause changes Playing to Paused. Calling pause again while already paused does not emit another event.
+
+```lua
+function onAudioPaused()
+    debug.log("onAudioPaused", self:getName())
+end
+```
+
+### onAudioResumed
+
+`onAudioResumed() - targeted GameObject callback`
+
+Runs on the AudioSource owner when resume changes Paused to Playing. Resuming continues from the existing playback cursor.
+
+```lua
+function onAudioResumed()
+    debug.log("onAudioResumed", self:getName())
+end
+```
+
+### onAudioStopped
+
+`onAudioStopped() - targeted GameObject callback`
+
+Runs on the AudioSource owner when a playing/paused primary source is explicitly stopped, including fade-out stop or playback failure. It is distinct from natural Finished.
+
+```lua
+function onAudioStopped()
+    debug.log("onAudioStopped", self:getName())
+end
+```
+
+### waitForSeconds
+
+`waitForSeconds(seconds) - suspend this callback, not the engine`
+
+Suspends the current lifecycle/object callback for finite playing-time seconds in [0, 86400]. Zero resumes no earlier than the next update. Other callbacks continue; this does not block the engine.
+
+- `param seconds number Finite seconds from 0 to 86400; zero resumes on next update`
+
+```lua
+function onStart()
+    debug.log("Before wait")
+    waitForSeconds(5)
+    debug.log("Five playing seconds later")
+end
+```
+
+### wait
+
+`wait(audioSource.onAudioFinished) - resume on the next audio event`
+
+Takes an opaque AudioEvent token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the AudioSource cancels its continuation.
+
+- `param event AudioEvent`
+
+```lua
+function onStart()
+    local audio = createAudioSource(self, AudioClip("Audio/example.wav"))
+    audio:play()
+    wait(audio.onAudioFinished)
+    debug.log("Audio finished")
+end
+```
+
 ### print
 
 `print(...) - log tab-separated values`
@@ -985,6 +1183,152 @@ end
 self.onDestroy = function()
     debug.log("Object callback: onDestroy")
 end
+```
+
+### GameObject.onMouseDown
+
+`onMouseDown()|nil`
+
+- `onMouseDown() - targeted GameObject callback`
+
+```lua
+self.onMouseDown = function()
+    debug.log("Object callback: onMouseDown")
+end
+```
+
+### GameObject.onMouseUp
+
+`onMouseUp()|nil`
+
+- `onMouseUp() - targeted GameObject callback`
+
+```lua
+self.onMouseUp = function()
+    debug.log("Object callback: onMouseUp")
+end
+```
+
+### GameObject.onMouseEnter
+
+`onMouseEnter()|nil`
+
+- `onMouseEnter() - targeted GameObject callback`
+
+```lua
+self.onMouseEnter = function()
+    debug.log("Object callback: onMouseEnter")
+end
+```
+
+### GameObject.onMouseExit
+
+`onMouseExit()|nil`
+
+- `onMouseExit() - targeted GameObject callback`
+
+```lua
+self.onMouseExit = function()
+    debug.log("Object callback: onMouseExit")
+end
+```
+
+### GameObject.onMouseOver
+
+`onMouseOver()|nil`
+
+- `onMouseOver() - targeted GameObject callback`
+
+```lua
+self.onMouseOver = function()
+    debug.log("Object callback: onMouseOver")
+end
+```
+
+### GameObject.onAudioStarted
+
+`onAudioStarted()|nil`
+
+- `onAudioStarted() - targeted GameObject callback`
+
+```lua
+self.onAudioStarted = function()
+    debug.log("Object callback: onAudioStarted")
+end
+```
+
+### GameObject.onAudioFinished
+
+`onAudioFinished()|nil`
+
+- `onAudioFinished() - targeted GameObject callback`
+
+```lua
+self.onAudioFinished = function()
+    debug.log("Object callback: onAudioFinished")
+end
+```
+
+### GameObject.onAudioPaused
+
+`onAudioPaused()|nil`
+
+- `onAudioPaused() - targeted GameObject callback`
+
+```lua
+self.onAudioPaused = function()
+    debug.log("Object callback: onAudioPaused")
+end
+```
+
+### GameObject.onAudioResumed
+
+`onAudioResumed()|nil`
+
+- `onAudioResumed() - targeted GameObject callback`
+
+```lua
+self.onAudioResumed = function()
+    debug.log("Object callback: onAudioResumed")
+end
+```
+
+### GameObject.onAudioStopped
+
+`onAudioStopped()|nil`
+
+- `onAudioStopped() - targeted GameObject callback`
+
+```lua
+self.onAudioStopped = function()
+    debug.log("Object callback: onAudioStopped")
+end
+```
+
+### GameObject.setActive
+
+`setActive(self:GameObject,enabled?:boolean) Set local activity (default true); inherited by children`
+
+Sets local activity; omitted enabled defaults to true. Inactive parents make descendants effectively inactive without changing their local flags. Inactive objects are hidden, excluded from physics, silent, and their attached script updates/events/waits pause. Another active script or Inspector can reactivate them.
+
+- `object:setActive(enabled=true) - activity inherited by children; Camera also selects active camera`
+
+```lua
+local object = self
+object:setActive(true)
+```
+
+### GameObject.isActive
+
+`isActive(self:GameObject):boolean Effective activity including parents`
+
+Returns effective activity, including all parents. It can be false even if this object is locally enabled. Destroyed handles raise a script error rather than returning false.
+
+- `object:isActive() -> effective activity including parents`
+
+```lua
+local object = self
+object:isActive()
 ```
 
 ### GameObject.setPosition
@@ -1260,7 +1604,7 @@ if object then debug.log(object:getName()) end
 
 `setActive(self:CameraObject,enabled?:boolean)`
 
-- `camera:setActive(enabled=true)`
+- `object:setActive(enabled=true) - activity inherited by children; Camera also selects active camera`
 
 ```lua
 local camera = Camera.new("Reference Camera")
@@ -2064,6 +2408,11 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | Field | Type / meaning |
 | --- | --- |
 | `clip` | `AudioClip` |
+| `onAudioStarted` | `AudioEvent` |
+| `onAudioFinished` | `AudioEvent` |
+| `onAudioPaused` | `AudioEvent` |
+| `onAudioResumed` | `AudioEvent` |
+| `onAudioStopped` | `AudioEvent` |
 
 ### AudioListener fields
 

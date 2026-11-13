@@ -513,6 +513,9 @@ void Physics::update(World& world, float seconds, const std::function<void(float
             entry.second.visited = false;
         }
         world.each<Transform>([&](Entity entity, Transform& transform) {
+            if (!isActive(world, entity)) {
+                return;
+            }
             const BoxCollider* boxCollider = world.tryGet<BoxCollider>(entity);
             const RigidBody* rigidBody = world.tryGet<RigidBody>(entity);
             if (!boxCollider && !rigidBody) {

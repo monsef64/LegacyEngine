@@ -35,6 +35,10 @@ GLOBALS = {
 'fadeSkybox': 'local skybox1 = GameObject.new("Skybox1")\nlocal skybox2 = GameObject.new("Skybox2")\nskybox1:addComponent(Skybox):setColor(0.8, 0.9, 1)\nlocal evening = skybox2:addComponent(Skybox)\nevening:setColor(0.3, 0.1, 0.05)\nevening:setEnabled(false)\nfadeSkybox(skybox1, skybox2, 0.5)',
 'getCurrentLevel': 'local name = getCurrentLevel()\nif name then debug.log("Current level", name) end',
 }
+for name in ('onMouseDown','onMouseUp','onMouseEnter','onMouseExit','onMouseOver','onAudioStarted','onAudioFinished','onAudioPaused','onAudioResumed','onAudioStopped'):
+    GLOBALS[name] = f'function {name}()\n    debug.log("{name}", self:getName())\nend'
+GLOBALS['waitForSeconds'] = 'function onStart()\n    debug.log("Before wait")\n    waitForSeconds(5)\n    debug.log("Five playing seconds later")\nend'
+GLOBALS['wait'] = 'function onStart()\n    local audio = createAudioSource(self, AudioClip("Audio/example.wav"))\n    audio:play()\n    wait(audio.onAudioFinished)\n    debug.log("Audio finished")\nend'
 CAMERA_GLOBALS = {
 'setCameraPosition': '{0, 2, 6}', 'setCameraRotation': '{0, 180, 0}',
 'lookAt': '{0, 0, 0}', 'setFieldOfView': '60', 'setProjectionMode': '"Perspective"',
@@ -87,7 +91,7 @@ METHOD_ARGS = {
 'setHDR':'"Sky/studio.hdr"', 'setFace':'"front", "Sky/front.png"',
 'setTextures':', '.join(f'"Sky/{face}.png"' for face in ('right','left','top','bottom','front','back')),
 }
-NO_ARGS = set('getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
+NO_ARGS = set('isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
 
 
 def inventory():
@@ -152,6 +156,24 @@ def example(entry):
     return prefix + f'\n{variable}:{name}({args})'
 
 
+CALLABLE_DETAILS = {
+    'onMouseDown': 'Runs on the nearest active Collider hit by a left-button press in Game. Requires an active Game camera; this is object picking, not a global input hook.',
+    'onMouseUp': 'Runs on the object that received the matching Down, even if the pointer has moved off it. No callback is delivered after the object is destroyed or inactive.',
+    'onMouseEnter': 'Runs once when the hovered Collider changes to this object. Picking uses the active camera viewport; a locked cursor uses its center.',
+    'onMouseExit': 'Runs when hover leaves this active object, including moving out of Game. Deactivated objects do not receive callbacks.',
+    'onMouseOver': 'Runs every playing frame while this object is the nearest active Collider under the Game pointer. It does not require a pressed button.',
+    'onAudioStarted': 'Runs on scripts attached to the AudioSource owner after play/fadeIn starts or restarts the primary clip. One-shots do not produce this primary-clip event.',
+    'onAudioFinished': 'Runs on the AudioSource owner when its non-looping primary clip reaches its natural end. Explicit stop, fade-out stop, decode failure and one-shot completion do not count.',
+    'onAudioPaused': 'Runs on the AudioSource owner when pause changes Playing to Paused. Calling pause again while already paused does not emit another event.',
+    'onAudioResumed': 'Runs on the AudioSource owner when resume changes Paused to Playing. Resuming continues from the existing playback cursor.',
+    'onAudioStopped': 'Runs on the AudioSource owner when a playing/paused primary source is explicitly stopped, including fade-out stop or playback failure. It is distinct from natural Finished.',
+    'waitForSeconds': 'Suspends the current lifecycle/object callback for finite playing-time seconds in [0, 86400]. Zero resumes no earlier than the next update. Other callbacks continue; this does not block the engine.',
+    'wait': 'Takes an opaque AudioEvent token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the AudioSource cancels its continuation.',
+    'GameObject.setActive': 'Sets local activity; omitted enabled defaults to true. Inactive parents make descendants effectively inactive without changing their local flags. Inactive objects are hidden, excluded from physics, silent, and their attached script updates/events/waits pause. Another active script or Inspector can reactivate them.',
+    'GameObject.isActive': 'Returns effective activity, including all parents. It can be false even if this object is locally enabled. Destroyed handles raise a script error rather than returning false.',
+}
+
+
 def render_reference():
     entries, properties = inventory()
     lines = ['# Scripting Reference', '',
@@ -182,11 +204,48 @@ def render_reference():
              '  4096-byte strings. Check the boolean returned by `emit` and remove unneeded listeners.',
              '- Level transition functions return acceptance and an optional error, not completion.',
              '- Lifecycle failures stop the failing script. Errors retain source filename/line and traceback.',
+             '- Mouse callbacks target the nearest active Collider under the Game camera in the Game view.',
+             '  Enter/Exit track hover, Over runs every playing frame, Down targets a left press and',
+             '  Up targets the object that received Down, even if released outside it.',
+             '- Audio callbacks target scripts attached to the AudioSource owner. Finished means natural',
+             '  primary-clip completion, not pause, explicit stop, fade-out stop or one-shot completion.',
+             '- `waitForSeconds` and `wait(audio.onAudioFinished)` suspend lifecycle/object callbacks only.',
+             '  Do not use them at file top-level, in custom event listeners or onDestroy. Each callback',
+             '  has at most one pending invocation. Other callbacks keep running; Play pause or object',
+             '  deactivation freezes timers, and Stop cancels waits. Audio waits observe the next event,',
+             '  not one that happened before subscribing. A looping clip never naturally finishes.',
+             '- `self:setActive(false)` hides an object, disables its physics/audio and pauses attached',
+             '  script updates/events/waits. Parents propagate inactivity; another active script or the',
+             '  Inspector can reactivate it. State persists in project/level saves and undo history.',
              '- `debug.error()` logs without throwing. Memory/instruction limits still apply.', '',
              'The sandbox also exposes Lua 5.4 base, table, string, math and utf8 computation libraries.',
              'It does not expose filesystem/process/module loading, coroutines, pcall/xpcall or the',
              'standard introspection debug library. Those standard computation-library APIs are not',
              'engine functions; this reference covers the engine-owned API.', '']
+    lines += ['## Callback and wait quick guide', '',
+              '| API | Where to define / call it | Requirement |',
+              '| --- | --- | --- |',
+              '| `onMouseDown/Up/Enter/Exit/Over()` | Global function in the target object’s attached script, or `object.onMouseDown = function() ... end` | Active Collider and Game camera |',
+              '| `onAudioStarted/Finished/Paused/Resumed/Stopped()` | Global function in the AudioSource owner’s attached script, or object callback | AudioSource on that owner |',
+              '| `waitForSeconds(seconds)` | Inside a running lifecycle/object callback | Finite 0–86400 seconds |',
+              '| `wait(audio.onAudioFinished)` | Inside a running lifecycle/object callback | Live AudioSource; next event only |', '',
+              'AudioSource event properties are opaque `AudioEvent` tokens. Define the callback as',
+              '`function onAudioFinished() ... end`; pass `audio.onAudioFinished` to `wait` without',
+              'parentheses. Do not assign a function to the AudioSource event property.', '',
+              'Waits are not supported at file top-level, in custom/level event listeners, or in',
+              '`onDestroy`. Play pause and object inactivity freeze timer progress. The engine allows',
+              'at most 128 pending callbacks per runtime and coalesces repeated invocations of the',
+              'same waiting callback. Shutdown/reset cancels continuations; variables survive a pause.', '',
+              '```lua', 'function onStart()',
+              '    local audio = self:getComponent(AudioSource)',
+              '    if not audio then return end',
+              '    waitForSeconds(5)',
+              '    audio:play()',
+              '    wait(audio.onAudioFinished)',
+              '    debug.log("Continue after natural playback completion")',
+              'end', '```', '',
+              'For complete setup and troubleshooting, see [mouse and audio events](audio-input.md#gameobject-mouse-callbacks)',
+              'and [object activity and waits](scripting.md#object-activity-mouseaudio-callbacks-and-waits).', '']
     groups = {'': 'Global functions and callbacks'}
     for entry in entries:
         groups.setdefault(entry['owner'], entry['owner'])
@@ -194,6 +253,9 @@ def render_reference():
         lines += [f'## {title}', '']
         for entry in (e for e in entries if e['owner'] == owner):
             lines += [f'### {entry["key"]}', '', f'`{entry["signature"]}`', '']
+            detail = CALLABLE_DETAILS.get(entry['key'])
+            if detail:
+                lines += [detail, '']
             if entry['notes']:
                 lines += [f'- `{note}`' for note in entry['notes']] + ['']
             lines += ['```lua', example(entry), '```', '']

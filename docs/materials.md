@@ -80,3 +80,15 @@ Zero-alpha pixels are discarded. Transparent surfaces do not cast shadows, to
 avoid fully opaque silhouettes from alpha images. Object-level sorting cannot
 perfectly resolve intersecting transparent meshes or self-overlapping surfaces;
 there is no order-independent transparency or colored/transmissive shadowing.
+
+## Asset thumbnails and hover preview
+
+Material files show a lit sphere thumbnail in either Asset Browser view. Hover
+the material tile/row for a larger 240 × 240 preview. The lightweight preview
+approximates material color, albedo texture and specular; it is not a full shader,
+normal-map, transparency or scene-lighting preview. Inspect the material on a
+mesh in Scene/Game to judge its final appearance.
+
+Thumbnails are cached with bounded update/decode work. Material edits and albedo
+file changes invalidate the preview; a large folder may populate over several
+frames. Missing/invalid assets may display a file icon instead.

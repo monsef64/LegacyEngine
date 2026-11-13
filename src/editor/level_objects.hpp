@@ -84,6 +84,7 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(MeshRenderer{});
     component(Collider{});
     component(Skybox{});
+    component(ObjectActivity{});
     component(DirectionalLight{});
     component(PointLight{});
     component(SpotLight{});

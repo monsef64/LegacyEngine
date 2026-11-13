@@ -18,6 +18,13 @@ class ScriptComponents {
         meshes_[4] = plane;
         sync();
     }
+    void objectEvent(Entity entity, const char* name) {
+        for (auto& entry : entries_) {
+            if (entry.console && entry.entity == entity) {
+                entry.console->objectEvent(entity, name);
+            }
+        }
+    }
     void update(float dt) {
         sync();
         for (auto& entry : entries_) {
@@ -99,6 +106,9 @@ class ScriptComponents {
         }
         std::vector<std::pair<Entity, std::string>> pending;
         world_->each<LuaScript>([&](Entity e, LuaScript& scripts) {
+            if (!isActive(*world_, e)) {
+                return;
+            }
             for (const auto& script : scriptAttachments(scripts)) {
                 if (!script.enabled || script.path.empty()) {
                     continue;

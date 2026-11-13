@@ -325,3 +325,12 @@ bool LuaConsole::bindExports(const std::vector<ScriptField>& fields) {
     }
     return true;
 }
+
+void LuaConsole::objectEvent(Entity entity, const char* name) {
+    if (!scene_) {
+        return;
+    }
+    beginBudget();
+    scene_->objectEvent(entity, name);
+    endBudget();
+}

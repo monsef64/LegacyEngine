@@ -42,6 +42,10 @@ class LuaConsole {
     bool bindObject(Entity entity);
     bool bindExports(const std::vector<ScriptField>& fields);
     void update(float deltaTime);
+    void objectEvent(Entity entity, const char* name);
+    void message(std::string_view text) {
+        append(Kind::Info, text);
+    }
     void fixedUpdate(float deltaTime);
     void shutdown();
     using EventValue = std::variant<std::monostate, bool, double, std::string>;

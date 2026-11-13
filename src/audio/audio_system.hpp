@@ -9,7 +9,8 @@
 inline Entity activeAudioListener(World& world) {
     Entity selected{};
     world.each<AudioListener, Transform>([&](Entity e, AudioListener& listener, Transform&) {
-        if (listener.enabled && (selected == Entity{} || e.index < selected.index)) {
+        if (isActive(world, e) && listener.enabled &&
+            (selected == Entity{} || e.index < selected.index)) {
             selected = e;
         }
     });
@@ -164,7 +165,9 @@ class AudioSystem {
             }
             for (int i = 0; i < frames; ++i) {
                 envelope.samples.push_back(envelope.result.fade);
-                envelope.result.advanceFade(1.0f / 48000);
+                if (isActive(world, voice.entity)) {
+                    envelope.result.advanceFade(1.0f / 48000);
+                }
                 if (envelope.result.state == AudioSource::State::Stopped) {
                     envelope.finishedFade = true;
                     envelope.samples.resize(frames, 0);
@@ -183,12 +186,12 @@ class AudioSystem {
                 it = voices.erase(it);
                 continue;
             }
-            if (a->state == AudioSource::State::Paused) {
+            if (!isActive(world, it->entity) || a->state == AudioSource::State::Paused) {
                 ++it;
                 continue;
             }
             const auto gains = spatialAudioGains(*a, world.tryGet<Transform>(it->entity), listener);
-            bool ended = false;
+            bool ended = false, failed = false;
             try {
                 const auto& samples = load(assets, it->clip);
                 const auto count = samples.size() / 2;
@@ -218,11 +221,16 @@ class AudioSystem {
                 }
             } catch (const std::exception& e) {
                 error = e.what();
+                failed = true;
                 ended = true;
             }
             if (ended) {
                 if (!it->shot) {
-                    a->state = AudioSource::State::Stopped;
+                    if (failed) {
+                        a->stop();
+                    } else {
+                        a->finish();
+                    }
                 }
                 it = voices.erase(it);
             } else {

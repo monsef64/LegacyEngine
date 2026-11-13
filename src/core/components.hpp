@@ -114,3 +114,28 @@ struct Camera {
     float shakeIntensity = 0, shakeRemaining = 0, shakePhase = 0;
     float aspect = 16.0f / 9; // Current Game viewport aspect, supplied by the editor.
 };
+
+// Absent means active, preserving old scenes. Parent deactivation propagates.
+struct ObjectActivity {
+    bool enabled = true;
+};
+struct Parent {
+    Entity entity;
+    Transform previous;
+};
+inline bool isActive(const World& world, Entity entity) {
+    for (unsigned depth = 0; depth < 128 && world.alive(entity); ++depth) {
+        if (const auto* state = world.tryGet<ObjectActivity>(entity); state && !state->enabled) {
+            return false;
+        }
+        const auto* parent = world.tryGet<Parent>(entity);
+        if (!parent) {
+            return true;
+        }
+        entity = parent->entity;
+    }
+    return false;
+}
+inline void setObjectActive(World& world, Entity entity, bool enabled) {
+    world.add(entity, ObjectActivity{enabled});
+}

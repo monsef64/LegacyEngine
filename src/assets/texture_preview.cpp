@@ -1,4 +1,5 @@
 #include "assets/texture_preview.hpp"
+#include "materials/material_io.hpp"
 #include <SDL3/SDL.h>
 #include <glad/gl.h>
 #define STB_IMAGE_IMPLEMENTATION
@@ -175,7 +176,7 @@ void TexturePreviewCache::beginFrame(const AssetManager& assets) {
     decodeBudget_ = 1;
 }
 unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::string& path) {
-    if (!textureAsset(path) || !SDL_GL_GetCurrentContext()) {
+    if ((!textureAsset(path) && !materialAsset(path)) || !SDL_GL_GetCurrentContext()) {
         return 0;
     }
     auto found = entries_.find(path);
@@ -189,7 +190,12 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
         e.checked = now;
         try {
             const auto file = assets.resolve(path);
-            if (e.modified == std::filesystem::last_write_time(file) &&
+            const bool dependencyCurrent =
+                e.dependency.empty() ||
+                (e.dependencyModified ==
+                     std::filesystem::last_write_time(assets.resolve(e.dependency)) &&
+                 e.dependencyBytes == std::filesystem::file_size(assets.resolve(e.dependency)));
+            if (dependencyCurrent && e.modified == std::filesystem::last_write_time(file) &&
                 e.bytes == std::filesystem::file_size(file)) {
                 return e.texture;
             }
@@ -201,7 +207,7 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
         }
         entries_.erase(found);
     }
-    if (budget_ <= 0) {
+    if (budget_ <= 0 || (materialAsset(path) && decodeBudget_ <= 0)) {
         return 0;
     }
     --budget_;
@@ -223,7 +229,56 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
         entry.modified = std::filesystem::last_write_time(file);
         entry.bytes = std::filesystem::file_size(file);
         bool cacheHit = false;
-        auto image = loadTextureThumbnail(assets, path, &cacheHit, decodeBudget_ > 0);
+        TextureThumbnail image;
+        if (materialAsset(path)) {
+            const auto material = loadMaterial(assets, path);
+            entry.dependency = material.texture;
+            if (!entry.dependency.empty()) {
+                const auto dependency = assets.resolve(entry.dependency);
+                entry.dependencyModified = std::filesystem::last_write_time(dependency);
+                entry.dependencyBytes = std::filesystem::file_size(dependency);
+            }
+            TextureThumbnail albedo;
+            bool textured = false;
+            if (!material.texture.empty()) {
+                albedo = loadTextureThumbnail(assets, material.texture);
+                textured = true;
+            }
+            for (int y = 0; y < TextureThumbnail::size; ++y) {
+                for (int x = 0; x < TextureThumbnail::size; ++x) {
+                    float nx = (x + .5f) / TextureThumbnail::size * 2 - 1,
+                          ny = 1 - (y + .5f) / TextureThumbnail::size * 2;
+                    float r = nx * nx + ny * ny;
+                    auto i = (y * TextureThumbnail::size + x) * 4;
+                    float background = ((x / 8 + y / 8) % 2) ? .16f : .12f;
+                    Vec3 color{background, background, background};
+                    if (r < .9f) {
+                        float nz = std::sqrt(1 - r / .9f);
+                        float light = .18f + .82f * std::max(0.f, (-nx + ny + nz) * .577f);
+                        float spec = material.specular *
+                                     std::pow(std::max(0.f, (-nx + ny + nz) * .577f), 24.f);
+                        Vec3 tex{1, 1, 1};
+                        if (textured) {
+                            tex = {albedo.pixels[i] / 255.f,
+                                   albedo.pixels[i + 1] / 255.f,
+                                   albedo.pixels[i + 2] / 255.f};
+                        }
+                        color = {material.color.x * tex.x * light + spec,
+                                 material.color.y * tex.y * light + spec,
+                                 material.color.z * tex.z * light + spec};
+                    }
+                    image.pixels[i] =
+                        static_cast<unsigned char>(std::clamp(color.x, 0.f, 1.f) * 255);
+                    image.pixels[i + 1] =
+                        static_cast<unsigned char>(std::clamp(color.y, 0.f, 1.f) * 255);
+                    image.pixels[i + 2] =
+                        static_cast<unsigned char>(std::clamp(color.z, 0.f, 1.f) * 255);
+                    image.pixels[i + 3] = 255;
+                }
+            }
+        } else {
+            image = loadTextureThumbnail(assets, path, &cacheHit, decodeBudget_ > 0);
+        }
         if (!cacheHit) {
             --decodeBudget_;
         }

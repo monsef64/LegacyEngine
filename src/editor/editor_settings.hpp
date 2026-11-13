@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <imgui.h>
+#include <sstream>
 struct EditorSettings {
     bool external = false, visible = false, alwaysShowColliders = false;
     int theme = 0;
@@ -45,6 +46,15 @@ struct EditorSettings {
         if (ImGui::GetCurrentContext()) {
             applyEditorPalette(theme);
         }
+    }
+    std::string signature() const {
+        std::ostringstream out;
+        out.precision(9);
+        out << external << theme << alwaysShowColliders << grid.visible << ':' << grid.cells << ':'
+            << grid.plane << ':' << grid.spacing << ':' << grid.position.x << ':' << grid.position.y
+            << ':' << grid.position.z << ':' << grid.color.x << ':' << grid.color.y << ':'
+            << grid.color.z;
+        return out.str();
     }
     void save() {
         auto path = file();

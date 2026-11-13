@@ -213,6 +213,11 @@ inline void drawInspector(World& world,
         } else {
             ImGui::PushID(static_cast<int>(selected.index));
             ImGui::BeginDisabled(editingGizmo);
+            bool objectActive =
+                !world.has<ObjectActivity>(selected) || world.get<ObjectActivity>(selected).enabled;
+            if (ImGui::Checkbox("Active", &objectActive)) {
+                setObjectActive(world, selected, objectActive);
+            }
             auto* objectName = world.tryGet<ObjectName>(selected);
             char name[257];
             std::snprintf(name, sizeof(name), "%s", objectName ? objectName->value.c_str() : "");

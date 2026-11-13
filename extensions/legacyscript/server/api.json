@@ -1,5 +1,17 @@
 [
   {
+    "name": "waitForSeconds",
+    "signature": "waitForSeconds(seconds) - suspend this callback, not the engine"
+  },
+  {
+    "name": "wait",
+    "signature": "wait(audioSource.onAudioFinished) - resume on the next audio event"
+  },
+  {
+    "name": "isActive",
+    "signature": "object:isActive() -> effective activity including parents"
+  },
+  {
     "name": "on",
     "signature": "on(eventName, callback) -> listener token; receives queued custom events"
   },
@@ -325,7 +337,7 @@
   },
   {
     "name": "setActive",
-    "signature": "camera:setActive(enabled=true)"
+    "signature": "object:setActive(enabled=true) - activity inherited by children; Camera also selects active camera"
   },
   {
     "name": "setTarget",
@@ -402,6 +414,46 @@
   {
     "name": "Camera",
     "signature": "Camera - camera component type token"
+  },
+  {
+    "name": "onMouseDown",
+    "signature": "onMouseDown() - targeted GameObject callback"
+  },
+  {
+    "name": "onMouseUp",
+    "signature": "onMouseUp() - targeted GameObject callback"
+  },
+  {
+    "name": "onMouseEnter",
+    "signature": "onMouseEnter() - targeted GameObject callback"
+  },
+  {
+    "name": "onMouseExit",
+    "signature": "onMouseExit() - targeted GameObject callback"
+  },
+  {
+    "name": "onMouseOver",
+    "signature": "onMouseOver() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioStarted",
+    "signature": "onAudioStarted() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioFinished",
+    "signature": "onAudioFinished() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioPaused",
+    "signature": "onAudioPaused() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioResumed",
+    "signature": "onAudioResumed() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioStopped",
+    "signature": "onAudioStopped() - targeted GameObject callback"
   },
   {
     "name": "onStart",

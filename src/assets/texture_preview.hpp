@@ -22,6 +22,9 @@ class TexturePreviewCache {
         std::filesystem::file_time_type modified{};
         std::uintmax_t bytes = 0;
         bool failed = false;
+        std::string dependency;
+        std::filesystem::file_time_type dependencyModified{};
+        std::uintmax_t dependencyBytes = 0;
         std::chrono::steady_clock::time_point checked{};
     };
     std::map<std::string, Entry> entries_;

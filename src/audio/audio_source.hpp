@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -13,6 +14,22 @@ struct AudioListener {
     }
 };
 struct AudioSource {
+    inline static constexpr const char* eventNames[]{
+        "onAudioStarted", "onAudioFinished", "onAudioPaused", "onAudioResumed", "onAudioStopped"};
+    std::array<unsigned, 5> eventSequence{};
+    std::vector<int> pendingEvents;
+    void notify(int event) {
+        ++eventSequence[event];
+        if (pendingEvents.size() < 64) {
+            pendingEvents.push_back(event);
+        }
+    }
+    void finish() {
+        if (state == State::Playing) {
+            state = State::Stopped;
+            notify(1);
+        }
+    }
     std::string clip;
     float volume = 1, pitch = 1, pan = 0, distance = 50, blend = 0;
     bool looping = false, muted = false, playOnStart = false;
@@ -23,6 +40,7 @@ struct AudioSource {
     bool stopAfterFade = false;
     std::vector<std::string> shots;
     void play() {
+        notify(0);
         state = State::Playing;
         ++restart;
         fade = 1;
@@ -30,6 +48,9 @@ struct AudioSource {
         stopAfterFade = false;
     }
     void stop() {
+        if (state != State::Stopped) {
+            notify(4);
+        }
         state = State::Stopped;
         ++restart;
         fade = 1;
@@ -39,11 +60,13 @@ struct AudioSource {
     void pause() {
         if (state == State::Playing) {
             state = State::Paused;
+            notify(2);
         }
     }
     void resume() {
         if (state == State::Paused) {
             state = State::Playing;
+            notify(3);
         }
     }
     float setVolume(float v) {

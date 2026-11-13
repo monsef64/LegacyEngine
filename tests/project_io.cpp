@@ -54,4 +54,15 @@ int main() {
     // Failed save left the original file intact.
     {std::ifstream in(path);std::string header;std::getline(in,header);assert(header=="LegacyEngineProject 1");}
     std::filesystem::remove_all(std::filesystem::path(path).parent_path());
+    {
+        World activeWorld;auto p=activeWorld.create(),c=activeWorld.create();
+        activeWorld.add(p,Transform{});activeWorld.add(c,Transform{});assert(setParent(activeWorld,c,p));
+        setObjectActive(activeWorld,p,false);assert(!isActive(activeWorld,p) && !isActive(activeWorld,c));
+        auto encoded=encode(activeWorld,"",OrbitCamera{},meshes);Loaded restored;decode(encoded,restored,meshes);
+        for(auto entity:restored.world.entities())assert(!isActive(restored.world,entity));
+        Entity selection=p;EditorHistory h(activeWorld,p);setObjectActive(activeWorld,p,true);h.commit(activeWorld,p);
+        assert(isActive(activeWorld,c));assert(h.undo(activeWorld,selection));assert(!isActive(activeWorld,c));
+        assert(h.redo(activeWorld,selection));assert(isActive(activeWorld,c));
+    }
+
 }

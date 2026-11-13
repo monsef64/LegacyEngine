@@ -21,7 +21,14 @@ projectContentState(World& world, std::string_view source, const OrbitCamera& ca
     scalar(camera.fieldOfView);
     return state;
 }
-inline std::string projectWindowTitle(const std::string& path, bool dirty) {
-    const auto name = path.empty() ? "Untitled" : std::filesystem::path(path).filename().string();
-    return name + (dirty ? "*" : "") + " - LegacyEngine";
+inline std::string
+projectWindowTitle(const std::string& path, bool dirty, const std::string& level = "Untitled") {
+    const auto name = path.empty() ? "Untitled" : std::filesystem::path(path).stem().string();
+#ifdef _WIN32
+    constexpr auto platform = "Windows";
+#else
+    constexpr auto platform = "Linux";
+#endif
+    return (level.empty() ? "Untitled" : level) + (dirty ? "*" : "") + " - " + name + " - " +
+           platform;
 }

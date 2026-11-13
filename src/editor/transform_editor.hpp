@@ -31,6 +31,7 @@ class TransformEditor {
         heldEntity_ = {};
         dragging_ = hovered_ = false;
     }
+    void drawToolbar();
     void draw(World& world,
               Entity entity,
               bool enabled,
