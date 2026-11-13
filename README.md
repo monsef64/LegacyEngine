@@ -317,7 +317,7 @@ code --install-extension legacyscript.vsix
 ```
 
 The **engine Release workflow** also tests and builds the extension, publishing
-**legacyscript-vsix** as a separate `.vsix` artifact in the same run. Tagged engine
+**`legacyscript.vsix`** as a separate downloadable artifact in the same run. Tagged engine
 releases attach `legacyscript.vsix` alongside the engine package. Use VS Code's
 **Install from VSIX** command with that file. The standalone **LegacyScript VSIX**
 workflow remains available (its artifact is a ZIP to extract first). `.ls` files
