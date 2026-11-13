@@ -1,4 +1,6 @@
 #include "physics/collider_debug.hpp"
+#include "core/profiler.hpp"
+#include "scene/camera_gizmo.hpp"
 #include "audio/audio_gizmo.hpp"
 #include "lighting/lighting.hpp"
 #include "rendering/renderer.hpp"
@@ -67,7 +69,7 @@ in vec3 vWorldPosition;
 in vec2 vCheckerUV;
 in vec2 vUV;
 uniform sampler2D uMaterialTexture,uNormalTexture;
-uniform bool uHasMaterialTexture,uBumped;
+uniform bool uHasMaterialTexture,uBumped,uTransparent;
 uniform float uNormalStrength;
 uniform vec2 uTiling;
 uniform bool uCheckerboard;
@@ -163,7 +165,10 @@ void main(){
         }
     }
     vec3 albedo=uColor;
-    if(uHasMaterialTexture)albedo*=texture(uMaterialTexture,uv).rgb;
+    vec4 texel=uHasMaterialTexture?texture(uMaterialTexture,uv):vec4(1);
+    albedo*=texel.rgb;
+    float alpha=uTransparent?texel.a:1.0;
+    if(alpha<0.001)discard;
     if(uCheckerboard)albedo*=texture(uCheckerTexture,vCheckerUV).rgb;
     vec3 viewDirection=normalize(uCameraPosition-vWorldPosition);
     vec3 result=albedo*.12;
@@ -185,7 +190,7 @@ void main(){
         float specular=uSpecular*pow(max(dot(normal,halfDirection),0.0),64.0);
         result+=(albedo*diffuse+vec3(specular))*uLightColor[i].rgb*attenuation*visibility(i,normal,toLight,worldDx,worldDy);
     }
-    fragColor=vec4(result,1.0);
+    fragColor=vec4(result,alpha);
 }
 )glsl";
 
@@ -275,6 +280,7 @@ bool Renderer::init()
     for(int i=0;i<Lighting::maxShadowLayers;++i)
         shadowMatrixLocations_[i]=glGetUniformLocation(litProgram_,("uShadowMatrix["+std::to_string(i)+"]").c_str());
 
+    litTransparent_=glGetUniformLocation(litProgram_,"uTransparent");
     litTexture_=glGetUniformLocation(litProgram_,"uMaterialTexture");litNormalTexture_=glGetUniformLocation(litProgram_,"uNormalTexture");
     litHasTexture_=glGetUniformLocation(litProgram_,"uHasMaterialTexture");litBumped_=glGetUniformLocation(litProgram_,"uBumped");
     litStrength_=glGetUniformLocation(litProgram_,"uNormalStrength");litTiling_=glGetUniformLocation(litProgram_,"uTiling");
@@ -365,11 +371,12 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
     glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    prepareLighting(world,viewProjection,cameraPosition);
+    {ProfileScope scope(ProfilePart::Lights);prepareLighting(world,viewProjection,cameraPosition);}
     glViewport(x,y,width,height);
     const Skybox* activeSky=nullptr;
     world.each<Skybox>([&](Entity,const Skybox& sky){if(!activeSky && sky.enabled)activeSky=&sky;});
-    if(activeSky)skyboxRenderer_.draw(*activeSky,materialAssets_,viewProjection);
+    {ProfileScope scope(ProfilePart::Skybox);if(activeSky)skyboxRenderer_.draw(*activeSky,materialAssets_,viewProjection);}
+    ProfileScope surfaces(ProfilePart::Surfaces);
     glUseProgram(litProgram_);
     glUniform3f(litCameraPosition_, cameraPosition.x, cameraPosition.y, cameraPosition.z);
     glUniform1i(litCheckerTexture_, 0);
@@ -377,7 +384,14 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, checkerTexture_);
 
-    auto drawMesh=[&](const Transform& transform,const MeshRenderer& renderer) {
+    auto resolveMaterial=[&](const MeshRenderer& renderer){
+        MaterialProperties material;material.color=renderer.color;material.specular=renderer.specular;
+        if(!renderer.material.empty())try{material=materialCache_.get(materialAssets_,renderer.material);}catch(const std::exception& e){materialError=e.what();}
+        material=applyMaterialOverrides(material,renderer.materialValues,renderer.materialOverrides);
+        if(!validMaterial(material)){materialError="Invalid material overrides";material=MaterialProperties{};}
+        return material;
+    };
+    auto drawMesh=[&](const Transform& transform,const MeshRenderer& renderer,const MaterialProperties& material) {
             if (renderer.mesh.id >= meshes_.size()) {
                 return; // no mesh to draw
             }
@@ -405,13 +419,10 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
                 glUseProgram(litProgram_);
                 glUniformMatrix4fv(litModel_, 1, GL_FALSE, model.m);
                 glUniform1i(litCheckerboard_, renderer.checkerboard ? 1 : 0);
-                MaterialProperties material;material.color=renderer.color;material.specular=renderer.specular;
-                if(!renderer.material.empty())try{material=materialCache_.get(materialAssets_,renderer.material);}catch(const std::exception& e){materialError=e.what();}
-                material=applyMaterialOverrides(material,renderer.materialValues,renderer.materialOverrides);
-                if(!validMaterial(material)){materialError="Invalid material overrides";material=MaterialProperties{};}
                 const auto texture=materialTextures_.get(materialAssets_,material.texture,materialError);
                 const auto normal=material.shader==1?materialTextures_.get(materialAssets_,material.normalMap,materialError):0;
                 glActiveTexture(GL_TEXTURE2);glBindTexture(GL_TEXTURE_2D,texture);glActiveTexture(GL_TEXTURE3);glBindTexture(GL_TEXTURE_2D,normal);glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,checkerTexture_);
+                glUniform1i(litTransparent_,material.shader==2);
                 glUniform1i(litTexture_,2);glUniform1i(litNormalTexture_,3);glUniform1i(litHasTexture_,texture!=0);glUniform1i(litBumped_,normal!=0);
                 glUniform1f(litStrength_,material.normalStrength);glUniform2f(litTiling_,material.tilingX,material.tilingY);
                 glUniform1f(litSpecular_,material.specular);
@@ -423,18 +434,30 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
             glBindVertexArray(mesh.vertexArray);
             glDrawArrays(mesh.lines ? GL_LINES : GL_TRIANGLES, 0, mesh.vertexCount);
         };
-    world.each<Transform, MeshRenderer>([&](Entity e,const Transform& t,const MeshRenderer& r){
-        if(!world.has<Camera>(e))drawMesh(t,r);
+    struct TransparentDraw{Transform transform;MeshRenderer renderer;MaterialProperties material;float distance;};
+    std::vector<TransparentDraw> transparent;
+    glDisable(GL_BLEND);glDepthMask(GL_TRUE);
+    world.each<Transform,MeshRenderer>([&](Entity e,const Transform& t,const MeshRenderer& r){
+        if(world.has<Camera>(e))return;
+        auto material=resolveMaterial(r);
+        if(material.shader==2){auto delta=t.position-cameraPosition;transparent.push_back({t,r,material,dot(delta,delta)});}
+        else drawMesh(t,r,material);
     });
+    std::stable_sort(transparent.begin(),transparent.end(),[](const auto& a,const auto& b){return a.distance>b.distance;});
+    if(!transparent.empty()){
+        glEnable(GL_BLEND);glBlendFuncSeparate(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA,GL_ZERO,GL_ONE);glDepthMask(GL_FALSE);
+        for(const auto& item:transparent)drawMesh(item.transform,item.renderer,item.material);
+        glDepthMask(GL_TRUE);glDisable(GL_BLEND);
+    }
     if(editorView) {
         if(audioModel_.id==UINT32_MAX)audioModel_=createMesh(audioSourceGlyph());
         world.each<AudioSource,Transform>([&](Entity,const AudioSource&,const Transform& t){
             Transform glyph=t;glyph.scale={1,1,1};
-            drawMesh(glyph,MeshRenderer{audioModel_,{.35f,.8f,1.0f},false,0});
+            MeshRenderer icon{audioModel_,{.35f,.8f,1.0f},false,0};drawMesh(glyph,icon,resolveMaterial(icon));
         });
         if(cameraModel_.id==UINT32_MAX)cameraModel_=createMesh(makeCameraModel());
         world.each<Camera,Transform>([&](Entity,const Camera&,const Transform& t){
-            drawMesh(t,MeshRenderer{cameraModel_,{.28f,.50f,.72f},false,.4f});
+            Transform glyph=t;glyph.scale={1,1,1};MeshRenderer icon{cameraModel_,{.92f,.94f,.98f},false,0};drawMesh(glyph,icon,resolveMaterial(icon));
         });
     }
 }
@@ -442,6 +465,9 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
 void Renderer::drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection)
 {
     drawWire(colliderWireframe(collider,transform.scale),transform,viewProjection,{0,1,0});
+}
+void Renderer::drawCamera(const Transform& transform,const Camera& camera,const Mat4& viewProjection){
+    drawWire(cameraFrustumWire(camera),transform,viewProjection,{.92f,.94f,.98f});
 }
 void Renderer::drawAudioSource(const Transform& transform,const AudioSource& source,const Mat4& viewProjection){
     drawWire(audioSourceRange(source),transform,viewProjection,{.35f,.8f,1.0f});
@@ -495,6 +521,11 @@ void Renderer::prepareLighting(World& world,const Mat4& viewProjection,Vec3 came
     if(needsShadows)world.each<Transform,MeshRenderer>([&](Entity e,const Transform& t,const MeshRenderer& r){
         if(world.has<Camera>(e) || r.mesh.id>=meshes_.size())return;
         const auto& mesh=meshes_[r.mesh.id];if(mesh.lines)return;
+        MaterialProperties material;
+        if(!r.material.empty())try{material=materialCache_.get(materialAssets_,r.material);}catch(const std::exception& e){materialError=e.what();}
+        material=applyMaterialOverrides(material,r.materialValues,r.materialOverrides);
+        if(material.shader==2)return; // alpha-blended surfaces do not cast opaque shadow silhouettes
+
         casters.push_back({&mesh,transformMatrix(t.position,t.rotation,t.scale),t.position,
             mesh.radius*std::max({std::abs(t.scale.x),std::abs(t.scale.y),std::abs(t.scale.z)}),t.scale.x*t.scale.y*t.scale.z<0});
     });

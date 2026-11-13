@@ -1,4 +1,5 @@
 #include "scene/scene_camera.hpp"
+#include "scene/camera_gizmo.hpp"
 #include "project/project_io.hpp"
 #include "editor/editor_history.hpp"
 #include "scripting/lua_console.hpp"
@@ -18,6 +19,11 @@ int main() {
     sceneCamera.focus({0,0,0},10000,1);assert(sceneCamera.distance==150);
     sceneCamera.focus({0,0,0},0,1);assert(sceneCamera.distance>=2);
 
+    Camera gizmo;gizmo.nearClip=.2f;gizmo.farClip=20;gizmo.aspect=2;
+    auto wire=cameraFrustumWire(gizmo);assert(wire.topology==MeshData::Topology::Lines && wire.vertices.size()==24);
+    float maxX=0,maxY=0;for(const auto& vertex:wire.vertices){maxX=std::max(maxX,std::abs(vertex.position.x));maxY=std::max(maxY,std::abs(vertex.position.y));assert(vertex.position.z<=0);}
+    assert(close(maxX/maxY,2));gizmo.fieldOfView=30;float narrow=std::abs(cameraFrustumWire(gizmo).vertices[8].position.x);assert(narrow<maxX);
+    gizmo.orthographic=true;gizmo.orthographicSize=4;wire=cameraFrustumWire(gizmo);assert(close(std::abs(wire.vertices[0].position.y),2));
     Transform transform;Camera camera;camera.aspect=1.5f;
     aimCamera(transform,{2,3,-8});
     auto front=rotateVector(transform.rotation,{0,0,-1});

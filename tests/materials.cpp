@@ -11,6 +11,7 @@ int main(){
     auto p=loadMaterial(assets,path);assert(p.shader==0 && p.color.x==1 && p.texture.empty());
     p.shader=1;p.texture="Textures/color.png";p.normalMap="Textures/normal.tga";p.color={.3f,.5f,.7f};p.tilingY=2;saveMaterial(assets,path,p);
     auto loaded=loadMaterial(assets,path);assert(loaded.normalMap==p.normalMap && loaded.shader==1 && loaded.tilingY==2);
+    p.shader=2;saveMaterial(assets,"Transparent.mat",p);assert(loadMaterial(assets,"Transparent.mat").shader==2);
     MaterialAssetCache cache;assert(cache.get(assets,path).color.x==.3f);
     bool rejected=false;try{loadMaterial(assets,"../outside.mat");}catch(...){rejected=true;}assert(rejected);
     auto malformed=materialJson(p);malformed["shader"]="Unknown";rejected=false;try{parseMaterial(malformed);}catch(...){rejected=true;}assert(rejected);
@@ -26,6 +27,7 @@ int main(){
     assert(!console.execute("self:getComponent(MeshRenderer):setMaterialTexture('../escape.png')"));
     assert(!console.execute("self:getComponent(MeshRenderer):setMaterialTiling(0,1)"));
     assert(!console.execute("self:getComponent(MeshRenderer):setMaterial('bad.png')"));
+    assert(console.execute("self:getComponent(MeshRenderer):setMaterialShader('Diffuse Transparent')"));assert(renderer.materialValues.shader==2);
     auto signature=sceneSignature(world);renderer.materialValues.color.x=.4f;assert(sceneSignature(world)!=signature);
     ProjectIO::Meshes meshes{};ProjectIO::Loaded project;auto encoded=ProjectIO::encode(world,"",OrbitCamera{},meshes);ProjectIO::decode(encoded,project,meshes);
     const auto& restored=project.world.get<MeshRenderer>(e);assert(restored.material==path && restored.materialOverrides==127 && restored.materialValues.color.x==.4f);
@@ -36,6 +38,8 @@ int main(){
     assert(console.bindExports(exports));assert(console.execute("assert(albedo=='Textures/color.png');self:getComponent(MeshRenderer):setMaterialTexture(albedo)"));
     assert(console.execute("self:getComponent(MeshRenderer):resetMaterialOverrides()"));assert(world.get<MeshRenderer>(e).materialOverrides==0);
     assert(console.execute("self:getComponent(MeshRenderer).material='Other.mat'"));assert(world.get<MeshRenderer>(e).material=="Other.mat");
+    console.bindWorld(world,{10},{11},{12},{13},{14});console.bindObject(e);
+    assert(console.execute("self:getComponent(MeshRenderer).mesh='Plane';assert(self:getComponent(MeshRenderer).mesh=='Plane')"));assert(world.get<MeshRenderer>(e).mesh.id==14);
     assert(console.execute("stale=self:getComponent(MeshRenderer);self:removeComponent(MeshRenderer)"));assert(!console.execute("stale:setMaterialColor(1,1,1)"));
     std::filesystem::remove_all(root);
 }

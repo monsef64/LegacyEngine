@@ -42,7 +42,7 @@ public:
         console_.execute(source_.data());return true;
     }
     void resetRuntime() { console_.reset(); }
-    void bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone={}) { world_=&world;console_.bindWorld(world,cube,sphere,capsule,cone); }
+    void bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone={},MeshHandle plane={}) { world_=&world;console_.bindWorld(world,cube,sphere,capsule,cone,plane); }
     void update(float dt) { console_.update(dt); }
     void fixedUpdate(float dt) { console_.fixedUpdate(dt); }
     void shutdown() { console_.shutdown(); }

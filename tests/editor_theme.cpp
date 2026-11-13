@@ -9,7 +9,7 @@ int main() {
     auto& io = ImGui::GetIO();
     assert(io.FontDefault != nullptr);
     assert(io.Fonts->Fonts.Size == 1);
-    assert(io.FontDefault->LegacySize == 16.0f);
+    assert(io.FontDefault->LegacySize == 18.0f);
     // Exercise rasterization at both ordinary and high pixel density.
     for (float density : {1.0f, 2.0f}) {
         io.DisplaySize = ImVec2(1280,720);

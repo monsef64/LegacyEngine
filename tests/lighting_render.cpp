@@ -85,6 +85,33 @@ int main(){
     mesh.materialOverrides=0;const auto diffuse=read();mesh.materialOverrides=MaterialNormal|MaterialShader;const auto bumped=read();assert(difference(diffuse,bumped)>100);
     assert(renderer.materialError.empty());
     mesh.materialValues.texture="missing.png";mesh.materialOverrides|=MaterialTexture;read();assert(!renderer.materialError.empty());
+    // Texture-alpha Diffuse remains lit, sorts independently of entity order,
+    // leaves opaque depth intact, and restores GL blending/depth-write state.
+    auto rgbaImage=[&](const char* name,unsigned char r,unsigned char g,unsigned char b,unsigned char alpha){
+        std::ofstream image(assets.root/name,std::ios::binary);unsigned char header[18]{};header[2]=2;header[12]=2;header[14]=2;header[16]=32;header[17]=8;image.write(reinterpret_cast<char*>(header),18);
+        for(int i=0;i<4;++i){image.put(char(b));image.put(char(g));image.put(char(r));image.put(char(alpha));}
+    };
+    rgbaImage("alpha-red.tga",255,0,0,128);rgbaImage("alpha-green.tga",0,255,0,128);rgbaImage("alpha-zero.tga",255,0,0,0);
+    World alphaWorld;auto farGlass=alphaWorld.create(),nearGlass=alphaWorld.create();
+    MeshRenderer glass;glass.mesh=cube;glass.materialValues.shader=2;glass.materialValues.texture="alpha-red.tga";glass.materialOverrides=MaterialShader|MaterialTexture;
+    world.get<MeshRenderer>(floor).materialOverrides=0;
+    auto greenGlass=glass;greenGlass.materialValues.texture="alpha-green.tga";
+    alphaWorld.add(farGlass,Transform{{0,0,-2}});alphaWorld.add(farGlass,greenGlass);alphaWorld.add(nearGlass,Transform{});alphaWorld.add(nearGlass,glass);
+    const Vec3 alphaEye{0,0,6};const auto alphaVP=multiply(perspective(kPi/3,1,.1f,100),lookAt(alphaEye,{0,0,0},{0,1,0}));
+    auto alphaRead=[&](){renderer.draw(alphaWorld,alphaVP,192,192,alphaEye,0,0,false);glFinish();std::array<unsigned char,4> p{};glReadPixels(96,96,1,1,GL_RGBA,GL_UNSIGNED_BYTE,p.data());GLboolean depth=0;glGetBooleanv(GL_DEPTH_WRITEMASK,&depth);assert(depth && !glIsEnabled(GL_BLEND) && glGetError()==GL_NO_ERROR);return p;};
+    auto blended=alphaRead();assert(blended[0]>blended[1] && blended[1]>blended[2]);
+    // Swap the objects' positions and material values, not their iteration order.
+    alphaWorld.get<Transform>(farGlass).position={0,0,0};alphaWorld.get<MeshRenderer>(farGlass)=glass;
+    alphaWorld.get<Transform>(nearGlass).position={0,0,-2};alphaWorld.get<MeshRenderer>(nearGlass)=greenGlass;
+    assert(alphaRead()==blended);
+    auto lightEntity=alphaWorld.create();alphaWorld.add(lightEntity,Transform{{0,0,4}});
+    auto lightingCheck=[&](auto light){using T=decltype(light);light.shadows=false;light.intensity=2;alphaWorld.add(lightEntity,light);auto lit=alphaRead();alphaWorld.remove<T>(lightEntity);assert(lit[0]>blended[0]+5);};
+    lightingCheck(DirectionalLight{});lightingCheck(PointLight{});lightingCheck(SpotLight{});
+    alphaWorld.get<MeshRenderer>(farGlass).materialValues.texture="alpha-zero.tga";alphaWorld.get<MeshRenderer>(nearGlass).materialValues.texture="alpha-zero.tga";
+    auto clear=alphaRead();assert(clear[0]>=24 && clear[0]<=27); // clear background, no opaque silhouette
+    auto occluder=alphaWorld.create();alphaWorld.add(occluder,Transform{{0,0,2}});alphaWorld.add(occluder,MeshRenderer{cube,{0,0,1}});
+    alphaWorld.get<MeshRenderer>(farGlass).materialValues.texture="alpha-red.tga";
+    auto occluded=alphaRead();assert(occluded[0]<3 && occluded[1]<3 && occluded[2]>25);
     // Six independently colored faces verify axis mapping, camera translation
     // invariance, color tinting, HDR decoding and foreground depth occlusion.
     World skyWorld;auto skyEntity=skyWorld.create();skyWorld.add(skyEntity,Skybox{});

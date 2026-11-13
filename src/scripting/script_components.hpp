@@ -7,8 +7,8 @@
 // Each attached script has an isolated Lua state and a generation-safe `self`.
 class ScriptComponents {
 public:
-    void start(World& world,AssetManager& assets,const MeshHandle* meshes) {
-        stop();world_=&world;assets_=&assets;for(int i=0;i<4;++i)meshes_[i]=meshes[i];sync();
+    void start(World& world,AssetManager& assets,const MeshHandle* meshes,MeshHandle plane={}) {
+        stop();world_=&world;assets_=&assets;for(int i=0;i<4;++i)meshes_[i]=meshes[i];meshes_[4]=plane;sync();
     }
     void update(float dt) {sync();for(auto& entry:entries_)if(entry.console)entry.console->update(dt);}
     void fixedUpdate(float dt) {sync();for(auto& entry:entries_)if(entry.console)entry.console->fixedUpdate(dt);}
@@ -24,7 +24,7 @@ public:
 private:
     struct Entry {Entity entity;std::string path,error;std::unique_ptr<LuaConsole> console;};
     std::vector<Entry> entries_;
-    World* world_=nullptr;AssetManager* assets_=nullptr;MeshHandle meshes_[4];
+    World* world_=nullptr;AssetManager* assets_=nullptr;MeshHandle meshes_[5];
     bool valid(const Entry& e) {
         auto* script=world_->tryGet<LuaScript>(e.entity);
         if(script)for(const auto& entry:scriptAttachments(*script))if(entry.enabled && entry.path==e.path)return true;
@@ -51,7 +51,7 @@ private:
             try {
                 auto source=assets_->readScript(entry.path);
                 entry.console=std::make_unique<LuaConsole>();
-                entry.console->bindWorld(*world_,meshes_[0],meshes_[1],meshes_[2],meshes_[3]);
+                entry.console->bindWorld(*world_,meshes_[0],meshes_[1],meshes_[2],meshes_[3],meshes_[4]);
                 auto* scripts=world_->tryGet<LuaScript>(entry.entity);
                 auto* fields=&scripts->fields;
                 if(scripts->path!=entry.path)for(auto& extra:scripts->additional)if(extra.path==entry.path){fields=&extra.fields;break;}

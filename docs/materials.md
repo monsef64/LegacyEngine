@@ -10,9 +10,11 @@ Expand **Material properties** in MeshRenderer to edit the shared asset:
 - **Bumped Diffuse**: the same controls plus a tangent-space **Normal map** and
   normal strength. Use OpenGL-style (+Y/green-up) normal maps; this is normal
   mapping, not grayscale height/displacement mapping.
+- **Diffuse Transparent**: Diffuse lighting with the albedo texture's alpha channel.
+  Choose this for PNG/TGA images with transparent or semi-transparent pixels.
 - Texture dropdowns accept PNG, JPEG, BMP and TGA; you can also drag textures
   from the Asset Browser. `None` removes a texture. All built-in solids and the
-  plane have UVs. Surfaces remain opaque; texture alpha is not transparency.
+  plane have UVs. Diffuse and Bumped Diffuse remain opaque; only Diffuse Transparent uses texture alpha.
 
 Inspector edits are saved immediately to the **shared material asset**, affecting
 all users; asset-file edits are not part of scene undo. Script changes are
@@ -50,7 +52,7 @@ Asset Browser thumbnails); each image is limited to 32 MiB encoded and
 4096×4096 pixels. The GPU texture cache is capped at 128 MiB/128 entries and
 checks changed files once per second. Material assets refresh within 250 ms;
 missing/invalid assets report errors and fall back safely. Large first-use
-texture loads are synchronous. No transparency, custom GLSL, height maps, or
+texture loads are synchronous. No custom GLSL, height maps, or
 standalone texture-loading scripting API is included.
 
 Asset Browser folders can be renamed with **F2** after selecting them, or with
@@ -58,3 +60,23 @@ Asset Browser folders can be renamed with **F2** after selecting them, or with
 nested script, audio, exported asset and material references up to date, including
 texture paths stored in `.mat` files. Existing destination names are rejected;
 folder deletion remains unavailable.
+
+## Texture alpha and lighting
+
+Use the Inspector's Shader dropdown or:
+
+```lua
+local mesh = self:getComponent(MeshRenderer)
+mesh:setMaterialShader("Diffuse Transparent")
+mesh:setMaterialTexture(albedo) -- assigned through a Texture export
+```
+
+All rendered triangle meshes receive enabled directional, point and spot lights
+through their material; an empty GameObject has no visible surface to light.
+Transparent meshes also receive these lights and opaque-object shadows. Opaque
+geometry renders first; transparent objects are sorted back-to-front by their
+origin distance and blended with depth testing enabled and depth writes disabled.
+Zero-alpha pixels are discarded. Transparent surfaces do not cast shadows, to
+avoid fully opaque silhouettes from alpha images. Object-level sorting cannot
+perfectly resolve intersecting transparent meshes or self-overlapping surfaces;
+there is no order-independent transparency or colored/transmissive shadowing.

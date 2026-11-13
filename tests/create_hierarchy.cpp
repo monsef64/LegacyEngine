@@ -8,6 +8,12 @@ static void require(bool ok,const char* text){if(!ok){std::fprintf(stderr,"FAIL:
 static bool near(Vec3 a,Vec3 b){return dot(a-b,a-b)<1e-7f;}
 int main(){
     World world;
+    Entity createdPlane=createEditorObject(world,10,{1,0,2},{1},{2},{3},{4},{5});
+    require(world.has<MeshRenderer>(createdPlane) && world.get<MeshRenderer>(createdPlane).mesh.id==5,"Plane menu item uses plane geometry");
+    require(world.has<Collider>(createdPlane) && !world.has<RigidBody>(createdPlane) && world.get<Collider>(createdPlane).size.y==.1f,"Plane is static with thin box collision");
+    Entity createdSky=createEditorObject(world,11,{},{1},{2},{3},{4},{5});
+    require(world.has<Skybox>(createdSky) && world.has<Transform>(createdSky) && !world.has<MeshRenderer>(createdSky),"Skybox menu creates component GameObject");
+    world.destroy(createdPlane);world.destroy(createdSky);
     Entity parent=createLevelObject(world,"Parent",{}, {},ColliderShape::Box,true);
     Entity child=createLevelObject(world,"Child",{1,0,0},{1},ColliderShape::Box,false);
     require(world.has<Transform>(parent) && !world.has<MeshRenderer>(parent),"empty object has transform without rendering");

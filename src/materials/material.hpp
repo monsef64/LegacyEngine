@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cctype>
 struct MaterialProperties {
-    int shader=0; // 0 Diffuse, 1 Bumped Diffuse (tangent-space normal map)
+    int shader=0; // 0 Diffuse, 1 Bumped Diffuse, 2 Diffuse Transparent (texture alpha)
     Vec3 color{1,1,1};
     std::string texture,normalMap;
     float normalStrength=1,tilingX=1,tilingY=1,specular=0;
@@ -23,7 +23,7 @@ inline bool materialTexturePath(const std::string& path){
 }
 inline bool validMaterial(const MaterialProperties& p){
     auto color=[](float x){return std::isfinite(x)&&x>=0&&x<=100;};
-    return (p.shader==0 || p.shader==1)&&color(p.color.x)&&color(p.color.y)&&color(p.color.z)&&
+    return (p.shader>=0 && p.shader<=2)&&color(p.color.x)&&color(p.color.y)&&color(p.color.z)&&
         materialTexturePath(p.texture)&&materialTexturePath(p.normalMap)&&std::isfinite(p.normalStrength)&&p.normalStrength>=0&&p.normalStrength<=4&&
         std::isfinite(p.tilingX)&&std::isfinite(p.tilingY)&&std::abs(p.tilingX)>=.001f&&std::abs(p.tilingY)>=.001f&&std::abs(p.tilingX)<=1000&&std::abs(p.tilingY)<=1000&&
         std::isfinite(p.specular)&&p.specular>=0&&p.specular<=1;

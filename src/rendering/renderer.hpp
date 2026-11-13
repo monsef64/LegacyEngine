@@ -36,6 +36,7 @@ public:
     // Green collider overlay for a selected object, drawn over the scene.
     void drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection);
 
+    void drawCamera(const Transform& transform,const Camera& camera,const Mat4& viewProjection);
     void drawAudioSource(const Transform& transform,const AudioSource& source,const Mat4& viewProjection);
 
 private:
@@ -43,6 +44,7 @@ private:
     AssetManager materialAssets_;
     MaterialAssetCache materialCache_;
     MaterialTextureCache materialTextures_;
+    int litTransparent_=-1;
     int litTexture_=-1,litNormalTexture_=-1,litHasTexture_=-1,litBumped_=-1,litStrength_=-1,litTiling_=-1;
     void drawWire(const MeshData& wire,const Transform& transform,const Mat4& viewProjection,Vec3 color);
     int lightCountLocation_=-1,shadowSamplerLocation_=-1;

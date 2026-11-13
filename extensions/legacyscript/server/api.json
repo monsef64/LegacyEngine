@@ -457,7 +457,7 @@
   },
   {
     "name": "setMaterialShader",
-    "signature": "mesh:setMaterialShader('Diffuse'|'Bumped Diffuse')"
+    "signature": "mesh:setMaterialShader('Diffuse'|'Bumped Diffuse'|'Diffuse Transparent')"
   },
   {
     "name": "setMaterialNormalStrength",
@@ -557,7 +557,7 @@
   },
   {
     "name": "mesh",
-    "signature": "MeshRenderer.mesh: Cube | Sphere | Capsule | Cone"
+    "signature": "MeshRenderer.mesh: Cube | Sphere | Capsule | Cone | Plane"
   },
   {
     "name": "color",

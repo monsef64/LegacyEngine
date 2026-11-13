@@ -119,7 +119,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"setMaterialColor","mesh:setMaterialColor(r,g,b) - instance color override"},
     {"setMaterialTexture","mesh:setMaterialTexture(Texture) - instance albedo override; nil clears"},
     {"setMaterialNormalMap","mesh:setMaterialNormalMap(Texture) - instance normal map override; nil clears"},
-    {"setMaterialShader","mesh:setMaterialShader('Diffuse'|'Bumped Diffuse')"},
+    {"setMaterialShader","mesh:setMaterialShader('Diffuse'|'Bumped Diffuse'|'Diffuse Transparent')"},
     {"setMaterialNormalStrength","mesh:setMaterialNormalStrength(value) - 0..4"},
     {"setMaterialTiling","mesh:setMaterialTiling(x,y) - nonzero UV repeat scale"},
     {"setMaterialSpecular","mesh:setMaterialSpecular(value) - 0..1"},
@@ -136,7 +136,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"angularVelocity","RigidBody.angularVelocity: {x,y,z}"},{"shape","Collider.shape: Box | Sphere | Capsule | Cone"},
     {"radius","Collider.radius: number"},{"height","Collider.height: number"},{"size","Collider.size: {x,y,z}"},
     {"center","Collider.center: {x,y,z}"},{"friction","Collider.friction: number"},
-    {"bounciness","Collider.bounciness: number"},{"mesh","MeshRenderer.mesh: Cube | Sphere | Capsule | Cone"},
+    {"bounciness","Collider.bounciness: number"},{"mesh","MeshRenderer.mesh: Cube | Sphere | Capsule | Cone | Plane"},
     {"color","MeshRenderer.color: {x,y,z}"},{"checkerboard","MeshRenderer.checkerboard: boolean"},
     {"specular","MeshRenderer.specular: number"},{"name","GameObject.name: string"},
     {"value","ObjectName.value: string"}
