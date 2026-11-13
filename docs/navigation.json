@@ -60,6 +60,10 @@
     "title": "Debug menu"
   },
   {
+    "file": "diagnostics.md",
+    "title": "Terminal logs and crashes"
+  },
+  {
     "file": "license.md",
     "title": "License"
   }

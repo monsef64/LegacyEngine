@@ -2,6 +2,7 @@
 #include "assets/assets.hpp"
 #include "scripting/script_exports.hpp"
 #include "scripting/lua_console.hpp"
+#include <SDL3/SDL.h>
 
 // Each attached script has an isolated Lua state and a generation-safe `self`.
 class ScriptComponents {
@@ -56,7 +57,7 @@ private:
                 if(scripts->path!=entry.path)for(auto& extra:scripts->additional)if(extra.path==entry.path){fields=&extra.fields;break;}
                 syncScriptExports(source,*fields);
                 if(entry.console->bindObject(entry.entity) && entry.console->bindExports(*fields))entry.console->execute(source);
-            } catch(const std::exception& error) {entry.error=error.what();}
+            } catch(const std::exception& error) {entry.error=error.what();SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"LegacyScript asset %s: %s",entry.path.c_str(),entry.error.c_str());}
             entries_.push_back(std::move(entry));
         }
     }
