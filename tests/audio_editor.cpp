@@ -87,7 +87,7 @@ int main(){
       assert(activeAudioListener(world)==listener);
       source.fadeIn(.01f);auto in=mixer.render(world,assets,1200);
       assert(in.front()==0 && in[1100]>0 && in.back()>0 && source.isPlaying());
-      mixer.render(world,assets,4800);assert(!source.isPlaying());
+      mixer.render(world,assets,4800);assert(!source.isPlaying());assert(source.eventSequence[1]>0);
       source.play();source.fadeOut(.01f);auto out=mixer.render(world,assets,1200);
       assert(out.front()>0 && out.back()==0 && !source.isPlaying());
       source.play();source.pause();source.fadeOut(.01f);mixer.render(world,assets,1200);assert(source.state==AudioSource::State::Paused);source.resume();mixer.render(world,assets,1200);assert(!source.isPlaying());

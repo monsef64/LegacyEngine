@@ -14,23 +14,23 @@
 // Font Awesome Free Solid glyphs, merged into the embedded editor font.
 inline const char* assetIcon(const std::string& path, bool folder = false) {
     if (folder) {
-        return "\xef\x81\xbb"; // folder
+        return "\xef\x81\xbc"; // folder-open
     }
     auto ext = AssetManager::extension(path);
     if (ext == ".ls" || ext == ".lua") {
         return "\xef\x87\x89"; // file-code
     }
     if (ext == ".mat") {
-        return "\xef\x94\xbf"; // palette
+        return "\xef\x81\x82"; // material sphere
     }
     if (textureAsset(path)) {
-        return "\xef\x80\xbe"; // image
+        return "\xef\x87\x85"; // file-image
     }
     if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb") {
         return "\xef\x86\xb2"; // cube
     }
     if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
-        return "\xef\x80\x81"; // music
+        return "\xef\x80\xa8"; // volume-high
     }
     if (ext == ".txt" || ext == ".json" || ext == ".md") {
         return "\xef\x85\x9c"; // file-lines
@@ -205,21 +205,36 @@ class AssetBrowser {
                 !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
                 !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) && editable &&
                 !dialog.pending();
-            ImGui::TextDisabled("%s", (assets.root / currentFolder).string().c_str());
+            ImGui::TextDisabled(
+                "%s",
+                currentFolder.empty()
+                    ? "Assets"
+                    : std::filesystem::path(currentFolder).filename().string().c_str());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", (assets.root / currentFolder).string().c_str());
+            }
             if (!currentFolder.empty() && ImGui::Button("Up one folder")) {
                 currentFolder = std::filesystem::path(currentFolder).parent_path().generic_string();
                 selected.clear();
             }
             ImGui::BeginDisabled(!editable || dialog.pending());
-            if (ImGui::Button("Import...")) {
+            ImGui::SetCursorPosX(
+                std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 112));
+            if (ImGui::Button("\xef\x95\xad##Import", ImVec2(32, 26))) {
                 dialog.showImport(window);
             }
-            ImGui::SameLine();
-            if (ImGui::Button("New LegacyScript")) {
-                createFile(".ls");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Import files");
             }
             ImGui::SameLine();
-            if (ImGui::Button("\xef\x99\x9e##NewFolder")) {
+            if (ImGui::Button("\xef\x87\x89##NewScript", ImVec2(32, 26))) {
+                createFile(".ls");
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("New LegacyScript");
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("\xef\x99\x9e##NewFolder", ImVec2(32, 26))) {
                 createFolder();
             }
             if (ImGui::IsItemHovered()) {
@@ -261,7 +276,11 @@ class AssetBrowser {
                         }
                     }
                 }
-                std::sort(files.begin(), files.end());
+                std::sort(files.begin(), files.end(), [&](const auto& a, const auto& b) {
+                    const bool da = std::filesystem::is_directory(assets.resolve(a));
+                    const bool db = std::filesystem::is_directory(assets.resolve(b));
+                    return da != db ? da > db : a < b;
+                });
                 const int columns =
                     grid_ ? std::clamp(
                                 static_cast<int>(ImGui::GetContentRegionAvail().x / 120), 1, 64)
@@ -269,9 +288,7 @@ class AssetBrowser {
                 if (ImGui::BeginTable("Asset items", columns, ImGuiTableFlags_SizingStretchSame)) {
                     for (const auto& file : files) {
                         const bool folderItem = std::filesystem::is_directory(assets.resolve(file));
-                        const std::string display =
-                            std::filesystem::path(file).filename().string() +
-                            (folderItem ? "/" : "");
+                        const std::string display = std::filesystem::path(file).filename().string();
                         ImGui::TableNextColumn();
                         ImGui::PushID(file.c_str());
                         const auto iconPosition = ImGui::GetCursorScreenPos();
@@ -294,6 +311,12 @@ class AssetBrowser {
                             fileBadge(file, iconPosition, folderItem, thumbnail);
                         }
                         const bool itemHovered = ImGui::IsMouseHoveringRect(itemMin, itemMax);
+                        if (itemHovered && materialAsset(file) && thumbnail &&
+                            ImGui::BeginTooltip()) {
+                            ImGui::TextUnformatted(display.c_str());
+                            ImGui::Image(static_cast<ImTextureID>(thumbnail), ImVec2(240, 240));
+                            ImGui::EndTooltip();
+                        }
                         if (grid_) {
                             const auto a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
                             auto* draw = ImGui::GetWindowDrawList();

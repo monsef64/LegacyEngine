@@ -2,6 +2,8 @@
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include <functional>
+#include <list>
+#include <string>
 #include <string_view>
 #include <vector>
 struct lua_State;
@@ -20,6 +22,10 @@ class LuaScene {
     void setSelf(Entity entity);
     void setExports(const std::vector<ScriptField>& fields);
     void start();
+    void objectEvent(Entity entity, const char* name);
+    bool receivesEvents() const {
+        return active_ && (selfEntity_ == Entity{} || isActive(world_, selfEntity_));
+    }
     void update(float dt);
     void fixedUpdate(float dt);
     void stop();
@@ -30,6 +36,22 @@ class LuaScene {
         int reference;
         bool owned = false, started = false, destroying = false;
     };
+    struct Task {
+        lua_State* thread = nullptr;
+        int reference = 0, objectReference = 0;
+        std::string callback;
+        float seconds = 0;
+        Entity audioEntity;
+        int audioEvent = -1;
+        unsigned sequence = 0;
+        Entity owner;
+    };
+    std::list<Task> tasks_;
+    Task* currentTask_ = nullptr;
+    Entity selfEntity_;
+    void resume(Task& task, int arguments);
+    void advanceTasks(float dt);
+    static int waitAPI(lua_State* state);
     lua_State* state_;
     World& world_;
     MeshHandle meshes_[5];

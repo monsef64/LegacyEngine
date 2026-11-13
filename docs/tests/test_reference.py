@@ -34,3 +34,20 @@ class ReferenceTests(unittest.TestCase):
         app = (ROOT / 'src/app/main.cpp').read_text()
         self.assertIn('openManual("scripting-reference.html")', app)
         self.assertIn('SDL_GetBasePath()', app)
+
+    def test_new_runtime_contracts_are_documented(self):
+        content = reference.render_reference()
+        for name in ('onMouseDown', 'onMouseUp', 'onMouseEnter', 'onMouseExit', 'onMouseOver',
+                     'onAudioStarted', 'onAudioFinished', 'onAudioPaused', 'onAudioResumed', 'onAudioStopped',
+                     'waitForSeconds', 'wait', 'GameObject.setActive', 'GameObject.isActive'):
+            self.assertIn('### ' + name + '\n', content)
+            self.assertTrue(reference.CALLABLE_DETAILS[name])
+        self.assertIn('## Callback and wait quick guide', content)
+        self.assertIn('opaque `AudioEvent` tokens', content)
+        self.assertIn('custom/level event listeners', content)
+
+    def test_level_actions_use_file_menu(self):
+        projects = (ROOT / 'docs/projects.md').read_text()
+        self.assertIn('**File > New Level...**', projects)
+        self.assertIn('**File > Save Level**', projects)
+        self.assertNotIn('Project > Levels > New Level', projects)

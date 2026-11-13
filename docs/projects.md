@@ -7,6 +7,7 @@ MyProject/
   Assets/                         # scripts, audio and other imported assets
   Settings/
     ProjectSettings.json          # project/editor-camera settings
+    Rendering.json                # VSync preference
     InputSettings.json            # three-slot named button mappings (v2)
   .cache/thumbnails/               # disposable texture previews; not source assets
 ```
@@ -21,9 +22,10 @@ JSON and 64 KiB editor source. Runtime state, logs and history are not serialize
 
 ## Levels
 
-Use **Project > Levels > New Level...** to create an empty level. The current
-level is saved first (initially as `Main`). **Save Current Level** saves the active
-world and editor camera; choose a name in the same menu to switch.
+Use **File > New Level...** to create an empty level. The current
+level is saved first (initially as `Main`). **File > Save Level** saves the active
+world and editor camera. **Project > Levels** only selects an existing level;
+New/Save are not duplicated there.
 Levels belong to the project: `Assets/Levels/<name>.level` contains the scene JSON,
 and `Assets/Levels/levels.json` records creation order and the current level.
 Project Save/Save As carries these assets with the project. Existing single-scene
@@ -55,3 +57,12 @@ available only outside Play; level names cannot contain filesystem separators.
 Right-click the Hierarchy root and choose **Rename Level...** to rename the active
 level. This updates its `.level` filename and registry entry; duplicate or invalid
 names are rejected without changing the current level.
+
+## Object activity in saved levels
+
+Inspector **Active** and `object:setActive(enabled)` persist the local activity
+flag with the GameObject. Missing flags in old files default to active. Effective
+activity also depends on parents; a disabled parent does not overwrite its
+children’s local flags. Activity participates in scene Undo/Redo and Play/Stop
+restoration. Wait timers, pending audio events and runtime subscriptions are not
+serialized; new runtimes start when the level is played again.

@@ -64,6 +64,8 @@ int main()
     auto frame=[&](bool enabled=true) {
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
+        ImGui::SetNextWindowPos(ImVec2(16,16));ImGui::SetNextWindowSize(ImVec2(160,50));
+        ImGui::Begin("Scene topbar",nullptr,ImGuiWindowFlags_NoDecoration);editor.drawToolbar();ImGui::End();
         editor.draw(world,e,enabled,camera,1280.0f/720);
         ImGui::Render();
     };
@@ -93,7 +95,7 @@ int main()
     require(world.get<RigidBody>(e).mass==2 && !world.get<RigidBody>(e).useGravity,"body settings preserved");
     // The icon-only toolbar switches to rotation and scale using normal ImGui input.
     for (int tool=1;tool<=2;++tool) {
-        io.AddMousePosEvent(44.0f+48.0f*tool,676);
+        io.AddMousePosEvent(37.0f+34.0f*tool,35);
         frame();
         io.AddMouseButtonEvent(0,true); frame();
         io.AddMouseButtonEvent(0,false); frame();

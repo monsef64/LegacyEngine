@@ -2,7 +2,6 @@
 
 [Complete Scripting Reference: every function, method and event with examples](scripting-reference.md)
 
-
 LegacyEngine is a C++17 3D editor with LegacyScript scripting, built on SDL3 and OpenGL.
 
 ![LegacyEngine editor](screenshot.png)
@@ -21,6 +20,8 @@ The **Release** workflow builds a standalone HTML/CSS site and uploads
 Extract the docs artifact and open `index.html` directly in a browser; no server,
 JavaScript, or internet connection is required. Tagged releases also attach
 `legacyengine-docs.zip`. The engine archive includes the same site in `docs/`.
+Open **Help > Documentation** or **Help > Scripting Reference** inside the engine
+to launch the corresponding local HTML page.
 
 ## Build this documentation
 
@@ -38,3 +39,15 @@ in `docs/`; `navigation.json` controls their order and titles. Presentation is i
 `style.css`. Generated HTML is not committed. The builder rejects missing pages,
 broken internal links, duplicate destinations, and output paths that could overwrite
 the source tree. Repository-source links point to the revision used for the build.
+
+## New editor and runtime workflows
+
+- [Settings history, Game window and asset controls](editor.md#settings-history-and-play-destination)
+- [Mouse picking and AudioSource event setup](audio-input.md#gameobject-mouse-callbacks)
+- [Object activation and non-blocking waits](scripting.md#object-activity-mouseaudio-callbacks-and-waits)
+- [Callback and wait quick guide](scripting-reference.md#callback-and-wait-quick-guide)
+
+The scripting reference is generated from engine-owned definitions. After changing
+an API or its examples, run `python3 docs/generate_reference.py`, then the docs
+tests and HTML builder above. Use `python3 docs/generate_reference.py --check` to
+check that the committed reference is current.

@@ -253,7 +253,7 @@ void Renderer::draw(World& world,
     const Skybox* activeSky = nullptr;
     const SkyboxTransition* skyFade = nullptr;
     world.eachReadOnly<Skybox>([&](Entity e, const Skybox& sky) {
-        if (!activeSky && sky.enabled) {
+        if (!activeSky && sky.enabled && isActive(world, e)) {
             activeSky = &sky;
             skyFade = world.has<SkyboxTransition>(e) ? world.tryGet<SkyboxTransition>(e) : nullptr;
         }
@@ -369,7 +369,7 @@ void Renderer::draw(World& world,
     glDepthMask(GL_TRUE);
     world.eachReadOnly<Transform, MeshRenderer>(
         [&](Entity e, const Transform& t, const MeshRenderer& r) {
-            if (world.has<Camera>(e) || !visibleMesh(t, r)) {
+            if (!isActive(world, e) || world.has<Camera>(e) || !visibleMesh(t, r)) {
                 return;
             }
             auto material = resolveMaterial(r);
@@ -526,7 +526,7 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
     if (needsShadows) {
         world.eachReadOnly<Transform, MeshRenderer>(
             [&](Entity e, const Transform& t, const MeshRenderer& r) {
-                if (world.has<Camera>(e) || r.mesh.id >= meshes_.size()) {
+                if (!isActive(world, e) || world.has<Camera>(e) || r.mesh.id >= meshes_.size()) {
                     return;
                 }
                 const auto& mesh = meshes_[r.mesh.id];

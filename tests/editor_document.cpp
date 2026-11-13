@@ -10,9 +10,11 @@ int main() {
         SDL_KMOD_LALT,SDL_KMOD_RALT,SDL_KMOD_LGUI,SDL_KMOD_RGUI})assert(cameraModifiersHeld(mod));
     assert(cameraModifiersHeld(SDL_KMOD_CTRL|SDL_KMOD_SHIFT));
     assert(!cameraModifiersHeld(SDL_KMOD_SHIFT));
-    assert(projectWindowTitle("",true)=="Untitled* - LegacyEngine");
-    assert(projectWindowTitle("/tmp/Scene.legacy",false)=="Scene.legacy - LegacyEngine");
-    assert(projectWindowTitle("/tmp/Scene.legacy",true)=="Scene.legacy* - LegacyEngine");
+#ifndef _WIN32
+    assert(projectWindowTitle("",true)=="Untitled* - Untitled - Linux");
+    assert(projectWindowTitle("/tmp/Scene.legacy",false)=="Untitled - Scene - Linux");
+    assert(projectWindowTitle("/tmp/Scene.legacy",true)=="Untitled* - Scene - Linux");
+#endif
     World world;Entity e=world.create();world.add(e,Transform{});OrbitCamera camera;
     auto saved=projectContentState(world,"print('saved')",camera);
     EditorHistory history(world);

@@ -39,14 +39,14 @@ int main(){
     auto frame=[&]{ImGui::NewFrame();drawInspector(world,object,layout.inspector,meshes,false);ImGui::Render();};
     frame();frame();
     // Rename through the actual Inspector text field.
-    io.AddMousePosEvent(layout.inspector.x+70,layout.inspector.y+35);frame();
+    io.AddMousePosEvent(layout.inspector.x+70,layout.inspector.y+58);frame();
     io.AddMouseButtonEvent(0,true);frame();io.AddMouseButtonEvent(0,false);frame();
     io.AddKeyEvent(ImGuiMod_Ctrl,true);io.AddKeyEvent(ImGuiKey_A,true);frame();
     io.AddKeyEvent(ImGuiKey_A,false);io.AddKeyEvent(ImGuiMod_Ctrl,false);frame();
     io.AddInputCharactersUTF8("Renamed");frame();
     require(world.get<ObjectName>(object).value=="Renamed","Inspector edits live object name");
     io.AddKeyEvent(ImGuiKey_Enter,true);frame();io.AddKeyEvent(ImGuiKey_Enter,false);frame();
-    io.AddMousePosEvent(layout.inspector.x+30,layout.inspector.y+125);frame();
+    io.AddMousePosEvent(layout.inspector.x+30,layout.inspector.y+148);frame();
     io.AddKeyEvent(ImGuiMod_Ctrl,true);frame();
     io.AddMouseButtonEvent(0,true);frame();io.AddMouseButtonEvent(0,false);frame();
     io.AddKeyEvent(ImGuiKey_A,true);frame();io.AddKeyEvent(ImGuiKey_A,false);io.AddKeyEvent(ImGuiMod_Ctrl,false);frame();

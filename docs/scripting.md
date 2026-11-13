@@ -109,3 +109,51 @@ These hooks can also be observed with `on("onLevelLoaded", callback)` and
 `on("onLevelFailedToLoad", callback)`. Unloading is not a successful load event.
 Scene replacement remains deferred; never expect `loadLevel()` to replace
 `self` or invoke callbacks inside the calling Lua function.
+
+## Object activity, mouse/audio callbacks, and waits
+
+```lua
+function onMouseDown()
+    debug.log("Clicked", self:getName())
+end
+
+function onAudioFinished()
+    debug.log("Primary clip finished naturally")
+end
+
+function onStart()
+    local audio = self:getComponent(AudioSource)
+    waitForSeconds(5)
+    if audio then
+        audio:play()
+        wait(audio.onAudioFinished)
+        debug.log("Playback completed; continue here")
+    end
+end
+```
+
+Mouse callbacks are `onMouseDown`, `onMouseUp`, `onMouseEnter`, `onMouseExit`, and
+`onMouseOver`. Put a Collider on the object. Picking uses the active Game camera,
+its viewport, and the nearest active Collider under the Game image (or separate
+Game window). Down is the left-button press; Up goes to its original pressed
+object. Cursor lock picks at the center. Over runs every playing frame.
+
+AudioSource owner scripts receive `onAudioStarted`, `onAudioFinished`,
+`onAudioPaused`, `onAudioResumed`, and `onAudioStopped`. Natural completion of the
+primary clip triggers Finished; explicit stop/fade-out stop triggers Stopped.
+Pausing/resuming does not restart the clip. Looping clips do not naturally finish;
+one-shots do not produce primary-clip events. Audio decode failure stops the
+source with diagnostics rather than claiming successful completion.
+
+Use `self:setActive(false)` and `object:isActive()` to control/query activity.
+Reactivation must come from another active script or Inspector. A paused script
+keeps its variables and resumes rather than rerunning onStart.
+
+Waits are non-blocking and only supported inside lifecycle/object callbacks, not
+at file top-level, inside custom/level event listeners, or in onDestroy. Each
+callback can have one pending invocation; other callbacks still run. Seconds are
+playing-time seconds (0–86400, zero waits until the next update). Pause and
+inactivity freeze waits; Stop/runtime reset cancels them. `wait(audio.onAudioFinished)`
+listens for the next occurrence after the wait is reached, not a past occurrence.
+Destroying/removing the source cancels its waiting continuation. Instruction and
+memory budgets remain enforced when a callback resumes.

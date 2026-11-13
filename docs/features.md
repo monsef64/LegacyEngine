@@ -17,3 +17,20 @@
 
 - Project-owned Diffuse/Diffuse Bumped material assets and six-face/HDR skyboxes.
 - Debug menu with FPS display and collider wireframes in the Game view.
+
+## Editor and scripting additions
+
+- Settings Undo/Redo in Edit mode, with Console logging.
+- Play focuses Game, with an optional separate native Game window.
+- Compact transform toolbar and icon-only asset actions; folders sort before files.
+- Material sphere thumbnails and enlarged hover previews.
+- GameObject activity inherited through parenting, saved with levels.
+- Targeted mouse callbacks and AudioSource playback callbacks.
+- Non-blocking `waitForSeconds(seconds)` and `wait(audio.onAudioFinished)`.
+- VS Code language-server error reporting and bounded automatic recovery.
+- [Complete offline scripting reference](scripting-reference.md) with signatures,
+  examples, callback requirements and wait restrictions.
+
+See [editor controls](editor.md#settings-history-and-play-destination),
+[mouse/audio callback setup](audio-input.md#gameobject-mouse-callbacks), and
+[activity and waits](scripting.md#object-activity-mouseaudio-callbacks-and-waits).

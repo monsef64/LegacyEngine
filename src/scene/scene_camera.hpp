@@ -6,7 +6,7 @@
 inline Entity activeCamera(World& world) {
     Entity found;
     world.each<Camera, Transform>([&](Entity e, Camera& c, Transform&) {
-        if (c.active && found == Entity{}) {
+        if (isActive(world, e) && c.active && found == Entity{}) {
             found = e;
         }
     });
@@ -133,7 +133,10 @@ inline Vec3 cameraScreenToWorld(const Transform& t, const Camera& c, Vec3 screen
     return projectCameraPoint(inverseCameraMatrix(cameraMatrix(t, c)), ndc);
 }
 inline void updateCameras(World& world, float dt) {
-    world.each<Camera, Transform>([&](Entity, Camera& c, Transform& t) {
+    world.each<Camera, Transform>([&](Entity e, Camera& c, Transform& t) {
+        if (!isActive(world, e)) {
+            return;
+        }
         if (c.tracking) {
             Vec3 target = c.target;
             if (c.targetEntity != Entity{}) {

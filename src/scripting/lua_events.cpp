@@ -1,4 +1,5 @@
 #include "scripting/lua_console.hpp"
+#include "scripting/lua_scene.hpp"
 #include <algorithm>
 extern "C" {
 #include <lauxlib.h>
@@ -148,6 +149,9 @@ int LuaConsole::eventAPI(lua_State* L) {
     return 1;
 }
 void LuaConsole::receiveEvent(const std::string& name, const std::vector<EventValue>& values) {
+    if (scene_ && !scene_->receivesEvents()) {
+        return;
+    }
     if (!state_) {
         return;
     }

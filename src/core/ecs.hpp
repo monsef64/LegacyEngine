@@ -151,6 +151,11 @@ class World {
     }
 
     // The entity's component, or nullptr if it does not have one.
+    template <typename T> const T* tryGet(Entity entity) const {
+        const Pool<T>* found = findPool<T>();
+        return found && alive(entity) && found->has(entity.index) ? &found->get(entity.index)
+                                                                  : nullptr;
+    }
     template <typename T> T* tryGet(Entity entity) {
         Pool<T>& components = pool<T>();
         return alive(entity) && components.has(entity.index) ? &components.get(entity.index)

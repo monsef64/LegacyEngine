@@ -68,7 +68,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 12\n";
+    out << std::setprecision(9) << "LegacyEngineProject 13\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -90,14 +90,14 @@ inline std::string encodeLegacy(World& world,
         }
     };
     for (Entity e : entities) {
-        unsigned mask = (world.has<ObjectName>(e) ? 1 : 0) | (world.has<Transform>(e) ? 2 : 0) |
-                        (world.has<MeshRenderer>(e) ? 4 : 0) | (world.has<Collider>(e) ? 8 : 0) |
-                        (world.has<RigidBody>(e) ? 16 : 0) | (world.has<LuaScript>(e) ? 32 : 0) |
-                        (world.has<Camera>(e) ? 64 : 0) | (world.has<AudioSource>(e) ? 128 : 0) |
-                        (world.has<AudioListener>(e) ? 256 : 0) |
-                        (world.has<DirectionalLight>(e) ? 512 : 0) |
-                        (world.has<PointLight>(e) ? 1024 : 0) |
-                        (world.has<SpotLight>(e) ? 2048 : 0) | (world.has<Skybox>(e) ? 4096 : 0);
+        unsigned mask =
+            (world.has<ObjectName>(e) ? 1 : 0) | (world.has<Transform>(e) ? 2 : 0) |
+            (world.has<MeshRenderer>(e) ? 4 : 0) | (world.has<Collider>(e) ? 8 : 0) |
+            (world.has<RigidBody>(e) ? 16 : 0) | (world.has<LuaScript>(e) ? 32 : 0) |
+            (world.has<Camera>(e) ? 64 : 0) | (world.has<AudioSource>(e) ? 128 : 0) |
+            (world.has<AudioListener>(e) ? 256 : 0) | (world.has<DirectionalLight>(e) ? 512 : 0) |
+            (world.has<PointLight>(e) ? 1024 : 0) | (world.has<SpotLight>(e) ? 2048 : 0) |
+            (world.has<Skybox>(e) ? 4096 : 0) | (world.has<ObjectActivity>(e) ? 8192 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -206,6 +206,9 @@ inline std::string encodeLegacy(World& world,
                 out << std::quoted(*path) << ' ';
             }
         }
+        if (const auto* activity = world.tryGet<ObjectActivity>(e)) {
+            out << activity->enabled << " ";
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -223,7 +226,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 12));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 13));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -282,7 +285,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 7  ? 255u
                          : version < 9  ? 511u
                          : version < 12 ? 4095u
-                                        : 8191u) &&
+                         : version < 13 ? 8191u
+                                        : 16383u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -453,6 +457,11 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             }
             require(validSkybox(sky));
             result.world.add(e, sky);
+        }
+        if (mask & 8192) {
+            bool enabled = true;
+            in >> enabled;
+            result.world.add(e, ObjectActivity{enabled});
         }
         require(bool(in));
     }

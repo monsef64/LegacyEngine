@@ -4,12 +4,12 @@ namespace {
 // Vector-drawn icons: no font-dependent Unicode symbols or external icon files.
 void toolButton(const char* id, const char* tooltip, TransformTool value, TransformTool& current) {
     const ImVec2 p = ImGui::GetCursorScreenPos();
-    if (ImGui::Button(id, ImVec2(40, 40))) {
+    if (ImGui::Button(id, ImVec2(26, 24))) {
         current = value;
     }
     auto* draw = ImGui::GetWindowDrawList();
     const ImU32 color = IM_COL32(235, 240, 245, 255);
-    auto point = [&](float x, float y) { return ImVec2(p.x + x, p.y + y); };
+    auto point = [&](float x, float y) { return ImVec2(p.x + x * .6f + 1, p.y + y * .55f + 1); };
     auto line = [&](float x, float y, float a, float b) {
         draw->AddLine(point(x, y), point(a, b), color, 2);
     };
@@ -25,7 +25,7 @@ void toolButton(const char* id, const char* tooltip, TransformTool value, Transf
         line(20, 31, 16, 27);
         line(20, 31, 24, 27);
     } else if (value == TransformTool::Rotate) {
-        draw->PathArcTo(point(20, 20), 11, -kPi * 0.8f, kPi * 0.65f, 24);
+        draw->PathArcTo(point(20, 20), 6, -kPi * 0.8f, kPi * 0.65f, 24);
         draw->PathStroke(color, 0, 2);
         line(13, 29, 19, 29);
         line(13, 29, 13, 23);
@@ -48,35 +48,6 @@ void TransformEditor::draw(World& world,
                            float aspect,
                            const EditorRect* scene,
                            ImDrawList* drawList) {
-    const auto* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(
-        scene ? ImVec2(scene->x + 8, scene->y + scene->height - 8)
-              : ImVec2(viewport->WorkPos.x + 16, viewport->WorkPos.y + viewport->WorkSize.y - 16),
-        ImGuiCond_Always,
-        ImVec2(0, 1));
-    ImGui::Begin("Transform tools",
-                 nullptr,
-                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-                     ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoMove |
-                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing);
-    const char* ids[]{"##move", "##rotate", "##scale"};
-    const char* tips[]{
-        "Move: drag an axis arrow", "Rotate: drag an axis ring", "Scale: drag an axis handle"};
-    for (int i = 0; i < 3; ++i) {
-        if (i) {
-            ImGui::SameLine();
-        }
-        const auto tool = static_cast<TransformTool>(i);
-        const bool active = tool_ == tool;
-        if (active) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.42f, 0.64f, 1));
-        }
-        toolButton(ids[i], tips[i], tool, tool_);
-        if (active) {
-            ImGui::PopStyleColor();
-        }
-    }
-    ImGui::End();
     if (!enabled || !world.alive(entity) || !world.has<Transform>(entity)) {
         finish(world);
         return;
@@ -92,6 +63,7 @@ void TransformEditor::draw(World& world,
     ImGuizmo::Enable(true);
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist(drawList ? drawList : ImGui::GetBackgroundDrawList());
+    const auto* viewport = ImGui::GetMainViewport();
     ImGuizmo::SetRect(scene ? scene->x : viewport->Pos.x,
                       scene ? scene->y : viewport->Pos.y,
                       scene ? scene->width : viewport->Size.x,
@@ -135,5 +107,25 @@ void TransformEditor::draw(World& world,
         const bool hovered = hovered_;
         finish(world);
         hovered_ = hovered;
+    }
+}
+
+void TransformEditor::drawToolbar() {
+    const char* ids[]{"##move", "##rotate", "##scale"};
+    const char* tips[]{
+        "Move: drag an axis arrow", "Rotate: drag an axis ring", "Scale: drag an axis handle"};
+    for (int i = 0; i < 3; ++i) {
+        if (i) {
+            ImGui::SameLine();
+        }
+        const auto tool = static_cast<TransformTool>(i);
+        const bool active = tool_ == tool;
+        if (active) {
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.42f, 0.64f, 1));
+        }
+        toolButton(ids[i], tips[i], tool, tool_);
+        if (active) {
+            ImGui::PopStyleColor();
+        }
     }
 }

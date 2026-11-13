@@ -126,3 +126,30 @@ icon-only **New Folder** button with a tooltip.
 ImGui conflict highlighting and red recovery tooltips are disabled in the engine
 viewport. Recoverable UI errors are still sent to the engine log rather than
 silently discarded.
+
+## Settings history and Play destination
+
+Editor preferences (including theme and Scene grid), rendering VSync and project
+input bindings participate in Undo/Redo in Edit mode. Settings actions log to the
+Console, including undo and redo. Slider gestures are grouped on release. Level
+New/Save actions live only in the File menu; Project > Levels selects levels.
+
+Play selects/focuses Game, even when its tab was hidden. Enable **Separate Game
+window** beside the playback controls before Play to render into an additional
+resizable native window. It shares the running world, pauses with Pause, and
+closes on Stop. Closing that window returns to the docked Game view without
+stopping Play. Keyboard/mouse input follows the focused Game window.
+
+The title reads `LevelName* - ProjectName - Linux` (or `Windows`); the asterisk
+marks unsaved scene changes. Asset browsing lists folders first, then files, with
+folder names only; import, script creation and folder creation use right-aligned
+icons. Materials display a lit sphere thumbnail (color, albedo, specular) and a
+larger 240px preview on hover. These are lightweight approximate previews, not a
+full renderer/normal-map preview.
+
+GameObject **Active** in Inspector controls local activity. Disabled parents
+also disable their children; reactivating a parent preserves each child's local
+setting. Inactive objects are hidden from rendering/shadows, removed from
+physics, silent, and do not run attached scripts, mouse callbacks, custom event
+listeners or wait timers. They remain selectable in Hierarchy and persist in
+scene saves and Undo/Redo.

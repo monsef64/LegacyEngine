@@ -13,6 +13,14 @@ int LuaScene::objectApi(lua_State* L) {
     const int op=static_cast<int>(lua_tointeger(L,lua_upvalueindex(2)))-200;
     if(op==8){h.world->add(h.entity,ObjectName{objectName(L,2)});return 0;}
     if(op==9){auto* name=h.world->tryGet<ObjectName>(h.entity);lua_pushstring(L,name?name->value.c_str():"");return 1;}
+    if(op==10){
+        bool enabled=lua_isnone(L,2)||lua_toboolean(L,2);
+        if(!lua_isnone(L,2))luaL_checktype(L,2,LUA_TBOOLEAN);
+        setObjectActive(*h.world,h.entity,enabled);
+        if(auto* camera=h.world->tryGet<Camera>(h.entity)) { if(enabled) activateCamera(*h.world,h.entity);else camera->active=false; }
+        return 0;
+    }
+    if(op==11){lua_pushboolean(L,isActive(*h.world,h.entity));return 1;}
     auto* transform=h.world->tryGet<Transform>(h.entity);
     if(!transform)return luaL_error(L,"GameObject has no Transform");
     switch(op) {

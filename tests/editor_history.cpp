@@ -59,6 +59,17 @@ int main() {
     }
     int count=0;while(noops.undo(world,selection))++count;
     assert(count==64);
+    // Settings actions share ordering with scene edits even with identical world signatures.
+    {
+        EditorHistory settingsHistory(world,selection);bool setting=true;std::vector<std::string> log;
+        assert(settingsHistory.perform(world,selection,[&](bool forward){setting=!forward;log.push_back(forward?"Set/Redo VSync":"Undo VSync");}));
+        assert(!setting);world.get<Transform>(object).position.z=42;settingsHistory.commit(world,selection);
+        assert(settingsHistory.undo(world,selection) && !setting);
+        assert(settingsHistory.undo(world,selection) && setting);
+        assert(settingsHistory.redo(world,selection) && !setting);
+        assert(settingsHistory.redo(world,selection));assert(world.get<Transform>(object).position.z==42);
+        assert(log.size()==3 && log[1]=="Undo VSync");
+    }
     // Clipboard is a value snapshot and survives source deletion and ID reuse.
     World copiedWorld;
     Entity source=copiedWorld.create(),parent=copiedWorld.create();

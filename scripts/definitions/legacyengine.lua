@@ -18,6 +18,16 @@
 ---@field onUpdate fun(deltaTime:number)|nil
 ---@field onFixedUpdate fun(deltaTime:number)|nil
 ---@field onDestroy fun()|nil
+---@field onMouseDown fun()|nil
+---@field onMouseUp fun()|nil
+---@field onMouseEnter fun()|nil
+---@field onMouseExit fun()|nil
+---@field onMouseOver fun()|nil
+---@field onAudioStarted fun()|nil
+---@field onAudioFinished fun()|nil
+---@field onAudioPaused fun()|nil
+---@field onAudioResumed fun()|nil
+---@field onAudioStopped fun()|nil
 ---@class Transform
 ---@field position Vec3
 ---@field rotation Quaternion
@@ -188,6 +198,8 @@ function screenToWorld(camera,screenPosition) end
 
 -- Object-oriented constructors and methods. Existing global APIs remain valid.
 ---@class GameObject
+---@field setActive fun(self:GameObject,enabled?:boolean) Set local activity (default true); inherited by children
+---@field isActive fun(self:GameObject):boolean Effective activity including parents
 ---@field setPosition fun(self:GameObject,x:number|Vec3,y?:number,z?:number)
 ---@field getPosition fun(self:GameObject):Vec3
 ---@field setRotation fun(self:GameObject,x:number|Vec3|Quaternion,y?:number,z?:number,w?:number)
@@ -477,3 +489,30 @@ function onLevelFailedToLoad(name,error) end
 ---@param speed number
 ---@overload fun(source:GameObject|Skybox,destination:GameObject|Skybox,speed:number)
 function fadeSkybox(destination,speed) end
+
+-- Targeted callbacks: attached scripts receive events for their owning GameObject.
+function onMouseDown() end
+function onMouseUp() end
+function onMouseEnter() end
+function onMouseExit() end
+function onMouseOver() end
+function onAudioStarted() end
+function onAudioFinished() end
+function onAudioPaused() end
+function onAudioResumed() end
+function onAudioStopped() end
+
+---@class AudioEvent Opaque token identifying an AudioSource event, not a callable function
+---@class AudioSource
+---@field onAudioStarted AudioEvent
+---@field onAudioFinished AudioEvent
+---@field onAudioPaused AudioEvent
+---@field onAudioResumed AudioEvent
+---@field onAudioStopped AudioEvent
+
+---Suspend this lifecycle callback without blocking the engine. Not supported at top-level/onDestroy/custom event listeners.
+---@param seconds number Finite seconds from 0 to 86400; zero resumes on next update
+function waitForSeconds(seconds) end
+---Resume after the next occurrence of an AudioSource event; past events do not count.
+---@param event AudioEvent
+function wait(event) end

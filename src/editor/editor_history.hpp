@@ -48,6 +48,7 @@ inline std::string sceneSignature(World& world) {
         }
     };
     for (Entity e : world.entities()) {
+        component(e, ObjectActivity{}, [&](const ObjectActivity& a) { scalar(a.enabled); });
         scalar(e.index);
         scalar(e.generation);
         component(e, ObjectName{}, [&](const ObjectName& n) {

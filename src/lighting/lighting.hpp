@@ -33,8 +33,9 @@ inline void gather(World& world, const Mat4& vp, Vec3 eye, std::vector<Light>& l
     lights.clear();
     const Frustum frustum(vp);
     auto collect = [&](int type, Entity e, const LightSettings& l, const Transform& t) {
-        if (!l.enabled || l.intensity <= 0 || !validLight(l) || !std::isfinite(t.position.x) ||
-            !std::isfinite(t.position.y) || !std::isfinite(t.position.z)) {
+        if (!isActive(world, e) || !l.enabled || l.intensity <= 0 || !validLight(l) ||
+            !std::isfinite(t.position.x) || !std::isfinite(t.position.y) ||
+            !std::isfinite(t.position.z)) {
             return;
         }
         if (type != 0 && !frustum.visible(t.position, l.range)) {

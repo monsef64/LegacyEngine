@@ -5,10 +5,6 @@
 
 // Transforms remain world-space for rendering, physics and Lua. The snapshot
 // carries the last parent pose so parent deltas can be applied to children.
-struct Parent {
-    Entity entity;
-    Transform previous;
-};
 inline Quat composeRotation(Quat a, Quat b) {
     return normalize(Quat{a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
                           a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
