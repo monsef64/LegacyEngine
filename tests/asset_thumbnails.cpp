@@ -13,15 +13,17 @@ int main(){
     };
     image(200);bool hit=false;auto a=loadTextureThumbnail(assets,"color.bmp",&hit);assert(!hit);
     auto cache=thumbnailCachePath(assets,"color.bmp");assert(cache.parent_path()==temp/".cache"/"thumbnails");assert(std::filesystem::exists(cache));
-    assert(a.pixels[(16*64)*4]==200 && a.pixels[(16*64)*4+3]==255 && a.pixels[3]==0);
+    assert(a.pixels[((TextureThumbnail::size/4)*TextureThumbnail::size)*4]==200 && a.pixels[((TextureThumbnail::size/4)*TextureThumbnail::size)*4+3]==255 && a.pixels[3]==0);
     auto b=loadTextureThumbnail(assets,"color.bmp",&hit);assert(hit && a.pixels==b.pixels);
     image(20);std::filesystem::last_write_time(assets.root/"color.bmp",std::filesystem::last_write_time(assets.root/"color.bmp")+std::chrono::seconds(2));
-    b=loadTextureThumbnail(assets,"color.bmp",&hit);assert(!hit && b.pixels[(16*64)*4]==20);
+    b=loadTextureThumbnail(assets,"color.bmp",&hit);assert(!hit && b.pixels[((TextureThumbnail::size/4)*TextureThumbnail::size)*4]==20);
     {std::ofstream corrupt(cache);corrupt<<"broken cache";}
-    b=loadTextureThumbnail(assets,"color.bmp",&hit);assert(!hit && b.pixels[(16*64)*4]==20);
+    b=loadTextureThumbnail(assets,"color.bmp",&hit);assert(!hit && b.pixels[((TextureThumbnail::size/4)*TextureThumbnail::size)*4]==20);
     {std::ofstream bad(assets.root/"invalid.png");bad<<"not PNG";}
     bool rejected=false;try{loadTextureThumbnail(assets,"invalid.png");}catch(...){rejected=true;}assert(rejected);
     rejected=false;try{loadTextureThumbnail(assets,"../escape.png");}catch(...){rejected=true;}assert(rejected);
+    {std::ofstream hdr(assets.root/"sky.hdr",std::ios::binary);hdr<<"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 2 +X 2\n";for(int i=0;i<4;++i){hdr.put(char(128));hdr.put(char(128));hdr.put(char(128));hdr.put(char(129));}}
+    assert(textureAsset("sky.hdr"));auto hdr=loadTextureThumbnail(assets,"sky.hdr");assert(hdr.pixels[(TextureThumbnail::size/2*TextureThumbnail::size+TextureThumbnail::size/2)*4]>0);
     // simdjson conversion preserves types, Unicode, malformed/deep rejection.
     auto json=parseJson("{\"i\":-3,\"u\":18446744073709551615,\"s\":\"\\u00e9\",\"b\":true,\"a\":[null,1.25]}");
     assert(json["i"]==-3 && json["u"].get<std::uint64_t>()==UINT64_MAX && json["s"]=="é" && json["b"]==true && json["a"][0].is_null());

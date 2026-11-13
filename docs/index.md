@@ -11,7 +11,8 @@ LegacyEngine is a C++17 3D editor with LegacyScript scripting, built on SDL3 and
 1. [Build and run the engine](building.md), or download an engine release artifact.
 2. Learn the [editor workflow](editor.md) and [project/asset layout](projects.md).
 3. Read the [LegacyScript guide](scripting.md) and [audio/input APIs](audio-input.md).
-4. Configure [lighting](lighting.md), [materials](materials.md), and [skyboxes](skybox.md).
+4. Create reusable [prefab assets](prefabs.md).
+5. Configure [lighting](lighting.md), [materials](materials.md), and [skyboxes](skybox.md).
 
 ## Downloadable documentation
 

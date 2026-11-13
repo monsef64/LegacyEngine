@@ -69,12 +69,11 @@ void TransformEditor::draw(World& world,
                       scene ? scene->width : viewport->Size.x,
                       scene ? scene->height : viewport->Size.y);
     const bool wasDragging = dragging_;
-    const bool changed =
-        ImGuizmo::Manipulate(view.m,
-                             projection.m,
-                             operations[static_cast<int>(tool_)],
-                             tool_ == TransformTool::Move ? ImGuizmo::WORLD : ImGuizmo::LOCAL,
-                             model.m);
+    const bool changed = ImGuizmo::Manipulate(view.m,
+                                              projection.m,
+                                              operations[static_cast<int>(tool_)],
+                                              localSpace_ ? ImGuizmo::LOCAL : ImGuizmo::WORLD,
+                                              model.m);
     hovered_ = ImGuizmo::IsOver(operations[static_cast<int>(tool_)]);
     dragging_ = ImGuizmo::IsUsing();
     if (dragging_ && !wasDragging) {
@@ -128,4 +127,14 @@ void TransformEditor::drawToolbar() {
             ImGui::PopStyleColor();
         }
     }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(dragging_);
+    if (ImGui::RadioButton("World", !localSpace_)) {
+        localSpace_ = false;
+    }
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Local", localSpace_)) {
+        localSpace_ = true;
+    }
+    ImGui::EndDisabled();
 }

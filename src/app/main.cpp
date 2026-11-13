@@ -30,6 +30,7 @@
 #include "physics/physics.hpp"
 #include "platform/engine_log.hpp"
 #include "platform/project_dialog.hpp"
+#include "prefabs/prefab.hpp"
 #include "project/project_document.hpp"
 #include "project/project_io.hpp"
 #include "project/rendering_settings.hpp"
@@ -240,6 +241,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     OrbitCamera camera;
     const ProjectIO::Meshes projectMeshes{
         gridMesh, planeMesh, cubeMesh, sphereMesh, capsuleMesh, coneMesh};
+    std::unique_ptr<World> prefabLevel;
+    std::optional<EditorHistory> prefabHistory;
+    std::string editingPrefab, editingCubemap;
+    CubemapAsset cubemapDraft;
+    Entity prefabLevelSelection;
+    OrbitCamera prefabLevelCamera;
     LevelSystem levels(projectMeshes);
     levels.setRoot(browser.assets.root);
     LevelSystem::active = &levels;
@@ -288,6 +295,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                                       static_cast<float>(windowHeight),
                                                       std::max(20.0f, ImGui::GetFrameHeight()));
         layout.scene = sceneRect;
+        scripts.console().setAssetRoot(browser.assets.root);
         inputSettings.load(browser.assets, input);
         renderingSettings.load(browser.assets);
         if (levels.root() != browser.assets.root) {
@@ -302,6 +310,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             input.releaseMouse();
             LuaConsole::clearEvents();
             world.restore(transition->level->world);
+            try {
+                Prefabs::refreshAll(browser.assets, world, projectMeshes);
+            } catch (const std::exception& e) {
+                browser.assets.error = e.what();
+            }
             embeddedLegacySource = transition->level->source;
             camera = transition->level->camera;
             scripts.resetRuntime();
@@ -321,6 +334,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (playMode.active()) {
                 audio.start(world);
                 scripts.setAssetContext("", {});
+                scripts.console().setAssetRoot(browser.assets.root);
                 scripts.startPlay();
                 const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
                 componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
@@ -525,8 +539,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
         bool openProject = false, saveProject = false, saveAsProject = false;
-        const bool projectEnabled = !levels.busy() && !playMode.active() && !editor.dragging() &&
-                                    !projectDialog.pending() && !browser.dialog.pending();
+        const bool projectEnabled = !prefabLevel && !levels.busy() && !playMode.active() &&
+                                    !editor.dragging() && !projectDialog.pending() &&
+                                    !browser.dialog.pending();
         profiler.checkpoint(ProfilePart::Events);
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("File")) {
@@ -648,6 +663,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                 ? existingProjectAssetsPath(result->path)
                                 : std::filesystem::absolute(result->path).parent_path() /
                                       assetDirectory);
+                        try {
+                            Prefabs::refreshAll(browser.assets, world, projectMeshes);
+                        } catch (const std::exception& e) {
+                            browser.assets.error = e.what();
+                        }
                         levels.setRoot(browser.assets.root);
                         if (!levels.current().empty()) {
                             levels.load();
@@ -691,8 +711,18 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (created > 0 && created < 5) {
                 position = findRoom(physics, position, shapes[created]);
             }
+            Entity prefabRoot;
+            if (prefabLevel) {
+                try {
+                    prefabRoot = Prefabs::root(world);
+                } catch (const std::exception&) {
+                }
+            }
             selectedEntity = createEditorObject(
                 world, created, position, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
+            if (prefabRoot != Entity{} && world.alive(selectedEntity)) {
+                setParent(world, selectedEntity, prefabRoot);
+            }
         };
         if (created >= 0) {
             createObject(created);
@@ -737,7 +767,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         bool showAbout = false;
         if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("Project")) {
+            if (ImGui::BeginMenu("Project", !prefabLevel)) {
                 if (ImGui::MenuItem("Input Settings")) {
                     inputSettings.visible = true;
                 }
@@ -900,6 +930,35 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                                           : "Undo VSync setting");
                     });
                 }
+                const auto shadowsBefore = renderingSettings.shadows;
+                bool shadowChanged =
+                    ImGui::Combo("Shadow mapping",
+                                 &renderingSettings.shadows.mode,
+                                 "Cascaded (CSM) - primary\0Single-map PCF (PCM)\0");
+                const int sizes[]{256, 512, 1024, 2048};
+                int resolution = 0;
+                for (int i = 0; i < 4; ++i) {
+                    if (sizes[i] == renderingSettings.shadows.resolution) {
+                        resolution = i;
+                    }
+                }
+                if (ImGui::Combo(
+                        "Shadow resolution", &resolution, "256\000512\0001024\0002048\0")) {
+                    renderingSettings.shadows.resolution = sizes[resolution];
+                    shadowChanged = true;
+                }
+                if (shadowChanged) {
+                    const auto after = renderingSettings.shadows;
+                    renderingSettings.shadows = shadowsBefore;
+                    history.perform(world, selectedEntity, [&, shadowsBefore, after](bool forward) {
+                        renderingSettings.shadows = forward ? after : shadowsBefore;
+                        renderingSettings.save(browser.assets);
+                        scripts.console().message(forward ? "Set/Redo shadow settings"
+                                                          : "Undo shadow settings");
+                    });
+                }
+                ImGui::TextWrapped(
+                    "CSM uses four directional cascades. Point/spot lights retain PCF. Light quality scales the project resolution; Off disables that light's shadows.");
                 int interval = 0;
                 if (SDL_GL_GetSwapInterval(&interval)) {
                     ImGui::Text("Driver swap interval: %d", interval);
@@ -943,7 +1002,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui::Begin("Scene controls",
                      nullptr,
                      fixedPanelFlags | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoDocking);
-        editor.drawToolbar();
         if (editAllowed) {
             if (copyRequested && objectSelected) {
                 clipboard.copy(world, selectedEntity);
@@ -1011,9 +1069,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             playbackKeys && ImGui::Shortcut(ImGuiKey_F7, ImGuiInputFlags_RouteGlobal);
         const float playbackWidth = 90 + 2 * ImGui::GetStyle().ItemSpacing.x;
         ImGui::SetCursorPosX((layout.toolbar.width - playbackWidth) * 0.5f);
-        ImGui::BeginDisabled(playMode.active() || levels.busy());
+        ImGui::BeginDisabled(prefabLevel || playMode.active() || levels.busy());
         if (playbackButton("##Play", "Play (F5)", PlaybackIcon::Play, playMode.active()) ||
-            (playKey && !playMode.active() && !levels.busy())) {
+            (playKey && !prefabLevel && !playMode.active() && !levels.busy())) {
             editor.finish(world);
             clicking = false;
             try {
@@ -1044,6 +1102,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 physics.reset();
                 audio.start(world);
                 scripts.setAssetContext(browser.openedScript, selectedEntity);
+                scripts.console().setAssetRoot(browser.assets.root);
                 scripts.startPlay();
                 const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
                 componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
@@ -1125,9 +1184,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         bool hierarchyFocused = false;
         int hierarchyCreate = -1;
         const std::string hierarchyLevelName =
-            !levels.current().empty() ? levels.current()
-            : currentProject.empty()  ? "Untitled"
-                                      : std::filesystem::path(currentProject).stem().string();
+            prefabLevel                 ? "Prefab: " + editingPrefab
+            : !levels.current().empty() ? levels.current()
+            : currentProject.empty()    ? "Untitled"
+                                        : std::filesystem::path(currentProject).stem().string();
         if (drawLevelObjects(world,
                              selectedEntity,
                              true,
@@ -1135,7 +1195,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                              &hierarchyFocused,
                              &hierarchyCreate,
                              hierarchyLevelName.c_str(),
-                             editAllowed ? &renameLevelPopup : nullptr)) {
+                             editAllowed && !prefabLevel ? &renameLevelPopup : nullptr)) {
             editor.finish(world);
             clicking = false;
         }
@@ -1157,6 +1217,165 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                     ? browser.assets.root
                                     : std::filesystem::absolute(currentProject).parent_path();
         browser.draw(window, world, selectedEntity, scripts, editAllowed, &history);
+        if (!browser.editCubemapRequest.empty()) {
+            const auto path = std::exchange(browser.editCubemapRequest, {});
+            try {
+                cubemapDraft = loadCubemap(browser.assets, path);
+                editingCubemap = path;
+            } catch (const std::exception& e) {
+                browser.assets.error = e.what();
+            }
+        }
+        if (!editingCubemap.empty()) {
+            bool open = true;
+            ImGui::SetNextWindowSize(ImVec2(540, 340), ImGuiCond_FirstUseEver);
+            ImGui::Begin("Cubemap Editor", &open);
+            ImGui::TextWrapped("%s", editingCubemap.c_str());
+            ImGui::TextWrapped(
+                "Assign six square textures of matching size. Front is -Z, back is +Z.");
+            for (int i = 0; i < 6; ++i) {
+                auto& path = cubemapDraft.faces[i];
+                if (ImGui::BeginCombo(CubemapAsset::names[i],
+                                      path.empty() ? "None (drop texture)" : path.c_str())) {
+                    if (ImGui::Selectable("None", path.empty())) {
+                        path.clear();
+                    }
+                    for (const auto& file : browser.assets.files()) {
+                        if (materialTexturePath(file) &&
+                            ImGui::Selectable(file.c_str(), file == path)) {
+                            path = file;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                        std::string value = static_cast<const char*>(drop->Data);
+                        if (materialTexturePath(value)) {
+                            path = value;
+                        }
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+            }
+            if (ImGui::Button("Save Cubemap")) {
+                try {
+                    saveCubemap(browser.assets, editingCubemap, cubemapDraft);
+                } catch (const std::exception& e) {
+                    browser.assets.error = e.what();
+                }
+            }
+            ImGui::End();
+            if (!open) {
+                editingCubemap.clear();
+            }
+        }
+        if (browser.prefabCreation != Entity{} && !playMode.active()) {
+            const auto source = browser.prefabCreation;
+            browser.prefabCreation = {};
+            try {
+                const auto* name = world.tryGet<ObjectName>(source);
+                std::string stem = name ? name->value : "Prefab";
+                for (auto& c : stem) {
+                    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') {
+                        c = '_';
+                    }
+                }
+                if (stem.empty()) {
+                    stem = "Prefab";
+                }
+                auto relative = (std::filesystem::path(browser.currentFolder) / (stem + ".prefab"))
+                                    .generic_string();
+                for (unsigned n = 2; std::filesystem::exists(browser.assets.resolve(relative));
+                     ++n) {
+                    relative = (std::filesystem::path(browser.currentFolder) /
+                                (stem + "_" + std::to_string(n) + ".prefab"))
+                                   .generic_string();
+                }
+                Prefabs::save(browser.assets, relative, world, source, projectMeshes);
+                history.commit(world, selectedEntity);
+                world.add(source, PrefabInstance{relative});
+                history.commit(world, selectedEntity);
+                browser.selected = relative;
+            } catch (const std::exception& e) {
+                browser.assets.error = e.what();
+            }
+        }
+        if (!browser.spawnPrefabRequest.empty() && !playMode.active()) {
+            const auto path = std::exchange(browser.spawnPrefabRequest, {});
+            try {
+                history.commit(world, selectedEntity);
+                const auto parent = prefabLevel ? Prefabs::root(world) : Entity{};
+                selectedEntity = Prefabs::spawn(browser.assets, path, world, projectMeshes, {}, {});
+                if (parent != Entity{}) {
+                    setParent(world, selectedEntity, parent);
+                }
+                history.commit(world, selectedEntity);
+            } catch (const std::exception& e) {
+                browser.assets.error = e.what();
+            }
+        }
+        if (!browser.editPrefabRequest.empty() && !playMode.active() && !prefabLevel &&
+            !levels.busy()) {
+            const auto path = std::exchange(browser.editPrefabRequest, {});
+            try {
+                auto loaded = Prefabs::load(browser.assets, path, projectMeshes);
+                editor.finish(world);
+                scripts.shutdown();
+                prefabLevel = world.snapshot();
+                prefabLevelSelection = selectedEntity;
+                prefabLevelCamera = camera;
+                prefabHistory.emplace(std::move(history));
+                levels.suspended = true;
+                world.restore(*loaded);
+                selectedEntity = Prefabs::root(world);
+                history = EditorHistory(world, selectedEntity);
+                editingPrefab = path;
+                physics.reset();
+                scripts.resetRuntime();
+                camera.focus(world.get<Transform>(selectedEntity).position, 3);
+                ImGui::SetWindowFocus("Scene");
+            } catch (const std::exception& e) {
+                browser.assets.error = e.what();
+            }
+        }
+        if (prefabLevel) {
+            ImGui::SetNextWindowSize(ImVec2(440, 180), ImGuiCond_FirstUseEver);
+            ImGui::Begin("Prefab Window");
+            ImGui::TextWrapped("Editing %s", editingPrefab.c_str());
+            ImGui::TextWrapped(
+                "Hierarchy and Scene contain only this prefab. Save updates linked instances; Exit restores the level. Unsaved edits are discarded on Exit.");
+            if (ImGui::Button("Save Prefab") ||
+                (!ImGui::GetIO().WantTextInput &&
+                 ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteGlobal))) {
+                try {
+                    auto root = Prefabs::root(world);
+                    Prefabs::save(browser.assets, editingPrefab, world, root, projectMeshes);
+                    Prefabs::refresh(browser.assets, editingPrefab, *prefabLevel, projectMeshes);
+                    Prefabs::refreshSavedLevels(browser.assets, editingPrefab, projectMeshes);
+                    scripts.console().message("Saved prefab and refreshed level instances");
+                } catch (const std::exception& e) {
+                    browser.assets.error = e.what();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Exit Prefab Mode")) {
+                editor.finish(world);
+                scripts.shutdown();
+                world.restore(*prefabLevel);
+                scripts.resetRuntime();
+                prefabLevel.reset();
+                selectedEntity = prefabLevelSelection;
+                camera = prefabLevelCamera;
+                history = std::move(*prefabHistory);
+                prefabHistory.reset();
+                history.commit(world, selectedEntity);
+                editingPrefab.clear();
+                levels.suspended = false;
+                physics.reset();
+            }
+            ImGui::End();
+        }
         const auto settingsBefore = browser.settings;
         browser.settings.draw(browser.projectFolder);
         if (settingsBefore.signature() != browser.settings.signature() && !settingsGesture) {
@@ -1216,6 +1435,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (panelOpen[2]) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
             if (beginEditorPanel("Scene")) {
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 3));
+                ImGui::BeginChild(
+                    "Scene toolbar", ImVec2(0, 30), ImGuiChildFlags_AlwaysUseWindowPadding);
+                editor.drawToolbar();
+                ImGui::EndChild();
+                ImGui::PopStyleVar();
                 sceneFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
                 const auto pos = ImGui::GetCursorScreenPos(), size = ImGui::GetContentRegionAvail();
                 sceneRect = {pos.x, pos.y, std::max(size.x, 1.0f), std::max(size.y, 1.0f)};
@@ -1234,8 +1459,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && ImGui::IsItemHovered();
                 if (ImGui::BeginDragDropTarget()) {
                     if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                        attachScriptAsset(
-                            world, selectedEntity, static_cast<const char*>(asset->Data));
+                        const std::string path = static_cast<const char*>(asset->Data);
+                        if (Prefabs::asset(path)) {
+                            browser.spawnPrefabRequest = path;
+                        } else {
+                            attachScriptAsset(world, selectedEntity, path);
+                        }
                     }
                     ImGui::EndDragDropTarget();
                 }
@@ -1280,7 +1509,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 ImGui::SetNextWindowFocus();
             }
             if (beginEditorPanel("Game")) {
-                gameHovered = ImGui::IsWindowHovered();
+                gameHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
                 gameFocused = ImGui::IsWindowFocused();
                 const auto active = activeCamera(world);
                 if (active == Entity{}) {
@@ -1419,11 +1648,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
         if (playMode.playing()) {
+            Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
             scripts.update(std::min(seconds, 0.25f));
             componentScripts.update(std::min(seconds, 0.25f));
         }
         profiler.checkpoint(ProfilePart::Scripts);
         LuaConsole::dispatchEvents();
+        scripts.console().setAssetRoot(browser.assets.root);
+        renderer.setShadowSettings(renderingSettings.shadows);
         renderer.setAssetRoot(browser.assets.root);
         renderer.updateSkyboxFades(world, playMode.playing() ? std::min(seconds, .25f) : 0.0f);
         updateHierarchy(world);
@@ -1517,6 +1749,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         int width = 0;
         int height = 0;
         SDL_GetWindowSizeInPixels(window, &width, &height);
+        scripts.console().setAssetRoot(browser.assets.root);
+        renderer.setShadowSettings(renderingSettings.shadows);
         renderer.setAssetRoot(browser.assets.root);
         if (width > 0 && height > 0) {
             if (sceneVisible) {
@@ -1631,7 +1865,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
 
         // Compare persisted content, not history depth: Undo back to the saved
         // state clears the marker, while Lua/camera edits also mark it dirty.
-        if (!playMode.active() && !editor.dragging()) {
+        if (!prefabLevel && !playMode.active() && !editor.dragging()) {
             projectDirty = currentProject.empty() ||
                            projectContentState(world, {}, camera) != savedProjectState;
         }

@@ -85,6 +85,7 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(Collider{});
     component(Skybox{});
     component(ObjectActivity{});
+    component(PrefabInstance{});
     component(DirectionalLight{});
     component(PointLight{});
     component(SpotLight{});
@@ -150,13 +151,7 @@ class ObjectClipboard {
     Entity entity_;
 };
 inline void deleteLevelObject(World& world, Entity object) {
-    // Detach direct children, preserving their world-space poses.
-    world.each<Parent>([&](Entity child, Parent& link) {
-        if (link.entity == object) {
-            world.remove<Parent>(child);
-        }
-    });
-    world.destroy(object);
+    destroyHierarchy(world, object);
 }
 
 // Search includes ancestors but never mutates the ECS hierarchy.
@@ -259,6 +254,13 @@ inline bool drawLevelObjects(World& world,
         const auto objects = levelObjects(world);
         static ImGuiTextFilter search;
         search.Draw("Search", -60);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x##ClearSearch")) {
+            search.Clear();
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Clear search");
+        }
         const auto visible = hierarchyMatches(world, objects, search.InputBuf);
 
         if (!selectionEnabled) {
@@ -298,6 +300,21 @@ inline bool drawLevelObjects(World& world,
             ImGui::PushID(static_cast<int>(object.entity.generation));
             if (depth) {
                 ImGui::Indent(static_cast<float>(depth) * 12);
+            }
+            bool prefab = false;
+            for (Entity ancestor = object.entity; world.alive(ancestor);
+                 ancestor = getParent(world, ancestor)) {
+                if (world.has<PrefabInstance>(ancestor)) {
+                    prefab = true;
+                    break;
+                }
+            }
+            const bool inactive = !isActive(world, object.entity);
+            if (inactive) {
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                                      ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            } else if (prefab) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.35f, .65f, 1, 1));
             }
             const auto iconPos = ImGui::GetCursorScreenPos();
             // Reserve pixels rather than spaces (font-dependent widths can overlap the icon).
@@ -363,6 +380,9 @@ inline bool drawLevelObjects(World& world,
                                                 object.name.c_str());
             if (depth) {
                 ImGui::Unindent(static_cast<float>(depth) * 12);
+            }
+            if (prefab || inactive) {
+                ImGui::PopStyleColor();
             }
             ImGui::PopID();
             ImGui::PopID();
@@ -462,6 +482,11 @@ inline bool drawLevelObjects(World& world,
                 ImGui::EndMenu();
             }
             ImGui::EndPopup();
+        }
+        if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+            !ImGui::IsAnyItemHovered()) {
+            changed = selected != Entity{};
+            selected = {};
         }
         ImGui::EndChild();
         ImGui::EndDisabled();

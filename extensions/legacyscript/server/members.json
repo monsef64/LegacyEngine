@@ -214,7 +214,7 @@
     "setSpotAngles": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
   },
   "Skybox": {
-    "type": "integer 0 six face textures, 1 HDR panorama",
+    "type": "integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama",
     "enabled": "boolean",
     "color": "Vector3 Color tint",
     "right": "Texture +X",
@@ -223,10 +223,12 @@
     "bottom": "Texture -Y",
     "front": "Texture -Z",
     "back": "Texture +Z",
+    "cubemap": "string Project-relative .cubemap asset",
     "hdr": "Texture Radiance .hdr equirectangular panorama",
-    "setType": "fun(self:Skybox,type:string|integer) Textures or HDR, or 0/1",
+    "setType": "fun(self:Skybox,type:string|integer) Cubemap or HDR, or 0/1 (Textures is a legacy alias)",
     "setColor": "fun(self:Skybox,r:number,g:number,b:number)",
     "setEnabled": "fun(self:Skybox,enabled:boolean)",
+    "setCubemap": "fun(self:Skybox,path:string|nil) Set Cubemap mode and project-relative asset",
     "setHDR": "fun(self:Skybox,texture:Texture|nil)",
     "setFace": "fun(self:Skybox,face:string,texture:Texture|nil)",
     "fadeTo": "fun(self:Skybox,destination:GameObject|Skybox,speed:number) Smooth crossfade, duration = 1/speed seconds",

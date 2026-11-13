@@ -157,3 +157,43 @@ inactivity freeze waits; Stop/runtime reset cancels them. `wait(audio.onAudioFin
 listens for the next occurrence after the wait is reached, not a past occurrence.
 Destroying/removing the source cancels its waiting continuation. Instruction and
 memory budgets remain enforced when a callback resumes.
+
+## Prefabs, spawning, and implicit components
+
+See [Prefab workflow](prefabs.md) for asset creation, isolated editing and updates.
+`getComponent(Type)`, `addComponent(Type)` and `removeComponent(Type)` default to
+attached `self`; their explicit `(object, Type)` forms still work. They require an
+attached object when the object argument is omitted.
+
+```legacyscript
+function onMouseEnter()
+    getComponent(MeshRenderer):setMaterialColor(1, 0.6, 0.3)
+end
+
+function onMouseExit()
+    getComponent(MeshRenderer):setMaterialColor(1, 1, 1)
+end
+```
+
+Put a Collider and MeshRenderer on this object. Enter/Exit follow the nearest
+Collider under the pointer in Game, not the mesh's exact visible pixel outline.
+Match Collider dimensions to the object: an oversized Collider keeps the mouse
+inside its pick area. Callback errors stop the runtime; inspect Console if Exit
+does not fire after an earlier failing Enter. Moving into blank Game space or
+outside Game sends Exit to the previously hovered active object.
+
+```legacyscript
+function onStart()
+    local copy = spawn(self, {x=2, y=1, z=0}, {x=0, y=45, z=0})
+    destroy(copy, 3)
+end
+```
+
+Avoid unconditional self-cloning in onStart on a scripted source: its cloned
+script will also run and spawn again. Prefer a prefab with a separate spawner
+script. Both `destroy` and `destroyGameObject` remove the object and **all descendants**,
+including inactive children. `destroyGameObject(object)` is immediate;
+`destroy(object, seconds)` optionally delays removal. `object:destroy()` is immediate.
+Attached scripts receive `onDestroy` once. To preserve a child, call
+`child:setParent(nil)` **before** deleting its parent (this preserves world pose).
+Editor deletion follows the same subtree rule and supports undo/redo.

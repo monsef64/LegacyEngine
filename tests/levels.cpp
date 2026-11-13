@@ -9,6 +9,12 @@ int main(){
     for(const char* file:{"lit.vert","lit.frag","unlit.vert","unlit.frag","skybox.vert","skybox.frag"})assert(loadShaderData(file).find("#version 330 core")!=std::string::npos);
     AssetManager assets;assets.root=root/"Assets";RenderingSettings settings;settings.vsync=false;settings.save(assets);
     assert(RenderingSettings::file(assets)==root/"Settings/Rendering.json");assert(readJsonFile(RenderingSettings::file(assets),4096)["vsync"]==false);
+    settings.shadows={1,2048};settings.save(assets);
+    RenderingSettings loaded;loaded.load(assets);assert(loaded.shadows.mode==1 && loaded.shadows.resolution==2048);
+    writeJsonFile(RenderingSettings::file(assets),Json{{"version",1},{"vsync",true}});
+    loaded.root.clear();loaded.load(assets);assert(loaded.shadows.mode==0 && loaded.shadows.resolution==1024);
+    writeJsonFile(RenderingSettings::file(assets),Json{{"version",2},{"vsync",true},{"shadowMode",0},{"shadowResolution",999}});
+    loaded.root.clear();loaded.load(assets);assert(!loaded.error.empty() && loaded.shadows.valid());
     ProjectIO::Meshes meshes{};LevelSystem levels(meshes);levels.setRoot(root);LevelSystem::active=&levels;
     World world;auto entity=world.create();world.add(entity,Transform{});
     levels.saveCurrent(world,"saved=42",OrbitCamera{});assert(levels.current()=="Main");

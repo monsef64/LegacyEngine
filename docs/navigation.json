@@ -28,6 +28,10 @@
     "title": "Projects"
   },
   {
+    "file": "prefabs.md",
+    "title": "Prefab workflow"
+  },
+  {
     "file": "scripting.md",
     "title": "LegacyScript"
   },

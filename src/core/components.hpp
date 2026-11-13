@@ -139,3 +139,11 @@ inline bool isActive(const World& world, Entity entity) {
 inline void setObjectActive(World& world, Entity entity, bool enabled) {
     world.add(entity, ObjectActivity{enabled});
 }
+
+// Asset linkage belongs to an instance root, never to the prefab asset itself.
+struct PrefabInstance {
+    std::string asset;
+};
+struct DestroyAfter {
+    float seconds = 0;
+};

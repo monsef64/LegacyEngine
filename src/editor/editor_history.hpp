@@ -49,6 +49,10 @@ inline std::string sceneSignature(World& world) {
     };
     for (Entity e : world.entities()) {
         component(e, ObjectActivity{}, [&](const ObjectActivity& a) { scalar(a.enabled); });
+        component(e, PrefabInstance{}, [&](const PrefabInstance& p) {
+            scalar(p.asset.size());
+            result += p.asset;
+        });
         scalar(e.index);
         scalar(e.generation);
         component(e, ObjectName{}, [&](const ObjectName& n) {
@@ -84,6 +88,8 @@ inline std::string sceneSignature(World& world) {
         component(e, PointLight{}, light);
         component(e, SpotLight{}, light);
         component(e, Skybox{}, [&](const Skybox& sky) {
+            scalar(sky.cubemap.size());
+            result += sky.cubemap;
             scalar(sky.type);
             vec(sky.color);
             scalar(sky.enabled);

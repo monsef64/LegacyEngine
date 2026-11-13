@@ -1,6 +1,22 @@
 #include "scripting/lua_console.hpp"
+#include "prefabs/prefab.hpp"
 #include <cassert>
 int main(){
+    {
+        World tree;LuaConsole c;c.bindWorld(tree);
+        for(const char* removal:{"destroyGameObject(parent)","destroy(parent)","parent:destroy()"}) {
+            assert(c.execute(R"(
+                parent=GameObject.new("Delete parent")
+                child=GameObject.new("Delete child");child:setParent(parent)
+                grandchild=GameObject.new("Delete grandchild");grandchild:setParent(child)
+                child:setActive(false)
+                survivor=GameObject.new("Keep child");survivor:setParent(parent);survivor:setParent(nil)
+            )"));
+            assert(tree.entities().size()==4);assert(c.execute(removal));assert(tree.entities().size()==1);
+            assert(c.execute("assert(survivor:getName()=='Keep child');destroy(survivor)"));
+            assert(tree.entities().empty());
+        }
+    }
     LuaConsole::clearEvents();
     LuaConsole first,second;
     assert(first.execute("count=0; token=on('ping',function(value) count=count+value end)"));
@@ -79,6 +95,30 @@ int main(){
         LuaConsole controller;controller.bindWorld(w);
         assert(controller.execute("GameObject.find('Toggle'):setActive(true)"));
         c.update(1);assert(w.get<Transform>(entity).position.x==1);
+    }
+
+    {
+        World w;auto e=w.create();w.add(e,Transform{});w.add(e,MeshRenderer{});LuaConsole c;c.bindWorld(w);assert(c.bindObject(e));
+        assert(c.execute(R"(
+            function onMouseEnter() getComponent(MeshRenderer):setMaterialColor(1,0.6,0.3) end
+            function onMouseExit() getComponent(MeshRenderer):setMaterialColor(0.1,0.2,0.3) end
+            clone=spawn(self,{4,5,6},{0,90,0});destroy(clone,0.5)
+        )"));
+        c.objectEvent(e,"onMouseEnter");assert(w.get<MeshRenderer>(e).materialValues.color.x==1);
+        c.objectEvent(e,"onMouseExit");assert(w.get<MeshRenderer>(e).materialValues.color.x==.1f);
+        assert(w.entities().size()==2);Prefabs::updateDestroyTimers(w,.5f);assert(w.entities().size()==1);
+        assert(!c.execute("destroy(self,-1)"));
+    }
+
+    {
+        AssetManager assets;assets.root=std::filesystem::temp_directory_path()/"legacy-lua-prefab-test";
+        std::filesystem::remove_all(assets.root);std::filesystem::create_directories(assets.root);
+        World source;auto root=source.create();source.add(root,Transform{});source.add(root,ObjectName{"Asset root"});
+        const ProjectIO::Meshes meshes{};Prefabs::save(assets,"Root.prefab",source,root,meshes);
+        World w;LuaConsole c;c.setAssetRoot(assets.root);c.bindWorld(w);
+        assert(c.execute("instance=spawn('Root.prefab',{1,2,3},{0,90,0});assert(instance:getPosition().x==1);destroy(instance)"));
+        assert(w.entities().empty());assert(!c.execute("spawn('../bad.prefab',{0,0,0},{0,0,0})"));
+        std::filesystem::remove_all(assets.root);
     }
 
 }

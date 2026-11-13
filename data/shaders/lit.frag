@@ -19,6 +19,9 @@ uniform vec4 uLightDirection[16]; // xyz, outer cone cosine
 uniform vec4
     uLightShadow[16]; // layer, bias, inner cone cosine, active resolution / atlas resolution
 uniform mat4 uShadowMatrix[12];
+uniform int uCascadeCount[16];
+uniform vec4 uCascadeSplits[16];
+uniform vec4 uShadowView; // forward, -dot(near-plane center, forward)
 out vec4 fragColor;
 int cubeFace(vec3 d) {
     vec3 a = abs(d);
@@ -38,14 +41,7 @@ float shadowTap(
     float receiverDepth = depth + dot(gradient, (uv - center) / scale);
     return texture(uShadowTexture, vec4(uv, float(layer), receiverDepth));
 }
-float visibility(int i, vec3 normal, vec3 toLight, vec3 worldDx, vec3 worldDy) {
-    int layer = int(uLightShadow[i].x);
-    if (layer < 0) {
-        return 1.0;
-    }
-    if (int(uLightPosition[i].w) == 1) {
-        layer += cubeFace(vWorldPosition - uLightPosition[i].xyz);
-    }
+float mapVisibility(int i, int layer, vec3 normal, vec3 toLight, vec3 worldDx, vec3 worldDy) {
     mat4 lightMatrix = uShadowMatrix[layer];
     vec4 projected = lightMatrix * vec4(vWorldPosition, 1.0);
     if (projected.w <= 0.0) {
@@ -122,6 +118,49 @@ float visibility(int i, vec3 normal, vec3 toLight, vec3 worldDx, vec3 worldDy) {
         }
     }
     return sum / 144.0;
+}
+float visibility(int i, vec3 normal, vec3 toLight, vec3 worldDx, vec3 worldDy) {
+    int base = int(uLightShadow[i].x);
+    if (base < 0) {
+        return 1.0;
+    }
+    if (int(uLightPosition[i].w) == 1) {
+        return mapVisibility(i,
+                             base + cubeFace(vWorldPosition - uLightPosition[i].xyz),
+                             normal,
+                             toLight,
+                             worldDx,
+                             worldDy);
+    }
+    if (uCascadeCount[i] <= 1) {
+        return mapVisibility(i, base, normal, toLight, worldDx, worldDy);
+    }
+    float depth = dot(vWorldPosition, uShadowView.xyz) + uShadowView.w;
+    vec4 splits = uCascadeSplits[i];
+    if (depth < 0.0 || depth > splits.w) {
+        return 1.0;
+    }
+    int cascade = 0;
+    if (depth > splits.x) {
+        cascade = 1;
+    }
+    if (depth > splits.y) {
+        cascade = 2;
+    }
+    if (depth > splits.z) {
+        cascade = 3;
+    }
+    float value = mapVisibility(i, base + cascade, normal, toLight, worldDx, worldDy);
+    float start = cascade == 0 ? 0.0 : splits[cascade - 1];
+    float end = splits[cascade];
+    float blend = smoothstep(mix(start, end, 0.9), end, depth);
+    if (blend > 0.0) {
+        float next = cascade == 3
+                         ? 1.0
+                         : mapVisibility(i, base + cascade + 1, normal, toLight, worldDx, worldDy);
+        value = mix(value, next, blend);
+    }
+    return value;
 }
 void main() {
     vec3 worldDx = dFdx(vWorldPosition), worldDy = dFdy(vWorldPosition);

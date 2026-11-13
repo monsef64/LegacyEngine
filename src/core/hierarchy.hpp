@@ -108,3 +108,62 @@ inline void updateHierarchy(World& world) {
     };
     world.each<Transform>([&](Entity e, Transform&) { visit(visit, e); });
 }
+
+// Inspector/editor local coordinates; ECS poses stay world-space for physics/rendering.
+inline Transform localTransform(World& world, Entity entity) {
+    Transform result = world.get<Transform>(entity);
+    const auto parent = getParent(world, entity);
+    if (parent == Entity{} || !world.has<Transform>(parent)) {
+        return result;
+    }
+    const auto& p = world.get<Transform>(parent);
+    const auto q = normalize(p.rotation);
+    const Quat inverse{-q.x, -q.y, -q.z, q.w};
+    auto divide = [](float a, float b) { return std::abs(b) > 1e-6f ? a / b : 0.f; };
+    auto position = rotateVector(inverse, result.position - p.position);
+    result.position = {divide(position.x, p.scale.x),
+                       divide(position.y, p.scale.y),
+                       divide(position.z, p.scale.z)};
+    result.rotation = composeRotation(inverse, result.rotation);
+    result.scale = {divide(result.scale.x, p.scale.x),
+                    divide(result.scale.y, p.scale.y),
+                    divide(result.scale.z, p.scale.z)};
+    return result;
+}
+inline void setLocalTransform(World& world, Entity entity, Transform value) {
+    const auto parent = getParent(world, entity);
+    if (parent != Entity{} && world.has<Transform>(parent)) {
+        const auto& p = world.get<Transform>(parent);
+        value.position = p.position + rotateVector(p.rotation, value.position * p.scale);
+        value.rotation = composeRotation(p.rotation, value.rotation);
+        value.scale = value.scale * p.scale;
+        if (auto* link = world.tryGet<Parent>(entity)) {
+            link->previous = p;
+        }
+    }
+    world.get<Transform>(entity) = value;
+}
+
+// Snapshot descendants before deleting: packed component pools may move on removal.
+inline std::vector<Entity> hierarchySubtree(World& world, Entity root) {
+    if (!world.alive(root)) {
+        return {};
+    }
+    std::vector<Entity> nodes{root};
+    std::unordered_set<std::uint32_t> seen{root.index};
+    const auto entities = world.entities();
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+        for (auto entity : entities) {
+            if (getParent(world, entity) == nodes[i] && seen.insert(entity.index).second) {
+                nodes.push_back(entity);
+            }
+        }
+    }
+    return nodes;
+}
+inline void destroyHierarchy(World& world, Entity root) {
+    const auto nodes = hierarchySubtree(world, root);
+    for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
+        world.destroy(*it);
+    }
+}

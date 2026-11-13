@@ -1,4 +1,6 @@
 #include "project/project_io.hpp"
+#include "prefabs/prefab.hpp"
+#include "assets/cubemap.hpp"
 #include "editor/editor_history.hpp"
 #include <cassert>
 #include <limits>
@@ -63,6 +65,34 @@ int main() {
         Entity selection=p;EditorHistory h(activeWorld,p);setObjectActive(activeWorld,p,true);h.commit(activeWorld,p);
         assert(isActive(activeWorld,c));assert(h.undo(activeWorld,selection));assert(!isActive(activeWorld,c));
         assert(h.redo(activeWorld,selection));assert(isActive(activeWorld,c));
+    }
+
+    {
+        AssetManager assets;assets.root=std::filesystem::temp_directory_path()/"legacy-prefab-tests";
+        std::filesystem::remove_all(assets.root);std::filesystem::create_directories(assets.root);
+        World source;auto root=source.create(),child=source.create();source.add(root,Transform{{1,0,0}});source.add(root,ObjectName{"Crate"});
+        source.add(child,Transform{{2,0,0}});source.add(child,ObjectName{"Child"});assert(setParent(source,child,root));
+        source.add(root,MeshRenderer{meshes[2]});source.add(root,LuaScript{"Script.ls",true,{}});source.get<LuaScript>(root).fields={{"child","GameObject","",0,false,child}};
+        Prefabs::save(assets,"Crate.prefab",source,root,meshes);
+        World level;auto instance=Prefabs::spawn(assets,"Crate.prefab",level,meshes,{10,0,0},{});
+        assert(level.get<PrefabInstance>(instance).asset=="Crate.prefab");
+        auto nodes=Prefabs::tree(level,instance);assert(nodes.size()==2 && getParent(level,nodes[1])==instance);
+        assert(level.get<Transform>(nodes[1]).position.x==11);
+        assert(level.get<LuaScript>(instance).fields[0].entity==nodes[1]);
+        source.get<MeshRenderer>(root).color={.2f,.3f,.4f};source.get<ObjectName>(child).value="Changed";
+        Prefabs::save(assets,"Crate.prefab",source,root,meshes);Prefabs::refresh(assets,"Crate.prefab",level,meshes);
+        assert(level.alive(instance) && level.get<Transform>(instance).position.x==10);
+        assert(level.get<MeshRenderer>(instance).color.x==.2f);
+        auto updated=Prefabs::tree(level,instance);assert(level.get<ObjectName>(updated[1]).value=="Changed");
+        Loaded restored;decode(encode(level,"",OrbitCamera{},meshes),restored,meshes);
+        unsigned links=0;restored.world.each<PrefabInstance>([&](Entity,const PrefabInstance&){++links;});assert(links==1);
+        level.add(instance,DestroyAfter{.5f});Prefabs::updateDestroyTimers(level,.25f);assert(level.alive(instance));
+        Prefabs::updateDestroyTimers(level,.25f);assert(level.entities().empty());
+        CubemapAsset cube;cube.faces={"r.png","l.png","t.png","b.png","f.png","bk.png"};saveCubemap(assets,"Sky.cubemap",cube);
+        assert(loadCubemap(assets,"Sky.cubemap").faces[4]=="f.png");
+        Skybox sky;sky.cubemap="Sky.cubemap";source.add(root,sky);Loaded skyRestored;
+        decode(encode(source,"",OrbitCamera{},meshes),skyRestored,meshes);assert(skyRestored.world.get<Skybox>(skyRestored.world.entities()[0]).cubemap=="Sky.cubemap");
+        std::filesystem::remove_all(assets.root);
     }
 
 }

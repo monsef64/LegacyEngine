@@ -5,7 +5,7 @@
 #include <map>
 
 struct TextureThumbnail {
-    static constexpr int size = 64;
+    static constexpr int size = 128;
     std::array<unsigned char, size * size * 4> pixels{};
 };
 bool textureAsset(const std::string& path);

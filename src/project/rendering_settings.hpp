@@ -1,9 +1,11 @@
 #pragma once
 #include "assets/assets.hpp"
+#include "lighting/shadow_settings.hpp"
 #include "project/json_io.hpp"
 #include <SDL3/SDL.h>
 struct RenderingSettings {
     bool visible = false, vsync = true;
+    ShadowSettings shadows;
     std::string error;
     std::filesystem::path root;
     static std::filesystem::path file(const AssetManager& assets) {
@@ -25,15 +27,29 @@ struct RenderingSettings {
         }
         root = assets.root;
         vsync = true;
+        shadows = {};
         error.clear();
         try {
             auto path = file(assets);
             if (std::filesystem::exists(path)) {
                 auto json = readJsonFile(path, 4096);
-                if (json.at("version") != 1 || !json.at("vsync").is_boolean()) {
+                if ((json.at("version") != 1 && json.at("version") != 2) ||
+                    !json.at("vsync").is_boolean()) {
                     throw std::runtime_error("Invalid rendering settings");
                 }
                 vsync = json.at("vsync").get<bool>();
+                if (json.at("version") == 2) {
+                    if (!json.at("shadowMode").is_number_integer() ||
+                        !json.at("shadowResolution").is_number_integer()) {
+                        throw std::runtime_error("Invalid shadow settings");
+                    }
+                    ShadowSettings loaded{json.at("shadowMode").get<int>(),
+                                          json.at("shadowResolution").get<int>()};
+                    if (!loaded.valid()) {
+                        throw std::runtime_error("Invalid shadow mode or resolution");
+                    }
+                    shadows = loaded;
+                }
             }
         } catch (const std::exception& e) {
             error = e.what();
@@ -42,6 +58,10 @@ struct RenderingSettings {
         apply();
     }
     void save(const AssetManager& assets) const {
-        writeJsonFile(file(assets), Json{{"version", 1}, {"vsync", vsync}});
+        writeJsonFile(file(assets),
+                      Json{{"version", 2},
+                           {"vsync", vsync},
+                           {"shadowMode", shadows.mode},
+                           {"shadowResolution", shadows.resolution}});
     }
 };

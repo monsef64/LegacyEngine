@@ -6,6 +6,7 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "lighting/lighting.hpp"
+#include "lighting/shadow_settings.hpp"
 #include "materials/material_io.hpp"
 #include "rendering/material_textures.hpp"
 #include "rendering/mesh.hpp"
@@ -17,6 +18,11 @@
 class Renderer {
   public:
     std::string materialError;
+    void setShadowSettings(ShadowSettings settings) {
+        if (settings.valid()) {
+            shadowSettings_ = settings;
+        }
+    }
     const std::string& skyboxError() const {
         return skyboxFadeRenderer_.error.empty() ? skyboxRenderer_.error
                                                  : skyboxFadeRenderer_.error;
@@ -84,6 +90,9 @@ class Renderer {
                   const Mat4& viewProjection,
                   Vec3 color,
                   float opacity = 1.0f);
+    ShadowSettings shadowSettings_;
+    int shadowAtlasResolution_ = 0;
+    int cascadeCountLocations_[16]{}, cascadeSplitLocations_[16]{}, shadowViewLocation_ = -1;
     int lightCountLocation_ = -1, shadowSamplerLocation_ = -1;
     int lightLocations_[16][4]{}, shadowMatrixLocations_[12]{};
     unsigned int shadowTexture_ = 0, shadowFramebuffer_ = 0;

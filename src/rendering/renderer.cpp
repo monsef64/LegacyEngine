@@ -1,6 +1,7 @@
 #include "rendering/renderer.hpp"
 #include "audio/audio_gizmo.hpp"
 #include "core/profiler.hpp"
+#include "lighting/cascades.hpp"
 #include "lighting/lighting.hpp"
 #include "physics/collider_debug.hpp"
 #include "rendering/shader_data.hpp"
@@ -107,6 +108,13 @@ bool Renderer::init() {
 
     lightCountLocation_ = glGetUniformLocation(litProgram_, "uLightCount");
     shadowSamplerLocation_ = glGetUniformLocation(litProgram_, "uShadowTexture");
+    shadowViewLocation_ = glGetUniformLocation(litProgram_, "uShadowView");
+    for (int i = 0; i < 16; ++i) {
+        cascadeCountLocations_[i] =
+            glGetUniformLocation(litProgram_, ("uCascadeCount[" + std::to_string(i) + "]").c_str());
+        cascadeSplitLocations_[i] = glGetUniformLocation(
+            litProgram_, ("uCascadeSplits[" + std::to_string(i) + "]").c_str());
+    }
     const char* lightNames[]{"uLightPosition", "uLightColor", "uLightDirection", "uLightShadow"};
     for (int i = 0; i < Lighting::maxLights; ++i) {
         for (int field = 0; field < 4; ++field) {
@@ -489,7 +497,27 @@ void Renderer::drawWire(const MeshData& wire,
 
 void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 cameraPosition) {
     auto& lights = lights_;
-    Lighting::gather(world, viewProjection, cameraPosition, lights);
+    Lighting::gather(world, viewProjection, cameraPosition, lights, shadowSettings_.mode == 0);
+    std::array<Lighting::Cascades, Lighting::maxLights> cascades{};
+    Vec3 shadowOrigin{}, shadowForward{0, 0, -1};
+    for (std::size_t i = 0; i < lights.size(); ++i) {
+        if (lights[i].type == 0 && lights[i].shadowCount == 4 && lights[i].shadowLayer >= 0) {
+            try {
+                cascades[i] = Lighting::buildCascades(
+                    viewProjection,
+                    cameraPosition,
+                    lights[i].direction,
+                    lights[i].settings.shadowDistance * 2,
+                    shadowSettings_.lightResolution(lights[i].settings.shadowQuality));
+                shadowOrigin = cascades[i].origin;
+                shadowForward = cascades[i].forward;
+            } catch (const std::exception& e) {
+                SDL_LogWarn(
+                    SDL_LOG_CATEGORY_RENDER, "CSM disabled for invalid frustum: %s", e.what());
+                lights[i].shadowLayer = -1;
+            }
+        }
+    }
     GLint framebuffer = 0, readFramebuffer = 0, frontFace = GL_CCW;
     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &framebuffer);
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer);
@@ -498,14 +526,24 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
     for (const auto& l : lights) {
         needsShadows |= l.shadowLayer >= 0;
     }
+    if (needsShadows && shadowAtlasResolution_ != shadowSettings_.resolution) {
+        if (shadowTexture_) {
+            glDeleteTextures(1, &shadowTexture_);
+        }
+        if (shadowFramebuffer_) {
+            glDeleteFramebuffers(1, &shadowFramebuffer_);
+        }
+        shadowTexture_ = shadowFramebuffer_ = 0;
+        shadowAtlasResolution_ = shadowSettings_.resolution;
+    }
     if (needsShadows && !shadowTexture_) {
         glGenTextures(1, &shadowTexture_);
         glBindTexture(GL_TEXTURE_2D_ARRAY, shadowTexture_);
         glTexImage3D(GL_TEXTURE_2D_ARRAY,
                      0,
                      GL_DEPTH_COMPONENT24,
-                     Lighting::shadowResolution,
-                     Lighting::shadowResolution,
+                     shadowAtlasResolution_,
+                     shadowAtlasResolution_,
                      Lighting::maxShadowLayers,
                      0,
                      GL_DEPTH_COMPONENT,
@@ -569,15 +607,20 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
             }
         }
         glUseProgram(unlitProgram_);
-        glViewport(0, 0, Lighting::shadowResolution, Lighting::shadowResolution);
+        glViewport(0, 0, shadowAtlasResolution_, shadowAtlasResolution_);
         glPolygonOffset(2, 4);
-        for (const auto& light : lights) {
+        for (std::size_t lightIndex = 0; lightIndex < lights.size(); ++lightIndex) {
+            const auto& light = lights[lightIndex];
             if (light.shadowLayer >= 0) {
-                for (int face = 0; face < (light.type == 1 ? 6 : 1); ++face) {
-                    const int resolution = lightShadowResolution(light.settings);
+                for (int face = 0; face < light.shadowCount; ++face) {
+                    const int resolution =
+                        shadowSettings_.lightResolution(light.settings.shadowQuality);
                     glViewport(0, 0, resolution, resolution);
                     const int layer = light.shadowLayer + face;
-                    const Mat4 vp = Lighting::shadowMatrix(light, cameraPosition, face);
+                    const Mat4 vp =
+                        light.type == 0 && light.shadowCount == 4
+                            ? cascades[lightIndex].matrices[face]
+                            : Lighting::shadowMatrix(light, cameraPosition, face, resolution);
                     matrices[layer] = vp;
                     glFramebufferTextureLayer(
                         GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, shadowTexture_, 0, layer);
@@ -606,9 +649,18 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
     glUseProgram(litProgram_);
     glUniform1i(lightCountLocation_, static_cast<int>(lights.size()));
     glUniform1i(shadowSamplerLocation_, 1);
+    glUniform4f(shadowViewLocation_,
+                shadowForward.x,
+                shadowForward.y,
+                shadowForward.z,
+                -dot(shadowOrigin, shadowForward));
     for (std::size_t i = 0; i < lights.size(); ++i) {
         const auto& l = lights[i];
         const auto& s = l.settings;
+        const bool csm = l.type == 0 && l.shadowCount == 4 && l.shadowLayer >= 0;
+        glUniform1i(cascadeCountLocations_[i], csm ? 4 : 1);
+        const auto& splits = cascades[i].splits;
+        glUniform4f(cascadeSplitLocations_[i], splits[0], splits[1], splits[2], splits[3]);
         glUniform4f(lightLocations_[i][0], l.position.x, l.position.y, l.position.z, float(l.type));
         glUniform4f(lightLocations_[i][1],
                     s.color.x * s.intensity,
@@ -624,7 +676,8 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
                     float(l.shadowLayer),
                     s.shadowBias,
                     std::cos(s.innerAngle * kPi / 180),
-                    float(lightShadowResolution(s)) / Lighting::shadowResolution);
+                    float(shadowSettings_.lightResolution(s.shadowQuality)) /
+                        shadowAtlasResolution_);
     }
     for (int i = 0; i < Lighting::maxShadowLayers; ++i) {
         glUniformMatrix4fv(shadowMatrixLocations_[i], 1, GL_FALSE, matrices[i].m);
