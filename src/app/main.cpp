@@ -664,6 +664,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         browser.draw(window,world,selectedEntity,scripts,editAllowed,&history);
         browser.settings.draw(browser.projectFolder);
         inputSettings.draw(browser.assets,input,editAllowed);
+        if(!renderer.skyboxError().empty()){ImGui::Begin("Skybox errors");ImGui::TextWrapped("%s",renderer.skyboxError().c_str());ImGui::End();}
         if(!renderer.materialError.empty()){ImGui::Begin("Material errors");ImGui::TextWrapped("%s",renderer.materialError.c_str());if(ImGui::Button("Dismiss"))renderer.materialError.clear();ImGui::End();}
         if(!audio.error.empty()){ImGui::Begin("Audio errors");ImGui::TextWrapped("%s",audio.error.c_str());if(ImGui::Button("Dismiss"))audio.error.clear();ImGui::End();}
         ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false,sceneFocused=false;

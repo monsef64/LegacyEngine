@@ -8,13 +8,15 @@
 #include "rendering/mesh.hpp"
 #include "materials/material_io.hpp"
 #include "rendering/material_textures.hpp"
+#include "rendering/skybox_renderer.hpp"
 
 #include <vector>
 
 class Renderer {
 public:
     std::string materialError;
-    void setAssetRoot(const std::filesystem::path& root){if(materialAssets_.root!=root){materialCache_.clear();materialTextures_.clear();materialAssets_.root=root;materialError.clear();}}
+    const std::string& skyboxError()const{return skyboxRenderer_.error;}
+    void setAssetRoot(const std::filesystem::path& root){if(materialAssets_.root!=root){materialCache_.clear();materialTextures_.clear();skyboxRenderer_.clear();materialAssets_.root=root;materialError.clear();}}
     // Call once, after the window's OpenGL context has been created. Returns
     // false, with the reason logged, if OpenGL cannot be set up.
     bool init();
@@ -37,6 +39,7 @@ public:
     void drawAudioSource(const Transform& transform,const AudioSource& source,const Mat4& viewProjection);
 
 private:
+    SkyboxRenderer skyboxRenderer_;
     AssetManager materialAssets_;
     MaterialAssetCache materialCache_;
     MaterialTextureCache materialTextures_;

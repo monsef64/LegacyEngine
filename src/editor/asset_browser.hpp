@@ -71,6 +71,7 @@ public:
         world.each<MeshRenderer>([&](Entity,MeshRenderer& r){remap(r.material);remap(r.materialValues.texture);remap(r.materialValues.normalMap);});
         for(const auto& file:assets.files())if(materialAsset(file))try{auto p=loadMaterial(assets,file);bool changed=false;changed|=remap(p.texture);changed|=remap(p.normalMap);if(changed)saveMaterial(assets,file,p);}catch(...){}
         world.each<AudioSource>([&](Entity,AudioSource& a){remap(a.clip);});
+        world.each<Skybox>([&](Entity,Skybox& sky){for(auto* path:{&sky.right,&sky.left,&sky.top,&sky.bottom,&sky.front,&sky.back,&sky.hdr})remap(*path);});
         remap(openedScript);remap(currentFolder);
         preview.stop();thumbnails.clear();
         selected=relative;

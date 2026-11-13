@@ -20,10 +20,6 @@
     "signature": "SpotLight - dynamic cone light with innerAngle and outerAngle in degrees"
   },
   {
-    "name": "Texture",
-    "signature": "Texture - export-only PNG/JPEG/BMP/TGA asset path; @export image Texture"
-  },
-  {
     "name": "AudioListener",
     "signature": "AudioListener - receives sound at its GameObject world position; pause() disables reception, start() enables it"
   },
@@ -410,6 +406,30 @@
   {
     "name": "BoxCollider",
     "signature": "BoxCollider - alias of Collider"
+  },
+  {
+    "name": "Skybox",
+    "signature": "Skybox - component type token; first enabled Skybox supplies scene background"
+  },
+  {
+    "name": "setType",
+    "signature": "sky:setType('Textures'|'HDR') - six-face or HDR skybox"
+  },
+  {
+    "name": "setHDR",
+    "signature": "sky:setHDR(Texture) - project .hdr panorama; nil clears"
+  },
+  {
+    "name": "setFace",
+    "signature": "sky:setFace(face,Texture) - right/left/top/bottom/front/back; nil clears"
+  },
+  {
+    "name": "setTextures",
+    "signature": "sky:setTextures(right,left,top,bottom,front,back)"
+  },
+  {
+    "name": "hdr",
+    "signature": "Skybox.hdr: project-relative Radiance .hdr panorama"
   },
   {
     "name": "MeshRenderer",

@@ -60,3 +60,10 @@ test('material methods and export-only Texture completion',()=>{
  const exported=f.completion(...input('@export albedo Texture\n'));
  assert(exported.some(x=>x.label==='albedo'));
 });
+
+test('Skybox component scripting and HDR Texture export',()=>{
+ const result=f.completion(...input('local sky=self:getComponent(Skybox)\nsky:'));
+ for(const name of ['setType','setColor','setEnabled','setHDR','setFace','setTextures'])assert(result.some(x=>x.label===name));
+ assert.match(f.hover(...input('sky:setTextures')).contents.value,/right:Texture/);
+ assert(f.completion(...input('@export panorama Texture\n')).some(x=>x.label==='panorama'));
+});

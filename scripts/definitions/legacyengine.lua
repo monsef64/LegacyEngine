@@ -35,7 +35,7 @@
 ---@field height number
 ---@field friction number
 ---@field bounciness number
--- Texture exports are project-relative PNG/JPEG/BMP/TGA asset paths, not loaders.
+-- Texture exports are project-relative PNG/JPEG/BMP/TGA/HDR asset paths, not loaders.
 ---@alias Texture string
 ---@class MeshRenderer
 ---@field material string Project-relative .mat asset path; empty uses inline Diffuse
@@ -402,3 +402,21 @@ function showCursor() end
 function isCursorVisible() end
 ---@return boolean
 function isCursorLocked() end
+
+---@class Skybox
+---@field type integer 0 six face textures, 1 HDR panorama
+---@field enabled boolean
+---@field color Vector3 Color tint
+---@field right Texture +X
+---@field left Texture -X
+---@field top Texture +Y
+---@field bottom Texture -Y
+---@field front Texture -Z
+---@field back Texture +Z
+---@field hdr Texture Radiance .hdr equirectangular panorama
+---@field setType fun(self:Skybox,type:string|integer) Textures or HDR, or 0/1
+---@field setColor fun(self:Skybox,r:number,g:number,b:number)
+---@field setEnabled fun(self:Skybox,enabled:boolean)
+---@field setHDR fun(self:Skybox,texture:Texture|nil)
+---@field setFace fun(self:Skybox,face:string,texture:Texture|nil)
+---@field setTextures fun(self:Skybox,right:Texture,left:Texture,top:Texture,bottom:Texture,front:Texture,back:Texture)

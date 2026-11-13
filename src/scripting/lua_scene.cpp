@@ -14,12 +14,12 @@ namespace {
 struct Handle { LuaScene* scene; World* world; Entity entity; };
 struct Component { Handle object; int type; };
 struct Vector { Component component; char field[32]; };
-const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener","DirectionalLight","PointLight","SpotLight"};
+const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener","DirectionalLight","PointLight","SpotLight","Skybox"};
 int componentType(lua_State* L,int index) {
     if (auto* type=static_cast<int*>(luaL_testudata(L,index,"ComponentType"))) return *type;
     const char* name=luaL_checkstring(L,index);
     if (!std::strcmp(name,"BoxCollider")) return 2;
-    for (int i=0;i<12;++i) if (!std::strcmp(name,types[i])) return i;
+    for (int i=0;i<13;++i) if (!std::strcmp(name,types[i])) return i;
     return luaL_error(L,"Unknown component type: %s",name);
 }
 Handle& handle(lua_State* L,int index) {
@@ -41,6 +41,7 @@ bool has(const Handle& h,int type) {
     case 9:return h.world->has<DirectionalLight>(h.entity);
     case 10:return h.world->has<PointLight>(h.entity);
     case 11:return h.world->has<SpotLight>(h.entity);
+    case 12:return h.world->has<Skybox>(h.entity);
     default:return false;
     }
 }
@@ -63,6 +64,7 @@ Field field(lua_State* L,const Component& c,const char* key) {
     case 3:{auto& v=h.world->get<MeshRenderer>(h.entity); FIELD(color,Vec);FIELD(checkerboard,Boolean);FIELD(specular,Number);FIELD(mesh,Mesh);FIELD(material,String);break;}
     case 4:{auto& v=h.world->get<ObjectName>(h.entity); FIELD(value,String);break;}
     case 5:{auto& v=h.world->get<LuaScript>(h.entity); FIELD(path,String);FIELD(enabled,Boolean);break;}
+    case 12:{auto& v=h.world->get<Skybox>(h.entity);FIELD(type,Integer);FIELD(color,Vec);FIELD(enabled,Boolean);FIELD(right,String);FIELD(left,String);FIELD(top,String);FIELD(bottom,String);FIELD(front,String);FIELD(back,String);FIELD(hdr,String);break;}
     case 8:{auto& v=h.world->get<AudioListener>(h.entity);FIELD(enabled,Boolean);break;}
     case 6:{auto& v=h.world->get<Camera>(h.entity); FIELD(active,Boolean);FIELD(orthographic,Boolean);FIELD(fieldOfView,Number);FIELD(nearClip,Number);FIELD(farClip,Number);FIELD(orthographicSize,Number);break;}
     }
@@ -135,7 +137,7 @@ LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,M
     luaL_newmetatable(L,"ComponentType");
     lua_pushlightuserdata(L,this);lua_pushcclosure(L,componentTypeIndex,1);lua_setfield(L,-2,"__index");
     lua_pushliteral(L,"locked");lua_setfield(L,-2,"__metatable");lua_pop(L,1);
-    for (int i=0;i<12;++i) {
+    for (int i=0;i<13;++i) {
         auto* type=static_cast<int*>(lua_newuserdatauv(L,sizeof(int),0));
         *type=i;luaL_setmetatable(L,"ComponentType");
         if(i==2) { lua_pushvalue(L,-1);lua_setglobal(L,"BoxCollider"); }
@@ -207,6 +209,7 @@ int LuaScene::api(lua_State* L) {
         case 9:self.world_.each<DirectionalLight>([&](Entity e,DirectionalLight&){collect(e);});break;
         case 10:self.world_.each<PointLight>([&](Entity e,PointLight&){collect(e);});break;
         case 11:self.world_.each<SpotLight>([&](Entity e,SpotLight&){collect(e);});break;
+        case 12:self.world_.each<Skybox>([&](Entity e,Skybox&){collect(e);});break;
         case 8:self.world_.each<AudioListener>([&](Entity e,AudioListener&){collect(e);});break;
         case 7:self.world_.each<AudioSource>([&](Entity e,AudioSource&){collect(e);});break;
         case 6:self.world_.each<Camera>([&](Entity e,Camera&){collect(e);});break;
@@ -233,6 +236,7 @@ int LuaScene::api(lua_State* L) {
         case 9:self.world_.remove<DirectionalLight>(h.entity);break;
         case 10:self.world_.remove<PointLight>(h.entity);break;
         case 11:self.world_.remove<SpotLight>(h.entity);break;
+        case 12:self.world_.remove<Skybox>(h.entity);break;
         } return 0;
     }
     if(!has(h,type)) switch(type) {
@@ -246,6 +250,7 @@ int LuaScene::api(lua_State* L) {
     case 7:self.world_.add(h.entity,AudioSource{});break;
     case 9:if(!self.world_.has<Transform>(h.entity))self.world_.add(h.entity,Transform{});self.world_.add(h.entity,DirectionalLight{});break;
     case 10:if(!self.world_.has<Transform>(h.entity))self.world_.add(h.entity,Transform{});self.world_.add(h.entity,PointLight{});break;
+    case 12:self.world_.add(h.entity,Skybox{});break;
     case 11:if(!self.world_.has<Transform>(h.entity))self.world_.add(h.entity,Transform{});self.world_.add(h.entity,SpotLight{});break;
     case 8:if(!self.world_.has<Transform>(h.entity))self.world_.add(h.entity,Transform{});self.world_.add(h.entity,AudioListener{});break;
     }
@@ -300,6 +305,11 @@ int LuaScene::objectNewIndex(lua_State* L) {
 }
 int LuaScene::componentIndex(lua_State* L) {
     const auto c=*static_cast<Component*>(luaL_checkudata(L,1,"Component"));const char* key=luaL_checkstring(L,2);
+    if(c.type==12){
+        if(!c.object.world->alive(c.object.entity) || !has(c.object,12))return luaL_error(L,"Skybox no longer exists");
+        const char* methods[]{"setType","setColor","setEnabled","setHDR","setFace","setTextures"};
+        for(int i=0;i<6;++i)if(!std::strcmp(key,methods[i])){lua_pushvalue(L,1);lua_pushinteger(L,i);lua_pushcclosure(L,skyboxMethod,2);return 1;}
+    }
     if(c.type==3){
         if(!c.object.world->alive(c.object.entity) || !has(c.object,3))return luaL_error(L,"MeshRenderer no longer exists");
         const char* methods[]{"setMaterial","setMaterialColor","setMaterialTexture","setMaterialNormalMap","setMaterialShader","setMaterialNormalStrength","setMaterialTiling","setMaterialSpecular","resetMaterialOverrides"};
@@ -351,10 +361,13 @@ int LuaScene::componentNewIndex(lua_State* L) {
         return 0;
     }
     switch(f.kind) {
-    case Kind::Integer:{auto value=luaL_checkinteger(L,3);if(value<0 || value>3)return luaL_error(L,"Shadow quality must be 0..3");*static_cast<int*>(f.value)=int(value);break;}
+    case Kind::Integer:{auto value=luaL_checkinteger(L,3);if(value<0 || value>(c.type==12?1:3))return luaL_error(L,"Component integer out of range");*static_cast<int*>(f.value)=int(value);break;}
     case Kind::Number:*static_cast<float*>(f.value)=number(L,3);break;
     case Kind::Boolean:luaL_checktype(L,3,LUA_TBOOLEAN);*static_cast<bool*>(f.value)=lua_toboolean(L,3)!=0;break;
-    case Kind::String:*static_cast<std::string*>(f.value)=objectName(L,3);break;
+    case Kind::String:{
+        if(c.type==12){std::size_t length=0;const char* value=luaL_checklstring(L,3,&length);std::string path(value,length);bool hdr=!std::strcmp(luaL_checkstring(L,2),"hdr");if(!(hdr?skyboxHDRPath(path):materialTexturePath(path)))return luaL_error(L,"Invalid Skybox texture path");*static_cast<std::string*>(f.value)=path;}
+        else *static_cast<std::string*>(f.value)=objectName(L,3);break;}
+
     case Kind::Shape:{const char* s=luaL_checkstring(L,3);int i=!std::strcmp(s,"Box")?0:!std::strcmp(s,"Sphere")?1:!std::strcmp(s,"Capsule")?2:!std::strcmp(s,"Cone")?3:-1;if(i<0)return luaL_error(L,"Expected Box, Sphere, Capsule or Cone");*static_cast<ColliderShape*>(f.value)=static_cast<ColliderShape>(i);break;}
     case Kind::Mesh:{const char* s=luaL_checkstring(L,3);int i=!std::strcmp(s,"Cube")?0:!std::strcmp(s,"Sphere")?1:!std::strcmp(s,"Capsule")?2:!std::strcmp(s,"Cone")?3:-1;if(i<0)return luaL_error(L,"Expected Cube, Sphere, Capsule or Cone");*static_cast<MeshHandle*>(f.value)=c.object.scene->meshes_[i];break;}
     default:{
@@ -448,6 +461,22 @@ int LuaScene::audioApi(lua_State* L) {
     if(!lua_isnoneornil(L,2))self.world_.get<AudioSource>(h.entity).clip=luaL_checkstring(L,2);
     component(L,h,7);return 1;
 }
+int LuaScene::skyboxMethod(lua_State* L){
+    const auto c=*static_cast<Component*>(luaL_checkudata(L,lua_upvalueindex(1),"Component"));
+    if(!c.object.world->alive(c.object.entity) || !has(c.object,12))return luaL_error(L,"Skybox no longer exists");
+    if(luaL_testudata(L,1,"Component"))lua_remove(L,1);
+    auto& sky=c.object.world->get<Skybox>(c.object.entity);auto edited=sky;const int op=int(lua_tointeger(L,lua_upvalueindex(2)));
+    if(op==0){if(lua_type(L,1)==LUA_TSTRING){const char* type=lua_tostring(L,1);if(!std::strcmp(type,"HDR"))edited.type=1;else if(!std::strcmp(type,"Textures"))edited.type=0;else return luaL_error(L,"Expected Textures or HDR");}else edited.type=int(luaL_checkinteger(L,1));}
+    if(op==1)edited.color={number(L,1),number(L,2),number(L,3)};
+    if(op==2){luaL_checktype(L,1,LUA_TBOOLEAN);edited.enabled=lua_toboolean(L,1);}
+    if(op==3)edited.hdr=lua_isnil(L,1)?"":luaL_checkstring(L,1);
+    if(op==4){const char* face=luaL_checkstring(L,1);std::string* path=nullptr;
+        if(!std::strcmp(face,"right"))path=&edited.right;if(!std::strcmp(face,"left"))path=&edited.left;if(!std::strcmp(face,"top"))path=&edited.top;if(!std::strcmp(face,"bottom"))path=&edited.bottom;if(!std::strcmp(face,"front"))path=&edited.front;if(!std::strcmp(face,"back"))path=&edited.back;
+        if(!path)return luaL_error(L,"Expected right, left, top, bottom, front or back");*path=lua_isnil(L,2)?"":luaL_checkstring(L,2);
+    }
+    if(op==5){int i=1;for(auto* path:{&edited.right,&edited.left,&edited.top,&edited.bottom,&edited.front,&edited.back}){*path=lua_isnil(L,i)?"":luaL_checkstring(L,i);++i;}}
+    if(!validSkybox(edited))return luaL_error(L,"Invalid Skybox type, color or project texture path");sky=edited;return 0;
+}
 int LuaScene::materialMethod(lua_State* L){
     const auto c=*static_cast<Component*>(luaL_checkudata(L,lua_upvalueindex(1),"Component"));
     if(!c.object.world->alive(c.object.entity) || !has(c.object,3))return luaL_error(L,"MeshRenderer no longer exists");
@@ -509,11 +538,11 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields){
         if(!exportName(field.name))continue;
         if(field.type=="number")lua_pushnumber(state_,field.number);
         else if(field.type=="boolean")lua_pushboolean(state_,field.boolean);
-        else if(field.type=="Texture" && !materialTexturePath(field.text))lua_pushnil(state_);
+        else if(field.type=="Texture" && !(materialTexturePath(field.text) || skyboxHDRPath(field.text)))lua_pushnil(state_);
         else if(field.type=="string" || exportAssetType(field.type))lua_pushlstring(state_,field.text.data(),field.text.size());
         else if(exportHasComponent(world_,field.entity,field.type)){
             if(field.type=="GameObject")pushObject(field.entity);
-            else{int type=0;for(;type<12;++type)if(field.type==types[type])break;component(state_,Handle{this,&world_,field.entity},type);}
+            else{int type=0;for(;type<13;++type)if(field.type==types[type])break;component(state_,Handle{this,&world_,field.entity},type);}
         }else lua_pushnil(state_);
         lua_setglobal(state_,field.name.c_str());
     }

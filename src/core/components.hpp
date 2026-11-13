@@ -10,6 +10,7 @@
 #include "audio/audio_source.hpp"
 #include "core/ecs.hpp"
 #include "rendering/mesh.hpp"
+#include "rendering/skybox.hpp"
 #include <string>
 #include <vector>
 

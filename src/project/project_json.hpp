@@ -41,7 +41,8 @@ inline const std::vector<std::pair<const char*,std::vector<Field>>> components{
  {"AudioListener",{{"enabled",'b'}}},
  {"DirectionalLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'},{"shadowQuality",'i'}}},
  {"PointLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'},{"shadowQuality",'i'}}},
- {"SpotLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'},{"shadowQuality",'i'}}}
+ {"SpotLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'},{"shadowQuality",'i'}}},
+ {"Skybox",{{"type",'i'},{"color",'f',3},{"enabled",'b'},{"right",'s'},{"left",'s'},{"top",'s'},{"bottom",'s'},{"front",'s'},{"back",'s'},{"hdr",'s'}}}
 };
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in,const std::vector<Field>& fields){Json result=Json::object();for(auto f:fields){auto part=read(in,{f});result.update(part);}return result;}
@@ -67,7 +68,7 @@ inline Json fromLegacy(const std::string& text){
 }
 inline std::string toLegacy(const Json& doc){
     if(doc.at("format")!="LegacyEngine" || doc.at("version")!=9 || !doc.at("objects").is_array() || doc.at("objects").size()>10000)throw std::runtime_error("Invalid JSON project format");
-    std::ostringstream out;out<<std::setprecision(17)<<"LegacyEngineProject 11\n";
+    std::ostringstream out;out<<std::setprecision(17)<<"LegacyEngineProject 12\n";
     write(out,doc,{{"script",'s'},{"assets",'s'}});write(out,doc.at("editorCamera"),{{"target",'f',3},{"yaw",'f'},{"pitch",'f'},{"distance",'f'},{"fieldOfView",'f'}});
     out<<doc.at("objects").size()<<' ';
     for(const auto& object:doc.at("objects")){

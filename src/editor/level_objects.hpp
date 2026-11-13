@@ -69,7 +69,7 @@ inline Entity copyLevelObject(World& sourceWorld, Entity source, World& world, b
         if (auto* original = sourceWorld.tryGet<T>(source)) { T data = *original; world.add(copy, data); }
     };
     component(Transform{}); component(MeshRenderer{}); component(Collider{});
-    component(DirectionalLight{});component(PointLight{});component(SpotLight{});component(AudioListener{});component(AudioSource{});component(RigidBody{}); component(ObjectName{}); component(LuaScript{}); component(Camera{});
+    component(Skybox{});component(DirectionalLight{});component(PointLight{});component(SpotLight{});component(AudioListener{});component(AudioSource{});component(RigidBody{}); component(ObjectName{}); component(LuaScript{}); component(Camera{});
     if(auto* scripts=world.tryGet<LuaScript>(copy)){
         auto remap=[&](std::vector<ScriptField>& fields){for(auto& field:fields)if(field.entity==source)field.entity=copy;};
         remap(scripts->fields);for(auto& extra:scripts->additional)remap(extra.fields);

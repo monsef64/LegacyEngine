@@ -241,6 +241,7 @@ GLuint createProgram(const char* vertexSource, const char* fragmentSource)
 
 bool Renderer::init()
 {
+    if(!skyboxRenderer_.init())return false;
     if (!gladLoadGL(SDL_GL_GetProcAddress)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load the OpenGL functions");
         return false;
@@ -304,6 +305,7 @@ bool Renderer::init()
 
 void Renderer::shutdown()
 {
+    skyboxRenderer_.shutdown();
     materialTextures_.clear();materialCache_.clear();
     for (GpuMesh& mesh : meshes_) {
         glDeleteBuffers(1, &mesh.vertexBuffer);
@@ -365,6 +367,9 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
 
     prepareLighting(world,viewProjection,cameraPosition);
     glViewport(x,y,width,height);
+    const Skybox* activeSky=nullptr;
+    world.each<Skybox>([&](Entity,const Skybox& sky){if(!activeSky && sky.enabled)activeSky=&sky;});
+    if(activeSky)skyboxRenderer_.draw(*activeSky,materialAssets_,viewProjection);
     glUseProgram(litProgram_);
     glUniform3f(litCameraPosition_, cameraPosition.x, cameraPosition.y, cameraPosition.z);
     glUniform1i(litCheckerTexture_, 0);

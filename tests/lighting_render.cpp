@@ -79,6 +79,30 @@ int main(){
     mesh.materialOverrides=0;const auto diffuse=read();mesh.materialOverrides=MaterialNormal|MaterialShader;const auto bumped=read();assert(difference(diffuse,bumped)>100);
     assert(renderer.materialError.empty());
     mesh.materialValues.texture="missing.png";mesh.materialOverrides|=MaterialTexture;read();assert(!renderer.materialError.empty());
+    // Six independently colored faces verify axis mapping, camera translation
+    // invariance, color tinting, HDR decoding and foreground depth occlusion.
+    World skyWorld;auto skyEntity=skyWorld.create();skyWorld.add(skyEntity,Skybox{});
+    auto& sky=skyWorld.get<Skybox>(skyEntity);
+    const unsigned char colors[6][3]{{255,0,0},{0,255,0},{0,0,255},{255,255,0},{255,0,255},{0,255,255}};
+    int faceIndex=0;for(auto* path:{&sky.right,&sky.left,&sky.top,&sky.bottom,&sky.front,&sky.back}){
+        *path="sky"+std::to_string(faceIndex)+".tga";
+        std::ofstream image(assets.root/ *path,std::ios::binary);unsigned char header[18]{};header[2]=2;header[12]=2;header[14]=2;header[16]=24;image.write(reinterpret_cast<char*>(header),18);
+        for(int i=0;i<4;++i){image.put(char(colors[faceIndex][2]));image.put(char(colors[faceIndex][1]));image.put(char(colors[faceIndex][0]));}++faceIndex;
+    }
+    auto skyRead=[&](Vec3 position,Vec3 direction,Vec3 up=Vec3{0,1,0}){
+        auto matrix=multiply(perspective(kPi/3,1,.1f,100),lookAt(position,position+direction,up));
+        renderer.draw(skyWorld,matrix,192,192,position,0,0,false);glFinish();assert(glGetError()==GL_NO_ERROR);
+        std::array<unsigned char,3> pixel{};glReadPixels(96,96,1,1,GL_RGB,GL_UNSIGNED_BYTE,pixel.data());return pixel;
+    };
+    const Vec3 directions[]{{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,-1},{0,0,1}};
+    for(int i=0;i<6;++i){auto pixel=skyRead({},directions[i],i==2 || i==3?Vec3{0,0,1}:Vec3{0,1,0});for(int c=0;c<3;++c)assert(std::abs(int(pixel[c])-colors[i][c])<=1);}
+    assert(skyRead({20,10,30},{1,0,0})==skyRead({},{1,0,0}));
+    sky.color={.5f,1,1};auto tinted=skyRead({},{1,0,0});assert(tinted[0]>=126 && tinted[0]<=129);sky.color={1,1,1};
+    {std::ofstream hdr(assets.root/"studio.hdr",std::ios::binary);hdr<<"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 2 +X 2\n";for(int i=0;i<4;++i){hdr.put(char(128));hdr.put(char(128));hdr.put(char(128));hdr.put(char(129));}}
+    sky.type=1;sky.hdr="studio.hdr";auto hdrPixel=skyRead({},{0,0,-1});for(auto c:hdrPixel)assert(c>=184 && c<=188);assert(renderer.skyboxError().empty());
+    auto foreground=skyWorld.create();skyWorld.add(foreground,Transform{{0,0,-3}});skyWorld.add(foreground,MeshRenderer{cube,{1,0,0}});
+    auto objectPixel=skyRead({},{0,0,-1});assert(objectPixel[1]<10 && objectPixel[2]<10);skyWorld.destroy(foreground);
+    sky.enabled=false;auto disabled=skyRead({},{0,0,-1});assert(disabled[0]<40 && disabled[1]<40);
     std::filesystem::remove_all(temp);
     renderer.shutdown();SDL_GL_DestroyContext(context);SDL_DestroyWindow(window);SDL_Quit();
 }

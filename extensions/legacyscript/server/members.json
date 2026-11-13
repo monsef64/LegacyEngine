@@ -193,5 +193,23 @@
     "setShadows": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)",
     "setShadowQuality": "fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)",
     "setSpotAngles": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
+  },
+  "Skybox": {
+    "type": "integer 0 six face textures, 1 HDR panorama",
+    "enabled": "boolean",
+    "color": "Vector3 Color tint",
+    "right": "Texture +X",
+    "left": "Texture -X",
+    "top": "Texture +Y",
+    "bottom": "Texture -Y",
+    "front": "Texture -Z",
+    "back": "Texture +Z",
+    "hdr": "Texture Radiance .hdr equirectangular panorama",
+    "setType": "fun(self:Skybox,type:string|integer) Textures or HDR, or 0/1",
+    "setColor": "fun(self:Skybox,r:number,g:number,b:number)",
+    "setEnabled": "fun(self:Skybox,enabled:boolean)",
+    "setHDR": "fun(self:Skybox,texture:Texture|nil)",
+    "setFace": "fun(self:Skybox,face:string,texture:Texture|nil)",
+    "setTextures": "fun(self:Skybox,right:Texture,left:Texture,top:Texture,bottom:Texture,front:Texture,back:Texture)"
   }
 }

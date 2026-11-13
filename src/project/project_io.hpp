@@ -35,7 +35,7 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
     auto entityIndex=[&](Entity target){int index=-1;for(std::size_t i=0;i<entities.size();++i)if(entities[i]==target)index=static_cast<int>(i);return index;};
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 11\n";
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 12\n";
     out<<std::quoted(std::string(source))<<'\n'<<std::quoted(std::string(assetDirectory))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
@@ -46,7 +46,7 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
     };
     for(Entity e:entities) {
         unsigned mask=(world.has<ObjectName>(e)?1:0)|(world.has<Transform>(e)?2:0)|
-            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0)|(world.has<Camera>(e)?64:0)|(world.has<AudioSource>(e)?128:0)|(world.has<AudioListener>(e)?256:0)|(world.has<DirectionalLight>(e)?512:0)|(world.has<PointLight>(e)?1024:0)|(world.has<SpotLight>(e)?2048:0);
+            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0)|(world.has<Camera>(e)?64:0)|(world.has<AudioSource>(e)?128:0)|(world.has<AudioListener>(e)?256:0)|(world.has<DirectionalLight>(e)?512:0)|(world.has<PointLight>(e)?1024:0)|(world.has<SpotLight>(e)?2048:0)|(world.has<Skybox>(e)?4096:0);
         int parent=-1;const Entity p=getParent(world,e);
         for(std::size_t i=0;i<entities.size();++i)if(entities[i]==p)parent=static_cast<int>(i);
         out<<mask<<' '<<parent<<' ';
@@ -84,6 +84,7 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
         if(auto* l=world.tryGet<DirectionalLight>(e))writeLight(*l);
         if(auto* l=world.tryGet<PointLight>(e))writeLight(*l);
         if(auto* l=world.tryGet<SpotLight>(e))writeLight(*l);
+        if(auto* sky=world.tryGet<Skybox>(e)){require(validSkybox(*sky));out<<sky->type<<' ';writeVec(out,sky->color);out<<sky->enabled<<' ';for(const auto* path:{&sky->right,&sky->left,&sky->top,&sky->bottom,&sky->front,&sky->back,&sky->hdr})out<<std::quoted(*path)<<' ';}
         out<<'\n';
     }
     auto text=out.str();require(text.size()<=maxBytes);return text;
@@ -92,7 +93,7 @@ struct Loaded { World world; std::string source,assetDirectory; OrbitCamera came
 inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=11));
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=12));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
     if(version>=4) {
         in>>std::quoted(result.assetDirectory);
@@ -113,7 +114,7 @@ inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& me
     };
     for(int i=0;i<count;++i) {
         unsigned mask=0;int parent=-1;in>>mask>>parent;
-        require(bool(in) && mask<=(version==1?31u:version==2?63u:version<6?127u:version<7?255u:version<9?511u:4095u) && parent>=-1 && parent<count && parent!=i);
+        require(bool(in) && mask<=(version==1?31u:version==2?63u:version<6?127u:version<7?255u:version<9?511u:version<12?4095u:8191u) && parent>=-1 && parent<count && parent!=i);
         const Entity e=result.world.create();entities.push_back(e);parents.push_back(parent);cameraTargets.push_back(-1);
         if(mask&1) {std::string name;in>>std::quoted(name);require(name.size()<=4096);result.world.add(e,ObjectName{name});}
         if(mask&2)result.world.add(e,readTransform(in));
@@ -165,6 +166,7 @@ inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& me
         if(mask&512)readLight(DirectionalLight{});
         if(mask&1024)readLight(PointLight{});
         if(mask&2048)readLight(SpotLight{});
+        if(mask&4096){Skybox sky;in>>sky.type;sky.color=readVec(in);in>>sky.enabled;for(auto* path:{&sky.right,&sky.left,&sky.top,&sky.bottom,&sky.front,&sky.back,&sky.hdr})in>>std::quoted(*path);require(validSkybox(sky));result.world.add(e,sky);}
         require(bool(in));
     }
     result.world.each<LuaScript>([&](Entity,LuaScript& scripts){

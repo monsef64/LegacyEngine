@@ -46,12 +46,13 @@ template<class T> inline bool componentHeader(World& world,Entity entity,const c
         if constexpr(std::is_same_v<T,DirectionalLight>)type=9;
         if constexpr(std::is_same_v<T,PointLight>)type=10;
         if constexpr(std::is_same_v<T,SpotLight>)type=11;
+        if constexpr(std::is_same_v<T,Skybox>)type=12;
         EditorComponentPayload payload{entity,type};ImGui::SetDragDropPayload("EDITOR_COMPONENT",&payload,sizeof(payload));ImGui::TextUnformatted(name);ImGui::EndDragDropSource();
     }
     if(remove){world.remove<T>(entity);return false;}return open;
 }
 inline void drawScriptExports(World& world,std::vector<ScriptField>& fields){
-    const char* componentTypes[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener","DirectionalLight","PointLight","SpotLight"};
+    const char* componentTypes[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener","DirectionalLight","PointLight","SpotLight","Skybox"};
     for(auto& field:fields){
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)",field.name.c_str(),field.type.c_str());
@@ -65,10 +66,10 @@ inline void drawScriptExports(World& world,std::vector<ScriptField>& fields){
             const std::string value=asset?(field.text.empty()?"None (drop asset)":field.text):exportHasComponent(world,field.entity,field.type)?(name?name->value:"GameObject"):"None (drop object / component)";
             ImGui::Button(value.c_str(),ImVec2(std::max(40.0f,ImGui::GetContentRegionAvail().x-36),0));
             if(ImGui::BeginDragDropTarget()){
-                if(asset){if(auto* p=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string path=static_cast<const char*>(p->Data);if((field.type!="AudioClip" || audioAsset(path)) && (field.type!="Texture" || (!path.empty() && materialTexturePath(path))))field.text=path;}}
+                if(asset){if(auto* p=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string path=static_cast<const char*>(p->Data);if((field.type!="AudioClip" || audioAsset(path)) && (field.type!="Texture" || (!path.empty() && (materialTexturePath(path) || skyboxHDRPath(path)))))field.text=path;}}
                 else{
                     if(auto* p=ImGui::AcceptDragDropPayload("LEVEL_OBJECT")){Entity target=*static_cast<const Entity*>(p->Data);if(exportHasComponent(world,target,field.type))field.entity=target;}
-                    if(auto* p=ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")){auto target=*static_cast<const EditorComponentPayload*>(p->Data);if(target.type>=0 && target.type<12 && (field.type=="GameObject" || field.type==componentTypes[target.type]) && exportHasComponent(world,target.entity,field.type))field.entity=target.entity;}
+                    if(auto* p=ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")){auto target=*static_cast<const EditorComponentPayload*>(p->Data);if(target.type>=0 && target.type<13 && (field.type=="GameObject" || field.type==componentTypes[target.type]) && exportHasComponent(world,target.entity,field.type))field.entity=target.entity;}
                 }
                 ImGui::EndDragDropTarget();
             }
@@ -229,6 +230,26 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 ImGui::TextWrapped("Emission follows local -Z. Shadow maps use a shared 12-layer budget; a point light uses six layers.");
                 if(validLight(edited))*light=edited;ImGui::PopID();
             };
+            if(auto* sky=world.tryGet<Skybox>(selected);sky && componentHeader<Skybox>(world,selected,"Skybox")){
+                ImGui::Checkbox("Skybox enabled",&sky->enabled);
+                ImGui::Combo("Skybox type",&sky->type,"Multi Texture Skybox\0Skybox HDR\0");
+                ImGui::ColorEdit3("Skybox color",&sky->color.x);
+                auto slot=[&](const char* label,std::string& path,bool hdr){
+                    ImGui::PushID(label);
+                    if(ImGui::BeginCombo(label,path.empty()?"None (drop texture)":path.c_str())){
+                        if(ImGui::Selectable("None",path.empty()))path.clear();
+                        if(assets)for(const auto& file:assets->files())if((hdr?skyboxHDRPath(file):materialTexturePath(file)) && ImGui::Selectable(file.c_str(),file==path))path=file;
+                        ImGui::EndCombo();
+                    }
+                    if(ImGui::BeginDragDropTarget()){
+                        if(const auto* payload=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string value=static_cast<const char*>(payload->Data);if(!value.empty() && (hdr?skyboxHDRPath(value):materialTexturePath(value)))path=value;}
+                        ImGui::EndDragDropTarget();
+                    }
+                    ImGui::PopID();
+                };
+                if(sky->type==1)slot("HDR panorama",sky->hdr,true);
+                else{slot("Right (+X)",sky->right,false);slot("Left (-X)",sky->left,false);slot("Top (+Y)",sky->top,false);slot("Bottom (-Y)",sky->bottom,false);slot("Front (-Z)",sky->front,false);slot("Back (+Z)",sky->back,false);}
+            }
             lightInspector(DirectionalLight{},"DirectionalLight",0);lightInspector(PointLight{},"PointLight",1);lightInspector(SpotLight{},"SpotLight",2);
             if(auto* listener=world.tryGet<AudioListener>(selected);listener && componentHeader<AudioListener>(world,selected,"AudioListener")){
                 ImGui::Checkbox("Listener enabled",&listener->enabled);
@@ -278,6 +299,7 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                     if(!world.has<SpotLight>(selected) && ImGui::MenuItem("SpotLight"))world.add(selected,SpotLight{});
                 }
                 if(!world.has<AudioListener>(selected) && world.has<Transform>(selected) && ImGui::MenuItem("AudioListener"))world.add(selected,AudioListener{});
+                if(!world.has<Skybox>(selected) && ImGui::MenuItem("Skybox"))world.add(selected,Skybox{});
                 if(!world.has<AudioSource>(selected) && ImGui::MenuItem("AudioSource"))world.add(selected,AudioSource{});
                 if(!world.has<Transform>(selected) && ImGui::MenuItem("Transform"))world.add(selected,Transform{});
                 if(!world.has<MeshRenderer>(selected) && ImGui::MenuItem("MeshRenderer"))world.add(selected,MeshRenderer{meshes[0]});
