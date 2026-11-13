@@ -14,6 +14,7 @@ on:
       - 'third_party/**'
       - 'CMakeLists.txt'
       - 'scripts/**'
+      - 'extensions/legacyscript/**'
       - '.github/workflows/release.yml'
   pull_request:
     paths:
@@ -22,6 +23,7 @@ on:
       - 'third_party/**'
       - 'CMakeLists.txt'
       - 'scripts/**'
+      - 'extensions/legacyscript/**'
       - '.github/workflows/release.yml'
   workflow_dispatch:
     inputs:
@@ -196,6 +198,9 @@ jobs:
           cp third_party/roboto/LICENSE "$package/licenses/Roboto.txt"
           cp third_party/glad/LICENSE "$package/licenses/glad.txt"
           cp third_party/miniaudio/LICENSE "$package/licenses/miniaudio.txt"
+          cp third_party/simdjson/LICENSE "$package/licenses/simdjson.txt"
+          cp third_party/fontawesome/LICENSE.txt "$package/licenses/FontAwesome.txt"
+          cp third_party/stb/LICENSE "$package/licenses/stb.txt"
           cp third_party/json/LICENSE.MIT "$package/licenses/nlohmann-json.txt"
           cp build/editor-screenshot.png "$package/"
           tar -czf "$package.tar.gz" "$package"
@@ -222,3 +227,38 @@ jobs:
             gh release create "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" \
               --verify-tag --generate-notes --title "LegacyEngine $GITHUB_REF_NAME"
           fi
+
+  vsix:
+    name: Build LegacyScript VSIX
+    needs: linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: extensions/legacyscript
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: extensions/legacyscript/package-lock.json
+      - name: Install extension dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Generate API, test and package VSIX
+        run: npm run generate && npm test && npm run package
+      - name: Upload separate installable VSIX file
+        uses: actions/upload-artifact@v7
+        with:
+          name: legacyscript-vsix
+          path: extensions/legacyscript/legacyscript.vsix
+          archive: false
+          if-no-files-found: error
+      - name: Attach VSIX to engine tag release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$GITHUB_REF_NAME" legacyscript.vsix --clobber

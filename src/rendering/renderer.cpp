@@ -91,9 +91,17 @@ float visibility(int i,vec3 normal,vec3 toLight){
     float bias=uLightShadow[i].y*(1.0+2.0*(1.0-max(dot(normal,toLight),0.0)));
     float sum=0.0;
     vec2 texel=1.0/vec2(textureSize(uShadowTexture,0).xy);
-    for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x)
-        sum+=(p.z-bias<=texture(uShadowTexture,vec3(p.xy+vec2(x,y)*texel,float(layer))).r)?1.0:0.0;
-    return sum/9.0;
+    float scale=uLightShadow[i].w;
+    int radius=scale<0.3?0:1;
+    float count=0.0;
+    for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x){
+        if(abs(x)>radius || abs(y)>radius)continue;
+        if(scale<0.6 && radius==1 && (x<0 || y<0))continue;
+        vec2 offset=vec2(x,y)-(scale<0.6 && radius==1?vec2(.5):vec2(0));
+        vec2 uv=clamp(p.xy*scale+offset*texel,texel*.5,vec2(scale)-texel*.5);
+        sum+=(p.z-bias<=texture(uShadowTexture,vec3(uv,float(layer))).r)?1.0:0.0;count+=1.0;
+    }
+    return sum/count;
 }
 void main(){
     vec3 normal=normalize(vNormal);
@@ -422,6 +430,8 @@ void Renderer::prepareLighting(World& world,const Mat4& viewProjection,Vec3 came
         glPolygonOffset(2,4);
         for(const auto& light:lights)if(light.shadowLayer>=0){
             for(int face=0;face<(light.type==1?6:1);++face){
+                const int resolution=lightShadowResolution(light.settings);
+                glViewport(0,0,resolution,resolution);
                 const int layer=light.shadowLayer+face;
                 const Mat4 vp=Lighting::shadowMatrix(light,cameraPosition,face);matrices[layer]=vp;
                 glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,shadowTexture_,0,layer);
@@ -445,7 +455,7 @@ void Renderer::prepareLighting(World& world,const Mat4& viewProjection,Vec3 came
         glUniform4f(lightLocations_[i][0],l.position.x,l.position.y,l.position.z,float(l.type));
         glUniform4f(lightLocations_[i][1],s.color.x*s.intensity,s.color.y*s.intensity,s.color.z*s.intensity,s.range);
         glUniform4f(lightLocations_[i][2],l.direction.x,l.direction.y,l.direction.z,std::cos(s.outerAngle*kPi/180));
-        glUniform4f(lightLocations_[i][3],float(l.shadowLayer),s.shadowBias,std::cos(s.innerAngle*kPi/180),0);
+        glUniform4f(lightLocations_[i][3],float(l.shadowLayer),s.shadowBias,std::cos(s.innerAngle*kPi/180),float(lightShadowResolution(s))/Lighting::shadowResolution);
     }
     for(int i=0;i<Lighting::maxShadowLayers;++i)glUniformMatrix4fv(shadowMatrixLocations_[i],1,GL_FALSE,matrices[i].m);
 }

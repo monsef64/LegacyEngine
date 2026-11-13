@@ -22,7 +22,7 @@ inline std::string sceneSignature(World& world) {
         scalar(e.index);scalar(e.generation);
         component(e,ObjectName{},[&](const ObjectName& n){scalar(n.value.size());result+=n.value;});
         component(e,LuaScript{},[&](const LuaScript& script){scalar(script.path.size());result+=script.path;scalar(script.enabled);fields(script.fields);scalar(script.additional.size());for(const auto& entry:script.additional){scalar(entry.path.size());result+=entry.path;scalar(entry.enabled);fields(entry.fields);}});
-        auto light=[&](const LightSettings& l){vec(l.color);scalar(l.intensity);scalar(l.enabled);scalar(l.shadows);scalar(l.range);scalar(l.innerAngle);scalar(l.outerAngle);scalar(l.shadowDistance);scalar(l.shadowBias);};
+        auto light=[&](const LightSettings& l){vec(l.color);scalar(l.intensity);scalar(l.enabled);scalar(l.shadows);scalar(l.range);scalar(l.innerAngle);scalar(l.outerAngle);scalar(l.shadowDistance);scalar(l.shadowBias);scalar(l.shadowQuality);};
         component(e,DirectionalLight{},light);component(e,PointLight{},light);component(e,SpotLight{},light);
         component(e,AudioListener{},[&](const AudioListener& listener){scalar(listener.enabled);});
         component(e,AudioSource{},[&](const AudioSource& a){scalar(a.clip.size());result+=a.clip;scalar(a.volume);scalar(a.pitch);scalar(a.pan);scalar(a.distance);scalar(a.blend);scalar(a.looping);scalar(a.muted);scalar(a.playOnStart);});

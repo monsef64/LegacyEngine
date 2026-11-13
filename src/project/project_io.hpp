@@ -35,7 +35,7 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
     auto entityIndex=[&](Entity target){int index=-1;for(std::size_t i=0;i<entities.size();++i)if(entities[i]==target)index=static_cast<int>(i);return index;};
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 9\n";
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 10\n";
     out<<std::quoted(std::string(source))<<'\n'<<std::quoted(std::string(assetDirectory))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
@@ -78,7 +78,7 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
         }
         if(auto* a=world.tryGet<AudioSource>(e))out<<std::quoted(a->clip)<<' '<<a->volume<<' '<<a->pitch<<' '<<a->pan<<' '<<a->distance<<' '<<a->looping<<' '<<a->muted<<' '<<a->playOnStart<<' '<<a->blend<<' ';
         if(auto* listener=world.tryGet<AudioListener>(e))out<<listener->enabled<<' ';
-        auto writeLight=[&](const LightSettings& l){require(validLight(l) && world.has<Transform>(e));writeVec(out,l.color);out<<l.intensity<<' '<<l.enabled<<' '<<l.shadows<<' '<<l.range<<' '<<l.innerAngle<<' '<<l.outerAngle<<' '<<l.shadowDistance<<' '<<l.shadowBias<<' ';};
+        auto writeLight=[&](const LightSettings& l){require(validLight(l) && world.has<Transform>(e));writeVec(out,l.color);out<<l.intensity<<' '<<l.enabled<<' '<<l.shadows<<' '<<l.range<<' '<<l.innerAngle<<' '<<l.outerAngle<<' '<<l.shadowDistance<<' '<<l.shadowBias<<' '<<l.shadowQuality<<' ';};
         if(auto* l=world.tryGet<DirectionalLight>(e))writeLight(*l);
         if(auto* l=world.tryGet<PointLight>(e))writeLight(*l);
         if(auto* l=world.tryGet<SpotLight>(e))writeLight(*l);
@@ -90,7 +90,7 @@ struct Loaded { World world; std::string source,assetDirectory; OrbitCamera came
 inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=9));
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=10));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
     if(version>=4) {
         in>>std::quoted(result.assetDirectory);
@@ -157,7 +157,7 @@ inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& me
             require(a.blend>=0 && a.blend<=1);
             require(a.volume>=0 && a.volume<=1 && a.pitch>=.1f && a.pitch<=4 && a.pan>=-1 && a.pan<=1 && a.distance>=0);result.world.add(e,a);}
         if(mask&256){AudioListener listener;in>>listener.enabled;result.world.add(e,listener);}
-        auto readLight=[&](auto light){light.color=readVec(in);light.intensity=number(in);in>>light.enabled>>light.shadows;light.range=number(in);light.innerAngle=number(in);light.outerAngle=number(in);light.shadowDistance=number(in);light.shadowBias=number(in);require(validLight(light) && (mask&2));result.world.add(e,light);};
+        auto readLight=[&](auto light){light.color=readVec(in);light.intensity=number(in);in>>light.enabled>>light.shadows;light.range=number(in);light.innerAngle=number(in);light.outerAngle=number(in);light.shadowDistance=number(in);light.shadowBias=number(in);if(version>=10)in>>light.shadowQuality;require(validLight(light) && (mask&2));result.world.add(e,light);};
         if(mask&512)readLight(DirectionalLight{});
         if(mask&1024)readLight(PointLight{});
         if(mask&2048)readLight(SpotLight{});

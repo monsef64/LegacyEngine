@@ -2,6 +2,7 @@
 #include <imgui.h>
 #include "editor/editor_palette.hpp"
 #include "editor_font.hpp"
+#include "editor_icons.hpp"
 
 // Apply once after context creation. The SDL/OpenGL backends bake fonts at the
 // current framebuffer density (including when moving between DPI displays).
@@ -15,6 +16,9 @@ inline void applyEditorTheme() {
     io.FontDefault = io.Fonts->AddFontFromMemoryTTF(
         const_cast<unsigned char*>(editorFontData), sizeof(editorFontData), 16.0f, &font);
 
+    static const ImWchar iconRanges[]{0xf000,0xf8ff,0};
+    ImFontConfig icons;icons.MergeMode=true;icons.FontDataOwnedByAtlas=false;icons.PixelSnapH=true;icons.GlyphMinAdvanceX=18;
+    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(editorIconData),sizeof(editorIconData),16,&icons,iconRanges);
     ImGui::StyleColorsDark();
     ImGuiStyle& s = ImGui::GetStyle();
     s.AntiAliasedLines = true;

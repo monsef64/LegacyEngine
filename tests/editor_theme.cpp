@@ -16,11 +16,13 @@ int main() {
         io.DisplayFramebufferScale = ImVec2(density,density);
         io.DeltaTime = 1.0f/60;
         io.Fonts->Build();
+        assert(io.FontDefault->IsGlyphInFont(0xf07b) && io.FontDefault->IsGlyphInFont(0xf1c9) && io.FontDefault->IsGlyphInFont(0xf03e));
         ImGui::NewFrame();
         ImGui::SetNextWindowPos(ImVec2(10,10));
         ImGui::SetNextWindowSize(ImVec2(420,160));
         ImGui::Begin("Typography");
         ImGui::TextUnformatted("Hierarchy / Inspector: Position 0.125");
+        ImGui::TextUnformatted("\xef\x81\xbb  \xef\x87\x89  \xef\x80\xbe");
         ImGui::End();
         ImGui::Render();
         assert(ImGui::GetDrawData()->TotalVtxCount > 0);

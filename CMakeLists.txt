@@ -129,6 +129,20 @@ add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_s
 target_include_directories(lua_console PUBLIC src)
 target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3)
 
+add_library(legacy_thumbnails STATIC src/assets/texture_preview.cpp)
+target_include_directories(legacy_thumbnails PUBLIC src PRIVATE third_party/stb)
+target_link_libraries(legacy_thumbnails PUBLIC SDL3::SDL3 glad)
+target_link_libraries(legacy_imgui PUBLIC legacy_thumbnails)
+
+# SIMD parser with a compatibility DOM bridge (no second text parse).
+add_library(legacy_simdjson STATIC third_party/simdjson/simdjson.cpp)
+target_include_directories(legacy_simdjson SYSTEM PUBLIC third_party/simdjson)
+add_library(legacy_json STATIC src/project/json_io.cpp)
+target_include_directories(legacy_json PUBLIC src)
+target_link_libraries(legacy_json PRIVATE legacy_simdjson)
+target_link_libraries(lua_console PUBLIC legacy_json)
+target_link_libraries(legacy_imgui PUBLIC legacy_json)
+
 # --- LegacyEngine -----------------------------------------------------------
 
 add_executable(LegacyEngine
@@ -146,6 +160,10 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/roboto/Roboto-Regular.ttf" LE
 string(REGEX REPLACE "(..)" "0x\\1," LEGACY_FONT_BYTES "${LEGACY_FONT_HEX}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_font.hpp"
   "#pragma once\ninline const unsigned char editorFontData[] = {${LEGACY_FONT_BYTES}};\n")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf" LEGACY_ICON_HEX HEX)
+string(REGEX REPLACE "(..)" "0x\\1," LEGACY_ICON_BYTES "${LEGACY_ICON_HEX}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma once\ninline const unsigned char editorIconData[] = {${LEGACY_ICON_BYTES}};\n")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui imguizmo lua_console)
 
@@ -372,7 +390,7 @@ if(BUILD_TESTING)
   add_executable(lighting_tests tests/lighting.cpp src/rendering/mesh.cpp)
   target_link_libraries(lighting_tests PRIVATE lua_console legacy_imgui)
   add_executable(lighting_render_tests tests/lighting_render.cpp src/rendering/renderer.cpp src/rendering/mesh.cpp)
-  target_link_libraries(lighting_render_tests PRIVATE SDL3::SDL3 glad)
+  target_link_libraries(lighting_render_tests PRIVATE SDL3::SDL3 glad lua_console legacy_thumbnails)
   target_include_directories(lighting_render_tests PRIVATE src)
   foreach(test_target lighting_tests lighting_render_tests)
     if(MSVC)
@@ -383,4 +401,21 @@ if(BUILD_TESTING)
   endforeach()
   add_test(NAME lighting COMMAND lighting_tests)
   # lighting_render_tests needs a real GL context; CI invokes it under Xvfb.
+endif()
+
+# Standalone project tests do not otherwise link an engine subsystem.
+if(BUILD_TESTING)
+  target_link_libraries(project_io_tests PRIVATE legacy_json)
+  target_link_libraries(editor_document_tests PRIVATE legacy_json)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(asset_thumbnail_tests tests/asset_thumbnails.cpp)
+  target_link_libraries(asset_thumbnail_tests PRIVATE legacy_thumbnails legacy_json)
+  if(MSVC)
+    target_compile_options(asset_thumbnail_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(asset_thumbnail_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME asset_thumbnails COMMAND asset_thumbnail_tests)
 endif()

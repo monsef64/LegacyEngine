@@ -44,5 +44,12 @@ test('dynamic light APIs and properties are available',()=>{
  const globals=f.completion(...input(''));
  for(const name of ['DirectionalLight','PointLight','SpotLight'])assert(globals.some(x=>x.label===name));
  const fields=f.completion(...input('light.'));
- for(const name of ['color','intensity','enabled','shadows','range','innerAngle','outerAngle','shadowDistance','shadowBias'])assert(fields.some(x=>x.label===name));
+ for(const name of ['color','intensity','enabled','shadows','range','innerAngle','outerAngle','shadowDistance','shadowBias','shadowQuality','setColor','setIntensity','setRange','setEnabled','setShadows','setShadowQuality','setSpotAngles'])assert(fields.some(x=>x.label===name));
+});
+
+test('mouse lock and visibility APIs have completions and signatures',()=>{
+ const globals=f.completion(...input(''));
+ for(const name of ['lockMouse','unlockMouse','hideMouse','showMouse','isMouseVisible','isMouseLocked']){
+   assert(globals.some(x=>x.label===name));assert.match(f.hover(...input(name)).contents.value,/boolean/);
+ }
 });

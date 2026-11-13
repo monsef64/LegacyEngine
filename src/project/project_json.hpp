@@ -36,13 +36,13 @@ inline const std::vector<std::pair<const char*,std::vector<Field>>> components{
  {"Camera",{{"active",'b'},{"orthographic",'b'},{"fieldOfView",'f'},{"nearClip",'f'},{"farClip",'f'},{"orthographicSize",'f'},{"viewport",'f',4},{"targetEntity",'i'},{"target",'f',3},{"followOffset",'f',3},{"tracking",'b'},{"following",'b'}}},
  {"AudioSource",{{"clip",'s'},{"volume",'f'},{"pitch",'f'},{"pan",'f'},{"maxDistance",'f'},{"looping",'b'},{"muted",'b'},{"playOnStart",'b'},{"spatialBlend",'f'}}},
  {"AudioListener",{{"enabled",'b'}}},
- {"DirectionalLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'}}},
- {"PointLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'}}},
- {"SpotLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'}}}
+ {"DirectionalLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'},{"shadowQuality",'i'}}},
+ {"PointLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'},{"shadowQuality",'i'}}},
+ {"SpotLight",{{"color",'f',3},{"intensity",'f'},{"enabled",'b'},{"shadows",'b'},{"range",'f'},{"innerAngle",'f'},{"outerAngle",'f'},{"shadowDistance",'f'},{"shadowBias",'f'},{"shadowQuality",'i'}}}
 };
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in,const std::vector<Field>& fields){Json result=Json::object();for(auto f:fields){auto part=read(in,{f});result.update(part);}return result;}
-inline void writeSchema(std::ostream& out,const Json& object,const std::vector<Field>& fields){for(auto f:fields)write(out,object,{f});}
+inline void writeSchema(std::ostream& out,const Json& object,const std::vector<Field>& fields){for(auto f:fields){if(std::string(f.name)=="shadowQuality" && !object.contains(f.name))out<<3<<' ';else write(out,object,{f});}}
 inline Json readFields(std::istream& in){int count=0;in>>count;if(count<0 || count>64)throw std::runtime_error("Too many exported fields");Json result=Json::array();for(int i=0;i<count;++i)result.push_back(read(in,{{"name",'s'},{"type",'s'},{"text",'s'},{"number",'f'},{"boolean",'b'},{"entity",'i'}}));return result;}
 inline void writeFields(std::ostream& out,const Json& fields){if(!fields.is_array() || fields.size()>64)throw std::runtime_error("Too many exported fields");out<<fields.size()<<' ';for(const auto& field:fields)write(out,field,{{"name",'s'},{"type",'s'},{"text",'s'},{"number",'f'},{"boolean",'b'},{"entity",'i'}});}
 inline Json fromLegacy(const std::string& text){
@@ -61,7 +61,7 @@ inline Json fromLegacy(const std::string& text){
 }
 inline std::string toLegacy(const Json& doc){
     if(doc.at("format")!="LegacyEngine" || doc.at("version")!=9 || !doc.at("objects").is_array() || doc.at("objects").size()>10000)throw std::runtime_error("Invalid JSON project format");
-    std::ostringstream out;out<<std::setprecision(17)<<"LegacyEngineProject 9\n";
+    std::ostringstream out;out<<std::setprecision(17)<<"LegacyEngineProject 10\n";
     write(out,doc,{{"script",'s'},{"assets",'s'}});write(out,doc.at("editorCamera"),{{"target",'f',3},{"yaw",'f'},{"pitch",'f'},{"distance",'f'},{"fieldOfView",'f'}});
     out<<doc.at("objects").size()<<' ';
     for(const auto& object:doc.at("objects")){

@@ -326,6 +326,14 @@ debug = nil
 ---@field outerAngle number
 ---@field shadowDistance number
 ---@field shadowBias number
+---@field shadowQuality integer 0=Off, 1=Low (256), 2=Medium (512), 3=High (1024)
+---@field setColor fun(self:DirectionalLight|PointLight|SpotLight,r:number,g:number,b:number)
+---@field setIntensity fun(self:DirectionalLight|PointLight|SpotLight,value:number)
+---@field setRange fun(self:DirectionalLight|PointLight|SpotLight,value:number)
+---@field setEnabled fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)
+---@field setShadows fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)
+---@field setShadowQuality fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)
+---@field setSpotAngles fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)
 DirectionalLight = nil
 
 ---@class PointLight
@@ -338,6 +346,14 @@ DirectionalLight = nil
 ---@field outerAngle number
 ---@field shadowDistance number
 ---@field shadowBias number
+---@field shadowQuality integer 0=Off, 1=Low (256), 2=Medium (512), 3=High (1024)
+---@field setColor fun(self:DirectionalLight|PointLight|SpotLight,r:number,g:number,b:number)
+---@field setIntensity fun(self:DirectionalLight|PointLight|SpotLight,value:number)
+---@field setRange fun(self:DirectionalLight|PointLight|SpotLight,value:number)
+---@field setEnabled fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)
+---@field setShadows fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)
+---@field setShadowQuality fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)
+---@field setSpotAngles fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)
 PointLight = nil
 
 ---@class SpotLight
@@ -350,4 +366,27 @@ PointLight = nil
 ---@field outerAngle number
 ---@field shadowDistance number
 ---@field shadowBias number
+---@field shadowQuality integer 0=Off, 1=Low (256), 2=Medium (512), 3=High (1024)
+---@field setColor fun(self:DirectionalLight|PointLight|SpotLight,r:number,g:number,b:number)
+---@field setIntensity fun(self:DirectionalLight|PointLight|SpotLight,value:number)
+---@field setRange fun(self:DirectionalLight|PointLight|SpotLight,value:number)
+---@field setEnabled fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)
+---@field setShadows fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)
+---@field setShadowQuality fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)
+---@field setSpotAngles fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)
 SpotLight = nil
+
+-- Mouse commands return true on success; queries report native window/cursor state.
+-- Locking uses relative motion and hides the cursor until unlocked.
+---@return boolean
+function lockMouse() end
+---@return boolean
+function unlockMouse() end
+---@return boolean
+function hideMouse() end
+---@return boolean
+function showMouse() end
+---@return boolean
+function isMouseVisible() end
+---@return boolean
+function isMouseLocked() end
