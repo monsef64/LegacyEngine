@@ -1,5 +1,7 @@
 #include "scripting/lua_scene.hpp"
+#include "assets/cubemap.hpp"
 #include "core/hierarchy.hpp"
+#include "prefabs/prefab.hpp"
 #include "scene/scene_camera.hpp"
 #include "scene/skybox_transition.hpp"
 #include "scripting/script_exports.hpp"
@@ -187,6 +189,7 @@ Field field(lua_State* L, const Component& c, const char* key) {
         FIELD(front, String);
         FIELD(back, String);
         FIELD(hdr, String);
+        FIELD(cubemap, String);
         break;
     }
     case 8: {
@@ -239,12 +242,24 @@ Vec3 vectorArgument(lua_State* L, int index) {
     luaL_checktype(L, index, LUA_TTABLE);
     Vec3 v;
     lua_getfield(L, index, "x");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_rawgeti(L, index, 1);
+    }
     v.x = number(L, -1);
     lua_pop(L, 1);
     lua_getfield(L, index, "y");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_rawgeti(L, index, 2);
+    }
     v.y = number(L, -1);
     lua_pop(L, 1);
     lua_getfield(L, index, "z");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_rawgeti(L, index, 3);
+    }
     v.z = number(L, -1);
     lua_pop(L, 1);
     return v;
@@ -254,6 +269,10 @@ Quat rotationArgument(lua_State* L, int index) {
     const bool table = lua_istable(L, index);
     if (table) {
         lua_getfield(L, index, "w");
+        if (lua_isnil(L, -1)) {
+            lua_pop(L, 1);
+            lua_rawgeti(L, index, 4);
+        }
     }
     const int wIndex = table ? -1 : index + 3;
     Quat result;
@@ -350,6 +369,12 @@ LuaScene::LuaScene(lua_State* L,
         lua_setglobal(L, seconds ? "waitForSeconds" : "wait");
     }
     lua_pushlightuserdata(L, this);
+    lua_pushcclosure(L, spawnAPI, 1);
+    lua_setglobal(L, "spawn");
+    lua_pushlightuserdata(L, this);
+    lua_pushcclosure(L, destroyAPI, 1);
+    lua_setglobal(L, "destroy");
+    lua_pushlightuserdata(L, this);
     lua_pushcclosure(L, audioApi, 1);
     lua_setglobal(L, "createAudioSource");
     lua_pushlightuserdata(L, this);
@@ -433,6 +458,13 @@ void LuaScene::pushObject(Entity e, bool owned) {
 int LuaScene::api(lua_State* L) {
     auto& self = *static_cast<LuaScene*>(lua_touserdata(L, lua_upvalueindex(1)));
     const int op = static_cast<int>(lua_tointeger(L, lua_upvalueindex(2)));
+    if (op >= 2 && op <= 4 && lua_gettop(L) == 1) {
+        if (!self.world_.alive(self.selfEntity_)) {
+            return luaL_error(L, "Implicit component access requires attached self");
+        }
+        self.pushObject(self.selfEntity_);
+        lua_insert(L, 1);
+    }
     if (op == 7 || op == 8) {
         const Handle child = handle(L, 1);
         if (op == 8) {
@@ -790,9 +822,15 @@ int LuaScene::componentIndex(lua_State* L) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, 12)) {
             return luaL_error(L, "Skybox no longer exists");
         }
-        const char* methods[]{
-            "setType", "setColor", "setEnabled", "setHDR", "setFace", "setTextures", "fadeTo"};
-        for (int i = 0; i < 7; ++i) {
+        const char* methods[]{"setType",
+                              "setColor",
+                              "setEnabled",
+                              "setHDR",
+                              "setFace",
+                              "setTextures",
+                              "fadeTo",
+                              "setCubemap"};
+        for (int i = 0; i < 8; ++i) {
             if (!std::strcmp(key, methods[i])) {
                 lua_pushvalue(L, 1);
                 lua_pushinteger(L, i);
@@ -1006,7 +1044,10 @@ int LuaScene::componentNewIndex(lua_State* L) {
             const char* value = luaL_checklstring(L, 3, &length);
             std::string path(value, length);
             bool hdr = !std::strcmp(luaL_checkstring(L, 2), "hdr");
-            if (!(hdr ? skyboxHDRPath(path) : materialTexturePath(path))) {
+            if (!((!std::strcmp(lua_tostring(L, 2), "cubemap"))
+                      ? (path.empty() || cubemapAsset(path))
+                  : hdr ? skyboxHDRPath(path)
+                        : materialTexturePath(path))) {
                 return luaL_error(L, "Invalid Skybox texture path");
             }
             *static_cast<std::string*>(f.value) = path;
@@ -1257,20 +1298,31 @@ void LuaScene::start() {
     active_ = true;
     call("onStart", LUA_NOREF, 0, false);
 }
-void LuaScene::destroy(Entity e) {
-    for (std::size_t i = 0; i < entries_.size(); ++i) {
-        if (entries_[i].entity == e) {
-            if (entries_[i].destroying) {
-                return;
+void LuaScene::destroy(Entity root) {
+    const auto nodes = hierarchySubtree(world_, root);
+    for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
+        const Entity e = *it;
+        if (!world_.alive(e)) {
+            continue;
+        }
+        bool destroying = false;
+        for (std::size_t i = 0; i < entries_.size(); ++i) {
+            if (entries_[i].entity == e) {
+                destroying = entries_[i].destroying;
+                if (!destroying) {
+                    entries_[i].destroying = true;
+                    const int ref = entries_[i].reference;
+                    call("onDestroy", ref, 0, false);
+                }
+                break;
             }
-            entries_[i].destroying = true;
-            const int ref = entries_[i].reference;
-            call("onDestroy", ref, 0, false);
-            break;
+        }
+        if (!destroying) {
+            world_.destroy(e);
         }
     }
-    world_.destroy(e);
 }
+
 void LuaScene::tick(const char* name, float dt) {
     // Snapshot count: objects created by callbacks start on the next tick.
     const std::size_t count = entries_.size();
@@ -1420,7 +1472,7 @@ int LuaScene::skyboxMethod(lua_State* L) {
             const char* type = lua_tostring(L, 1);
             if (!std::strcmp(type, "HDR")) {
                 edited.type = 1;
-            } else if (!std::strcmp(type, "Textures")) {
+            } else if (!std::strcmp(type, "Textures") || !std::strcmp(type, "Cubemap")) {
                 edited.type = 0;
             } else {
                 return luaL_error(L, "Expected Textures or HDR");
@@ -1438,6 +1490,11 @@ int LuaScene::skyboxMethod(lua_State* L) {
     }
     if (op == 3) {
         edited.hdr = lua_isnil(L, 1) ? "" : luaL_checkstring(L, 1);
+        edited.type = 1;
+    }
+    if (op == 7) {
+        edited.cubemap = lua_isnil(L, 1) ? "" : luaL_checkstring(L, 1);
+        edited.type = 0;
     }
     if (op == 4) {
         const char* face = luaL_checkstring(L, 1);
@@ -1762,4 +1819,66 @@ int LuaScene::skyboxFadeAPI(lua_State* L) {
         return luaL_error(L, "%s", error);
     }
     return 0;
+}
+
+int LuaScene::destroyAPI(lua_State* L) {
+    auto& self = *static_cast<LuaScene*>(lua_touserdata(L, lua_upvalueindex(1)));
+    auto object = handle(L, 1);
+    if (object.world != &self.world_) {
+        return luaL_error(L, "Object belongs to another world");
+    }
+    float delay = lua_isnoneornil(L, 2) ? 0 : number(L, 2);
+    if (delay < 0) {
+        return luaL_error(L, "Destroy delay must be nonnegative");
+    }
+    if (delay == 0) {
+        self.destroy(object.entity);
+    } else {
+        self.world_.add(object.entity, DestroyAfter{delay});
+    }
+    return 0;
+}
+int LuaScene::spawnAPI(lua_State* L) {
+    auto& self = *static_cast<LuaScene*>(lua_touserdata(L, lua_upvalueindex(1)));
+    if (self.stopping_) {
+        return luaL_error(L, "Cannot spawn during shutdown");
+    }
+    Vec3 position = vectorArgument(L, 2);
+    Quat rotation = rotationArgument(L, 3);
+    Entity result;
+    self.apiError_.clear();
+    try {
+        if (lua_type(L, 1) == LUA_TSTRING) {
+            const ProjectIO::Meshes meshes{MeshHandle{},
+                                           self.meshes_[4],
+                                           self.meshes_[0],
+                                           self.meshes_[1],
+                                           self.meshes_[2],
+                                           self.meshes_[3]};
+            result = Prefabs::spawn(
+                self.assets_, lua_tostring(L, 1), self.world_, meshes, position, rotation);
+        } else {
+            auto object = handle(L, 1);
+            if (object.world != &self.world_) {
+                return luaL_error(L, "Object belongs to another world");
+            }
+            if (!self.world_.has<Transform>(object.entity)) {
+                return luaL_error(L, "Spawn source needs a Transform");
+            }
+            result = Prefabs::clone(self.world_, object.entity, self.world_);
+            auto& t = self.world_.get<Transform>(result);
+            t.position = position;
+            t.rotation = rotation;
+            updateHierarchy(self.world_);
+        }
+    } catch (const std::exception& e) {
+        self.apiError_ = e.what();
+    }
+    if (!self.apiError_.empty()) {
+        lua_pushlstring(L, self.apiError_.data(), self.apiError_.size());
+        self.apiError_.clear();
+        return lua_error(L);
+    }
+    self.pushObject(result, true);
+    return 1;
 }

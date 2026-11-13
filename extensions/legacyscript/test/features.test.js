@@ -87,3 +87,10 @@ test('activity, waits, mouse and audio events are discoverable',()=>{
  const methods=f.completion(...input('self:'));for(const name of ['setActive','isActive'])assert(methods.some(x=>x.label===name));
  const audio=f.completion(...input('local audio = self:getComponent(AudioSource)\naudio.'));assert(audio.some(x=>x.label==='onAudioFinished'));
 });
+
+test('prefab spawning, delayed destroy and cubemap assets have completion',()=>{
+ const globals=f.completion(...input(''));
+ for(const name of ['spawn','destroy'])assert(globals.some(x=>x.label===name));
+ const methods=f.completion(...input('local sky = self:getComponent(Skybox)\nsky:'));
+ assert(methods.some(x=>x.label==='setCubemap'));
+});

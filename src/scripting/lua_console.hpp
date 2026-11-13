@@ -4,6 +4,7 @@
 #include "core/ecs.hpp"
 #include <cstddef>
 #include <deque>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -33,6 +34,7 @@ class LuaConsole {
     LuaConsole& operator=(const LuaConsole&) = delete;
     bool execute(std::string_view source, std::string_view sourceName = "editor");
     void reset();
+    void setAssetRoot(const std::filesystem::path& root);
     void bindWorld(World& world,
                    MeshHandle cube = {},
                    MeshHandle sphere = {},
@@ -65,6 +67,7 @@ class LuaConsole {
   private:
     lua_State* state_ = nullptr;
     World* world_ = nullptr;
+    std::filesystem::path assetRoot_;
     MeshHandle meshes_[5];
     std::unique_ptr<LuaScene> scene_;
     void installScene();

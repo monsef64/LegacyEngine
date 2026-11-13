@@ -1,4 +1,6 @@
 #pragma once
+#include "assets/cubemap.hpp"
+#include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
 #include "editor/editor_layout.hpp"
 #include "editor/level_objects.hpp"
@@ -47,7 +49,18 @@ inline bool editVector(const char* label,
     return true;
 }
 template <class T> inline bool componentHeader(World& world, Entity entity, const char* name) {
+    ImGui::Spacing();
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4);
+    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(.16f, .23f, .31f, 1));
     const bool open = ImGui::CollapsingHeader(name, ImGuiTreeNodeFlags_DefaultOpen);
+    const auto header = ImGui::GetItemRectMin(), end = ImGui::GetItemRectMax();
+    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(header.x, header.y + 3),
+                                              ImVec2(header.x + 3, end.y - 3),
+                                              ImGui::GetColorU32(ImGuiCol_CheckMark),
+                                              2);
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
     bool remove = false;
     if (ImGui::BeginPopupContextItem(name)) {
         bool allowed = true;
@@ -246,16 +259,20 @@ inline void drawInspector(World& world,
             }
             if (auto* t = world.tryGet<Transform>(selected);
                 t && componentHeader<Transform>(world, selected, "Transform")) {
-                editVector("Position", t->position);
+                const bool child = getParent(world, selected) != Entity{};
+                auto edited = localTransform(world, selected);
+                bool transformChanged =
+                    editVector(child ? "Local position" : "Position", edited.position);
                 static RotationEditorState rotationState;
-                rotationState.sync(selected, t->rotation);
+                rotationState.sync(selected, edited.rotation);
                 Vec3 rotation = rotationState.angles;
                 if (editVector("Rotation (deg)", rotation, .5f, -360, 360)) {
-                    t->rotation = rotationState.apply(rotation);
+                    edited.rotation = rotationState.apply(rotation);
+                    transformChanged = true;
                 }
                 const auto* c = world.tryGet<Collider>(selected);
                 if (c && c->shape != ColliderShape::Box) {
-                    float size = t->scale.x;
+                    float size = edited.scale.x;
                     if (ImGui::DragFloat("Uniform scale",
                                          &size,
                                          0.02f,
@@ -264,10 +281,14 @@ inline void drawInspector(World& world,
                                          "%.3f",
                                          ImGuiSliderFlags_AlwaysClamp) &&
                         std::isfinite(size)) {
-                        t->scale = {size, size, size};
+                        edited.scale = {size, size, size};
+                        transformChanged = true;
                     }
                 } else {
-                    editVector("Scale", t->scale, 0.02f, 0.05f, 100);
+                    transformChanged |= editVector("Scale", edited.scale, 0.02f, 0.05f, 100);
+                }
+                if (transformChanged) {
+                    setLocalTransform(world, selected, edited);
                 }
             }
             if (auto* r = world.tryGet<MeshRenderer>(selected);
@@ -318,21 +339,52 @@ inline void drawInspector(World& world,
                             listedRoot = assets->root;
                             listedAt = now;
                         }
-                        if (ImGui::BeginCombo("Material",
-                                              r->material.empty() ? "None (Diffuse)"
-                                                                  : r->material.c_str())) {
-                            if (ImGui::Selectable("None (Diffuse)", r->material.empty())) {
+                        ImGui::TextWrapped("Material: %s",
+                                           r->material.empty() ? "None (Diffuse)"
+                                                               : r->material.c_str());
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("...##MaterialPicker")) {
+                            ImGui::OpenPopup("Select Material");
+                        }
+                        ImGui::SetNextWindowSize(ImVec2(650, 480), ImGuiCond_FirstUseEver);
+                        if (ImGui::BeginPopupModal(
+                                "Select Material", nullptr, ImGuiWindowFlags_None)) {
+                            static TexturePreviewCache materialPreviews;
+                            materialPreviews.beginFrame(*assets);
+                            if (ImGui::Button("None (Diffuse)")) {
                                 r->material.clear();
                                 r->materialOverrides = 0;
+                                ImGui::CloseCurrentPopup();
                             }
-                            for (const auto& path : materialFiles) {
-                                if (materialAsset(path) &&
-                                    ImGui::Selectable(path.c_str(), r->material == path)) {
-                                    r->material = path;
-                                    r->materialOverrides = 0;
+                            ImGui::SameLine();
+                            if (ImGui::Button("Close")) {
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::BeginChild("Material choices");
+                            if (ImGui::BeginTable(
+                                    "Material tiles", 4, ImGuiTableFlags_SizingStretchSame)) {
+                                for (const auto& path : materialFiles) {
+                                    if (materialAsset(path)) {
+                                        ImGui::TableNextColumn();
+                                        ImGui::PushID(path.c_str());
+                                        const auto texture =
+                                            materialPreviews.texture(*assets, path);
+                                        if (texture) {
+                                            ImGui::Image(static_cast<ImTextureID>(texture),
+                                                         ImVec2(96, 96));
+                                        }
+                                        if (ImGui::Selectable(path.c_str(), r->material == path)) {
+                                            r->material = path;
+                                            r->materialOverrides = 0;
+                                            ImGui::CloseCurrentPopup();
+                                        }
+                                        ImGui::PopID();
+                                    }
                                 }
+                                ImGui::EndTable();
                             }
-                            ImGui::EndCombo();
+                            ImGui::EndChild();
+                            ImGui::EndPopup();
                         }
                         if (ImGui::BeginDragDropTarget()) {
                             if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
@@ -571,7 +623,7 @@ inline void drawInspector(World& world,
             if (auto* sky = world.tryGet<Skybox>(selected);
                 sky && componentHeader<Skybox>(world, selected, "Skybox")) {
                 ImGui::Checkbox("Skybox enabled", &sky->enabled);
-                ImGui::Combo("Skybox type", &sky->type, "Multi Texture Skybox\0Skybox HDR\0");
+                ImGui::Combo("Skybox type", &sky->type, "Cubemap asset\0HDR panorama\0");
                 ImGui::ColorEdit3("Skybox color", &sky->color.x);
                 auto slot = [&](const char* label, std::string& path, bool hdr) {
                     ImGui::PushID(label);
@@ -582,7 +634,7 @@ inline void drawInspector(World& world,
                         }
                         if (assets) {
                             for (const auto& file : assets->files()) {
-                                if ((hdr ? skyboxHDRPath(file) : materialTexturePath(file)) &&
+                                if ((hdr ? skyboxHDRPath(file) : cubemapAsset(file)) &&
                                     ImGui::Selectable(file.c_str(), file == path)) {
                                     path = file;
                                 }
@@ -594,7 +646,7 @@ inline void drawInspector(World& world,
                         if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                             std::string value = static_cast<const char*>(payload->Data);
                             if (!value.empty() &&
-                                (hdr ? skyboxHDRPath(value) : materialTexturePath(value))) {
+                                (hdr ? skyboxHDRPath(value) : cubemapAsset(value))) {
                                 path = value;
                             }
                         }
@@ -605,12 +657,7 @@ inline void drawInspector(World& world,
                 if (sky->type == 1) {
                     slot("HDR panorama", sky->hdr, true);
                 } else {
-                    slot("Right (+X)", sky->right, false);
-                    slot("Left (-X)", sky->left, false);
-                    slot("Top (+Y)", sky->top, false);
-                    slot("Bottom (-Y)", sky->bottom, false);
-                    slot("Front (-Z)", sky->front, false);
-                    slot("Back (+Z)", sky->back, false);
+                    slot("Cubemap asset", sky->cubemap, false);
                 }
             }
             lightInspector(DirectionalLight{}, "DirectionalLight", 0);

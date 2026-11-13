@@ -1,4 +1,5 @@
 #include "rendering/skybox_renderer.hpp"
+#include "assets/cubemap.hpp"
 #include "rendering/shader_data.hpp"
 #include <algorithm>
 #include <glad/gl.h>
@@ -146,6 +147,26 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
         sky.type == 1 ? std::vector<std::string>{sky.hdr}
                       : std::vector<std::string>{
                             sky.right, sky.left, sky.top, sky.bottom, sky.back, sky.front};
+    if (sky.type == 0 && !sky.cubemap.empty()) {
+        try {
+            const auto cubemap = loadCubemap(assets, sky.cubemap);
+            paths = {cubemap.faces[0],
+                     cubemap.faces[1],
+                     cubemap.faces[2],
+                     cubemap.faces[3],
+                     cubemap.faces[5],
+                     cubemap.faces[4]};
+        } catch (const std::exception& e) {
+            error = e.what();
+            if (texture_) {
+                glDeleteTextures(1, &texture_);
+            }
+            texture_ = 0;
+            loaded_ = false;
+            signature_.clear();
+            return false;
+        }
+    }
     if (std::all_of(
             paths.begin(), paths.end(), [](const std::string& path) { return path.empty(); })) {
         if (texture_) {

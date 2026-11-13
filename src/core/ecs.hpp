@@ -1,3 +1,4 @@
+#include <stdexcept>
 // A small entity-component system (ECS).
 //
 //   * An entity is an id. It has no data and no behaviour of its own.
@@ -124,6 +125,29 @@ class World {
                generations_[entity.index] == entity.generation;
     }
 
+    // Copy component values without coupling runtime prefab cloning to editor UI code.
+    void copyEntityFrom(const World& source, Entity original, Entity destination) {
+        if (!source.alive(original) || !alive(destination)) {
+            throw std::runtime_error("Cannot copy stale entity");
+        }
+        if (&source == this && original == destination) {
+            return;
+        }
+        for (auto& p : pools_) {
+            if (p) {
+                p->remove(destination.index);
+            }
+        }
+        if (pools_.size() < source.pools_.size()) {
+            pools_.resize(source.pools_.size());
+        }
+        for (std::size_t i = 0; i < source.pools_.size(); ++i) {
+            if (source.pools_[i]) {
+                source.pools_[i]->copyTo(original.index, destination.index, pools_[i]);
+            }
+        }
+    }
+
     // --- Components ---------------------------------------------------------
 
     // Attaches a component to the entity, replacing the one of the same type if
@@ -236,6 +260,9 @@ class World {
         virtual ~PoolBase() = default;
         virtual void remove(std::uint32_t entityIndex) = 0;
         virtual std::unique_ptr<PoolBase> clone() const = 0;
+        virtual void copyTo(std::uint32_t source,
+                            std::uint32_t destination,
+                            std::unique_ptr<PoolBase>& target) const = 0;
     };
 
     template <typename T> struct Pool final : PoolBase {
@@ -247,6 +274,19 @@ class World {
 
         std::unique_ptr<PoolBase> clone() const override {
             return std::make_unique<Pool<T>>(*this);
+        }
+
+        void copyTo(std::uint32_t source,
+                    std::uint32_t destination,
+                    std::unique_ptr<PoolBase>& target) const override {
+            if (!has(source)) {
+                return;
+            }
+            T value = get(source);
+            if (!target) {
+                target = std::make_unique<Pool<T>>();
+            }
+            static_cast<Pool<T>*>(target.get())->set(destination, std::move(value));
         }
 
         bool has(std::uint32_t entityIndex) const {

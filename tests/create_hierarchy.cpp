@@ -37,6 +37,18 @@ int main(){
     require(getParent(world,child)==Entity{} && near(world.get<Transform>(child).position,before.position),"destroyed parent detaches child without moving it");
     require(setParent(world,grandchild,{}),"unparent accepted");
     require(getParent(world,grandchild)==Entity{},"unparent clears link");
+    Entity localParent=world.create(),localChild=world.create();
+    world.add(localParent,Transform{{3,4,5},axisAngle({0,1,0},.7f),{2,3,-4}});
+    world.add(localChild,Transform{});require(setParent(world,localChild,localParent),"local parent accepted");
+    Transform local{{1,2,3},axisAngle({1,0,0},.3f),{.5f,2,1}};
+    setLocalTransform(world,localChild,local);
+    auto recovered=localTransform(world,localChild);
+    require(near(local.position,recovered.position) && near(local.scale,recovered.scale),"parent-relative position and scale roundtrip");
+    require(near(rotateVector(local.rotation,{0,0,-1}),rotateVector(recovered.rotation,{0,0,-1})),"local rotation roundtrip");
+    auto worldPose=world.get<Transform>(localChild);updateHierarchy(world);
+    require(near(worldPose.position,world.get<Transform>(localChild).position),"local edit not reapplied by hierarchy");
+    world.get<Transform>(localParent).scale.x=0;updateHierarchy(world);
+    require(std::isfinite(localTransform(world,localChild).position.x),"zero parent scale is safe");
     // Cone triangles and the collision hull share the exact same perimeter.
     const auto mesh=makeCone(0.5f,1);
     require(mesh.vertices.size()==static_cast<std::size_t>(kConeSegments*6),"cone triangles complete");

@@ -169,8 +169,10 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"bottom", 's'},
       {"front", 's'},
       {"back", 's'},
-      {"hdr", 's'}}},
-    {"ObjectActivity", {{"enabled", 'b'}}}};
+      {"hdr", 's'},
+      {"cubemap", 's'}}},
+    {"ObjectActivity", {{"enabled", 'b'}}},
+    {"PrefabInstance", {{"asset", 's'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     Json result = Json::object();
@@ -180,7 +182,11 @@ inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     }
     return result;
 }
-inline void writeSchema(std::ostream& out, const Json& object, const std::vector<Field>& fields) {
+inline void writeSchema(std::ostream& out, const Json& original, const std::vector<Field>& fields) {
+    Json object = original;
+    if (!object.contains("cubemap")) {
+        object["cubemap"] = "";
+    }
     for (auto f : fields) {
         if (std::string(f.name) == "shadowQuality" && !object.contains(f.name)) {
             out << 3 << ' ';
@@ -281,7 +287,7 @@ inline std::string toLegacy(const Json& doc) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 13\n";
+    out << std::setprecision(17) << "LegacyEngineProject 14\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),

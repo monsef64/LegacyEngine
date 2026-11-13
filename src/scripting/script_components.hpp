@@ -141,6 +141,7 @@ class ScriptComponents {
             try {
                 auto source = assets_->readScript(entry.path);
                 entry.console = std::make_unique<LuaConsole>();
+                entry.console->setAssetRoot(assets_->root);
                 entry.console->bindWorld(
                     *world_, meshes_[0], meshes_[1], meshes_[2], meshes_[3], meshes_[4]);
                 auto* scripts = world_->tryGet<LuaScript>(entry.entity);

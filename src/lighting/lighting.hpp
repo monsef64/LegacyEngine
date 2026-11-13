@@ -12,6 +12,7 @@ struct Light {
     Vec3 position, direction;
     int type = 0, shadowLayer = -1; // directional=0, point=1, spot=2
     float priority = 0;
+    int shadowCount = 1;
 };
 // Conservative sphere/frustum test. The same test culls lights and shadow casters.
 inline bool visibleSphere(const Mat4& vp, Vec3 center, float radius) {
@@ -29,7 +30,8 @@ inline bool visibleSphere(const Mat4& vp, Vec3 center, float radius) {
 }
 using Frustum = ViewFrustum; // Compatibility for existing lighting clients.
 // Caller-owned scratch storage avoids allocation churn across viewport renders.
-inline void gather(World& world, const Mat4& vp, Vec3 eye, std::vector<Light>& lights) {
+inline void
+gather(World& world, const Mat4& vp, Vec3 eye, std::vector<Light>& lights, bool cascaded = false) {
     lights.clear();
     const Frustum frustum(vp);
     auto collect = [&](int type, Entity e, const LightSettings& l, const Transform& t) {
@@ -70,7 +72,8 @@ inline void gather(World& world, const Mat4& vp, Vec3 eye, std::vector<Light>& l
     }
     int layers = 0;
     for (auto& l : lights) {
-        const int count = l.type == 1 ? 6 : 1;
+        const int count = l.type == 1 ? 6 : (l.type == 0 && cascaded ? 4 : 1);
+        l.shadowCount = count;
         if (l.settings.shadows && l.settings.shadowQuality > 0 &&
             layers + count <= maxShadowLayers) {
             l.shadowLayer = layers;
@@ -83,7 +86,7 @@ inline std::vector<Light> gather(World& world, const Mat4& vp, Vec3 eye) {
     gather(world, vp, eye, lights);
     return lights;
 }
-inline Mat4 shadowMatrix(const Light& light, Vec3 eye, int face = 0) {
+inline Mat4 shadowMatrix(const Light& light, Vec3 eye, int face = 0, int resolution = 0) {
     const auto& l = light.settings;
     Vec3 direction = light.direction, up{0, 1, 0};
     if (light.type == 1) {
@@ -99,7 +102,7 @@ inline Mat4 shadowMatrix(const Light& light, Vec3 eye, int face = 0) {
         const float extent = l.shadowDistance;
         // Snap the view anchor in light space to shadow texels to reduce shimmer.
         const Vec3 right = normalize(cross(direction, up)), vertical = cross(right, direction);
-        const float texel = 2 * extent / lightShadowResolution(l);
+        const float texel = 2 * extent / (resolution > 0 ? resolution : lightShadowResolution(l));
         eye = eye + right * (std::floor(dot(eye, right) / texel) * texel - dot(eye, right)) +
               vertical * (std::floor(dot(eye, vertical) / texel) * texel - dot(eye, vertical));
         Mat4 projection{};

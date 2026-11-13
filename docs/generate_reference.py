@@ -39,6 +39,8 @@ for name in ('onMouseDown','onMouseUp','onMouseEnter','onMouseExit','onMouseOver
     GLOBALS[name] = f'function {name}()\n    debug.log("{name}", self:getName())\nend'
 GLOBALS['waitForSeconds'] = 'function onStart()\n    debug.log("Before wait")\n    waitForSeconds(5)\n    debug.log("Five playing seconds later")\nend'
 GLOBALS['wait'] = 'function onStart()\n    local audio = createAudioSource(self, AudioClip("Audio/example.wav"))\n    audio:play()\n    wait(audio.onAudioFinished)\n    debug.log("Audio finished")\nend'
+GLOBALS['spawn'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=90, z=0})\ndebug.log(copy:getName())'
+GLOBALS['destroy'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=0, z=0})\ndestroy(copy, 5)'
 CAMERA_GLOBALS = {
 'setCameraPosition': '{0, 2, 6}', 'setCameraRotation': '{0, 180, 0}',
 'lookAt': '{0, 0, 0}', 'setFieldOfView': '60', 'setProjectionMode': '"Perspective"',
@@ -88,7 +90,7 @@ METHOD_ARGS = {
 'playOneShot':'AudioClip("Audio/example.wav")', 'setColor':'1, 0.8, 0.6',
 'setIntensity':'2', 'setRange':'20', 'setEnabled':'true', 'setShadows':'true',
 'setShadowQuality':'2', 'setSpotAngles':'15, 35', 'setType':'"Textures"',
-'setHDR':'"Sky/studio.hdr"', 'setFace':'"front", "Sky/front.png"',
+'setCubemap':'"Sky/Evening.cubemap"', 'setHDR':'"Sky/studio.hdr"', 'setFace':'"front", "Sky/front.png"',
 'setTextures':', '.join(f'"Sky/{face}.png"' for face in ('right','left','top','bottom','front','back')),
 }
 NO_ARGS = set('isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
@@ -157,6 +159,12 @@ def example(entry):
 
 
 CALLABLE_DETAILS = {
+    'destroyGameObject': 'Immediately destroys the GameObject and all descendants, including inactive children. Attached scripts receive onDestroy once. To keep a child, detach it with child:setParent(nil) before deleting its parent. Editor deletion also removes the entire subtree and supports undo/redo.',
+    'spawn': 'Creates a prefab asset instance or copies a GameObject subtree and returns its new root. Prefab paths are project-relative .prefab strings, not component tokens. Position is world-space; rotation accepts Euler degrees or a quaternion. Internal object references are remapped; external references are cleared. See the Prefab workflow guide.',
+    'destroy': 'Destroys the root and its descendants now (omitted/zero delay) or after nonnegative playing seconds. Pause freezes delayed destruction. A later schedule replaces the delay; pending timers are not serialized.',
+    'getComponent': 'Use getComponent(Type) for attached self, getComponent(object, Type) for an explicit owner, or object:getComponent(Type). Missing components return nil. The implicit form requires an attached live self.',
+    'Skybox.setCubemap': 'Selects Cubemap mode and assigns a project-relative .cubemap asset. Author its six faces in Cubemap Editor; new Skybox components no longer need six independent Inspector slots. Nil clears the cubemap.',
+    'Skybox.setHDR': 'Selects HDR mode and assigns a project-relative Radiance panorama. Nil clears the slot. Use setCubemap for six-face skybox assets.',
     'onMouseDown': 'Runs on the nearest active Collider hit by a left-button press in Game. Requires an active Game camera; this is object picking, not a global input hook.',
     'onMouseUp': 'Runs on the object that received the matching Down, even if the pointer has moved off it. No callback is delivered after the object is destroyed or inactive.',
     'onMouseEnter': 'Runs once when the hovered Collider changes to this object. Picking uses the active camera viewport; a locked cursor uses its center.',
@@ -190,7 +198,7 @@ def render_reference():
              'named input buttons in Project > Input Settings and create/register the `Main` level',
              'before level examples. Find/get functions can return nil; check before dereferencing.', '',
              'See [LegacyScript guide](scripting.md), [input/audio details](audio-input.md),',
-             '[level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).', '',
+             '[prefab workflow](prefabs.md), [level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).', '',
              '## Events and runtime rules', '',
              '- `onStart()` runs once when an attached runtime starts; `onUpdate(dt)` runs per playing frame.',
              '- `onFixedUpdate(dt)` runs before fixed physics steps; `onDestroy()` runs on teardown.',

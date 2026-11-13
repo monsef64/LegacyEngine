@@ -1,5 +1,17 @@
 [
   {
+    "name": "spawn",
+    "signature": "spawn(prefabPathOrGameObject, position, rotation) -> new GameObject root"
+  },
+  {
+    "name": "destroy",
+    "signature": "destroy(gameObject, delay=0) - destroy subtree now or after playing seconds"
+  },
+  {
+    "name": "setCubemap",
+    "signature": "sky:setCubemap(projectRelativeCubemapPath) - select a .cubemap asset"
+  },
+  {
     "name": "waitForSeconds",
     "signature": "waitForSeconds(seconds) - suspend this callback, not the engine"
   },
@@ -333,7 +345,7 @@
   },
   {
     "name": "destroy",
-    "signature": "object:destroy()"
+    "signature": "destroy(object, delay=0) / object:destroy()"
   },
   {
     "name": "setActive",
@@ -477,11 +489,11 @@
   },
   {
     "name": "destroyGameObject",
-    "signature": "destroyGameObject(gameObject)"
+    "signature": "destroyGameObject(gameObject) - immediately destroy object and all descendants"
   },
   {
     "name": "getComponent",
-    "signature": "getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil"
+    "signature": "getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil"
   },
   {
     "name": "addComponent",
@@ -529,7 +541,7 @@
   },
   {
     "name": "setType",
-    "signature": "sky:setType('Textures'|'HDR') - six-face or HDR skybox"
+    "signature": "sky:setType('Textures'|'HDR') - Cubemap or HDR skybox (Textures is a legacy alias)"
   },
   {
     "name": "setHDR",

@@ -84,6 +84,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
 ---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil
+---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
 ---@param componentType ComponentType
@@ -418,7 +419,7 @@ function isCursorVisible() end
 function isCursorLocked() end
 
 ---@class Skybox
----@field type integer 0 six face textures, 1 HDR panorama
+---@field type integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama
 ---@field enabled boolean
 ---@field color Vector3 Color tint
 ---@field right Texture +X
@@ -427,10 +428,12 @@ function isCursorLocked() end
 ---@field bottom Texture -Y
 ---@field front Texture -Z
 ---@field back Texture +Z
+---@field cubemap string Project-relative .cubemap asset
 ---@field hdr Texture Radiance .hdr equirectangular panorama
----@field setType fun(self:Skybox,type:string|integer) Textures or HDR, or 0/1
+---@field setType fun(self:Skybox,type:string|integer) Cubemap or HDR, or 0/1 (Textures is a legacy alias)
 ---@field setColor fun(self:Skybox,r:number,g:number,b:number)
 ---@field setEnabled fun(self:Skybox,enabled:boolean)
+---@field setCubemap fun(self:Skybox,path:string|nil) Set Cubemap mode and project-relative asset
 ---@field setHDR fun(self:Skybox,texture:Texture|nil)
 ---@field setFace fun(self:Skybox,face:string,texture:Texture|nil)
 ---@field fadeTo fun(self:Skybox,destination:GameObject|Skybox,speed:number) Smooth crossfade, duration = 1/speed seconds
@@ -516,3 +519,14 @@ function waitForSeconds(seconds) end
 ---Resume after the next occurrence of an AudioSource event; past events do not count.
 ---@param event AudioEvent
 function wait(event) end
+
+---Instantiate a prefab asset or copy a GameObject subtree. Returns the new root.
+---@param source string|GameObject Project-relative .prefab path or live object
+---@param position Vec3
+---@param rotation Vec3|Quaternion Euler degrees or quaternion
+---@return GameObject
+function spawn(source,position,rotation) end
+---Destroy a subtree now or after a delay in playing seconds.
+---@param object GameObject
+---@param delay? number Nonnegative, defaults to zero
+function destroy(object,delay) end

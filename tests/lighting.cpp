@@ -1,4 +1,6 @@
 #include "lighting/lighting.hpp"
+#include "lighting/cascades.hpp"
+#include "lighting/shadow_settings.hpp"
 #include "project/project_io.hpp"
 #include "editor/level_objects.hpp"
 #include "editor/editor_history.hpp"
@@ -17,6 +19,33 @@ int main(){
         Vec3 center{float(x)+.137f,float(y)+.219f,float(z)+.347f};
         assert(frustum.visible(center,.673f)==Lighting::visibleSphere(vp,center,.673f));
     }
+    ShadowSettings settings;
+    assert(settings.valid() && settings.mode==0 && settings.lightResolution(3)==1024);
+    assert(settings.lightResolution(2)==512 && settings.lightResolution(1)==256 && settings.lightResolution(0)==0);
+    for(int resolution:{256,512,1024,2048}) {
+        settings.resolution=resolution;assert(settings.valid());
+        for(bool ortho:{false,true}) {
+            Transform cameraPose{{0,0,5}};Camera camera;camera.orthographic=ortho;camera.farClip=100;
+            const auto cameraVP=cameraMatrix(cameraPose,camera);
+            const auto cascades=Lighting::buildCascades(cameraVP,cameraPose.position,{0,-1,0},60,resolution);
+            const auto inverse=inverseCameraMatrix(cameraVP);
+            const auto far=projectCameraPoint(inverse,{0,0,1});
+            const float range=dot(far-cascades.origin,cascades.forward);
+            float previous=0;
+            for(int layer=0;layer<4;++layer) {
+                const float end=cascades.splits[layer];assert(end>previous && std::isfinite(end));
+                for(float depth:{layer==0?0.f:previous*.9f,end})for(float x:{-1.f,1.f})for(float y:{-1.f,1.f}) {
+                    const auto a=projectCameraPoint(inverse,{x,y,-1}),b=projectCameraPoint(inverse,{x,y,1});
+                    const auto clip=projectCameraPoint(cascades.matrices[layer],a+(b-a)*(depth/range));
+                    assert(std::abs(clip.x)<=1.001f && std::abs(clip.y)<=1.001f && std::abs(clip.z)<=1.001f);
+                }
+                previous=end;
+            }
+        }
+    }
+    std::vector<Lighting::Light> cascadedLights;Lighting::gather(world,vp,{0,0,5},cascadedLights,true);
+    int cascadeLayers=0;for(const auto& light:cascadedLights)if(light.shadowLayer>=0){cascadeLayers+=light.shadowCount;assert(light.shadowLayer+light.shadowCount<=Lighting::maxShadowLayers);if(light.type==0)assert(light.shadowCount==4);}
+    assert(cascadeLayers<=Lighting::maxShadowLayers);
     auto lights=Lighting::gather(world,vp,{0,0,5});assert(lights.size()==3);
     int layers=0;for(const auto& l:lights){assert(l.shadowLayer>=0);layers+=l.type==1?6:1;
         for(int face=0;face<(l.type==1?6:1);++face){const auto m=Lighting::shadowMatrix(l,{0,0,5},face);for(float f:m.m)assert(std::isfinite(f));}}

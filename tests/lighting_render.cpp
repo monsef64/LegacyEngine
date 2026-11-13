@@ -68,6 +68,11 @@ int main(){
         world.remove<T>(lamp);world.get<Transform>(lamp)=t;
     };
     check(DirectionalLight{});check(PointLight{});check(SpotLight{});
+    // Exercise atlas reallocation and the single-map compatibility path too.
+    for(int resolution:{256,512,1024,2048}) {
+        renderer.setShadowSettings({1,resolution});check(DirectionalLight{});
+    }
+    renderer.setShadowSettings({0,1024});
     // Exercise real GL thumbnail upload and persistent cache, not only CPU pixels.
     const auto temp=std::filesystem::temp_directory_path()/("legacy-preview-gl-"+std::to_string(SDL_GetTicksNS()));
     AssetManager assets;assets.root=temp/"Assets";std::filesystem::create_directories(assets.root);

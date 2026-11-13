@@ -153,3 +153,18 @@ setting. Inactive objects are hidden from rendering/shadows, removed from
 physics, silent, and do not run attached scripts, mouse callbacks, custom event
 listeners or wait timers. They remain selectable in Hierarchy and persist in
 scene saves and Undo/Redo.
+
+## Prefab and Scene workspace changes
+
+[Prefab assets](prefabs.md) open an isolated Prefab Window; linked hierarchy
+objects are blue. Clicking unused space in Hierarchy clears selection.
+Move/Rotate/Scale controls now sit in their own bar directly below the Scene tab,
+above the viewport image: the bar is not part of camera rendering or picking.
+Asset icons reserve explicit pixel space and textures offer large hover previews.
+
+### Deleting a hierarchy
+
+Deleting a parent GameObject removes **all children and grandchildren**, including
+inactive objects. Undo restores the complete subtree and its components; redo
+removes it again. To retain a child, unparent it before deleting the parent.
+Scripting `destroyGameObject`, `destroy` and `object:destroy()` use the same rule.

@@ -92,3 +92,12 @@ mesh in Scene/Game to judge its final appearance.
 Thumbnails are cached with bounded update/decode work. Material edits and albedo
 file changes invalidate the preview; a large folder may populate over several
 frames. Missing/invalid assets may display a file icon instead.
+
+## Material picker and texture inspection
+
+MeshRenderer shows its assigned material and a **...** button. Use that button
+to open **Select Material**, a preview-tile window, rather than a long material
+dropdown. Choose a tile or None to clear the slot; asset drag/drop still works.
+Material/texture thumbnails are now 128 × 128, and textures (including `.hdr`
+panoramas) have enlarged hover previews in Assets. HDR thumbnails are LDR
+display approximations; judge exposure in the actual skybox renderer.

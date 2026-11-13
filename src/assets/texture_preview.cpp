@@ -11,7 +11,7 @@
 
 bool textureAsset(const std::string& path) {
     const auto e = AssetManager::extension(path);
-    return e == ".png" || e == ".jpg" || e == ".jpeg" || e == ".bmp" || e == ".tga";
+    return e == ".png" || e == ".jpg" || e == ".jpeg" || e == ".bmp" || e == ".tga" || e == ".hdr";
 }
 std::filesystem::path thumbnailCachePath(const AssetManager& assets, const std::string& path) {
     assets.resolve(path);
@@ -55,13 +55,16 @@ TextureThumbnail loadTextureThumbnail(const AssetManager& assets,
     {
         std::ifstream in(cache, std::ios::binary);
         std::string header;
-        if (in && std::filesystem::file_size(cache) < 17000 && std::getline(in, header)) {
+        if (in &&
+            std::filesystem::file_size(cache) <
+                TextureThumbnail::size * TextureThumbnail::size * 4 + 512 &&
+            std::getline(in, header)) {
             std::istringstream metadata(header);
             std::string magic;
             std::uintmax_t savedBytes = 0;
             std::int64_t savedStamp = 0;
             metadata >> magic >> savedBytes >> savedStamp;
-            if (metadata && magic == "LegacyThumbnail1" && savedBytes == bytes &&
+            if (metadata && magic == "LegacyThumbnail2" && savedBytes == bytes &&
                 savedStamp == stamp) {
                 in.read(reinterpret_cast<char*>(result.pixels.data()), result.pixels.size());
                 if (in.gcount() == static_cast<std::streamsize>(result.pixels.size()) &&
@@ -131,7 +134,7 @@ TextureThumbnail loadTextureThumbnail(const AssetManager& assets,
             ".tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
         try {
             std::ofstream out(temp, std::ios::binary);
-            out << "LegacyThumbnail1 " << bytes << ' ' << stamp << '\n';
+            out << "LegacyThumbnail2 " << bytes << ' ' << stamp << '\n';
             out.write(reinterpret_cast<const char*>(result.pixels.data()), result.pixels.size());
             out.close();
             if (!out) {

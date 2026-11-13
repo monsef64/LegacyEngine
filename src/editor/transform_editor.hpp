@@ -19,6 +19,14 @@ class TransformEditor {
             tool_ = tool;
         }
     }
+    bool localSpace() const {
+        return localSpace_;
+    }
+    void setLocalSpace(bool value) {
+        if (!dragging_) {
+            localSpace_ = value;
+        }
+    }
     bool dragging() const {
         return dragging_;
     }
@@ -41,6 +49,7 @@ class TransformEditor {
               ImDrawList* drawList = nullptr);
 
   private:
+    bool localSpace_ = false;
     TransformTool tool_ = TransformTool::Move;
     bool hovered_ = false, dragging_ = false, heldBody_ = false;
     Entity heldEntity_;

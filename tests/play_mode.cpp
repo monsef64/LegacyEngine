@@ -31,9 +31,7 @@ int main() {
     world.get<Collider>(copy).friction=0.9f;
     assert(world.get<Collider>(parent).friction==0.5f);
     deleteLevelObject(world,parent);
-    assert(getParent(world,child)==Entity{});
-    world.get<Transform>(child).position.x=99;
-    world.remove<Parent>(child);
+    assert(!world.alive(parent) && !world.alive(child));
     Entity temporary=world.create();world.add(temporary,Extra{"temporary"});
     assert(mode.stop(world));
     physics.reset();physics.update(world,0);

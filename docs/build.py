@@ -10,6 +10,17 @@ import shutil
 from urllib.parse import quote, unquote, urlsplit
 
 import markdown
+from pygments import highlight
+from pygments.lexers import get_lexer_by_name
+from pygments.formatters import HtmlFormatter
+from pygments.util import ClassNotFound
+from pygments.lexers.scripting import LuaLexer
+from pygments.lexer import inherit
+from pygments.token import Comment
+
+
+class LegacyScriptLexer(LuaLexer):
+    tokens = {'root': [(r'(?m)^\s*@export[^\n]*', Comment.Preproc), inherit]}
 
 SOURCE = Path(__file__).resolve().parent
 REPO = SOURCE.parent
@@ -69,6 +80,18 @@ def build(output, revision='main'):
         md = markdown.Markdown(extensions=['fenced_code', 'tables', 'toc', 'sane_lists'], extension_configs={'toc': {'toc_depth': '2-3'}})
         content = md.convert((SOURCE / entry['file']).read_text(encoding='utf-8'))
 
+        def highlight_block(match):
+            language = match.group(1)
+            alias = 'lua' if language in ('legacyscript', 'ls') else language
+            try:
+                lexer = LegacyScriptLexer() if alias == 'lua' else get_lexer_by_name(alias)
+            except ClassNotFound:
+                return match.group(0)
+            code = html.unescape(match.group(2))
+            colored = highlight(code, lexer, HtmlFormatter(nowrap=True))
+            return f'<pre class="highlight"><code class="language-{language}">{colored}</code></pre>'
+        content = re.sub(r'<pre><code class="language-([a-zA-Z0-9_+-]+)">(.*?)</code></pre>', highlight_block, content, flags=re.S)
+
         def rewrite(match):
             link = html.unescape(match.group(2))
             url = urlsplit(link)
@@ -109,6 +132,9 @@ def build(output, revision='main'):
         (output / name).write_text(content, encoding='utf-8')
     for name in ('style.css', 'screenshot.png'):
         shutil.copyfile(SOURCE / name, output / name)
+        if name == 'style.css':
+            with (output / name).open('a', encoding='utf-8') as stylesheet:
+                stylesheet.write('\n' + HtmlFormatter(style='monokai').get_style_defs('.highlight'))
     shutil.copyfile(REPO / 'LICENSE', output / 'LICENSE')
     print(f'Built {len(pages)} documentation pages in {output}')
     return pages

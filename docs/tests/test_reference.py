@@ -51,3 +51,10 @@ class ReferenceTests(unittest.TestCase):
         self.assertIn('**File > New Level...**', projects)
         self.assertIn('**File > Save Level**', projects)
         self.assertNotIn('Project > Levels > New Level', projects)
+
+    def test_prefab_and_cubemap_apis_documented(self):
+        content = reference.render_reference()
+        for name in ('spawn','destroy','Skybox.setCubemap'):
+            self.assertIn('### ' + name + '\n', content)
+        self.assertIn('getComponent(Type)', content)
+        self.assertIn('[prefab workflow](prefabs.md)', content)

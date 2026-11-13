@@ -68,7 +68,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 13\n";
+    out << std::setprecision(9) << "LegacyEngineProject 14\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -97,7 +97,8 @@ inline std::string encodeLegacy(World& world,
             (world.has<Camera>(e) ? 64 : 0) | (world.has<AudioSource>(e) ? 128 : 0) |
             (world.has<AudioListener>(e) ? 256 : 0) | (world.has<DirectionalLight>(e) ? 512 : 0) |
             (world.has<PointLight>(e) ? 1024 : 0) | (world.has<SpotLight>(e) ? 2048 : 0) |
-            (world.has<Skybox>(e) ? 4096 : 0) | (world.has<ObjectActivity>(e) ? 8192 : 0);
+            (world.has<Skybox>(e) ? 4096 : 0) | (world.has<ObjectActivity>(e) ? 8192 : 0) |
+            (world.has<PrefabInstance>(e) ? 16384 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -206,8 +207,14 @@ inline std::string encodeLegacy(World& world,
                 out << std::quoted(*path) << ' ';
             }
         }
+        if (const auto* sky = world.tryGet<Skybox>(e)) {
+            out << std::quoted(sky->cubemap) << ' ';
+        }
         if (const auto* activity = world.tryGet<ObjectActivity>(e)) {
             out << activity->enabled << " ";
+        }
+        if (const auto* link = world.tryGet<PrefabInstance>(e)) {
+            out << std::quoted(link->asset) << ' ';
         }
         out << '\n';
     }
@@ -226,7 +233,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 13));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 14));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -286,7 +293,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 9  ? 511u
                          : version < 12 ? 4095u
                          : version < 13 ? 8191u
-                                        : 16383u) &&
+                         : version < 14 ? 16383u
+                                        : 32767u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -455,6 +463,9 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                  {&sky.right, &sky.left, &sky.top, &sky.bottom, &sky.front, &sky.back, &sky.hdr}) {
                 in >> std::quoted(*path);
             }
+            if (version >= 14) {
+                in >> std::quoted(sky.cubemap);
+            }
             require(validSkybox(sky));
             result.world.add(e, sky);
         }
@@ -462,6 +473,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             bool enabled = true;
             in >> enabled;
             result.world.add(e, ObjectActivity{enabled});
+        }
+        if (mask & 16384) {
+            std::string path;
+            in >> std::quoted(path);
+            require(materialPathValid(path) && AssetManager::extension(path) == ".prefab");
+            result.world.add(e, PrefabInstance{path});
         }
         require(bool(in));
     }

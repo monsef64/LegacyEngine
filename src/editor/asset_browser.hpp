@@ -1,5 +1,6 @@
 #pragma once
 #include "assets/assets.hpp"
+#include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_preview.hpp"
 #include "editor/editor_history.hpp"
@@ -10,6 +11,7 @@
 #include "platform/project_dialog.hpp"
 #include "platform/system_trash.hpp"
 #include "project/project_assets.hpp"
+#include <imgui_internal.h>
 
 // Font Awesome Free Solid glyphs, merged into the embedded editor font.
 inline const char* assetIcon(const std::string& path, bool folder = false) {
@@ -19,6 +21,12 @@ inline const char* assetIcon(const std::string& path, bool folder = false) {
     auto ext = AssetManager::extension(path);
     if (ext == ".ls" || ext == ".lua") {
         return "\xef\x87\x89"; // file-code
+    }
+    if (ext == ".prefab") {
+        return "\xef\x86\xb2";
+    }
+    if (ext == ".cubemap") {
+        return "\xef\x9e\xa2";
     }
     if (ext == ".mat") {
         return "\xef\x81\x82"; // material sphere
@@ -42,19 +50,19 @@ fileBadge(const std::string& path, ImVec2 pos, bool folder = false, unsigned thu
     auto* draw = ImGui::GetWindowDrawList();
     if (thumbnail) {
         draw->AddImage(static_cast<ImTextureID>(thumbnail),
-                       ImVec2(pos.x + 6, pos.y),
-                       ImVec2(pos.x + 34, pos.y + 28));
+                       ImVec2(pos.x, pos.y),
+                       ImVec2(pos.x + 32, pos.y + 32));
         return;
     }
-    draw->AddRectFilled(pos, ImVec2(pos.x + 40, pos.y + 28), IM_COL32(35, 45, 60, 255), 4);
+    draw->AddRectFilled(pos, ImVec2(pos.x + 32, pos.y + 32), IM_COL32(35, 45, 60, 255), 4);
     const char* icon = assetIcon(path, folder);
     const float width = ImGui::CalcTextSize(icon).x;
     draw->AddText(
-        ImVec2(pos.x + (40 - width) * .5f, pos.y + 5), IM_COL32(160, 185, 215, 255), icon);
+        ImVec2(pos.x + (32 - width) * .5f, pos.y + 6), IM_COL32(160, 185, 215, 255), icon);
 }
 inline void fileIcon(const std::string& path, bool folder = false, unsigned thumbnail = 0) {
     auto pos = ImGui::GetCursorScreenPos();
-    ImGui::Dummy(ImVec2(44, 28));
+    ImGui::Dummy(ImVec2(36, 32));
     fileBadge(path, pos, folder, thumbnail);
     ImGui::SameLine();
 }
@@ -72,6 +80,8 @@ class AssetBrowser {
         return grid_;
     }
     AssetManager assets;
+    Entity prefabCreation;
+    std::string editPrefabRequest, spawnPrefabRequest, editCubemapRequest;
     std::string selected, openedScript, currentFolder;
     EditorSettings settings;
     std::filesystem::path projectFolder;
@@ -141,6 +151,7 @@ class AssetBrowser {
                 rename(extra.fields);
             }
         });
+        world.each<PrefabInstance>([&](Entity, PrefabInstance& link) { remap(link.asset); });
         world.each<MeshRenderer>([&](Entity, MeshRenderer& r) {
             remap(r.material);
             remap(r.materialValues.texture);
@@ -162,8 +173,14 @@ class AssetBrowser {
         }
         world.each<AudioSource>([&](Entity, AudioSource& a) { remap(a.clip); });
         world.each<Skybox>([&](Entity, Skybox& sky) {
-            for (auto* path :
-                 {&sky.right, &sky.left, &sky.top, &sky.bottom, &sky.front, &sky.back, &sky.hdr}) {
+            for (auto* path : {&sky.right,
+                               &sky.left,
+                               &sky.top,
+                               &sky.bottom,
+                               &sky.front,
+                               &sky.back,
+                               &sky.hdr,
+                               &sky.cubemap}) {
                 remap(*path);
             }
         });
@@ -293,7 +310,7 @@ class AssetBrowser {
                         ImGui::PushID(file.c_str());
                         const auto iconPosition = ImGui::GetCursorScreenPos();
                         if (!grid_) {
-                            ImGui::Dummy(ImVec2(44, 28));
+                            ImGui::Dummy(ImVec2(36, 32));
                             ImGui::SameLine();
                         }
                         const bool clicked =
@@ -311,8 +328,10 @@ class AssetBrowser {
                             fileBadge(file, iconPosition, folderItem, thumbnail);
                         }
                         const bool itemHovered = ImGui::IsMouseHoveringRect(itemMin, itemMax);
-                        if (itemHovered && materialAsset(file) && thumbnail &&
-                            ImGui::BeginTooltip()) {
+                        if (itemHovered &&
+                            (materialAsset(file) || textureAsset(file) ||
+                             AssetManager::extension(file) == ".hdr") &&
+                            thumbnail && ImGui::BeginTooltip()) {
                             ImGui::TextUnformatted(display.c_str());
                             ImGui::Image(static_cast<ImTextureID>(thumbnail), ImVec2(240, 240));
                             ImGui::EndTooltip();
@@ -322,7 +341,7 @@ class AssetBrowser {
                             auto* draw = ImGui::GetWindowDrawList();
                             draw->PushClipRect(a, b, true);
                             fileBadge(file,
-                                      ImVec2((a.x + b.x) * .5f - 20, a.y + 4),
+                                      ImVec2((a.x + b.x) * .5f - 16, a.y + 4),
                                       folderItem,
                                       thumbnail);
                             draw->AddText(nullptr,
@@ -336,6 +355,14 @@ class AssetBrowser {
                         }
                         if (clicked) {
                             selected = file;
+                            if (!folderItem && cubemapAsset(file) &&
+                                ImGui::IsMouseDoubleClicked(0)) {
+                                editCubemapRequest = file;
+                            }
+                            if (!folderItem && AssetManager::extension(file) == ".prefab" &&
+                                ImGui::IsMouseDoubleClicked(0)) {
+                                editPrefabRequest = file;
+                            }
                             if (folderItem && ImGui::IsMouseDoubleClicked(0)) {
                                 currentFolder = file;
                                 selected.clear();
@@ -358,6 +385,16 @@ class AssetBrowser {
                                     assets.error = e.what();
                                 }
                             }
+                        }
+                        if (!folderItem && AssetManager::extension(file) == ".prefab" &&
+                            ImGui::BeginPopupContextItem("Prefab actions")) {
+                            if (ImGui::MenuItem("Edit Prefab")) {
+                                editPrefabRequest = file;
+                            }
+                            if (ImGui::MenuItem("Instantiate in level")) {
+                                spawnPrefabRequest = file;
+                            }
+                            ImGui::EndPopup();
                         }
                         if (!folderItem && ImGui::BeginDragDropSource()) {
                             ImGui::SetDragDropPayload("ASSET_PATH", file.c_str(), file.size() + 1);
@@ -420,6 +457,15 @@ class AssetBrowser {
                     }
                     ImGui::EndTable();
                 }
+                // Cover the browser child, including blank space, as a hierarchy drop target.
+                if (editable &&
+                    ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect,
+                                                     ImGui::GetID("PrefabDrop"))) {
+                    if (const auto* payload = ImGui::AcceptDragDropPayload("LEVEL_OBJECT")) {
+                        prefabCreation = *static_cast<const Entity*>(payload->Data);
+                    }
+                    ImGui::EndDragDropTarget();
+                }
                 if (ImGui::BeginPopupContextWindow("Assets empty actions",
                                                    ImGuiPopupFlags_MouseButtonRight |
                                                        ImGuiPopupFlags_NoOpenOverItems)) {
@@ -427,6 +473,24 @@ class AssetBrowser {
                         createFolder();
                     }
                     if (ImGui::BeginMenu("Create")) {
+                        if (ImGui::MenuItem("Cubemap (.cubemap)")) {
+                            try {
+                                auto path =
+                                    (std::filesystem::path(currentFolder) / "Cubemap.cubemap")
+                                        .generic_string();
+                                for (unsigned n = 2; std::filesystem::exists(assets.resolve(path));
+                                     ++n) {
+                                    path = (std::filesystem::path(currentFolder) /
+                                            ("Cubemap_" + std::to_string(n) + ".cubemap"))
+                                               .generic_string();
+                                }
+                                saveCubemap(assets, path, CubemapAsset{});
+                                selected = path;
+                                editCubemapRequest = path;
+                            } catch (const std::exception& e) {
+                                assets.error = e.what();
+                            }
+                        }
                         if (ImGui::MenuItem("Material (.mat)")) {
                             try {
                                 selected = createMaterial(assets, currentFolder);
@@ -537,7 +601,7 @@ class AssetBrowser {
                 if (mode) {
                     for (int y = 0; y < 2; ++y) {
                         for (int x = 0; x < 2; ++x) {
-                            draw->AddRect(ImVec2(pos.x + 5 + x * 9, pos.y + 5 + y * 9),
+                            draw->AddRect(ImVec2(pos.x + 5 + x * 9, pos.y + 6 + y * 9),
                                           ImVec2(pos.x + 11 + x * 9, pos.y + 11 + y * 9),
                                           color);
                         }

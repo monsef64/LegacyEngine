@@ -5,6 +5,22 @@
 #include <cassert>
 
 int main() {
+    {
+        World tree;auto parent=tree.create(),child=tree.create(),grandchild=tree.create(),survivor=tree.create(),detached=tree.create();
+        for(auto e:{parent,child,grandchild,survivor,detached})tree.add(e,Transform{});
+        tree.add(child,Collider{});assert(setParent(tree,child,parent));assert(setParent(tree,grandchild,child));
+        assert(setParent(tree,detached,parent));assert(setParent(tree,detached,{}));
+        tree.add(child,ObjectActivity{false});
+        Entity selected=parent;EditorHistory history(tree,selected);
+        deleteLevelObject(tree,parent);selected={};history.commit(tree,selected);
+        assert(!tree.alive(parent) && !tree.alive(child) && !tree.alive(grandchild));
+        assert(tree.alive(survivor) && tree.alive(detached));
+        deleteLevelObject(tree,parent); // stale deletion is harmless
+        assert(history.undo(tree,selected));
+        assert(tree.alive(parent) && tree.alive(child) && tree.alive(grandchild));
+        assert(tree.has<Collider>(child) && getParent(tree,grandchild)==child);
+        assert(history.redo(tree,selected));assert(!tree.alive(parent) && !tree.alive(child) && !tree.alive(grandchild));
+    }
     World world;
     Entity object=world.create(),selection=object;
     world.add(object,Transform{{1,2,3}});

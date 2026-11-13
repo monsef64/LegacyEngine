@@ -53,4 +53,12 @@ int main(){
     std::vector<ScriptField> fields;syncScriptExports("@export panorama Texture \"studio.hdr\"\n@export sky Skybox",fields);assert(fields.size()==2 && fields[0].text=="studio.hdr");fields[1].entity=e;
     assert(exportHasComponent(world,e,"Skybox"));assert(console.bindExports(fields));assert(console.execute("sky:setHDR(panorama);assert(sky.hdr=='studio.hdr')"));
     assert(console.execute("stale=self:getComponent(Skybox);self:removeComponent(Skybox)"));assert(!console.execute("stale:setEnabled(true)"));
+    {
+        World w;auto e=w.create();w.add(e,Transform{});w.add(e,Skybox{});LuaConsole c;c.bindWorld(w);assert(c.bindObject(e));
+        assert(c.execute("getComponent(Skybox):setCubemap('Sky/Evening.cubemap')"));
+        assert(w.get<Skybox>(e).cubemap=="Sky/Evening.cubemap" && w.get<Skybox>(e).type==0);
+        assert(c.execute("getComponent(Skybox):setHDR('Sky/Studio.hdr')"));assert(w.get<Skybox>(e).type==1);
+        assert(!c.execute("getComponent(Skybox):setCubemap('../outside.cubemap')"));
+    }
+
 }

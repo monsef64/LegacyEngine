@@ -1,4 +1,5 @@
 #pragma once
+#include "assets/assets.hpp"
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include <functional>
@@ -20,6 +21,9 @@ class LuaScene {
              std::function<void(std::string_view)> error,
              MeshHandle plane = {});
     void setSelf(Entity entity);
+    void setAssetRoot(const std::filesystem::path& root) {
+        assets_.root = root;
+    }
     void setExports(const std::vector<ScriptField>& fields);
     void start();
     void objectEvent(Entity entity, const char* name);
@@ -54,6 +58,8 @@ class LuaScene {
     static int waitAPI(lua_State* state);
     lua_State* state_;
     World& world_;
+    AssetManager assets_;
+    std::string apiError_;
     MeshHandle meshes_[5];
     std::function<void(std::string_view)> error_;
     std::vector<Entry> entries_;
@@ -64,6 +70,8 @@ class LuaScene {
     void destroy(Entity e);
     void tick(const char* name, float dt);
     static int api(lua_State* state);
+    static int spawnAPI(lua_State* state);
+    static int destroyAPI(lua_State* state);
     static int audioApi(lua_State* state);
     static int skyboxFadeAPI(lua_State* state);
     static int skyboxMethod(lua_State* state);

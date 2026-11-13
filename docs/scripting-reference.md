@@ -19,7 +19,7 @@ named input buttons in Project > Input Settings and create/register the `Main` l
 before level examples. Find/get functions can return nil; check before dereferencing.
 
 See [LegacyScript guide](scripting.md), [input/audio details](audio-input.md),
-[level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).
+[prefab workflow](prefabs.md), [level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).
 
 ## Events and runtime rules
 
@@ -147,7 +147,9 @@ object:setPosition(0, 1, 0)
 
 ### destroyGameObject
 
-`destroyGameObject(gameObject)`
+`destroyGameObject(gameObject) - immediately destroy object and all descendants`
+
+Immediately destroys the GameObject and all descendants, including inactive children. Attached scripts receive onDestroy once. To keep a child, detach it with child:setParent(nil) before deleting its parent. Editor deletion also removes the entire subtree and supports undo/redo.
 
 - `param gameObject GameObject`
 
@@ -158,7 +160,9 @@ destroyGameObject(object)
 
 ### getComponent
 
-`getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
+`getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
+
+Use getComponent(Type) for attached self, getComponent(object, Type) for an explicit owner, or object:getComponent(Type). Missing components return nil. The implicit form requires an attached live self.
 
 - `param gameObject GameObject`
 - `param componentType ComponentType`
@@ -168,6 +172,7 @@ destroyGameObject(object)
 - `overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil`
 - `overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil`
 - `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil`
+- `overload fun(componentType:ComponentType):any`
 
 ```lua
 local transform = getComponent(self, Transform)
@@ -1094,6 +1099,36 @@ function onStart()
 end
 ```
 
+### spawn
+
+`spawn(prefabPathOrGameObject, position, rotation) -> new GameObject root`
+
+Creates a prefab asset instance or copies a GameObject subtree and returns its new root. Prefab paths are project-relative .prefab strings, not component tokens. Position is world-space; rotation accepts Euler degrees or a quaternion. Internal object references are remapped; external references are cleared. See the Prefab workflow guide.
+
+- `param source string|GameObject Project-relative .prefab path or live object`
+- `param position Vec3`
+- `param rotation Vec3|Quaternion Euler degrees or quaternion`
+- `return GameObject`
+
+```lua
+local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=90, z=0})
+debug.log(copy:getName())
+```
+
+### destroy
+
+`destroy(object, delay=0) / object:destroy()`
+
+Destroys the root and its descendants now (omitted/zero delay) or after nonnegative playing seconds. Pause freezes delayed destruction. A later schedule replaces the delay; pending timers are not serialized.
+
+- `param object GameObject`
+- `param delay? number Nonnegative, defaults to zero`
+
+```lua
+local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=0, z=0})
+destroy(copy, 5)
+```
+
 ### print
 
 `print(...) - log tab-separated values`
@@ -1108,7 +1143,7 @@ print("Player position", self:getPosition().x)
 
 `getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil`
 
-- `getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
+- `getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
 
 ```lua
 local object = self
@@ -1467,7 +1502,7 @@ object:getName()
 
 `destroy(self:GameObject)`
 
-- `object:destroy()`
+- `destroy(object, delay=0) / object:destroy()`
 
 ```lua
 local object = self
@@ -2238,9 +2273,9 @@ component:setSpotAngles(15, 35)
 
 ### Skybox.setType
 
-`setType(self:Skybox,type:string|integer) Textures or HDR, or 0/1`
+`setType(self:Skybox,type:string|integer) Cubemap or HDR, or 0/1 (Textures is a legacy alias)`
 
-- `sky:setType('Textures'|'HDR') - six-face or HDR skybox`
+- `sky:setType('Textures'|'HDR') - Cubemap or HDR skybox (Textures is a legacy alias)`
 
 ```lua
 local component = self:getComponent(Skybox) or self:addComponent(Skybox)
@@ -2265,9 +2300,24 @@ local component = self:getComponent(Skybox) or self:addComponent(Skybox)
 component:setEnabled(true)
 ```
 
+### Skybox.setCubemap
+
+`setCubemap(self:Skybox,path:string|nil) Set Cubemap mode and project-relative asset`
+
+Selects Cubemap mode and assigns a project-relative .cubemap asset. Author its six faces in Cubemap Editor; new Skybox components no longer need six independent Inspector slots. Nil clears the cubemap.
+
+- `sky:setCubemap(projectRelativeCubemapPath) - select a .cubemap asset`
+
+```lua
+local component = self:getComponent(Skybox) or self:addComponent(Skybox)
+component:setCubemap("Sky/Evening.cubemap")
+```
+
 ### Skybox.setHDR
 
 `setHDR(self:Skybox,texture:Texture|nil)`
+
+Selects HDR mode and assigns a project-relative Radiance panorama. Nil clears the slot. Use setCubemap for six-face skybox assets.
 
 - `sky:setHDR(Texture) - project .hdr panorama; nil clears`
 
@@ -2476,7 +2526,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
-| `type` | `integer 0 six face textures, 1 HDR panorama` |
+| `type` | `integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama` |
 | `enabled` | `boolean` |
 | `color` | `Vector3 Color tint` |
 | `right` | `Texture +X` |
@@ -2485,6 +2535,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `bottom` | `Texture -Y` |
 | `front` | `Texture -Z` |
 | `back` | `Texture +Z` |
+| `cubemap` | `string Project-relative .cubemap asset` |
 | `hdr` | `Texture Radiance .hdr equirectangular panorama` |
 
 ## Skybox1 to Skybox2 transition

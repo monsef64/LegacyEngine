@@ -20,7 +20,7 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn('href="scripting-reference.html"', pages['index.html'])
             self.assertIn('fadeSkybox', pages['scripting-reference.html'])
             self.assertTrue((Path(temp) / 'scripting-reference.html').is_file())
-            self.assertIn('<pre><code class="language-lua">', pages['scripting.html'])
+            self.assertIn('<pre class="highlight"><code class="language-lua">', pages['scripting.html'])
             self.assertIn('aria-current="page"', pages['index.html'])
             self.assertIn('href="building.html"', pages['index.html'])
             self.assertIn('/blob/test-revision/', pages['building.html'])
@@ -28,6 +28,15 @@ class DocumentationTests(unittest.TestCase):
             for asset in ('style.css', 'screenshot.png', 'LICENSE'):
                 self.assertTrue((Path(temp) / asset).is_file())
             self.assertEqual(pages, builder.build(Path(temp), 'test-revision'))
+
+    def test_offline_syntax_highlighting(self):
+        with tempfile.TemporaryDirectory() as temp:
+            pages = builder.build(Path(temp))
+            reference = pages['scripting-reference.html']
+            self.assertIn('<span class="kr">function</span>', reference)
+            self.assertIn('class="language-legacyscript"', pages['prefabs.html'])
+            self.assertIn('.highlight .', (Path(temp) / 'style.css').read_text())
+            self.assertNotIn('<script', reference)
 
     def test_reject_source_overwrite(self):
         for target in (builder.REPO, builder.SOURCE, builder.REPO / 'src', builder.REPO.parent):

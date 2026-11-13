@@ -237,8 +237,16 @@ void LuaConsole::installScene() {
                 append(Kind::Error, message);
             },
             meshes_[4]);
+        scene_->setAssetRoot(assetRoot_);
     }
 }
+void LuaConsole::setAssetRoot(const std::filesystem::path& root) {
+    assetRoot_ = root;
+    if (scene_) {
+        scene_->setAssetRoot(root);
+    }
+}
+
 void LuaConsole::bindWorld(World& world,
                            MeshHandle cube,
                            MeshHandle sphere,
