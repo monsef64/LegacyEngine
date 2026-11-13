@@ -705,7 +705,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             if(beginEditorPanel("Game")) {
                 gameHovered=ImGui::IsWindowHovered();gameFocused=ImGui::IsWindowFocused();
                 const auto active=activeCamera(world);
-                if(active==Entity{})ImGui::TextUnformatted("No active camera. Create > Camera or createCamera(name).");
+                if(active==Entity{}) {
+                    const char* message="No active camera available";
+                    const auto size=ImGui::GetContentRegionAvail();
+                    const auto textSize=ImGui::CalcTextSize(message);
+                    const auto origin=ImGui::GetCursorPos();
+                    ImGui::SetCursorPos(ImVec2(origin.x+std::max(0.0f,(size.x-textSize.x)*0.5f),
+                                              origin.y+std::max(0.0f,(size.y-textSize.y)*0.5f)));
+                    ImGui::TextUnformatted(message);
+                }
                 else {
                     auto size=ImGui::GetContentRegionAvail();size.x=std::max(size.x,1.0f);size.y=std::max(size.y,1.0f);
                     int dw=0,dh=0;SDL_GetWindowSizeInPixels(window,&dw,&dh);
