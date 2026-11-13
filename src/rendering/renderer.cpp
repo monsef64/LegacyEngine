@@ -71,7 +71,7 @@ uniform int uLightCount;
 uniform vec4 uLightPosition[16]; // xyz, type
 uniform vec4 uLightColor[16]; // rgb * intensity, range
 uniform vec4 uLightDirection[16]; // xyz, outer cone cosine
-uniform vec4 uLightShadow[16]; // layer, bias, inner cone cosine, unused
+uniform vec4 uLightShadow[16]; // layer, bias, inner cone cosine, active resolution / atlas resolution
 uniform mat4 uShadowMatrix[12];
 out vec4 fragColor;
 int cubeFace(vec3 d){

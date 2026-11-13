@@ -23,7 +23,7 @@ inline const char* assetIcon(const std::string& path,bool folder=false){
 }
 inline void fileBadge(const std::string& path,ImVec2 pos,bool folder=false,unsigned thumbnail=0){
     auto* draw=ImGui::GetWindowDrawList();
-    if(thumbnail){draw->AddImage(static_cast<ImTextureID>(thumbnail),pos,ImVec2(pos.x+40,pos.y+28));return;}
+    if(thumbnail){draw->AddImage(static_cast<ImTextureID>(thumbnail),ImVec2(pos.x+6,pos.y),ImVec2(pos.x+34,pos.y+28));return;}
     draw->AddRectFilled(pos,ImVec2(pos.x+40,pos.y+28),IM_COL32(35,45,60,255),4);
     const char* icon=assetIcon(path,folder);const float width=ImGui::CalcTextSize(icon).x;
     draw->AddText(ImVec2(pos.x+(40-width)*.5f,pos.y+5),IM_COL32(160,185,215,255),icon);
