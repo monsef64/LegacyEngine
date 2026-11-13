@@ -241,7 +241,6 @@ GLuint createProgram(const char* vertexSource, const char* fragmentSource)
 
 bool Renderer::init()
 {
-    if(!skyboxRenderer_.init())return false;
     if (!gladLoadGL(SDL_GL_GetProcAddress)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not load the OpenGL functions");
         return false;
@@ -249,6 +248,7 @@ bool Renderer::init()
     SDL_Log("OpenGL %s on %s", reinterpret_cast<const char*>(glGetString(GL_VERSION)),
             reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
 
+    if(!skyboxRenderer_.init())return false;
     unlitProgram_ = createProgram(kUnlitVertexShader, kUnlitFragmentShader);
     litProgram_   = createProgram(kLitVertexShader, kLitFragmentShader);
     if (!unlitProgram_ || !litProgram_) {

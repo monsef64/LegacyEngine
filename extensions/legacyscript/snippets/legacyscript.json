@@ -43,7 +43,7 @@
   "Export field": {
     "prefix": "export",
     "body": [
-      "@export ${1:target} ${2|GameObject,AudioSource,AudioListener,Transform,RigidBody,Collider,Camera,AudioClip,Asset,number,boolean,string|} ${3}"
+      "@export ${1:target} ${2|GameObject,AudioSource,AudioListener,Transform,RigidBody,Collider,Camera,Skybox,Texture,AudioClip,Asset,number,boolean,string|} ${3}"
     ],
     "description": "Declare an Inspector-assigned LegacyScript field"
   }
