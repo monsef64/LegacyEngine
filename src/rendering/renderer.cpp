@@ -1,4 +1,5 @@
 #include "physics/collider_debug.hpp"
+#include "audio/audio_gizmo.hpp"
 #include "rendering/renderer.hpp"
 
 #include "core/components.hpp"
@@ -288,6 +289,11 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
         if(!world.has<Camera>(e))drawMesh(t,r);
     });
     if(editorView) {
+        if(audioModel_.id==UINT32_MAX)audioModel_=createMesh(audioSourceGlyph());
+        world.each<AudioSource,Transform>([&](Entity,const AudioSource&,const Transform& t){
+            Transform glyph=t;glyph.scale={1,1,1};
+            drawMesh(glyph,MeshRenderer{audioModel_,{.35f,.8f,1.0f},false,0});
+        });
         if(cameraModel_.id==UINT32_MAX)cameraModel_=createMesh(makeCameraModel());
         world.each<Camera,Transform>([&](Entity,const Camera&,const Transform& t){
             drawMesh(t,MeshRenderer{cameraModel_,{.28f,.50f,.72f},false,.4f});
@@ -297,7 +303,13 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
 
 void Renderer::drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection)
 {
-    const MeshData wire = colliderWireframe(collider, transform.scale);
+    drawWire(colliderWireframe(collider,transform.scale),transform,viewProjection,{0,1,0});
+}
+void Renderer::drawAudioSource(const Transform& transform,const AudioSource& source,const Mat4& viewProjection){
+    drawWire(audioSourceRange(source),transform,viewProjection,{.35f,.8f,1.0f});
+}
+void Renderer::drawWire(const MeshData& wire,const Transform& transform,const Mat4& viewProjection,Vec3 color){
+    if(wire.vertices.empty())return;
     if (!colliderVertexArray_) {
         glGenVertexArrays(1, &colliderVertexArray_);
         glGenBuffers(1, &colliderVertexBuffer_);
@@ -314,7 +326,7 @@ void Renderer::drawCollider(const Transform& transform, const Collider& collider
     const Mat4 mvp = multiply(viewProjection, transformMatrix(transform.position, transform.rotation, {1, 1, 1}));
     glUseProgram(unlitProgram_);
     glUniformMatrix4fv(unlitModelViewProjection_, 1, GL_FALSE, mvp.m);
-    glUniform3f(unlitColor_, 0.0f, 1.0f, 0.0f);
+    glUniform3f(unlitColor_, color.x,color.y,color.z);
     // Show the entire collider, including the back and the plane's hidden slab.
     const bool depthTest = glIsEnabled(GL_DEPTH_TEST);
     glDisable(GL_DEPTH_TEST);

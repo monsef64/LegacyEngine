@@ -243,6 +243,8 @@ function createAudioSource(owner,clip) end
 
 ---@class AudioListener
 ---@field enabled boolean
+---@field pause fun(self:AudioListener) Disable reception without stopping AudioSources
+---@field start fun(self:AudioListener) Enable reception again
 AudioListener = nil
 
 -- Input snapshots are shared across attached scripts for the current render frame.

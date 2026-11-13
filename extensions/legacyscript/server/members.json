@@ -114,7 +114,9 @@
     "playOneShot": "fun(self:AudioSource,clip:AudioClip)"
   },
   "AudioListener": {
-    "enabled": "boolean"
+    "enabled": "boolean",
+    "pause": "fun(self:AudioListener) Disable reception without stopping AudioSources",
+    "start": "fun(self:AudioListener) Enable reception again"
   },
   "Vec2": {
     "x": "number",
