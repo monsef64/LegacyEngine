@@ -103,3 +103,26 @@ opposite endpoint to view from the negative direction. Drag within the gizmo to
 orbit around the Scene camera's current pivot. Snapping preserves that pivot and
 viewing distance, including stable straight-down/straight-up views. This is
 Scene navigation only: it does not rotate selected objects or the Game camera.
+
+## Scene-only grid and file workflows
+
+Spawn mode has been removed. Create objects using the main **Create** menu or
+Hierarchy context menu; Scene clicks select objects. New startup scenes no longer
+contain a Grid GameObject or a checkerboard ground plane. Existing authored scene
+objects are not silently removed when opening an older project.
+
+The grid is an engine-owned Scene overlay, absent from Hierarchy, Game rendering,
+physics, saved scene content and scripts. In **Settings > Editor Settings > Scene
+Grid**, adjust visibility, XZ/XY/YZ plane, X/Y/Z position, cell count, spacing and
+color. These preferences persist with editor settings. User-created planes remain
+available through Create.
+
+**File > New Level...** and **File > Save Level** provide direct level actions.
+Project Save/Save As saves the current level and pending script document along
+with project assets. The default bottom tab order is **Assets, Script Editor,
+Console**; use **Windows > Reset layout** to restore it. Assets also has an
+icon-only **New Folder** button with a tooltip.
+
+ImGui conflict highlighting and red recovery tooltips are disabled in the engine
+viewport. Recoverable UI errors are still sent to the engine log rather than
+silently discarded.

@@ -158,6 +158,7 @@ jobs:
           "$RUNNER_TEMP/docs-tools/bin/python" -m pip install -r docs/requirements.txt
           "$RUNNER_TEMP/docs-tools/bin/python" -m unittest discover -s docs/tests
           "$RUNNER_TEMP/docs-tools/bin/python" docs/build.py --output build/docs --revision "$GITHUB_SHA"
+          test -s build/docs/scripting-reference.html
           cd build/docs
           "$RUNNER_TEMP/docs-tools/bin/python" -m zipfile -c ../legacyengine-docs.zip *.html style.css screenshot.png LICENSE
 
@@ -178,6 +179,7 @@ jobs:
           cp build/LegacyEngine "$package/"
           cp LICENSE "$package/"
           cp -r build/docs "$package/docs"
+          test -s "$package/docs/scripting-reference.html"
           cp -r scripts "$package/"
           cp -r data "$package/"
           cp .luarc.json "$package/"

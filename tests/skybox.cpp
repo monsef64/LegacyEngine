@@ -5,7 +5,27 @@
 #include "scripting/lua_console.hpp"
 #include "scripting/script_exports.hpp"
 #include <cassert>
+#include "scene/skybox_transition.hpp"
 int main(){
+    {
+        World fadeWorld;auto a=fadeWorld.create(),b=fadeWorld.create();Skybox day,night;day.color={1,1,1};night.color={.1f,.2f,.3f};night.enabled=false;
+        fadeWorld.add(a,day);fadeWorld.add(b,night);fadeWorld.add(a,ObjectName{"Skybox1"});fadeWorld.add(b,ObjectName{"Skybox2"});
+        LuaConsole fadeConsole;fadeConsole.bindWorld(fadeWorld);assert(fadeConsole.bindObject(a));
+        assert(!fadeConsole.execute("fadeSkybox(self,GameObject.find('Skybox2'),0)"));
+        assert(fadeConsole.execute("fadeSkybox(GameObject.find('Skybox1'),GameObject.find('Skybox2'),2)"));
+        updateSkyboxTransitions(fadeWorld,.25f);assert(fadeWorld.get<SkyboxTransition>(a).weight()==.5f);
+        assert(fadeWorld.get<Skybox>(a).enabled && !fadeWorld.get<Skybox>(b).enabled);
+        assert(beginSkyboxFade(fadeWorld,a,b,1)!=nullptr);
+        updateSkyboxTransitions(fadeWorld,.25f);
+        assert(!fadeWorld.has<SkyboxTransition>(a));assert(!fadeWorld.get<Skybox>(a).enabled && fadeWorld.get<Skybox>(b).enabled);
+        assert(fadeWorld.get<Skybox>(a).color.x==1 && fadeWorld.get<Skybox>(b).color.x==.1f);
+        assert(fadeConsole.execute("fadeSkybox(GameObject.find('Skybox1'),1)"));
+        assert(fadeWorld.has<SkyboxTransition>(b));updateSkyboxTransitions(fadeWorld,1);
+        assert(fadeWorld.get<Skybox>(a).enabled && !fadeWorld.get<Skybox>(b).enabled);
+        assert(fadeConsole.execute("self:getComponent(Skybox):fadeTo(GameObject.find('Skybox2'):getComponent(Skybox),0.5)"));
+        fadeWorld.destroy(b);updateSkyboxTransitions(fadeWorld,1);assert(!fadeWorld.has<SkyboxTransition>(a) && fadeWorld.get<Skybox>(a).enabled);
+    }
+
     World world;auto e=world.create();world.add(e,ObjectName{"Sky"});world.add(e,Skybox{});
     LuaConsole console;console.bindWorld(world);assert(console.bindObject(e));
     assert(console.execute(R"(

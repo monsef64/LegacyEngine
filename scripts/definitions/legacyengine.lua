@@ -216,6 +216,8 @@ GameObject = nil
 ---@field setTarget fun(self:CameraObject,target:GameObject|Vec3|number|nil,y?:number,z?:number)
 ---@field setFollowTarget fun(self:CameraObject,target:GameObject|Vec3|nil,offset:Vec3|number,y?:number,z?:number)
 ---@field setShake fun(self:CameraObject,intensity:number,duration:number)
+---@field setCameraShake fun(self:CameraObject,intensity:number,duration:number) Alias of setShake
+---@field setCameraTarget fun(self:CameraObject,target:GameObject|Vec3|nil) Alias of setTarget
 ---@field worldToScreen fun(self:CameraObject,x:Vec3|number,y?:number,z?:number):Vec3
 ---@field screenToWorld fun(self:CameraObject,x:Vec3|number,y?:number,z?:number):Vec3
 ---@class CameraConstructor:ComponentToken
@@ -419,6 +421,7 @@ function isCursorLocked() end
 ---@field setEnabled fun(self:Skybox,enabled:boolean)
 ---@field setHDR fun(self:Skybox,texture:Texture|nil)
 ---@field setFace fun(self:Skybox,face:string,texture:Texture|nil)
+---@field fadeTo fun(self:Skybox,destination:GameObject|Skybox,speed:number) Smooth crossfade, duration = 1/speed seconds
 ---@field setTextures fun(self:Skybox,right:Texture,left:Texture,top:Texture,bottom:Texture,front:Texture,back:Texture)
 
 ---Request a deferred level switch. Returns acceptance, not completion.
@@ -450,3 +453,27 @@ function nextLevel() end
 ---@return boolean accepted
 ---@return string? error
 function previousLevel() end
+
+---Subscribe to a custom queued event; listeners are removed when the runtime stops.
+---@param eventName string
+---@param callback function
+---@return integer token
+function on(eventName,callback) end
+---@param token integer
+---@return boolean removed
+function off(token) end
+---Queue an event for delivery between script updates. Payloads: nil, boolean, number, string.
+---@param eventName string
+---@vararg any
+---@return boolean accepted
+function emit(eventName,...) end
+---@param name string
+function onLevelLoaded(name) end
+---@param name string
+---@param error string
+function onLevelFailedToLoad(name,error) end
+---Smoothly blend from the active skybox. Speed must be positive; 0.5 takes 2 seconds.
+---@param destination GameObject|Skybox
+---@param speed number
+---@overload fun(source:GameObject|Skybox,destination:GameObject|Skybox,speed:number)
+function fadeSkybox(destination,speed) end

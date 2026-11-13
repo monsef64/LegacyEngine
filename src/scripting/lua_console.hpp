@@ -1,12 +1,14 @@
 #pragma once
 
-#include <cstddef>
-#include <deque>
-#include <string>
-#include <string_view>
-#include <memory>
 #include "core/components.hpp"
 #include "core/ecs.hpp"
+#include <cstddef>
+#include <deque>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <variant>
+#include <vector>
 class LuaScene;
 
 struct lua_State;
@@ -14,9 +16,12 @@ struct lua_Debug;
 
 // Persistent, restricted Lua state and bounded console transcript; no UI dependency.
 class LuaConsole {
-public:
+  public:
     enum class Kind { Info, Output, Error, Warning };
-    struct Line { Kind kind; std::string text; };
+    struct Line {
+        Kind kind;
+        std::string text;
+    };
     static constexpr std::size_t maxSourceBytes = 64 * 1024;
     static constexpr std::size_t maxLines = 1000;
     static constexpr std::size_t maxLineBytes = 8192;
@@ -26,19 +31,34 @@ public:
     ~LuaConsole();
     LuaConsole(const LuaConsole&) = delete;
     LuaConsole& operator=(const LuaConsole&) = delete;
-    bool execute(std::string_view source);
+    bool execute(std::string_view source, std::string_view sourceName = "editor");
     void reset();
-    void bindWorld(World& world, MeshHandle cube={}, MeshHandle sphere={}, MeshHandle capsule={}, MeshHandle cone={}, MeshHandle plane={});
+    void bindWorld(World& world,
+                   MeshHandle cube = {},
+                   MeshHandle sphere = {},
+                   MeshHandle capsule = {},
+                   MeshHandle cone = {},
+                   MeshHandle plane = {});
     bool bindObject(Entity entity);
     bool bindExports(const std::vector<ScriptField>& fields);
     void update(float deltaTime);
     void fixedUpdate(float deltaTime);
     void shutdown();
-    void clear() { lines_.clear(); }
-    const std::deque<Line>& lines() const { return lines_; }
-    bool ready() const { return state_ != nullptr; }
+    using EventValue = std::variant<std::monostate, bool, double, std::string>;
+    static bool postEvent(std::string name, std::vector<EventValue> values = {});
+    static void dispatchEvents();
+    static void clearEvents();
+    void clear() {
+        lines_.clear();
+    }
+    const std::deque<Line>& lines() const {
+        return lines_;
+    }
+    bool ready() const {
+        return state_ != nullptr;
+    }
 
-private:
+  private:
     lua_State* state_ = nullptr;
     World* world_ = nullptr;
     MeshHandle meshes_[5];
@@ -46,9 +66,19 @@ private:
     void installScene();
     void installInput();
     void installLevels();
+    void installEvents();
+    void removeEventListeners();
+    void receiveEvent(const std::string& name, const std::vector<EventValue>& values);
+    static int eventAPI(lua_State* state);
+    struct Listener {
+        std::string name;
+        int token, reference;
+    };
+    std::vector<Listener> listeners_;
+    int nextListener_ = 1;
     void beginBudget();
     void endBudget();
-    std::size_t allocated_ = 0;
+    std::size_t allocated_ = 0, errorCount_ = 0;
     int remainingInstructions_ = 0;
     std::deque<Line> lines_;
     void append(Kind kind, std::string_view text);

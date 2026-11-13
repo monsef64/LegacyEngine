@@ -1,5 +1,33 @@
 [
   {
+    "name": "on",
+    "signature": "on(eventName, callback) -> listener token; receives queued custom events"
+  },
+  {
+    "name": "off",
+    "signature": "off(token) -> boolean; remove this script's listener"
+  },
+  {
+    "name": "emit",
+    "signature": "emit(eventName, ...) -> boolean; queue up to eight primitive arguments"
+  },
+  {
+    "name": "onLevelLoaded",
+    "signature": "onLevelLoaded(name) - destination callback after its scripts start"
+  },
+  {
+    "name": "onLevelFailedToLoad",
+    "signature": "onLevelFailedToLoad(name, error) - current level stays active"
+  },
+  {
+    "name": "fadeSkybox",
+    "signature": "fadeSkybox(destination, speed) or fadeSkybox(source, destination, speed) - activate destination after smooth crossfade"
+  },
+  {
+    "name": "fadeTo",
+    "signature": "sky:fadeTo(destination, speed) - smooth skybox transition"
+  },
+  {
     "name": "loadLevel",
     "signature": "loadLevel(name=nil) -> accepted, error; switch at next frame boundary"
   },
@@ -50,6 +78,10 @@
   {
     "name": "SpotLight",
     "signature": "SpotLight - dynamic cone light with innerAngle and outerAngle in degrees"
+  },
+  {
+    "name": "Texture",
+    "signature": "Texture - export-only image or HDR asset path; @export image Texture"
   },
   {
     "name": "AudioListener",

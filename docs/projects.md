@@ -23,7 +23,7 @@ JSON and 64 KiB editor source. Runtime state, logs and history are not serialize
 
 Use **Project > Levels > New Level...** to create an empty level. The current
 level is saved first (initially as `Main`). **Save Current Level** saves the active
-world, editor camera and console source; choose a name in the same menu to switch.
+world and editor camera; choose a name in the same menu to switch.
 Levels belong to the project: `Assets/Levels/<name>.level` contains the scene JSON,
 and `Assets/Levels/levels.json` records creation order and the current level.
 Project Save/Save As carries these assets with the project. Existing single-scene

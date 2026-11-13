@@ -32,6 +32,10 @@
     "title": "LegacyScript"
   },
   {
+    "file": "scripting-reference.md",
+    "title": "Scripting Reference"
+  },
+  {
     "file": "audio-input.md",
     "title": "Audio and input"
   },

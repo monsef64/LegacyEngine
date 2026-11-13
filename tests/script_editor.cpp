@@ -21,6 +21,9 @@ int main()
     ImGui::GetPlatformIO().Platform_SetClipboardTextFn=+[](ImGuiContext*,const char* text){clipboard=text;};
     ScriptEditor editor;
     require(editor.source().empty(),"new editor has no example snippet");
+    require(!editor.fileOpen() && !editor.executeSource(),"no anonymous script document is executable");
+    World fileWorld;auto fileOwner=fileWorld.create();fileWorld.add(fileOwner,Transform{});fileWorld.add(fileOwner,LuaScript{"Test.ls",true,{}});
+    editor.bindWorld(fileWorld,{},{},{});editor.setAssetContext("Test.ls",fileOwner);
     editor.setSource("print(\"Hello from Lua!\")");
     auto frame=[&] { ImGui::NewFrame(); editor.draw(); ImGui::Render(); };
     frame(); frame();
@@ -56,6 +59,16 @@ int main()
     io.AddKeyEvent(ImGuiKey_Tab,true); frame();
     io.AddKeyEvent(ImGuiKey_Tab,false); frame();
     require(editor.source()=="createGameObject","Tab completes scene API in multiline editor");
+    AssetManager fileAssets;fileAssets.root=std::filesystem::temp_directory_path()/("legacy-script-documents-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    editor.saveFile(fileAssets);require(fileAssets.readScript("Test.ls")=="createGameObject","edited document saves to its script file");
+    fileAssets.writeScript("Gameplay/Movement/Player.ls","");fileAssets.writeScript("Tools/Editor.lua","");
+    {std::ofstream other(fileAssets.root/"image.png");other<<"not a script";}
+    const auto tree=buildScriptTree(fileAssets);
+    require(tree.files.size()==1 && tree.files[0]=="Test.ls","script tree excludes non-script files");
+    require(tree.folders.at("Gameplay").folders.at("Movement").files[0]=="Player.ls","script tree preserves folders");
+    require(tree.folders.at("Tools").files[0]=="Editor.lua","script tree includes Lua files");
+    std::filesystem::remove_all(fileAssets.root);
+
     World world;auto owner=world.create();world.add(owner,Transform{});world.add(owner,LuaScript{"Camera.ls",true,{}});
     editor.bindWorld(world,{},{},{});editor.setAssetContext("Camera.ls",owner);
     editor.setSource("function onStart() self:setPosition(1,2,3) end");

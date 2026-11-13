@@ -12,12 +12,11 @@ out vec3 vWorldPosition;
 out vec2 vCheckerUV;
 out vec2 vUV;
 
-void main()
-{
+void main() {
     vNormal = uNormalMatrix * aNormal;
     vWorldPosition = (uModel * vec4(aPosition, 1.0)).xyz;
     // A 2x2 repeat covers 2 metres: each texel is one checker square.
     vCheckerUV = aPosition.xz * 0.5;
-    vUV=aUV;
+    vUV = aUV;
     gl_Position = uModelViewProjection * vec4(aPosition, 1.0);
 }

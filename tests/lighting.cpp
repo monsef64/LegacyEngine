@@ -48,5 +48,18 @@ int main(){
     for(int i=0;i<40;++i){auto id=world.create();world.add(id,Transform{{0,0,-1}});world.add(id,PointLight{});}
     lights=Lighting::gather(world,vp,{0,0,5});assert(lights.size()==Lighting::maxLights);
     layers=0;for(const auto& l:lights)if(l.shadowLayer>=0){const int n=l.type==1?6:1;assert(l.shadowLayer+n<=Lighting::maxShadowLayers);layers+=n;}assert(layers<=Lighting::maxShadowLayers);
+    // Repeated viewport collection reuses capacity and never carries stale lights/layers.
+    std::vector<Lighting::Light> scratch;
+    Lighting::gather(world,vp,{0,0,5},scratch);
+    const auto* storage=scratch.data();const auto capacity=scratch.capacity();
+    for(int frame=0;frame<10;++frame){
+        Lighting::gather(world,vp,{0,0,5},scratch);
+        assert(scratch.size()==lights.size() && scratch.data()==storage && scratch.capacity()==capacity);
+        for(std::size_t i=0;i<lights.size();++i){
+            assert(scratch[i].entity==lights[i].entity && scratch[i].shadowLayer==lights[i].shadowLayer);
+        }
+    }
+    World empty;Lighting::gather(empty,vp,{0,0,5},scratch);assert(scratch.empty() && scratch.capacity()==capacity);
+    Lighting::gather(world,vp,{0,0,5},scratch);assert(scratch.size()==Lighting::maxLights);
     auto invalid=PointLight{};invalid.intensity=std::numeric_limits<float>::quiet_NaN();assert(!validLight(invalid));
 }

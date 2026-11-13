@@ -15,6 +15,7 @@ int main(){
     levels.create("Second");assert(levels.names().size()==2);
     bool rejected=false;try{levels.create("../escape");}catch(...){rejected=true;}assert(rejected);
     assert(!levels.load("missing"));assert(levels.current()=="Main");
+    auto failure=levels.takeFailure();assert(failure && failure->name=="missing" && !failure->error.empty());assert(!levels.takeFailure());
     LuaConsole console;assert(console.execute("assert(getCurrentLevel()=='Main');assert(nextLevel());assert(getCurrentLevel()=='Main');assert(not previousLevel())"));
     auto transition=levels.poll();assert(transition && transition->name=="Second" && transition->level->world.entities().empty());
     levels.commit(transition->name,true);

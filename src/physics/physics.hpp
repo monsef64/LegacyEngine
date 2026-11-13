@@ -26,19 +26,19 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 
-#include <memory>
 #include <functional>
+#include <memory>
 
 // What Physics::raycast() found.
 struct RayHit {
-    Entity entity;          // the entity whose Collider the ray met
-    Vec3   point;           // where it met it
-    Vec3   normal;          // unit vector pointing straight out of the surface there
-    float  distance = 0.0f; // metres from the origin of the ray to `point`
+    Entity entity;         // the entity whose Collider the ray met
+    Vec3 point;            // where it met it
+    Vec3 normal;           // unit vector pointing straight out of the surface there
+    float distance = 0.0f; // metres from the origin of the ray to `point`
 };
 
 class Physics {
-public:
+  public:
     Physics();
     ~Physics();
     void reset(); // Discard solver bodies, contacts and accumulated time.
@@ -66,7 +66,7 @@ public:
     // and Z axes.
     bool checkBox(Vec3 center, Vec3 size) const;
 
-private:
+  private:
     struct Impl; // keeps ReactPhysics3D out of the rest of the engine
     std::unique_ptr<Impl> impl_;
 };
