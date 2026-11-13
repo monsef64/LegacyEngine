@@ -55,6 +55,7 @@ struct Collider {
     // scale).
     float radius = 0.5f;
     float height = 1.0f;
+    bool isTrigger = false;
 };
 
 // Backward-compatible name: existing box scene code remains valid.
@@ -70,6 +71,9 @@ struct RigidBody {
     bool useGravity = true; // switch off to keep it floating
     Vec3 linearVelocity;    // metres per second
     Vec3 angularVelocity;   // radians per second around each axis
+    float drag = 0, angularDrag = 0;
+    bool isKinematic = false;
+    Vec3 force, impulse;
 };
 
 // Primary LegacyScript and additional attachments, all relative to project assets.
@@ -161,4 +165,19 @@ struct FPSCamera {
     float sensitivity = .12f, speed = 6;
     float yaw = 0, pitch = 0;
     bool initialized = false;
+};
+
+struct InspectorOrder {
+    std::vector<int> types;
+};
+struct ObjectLayer {
+    int value = 0;
+};
+struct Raycast {
+    int type = 0; // Line, LineOfSight fan, Sphere overlap
+    float distance = 20, radius = 1, angle = 180;
+    int samples = 25;
+    Vec3 offset;
+    unsigned layerMask = 0xffffffffu;
+    bool includeTriggers = true;
 };

@@ -9,6 +9,9 @@ OUTPUT = ROOT / 'docs/scripting-reference.md'
 
 # Executable fragments, not pseudo-code. Asset names are project-relative examples.
 GLOBALS = {
+'onTriggerEnter': 'function onTriggerEnter(collider)\n    if collider then debug.log("Entered", collider.gameObject:getName()) end\nend',
+'onTriggerStay': 'function onTriggerStay(collider)\n    if collider then debug.log("Overlapping", collider.gameObject.layer) end\nend',
+'onTriggerExit': 'function onTriggerExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Destroyed collider", "left")\nend',
 'onStart': 'function onStart()\n    debug.log("Script started", self:getName())\nend',
 'onUpdate': 'function onUpdate(deltaTime)\n    self:translate(deltaTime, 0, 0)\nend',
 'onFixedUpdate': 'function onFixedUpdate(deltaTime)\n    debug.log("Fixed step", deltaTime)\nend',
@@ -42,6 +45,9 @@ GLOBALS['wait'] = 'function onStart()\n    local audio = createAudioSource(self,
 GLOBALS['spawn'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=90, z=0})\ndebug.log(copy:getName())'
 GLOBALS['destroy'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=0, z=0})\ndestroy(copy, 5)'
 CAMERA_GLOBALS = {
+'onTriggerEnter': 'function onTriggerEnter(collider)\n    if collider then debug.log("Entered", collider.gameObject:getName()) end\nend',
+'onTriggerStay': 'function onTriggerStay(collider)\n    if collider then debug.log("Overlapping", collider.gameObject.layer) end\nend',
+'onTriggerExit': 'function onTriggerExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Destroyed collider", "left")\nend',
 'setCameraPosition': '{0, 2, 6}', 'setCameraRotation': '{0, 180, 0}',
 'lookAt': '{0, 0, 0}', 'setFieldOfView': '60', 'setProjectionMode': '"Perspective"',
 'setNearClipPlane': '0.1', 'setFarClipPlane': '100', 'setViewport': '0, 0, 1, 1',
@@ -74,6 +80,8 @@ for name in ('lockCursor', 'unlockCursor', 'hideCursor', 'showCursor', 'isCursor
     GLOBALS[name] = f'local result = {name}()\ndebug.log(result)'
 
 METHOD_ARGS = {
+'addForce':'0, 10, 0', 'addImpulse':'0, 3, 0', 'setVelocity':'1, 0, 0', 'addVelocity':'0, 1, 0', 'movePosition':'0, 2, 0', 'moveRotation':'0, 90, 0', 'setLayers':"{'Default'}",
+
 'move':'0, -1', 'sprint':'true', 'setIsFreecam':'false',
 'getComponent':'Transform', 'addComponent':'Collider', 'removeComponent':'Collider',
 'setPosition':'1, 2, 3', 'setRotation':'0, 45, 0', 'setScale':'1, 1, 1', 'translate':'0, 0, 1',
@@ -94,7 +102,7 @@ METHOD_ARGS = {
 'setCubemap':'"Sky/Evening.cubemap"', 'setHDR':'"Sky/studio.hdr"', 'setFace':'"front", "Sky/front.png"',
 'setTextures':', '.join(f'"Sky/{face}.png"' for face in ('right','left','top','bottom','front','back')),
 }
-NO_ARGS = set('getForward getBackward getRight getLeft getUp getDown jump getIsFreecam isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
+NO_ARGS = set('cast castAll getVelocity getForward getBackward getRight getLeft getUp getDown jump getIsFreecam isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
 
 
 def inventory():
@@ -132,7 +140,7 @@ def example(entry):
     owner, name = entry['owner'], entry['name']
     if not owner:
         return GLOBALS[name] if name != 'print' else 'print("Player position", self:getPosition().x)'
-    if name.startswith('on') and owner == 'GameObject':
+    if name.startswith('on') and owner == 'GameObject' and not name.startswith('onTrigger'):
         args = 'deltaTime' if name in ('onUpdate', 'onFixedUpdate') else ''
         return f'self.{name} = function({args})\n    debug.log("Object callback: {name}")\nend'
     if owner == 'GameObjectConstructor':
@@ -150,8 +158,10 @@ def example(entry):
         prefix = f'local component = self:getComponent({owner}) or self:addComponent({owner})'
         if owner == 'AudioSource':
             prefix += '\ncomponent.clip = AudioClip("Audio/example.wav")'
+    if owner=='GameObject' and name in ('onTriggerEnter','onTriggerStay','onTriggerExit'):
+        return f'self.{name} = function(collider)\n    if collider then debug.log(collider.gameObject:getName()) end\nend'
     if name == 'linkToCharacter':
-        return 'local character = self:getComponent(CharacterController) or self:addComponent(CharacterController)\nlocal camera = Camera.new("Player FPS Camera")\nlocal fps = camera:addComponent(FPSCamera)\nfps:linkToCharacter(character, {x=0,y=0.7,z=0})'
+        return 'local character = self:getComponent(CharacterController) or self:addComponent(CharacterController)\nlocal camera = Camera.new("Player FPS Camera")\nlocal fps = camera:addComponent(FPSCamera)\nfps:linkToCharacter(character, 0, 0.7, 0)'
     if name == 'fadeTo':
         return 'local skybox1 = self:getComponent(Skybox) or self:addComponent(Skybox)\nlocal skybox2 = GameObject.new("Skybox2"):addComponent(Skybox)\nskybox2:setColor(0.3, 0.1, 0.05)\nskybox2:setEnabled(false)\nskybox1:fadeTo(skybox2, 0.5)'
     if name in NO_ARGS:
@@ -162,10 +172,15 @@ def example(entry):
 
 
 CALLABLE_DETAILS = {
+    'Raycast.cast': 'Queries current synchronized collider poses. Unselected layers are ignored before hit selection, so rays pass through them. Returns a generation-safe collider/transform and world point, normal and distance, or nil. The owner is excluded.',
+    'Raycast.castAll': 'Line queries return all distinct hit objects; LineOfSight samples an adjustable fan in local XZ and returns the nearest selected blocker on each ray, deduplicated and distance sorted. Sphere queries return overlapping collider objects; point/normal are the surface intersection toward collider center, or origin/zero if inside. This is not a swept sphere cast.',
+    'RigidBody.addForce': 'Accumulates world force for the next fixed physics step. Apply from onFixedUpdate for continuous thrust; mass zero or kinematic bodies ignore force. addImpulse applies velocity change impulse/mass without deltaTime multiplication.',
+    'RigidBody.movePosition': 'Changes world position (teleports); this is not a swept collision-aware character move. Use velocity or CharacterController for simulated movement.',
+
     'CharacterController.move': 'Sets persistent local X/Z input, clamped to unit length. Call move(0,0) to stop. Applied by fixed physics steps; do not multiply by deltaTime. Requires Transform, Collider and dynamic RigidBody (added automatically). Upright rotation is locked against physics torque. State flags update on fixed steps.',
     'CharacterController.jump': 'Queues one grounded jump. Requests while airborne or canJump=false are discarded; holding a button does not automatically retrigger unless your script requests another jump. isJumping means airborne and ascending, not falling.',
     'CharacterController.sprint': 'Stores sprint intent; true when omitted. isSprinting requires canMove, canSprint and nonzero movement input.',
-    'FPSCamera.linkToCharacter': 'Accepts a CharacterController component or its GameObject. Parents the camera and sets its parent-local position offset, default (0,0.7,0). Mouse yaw turns the character, while pitch stays local and clamps to +/-89 degrees. Existing Camera APIs remain available on the camera GameObject; FPSCamera also forwards Camera settings and methods.',
+    'FPSCamera.linkToCharacter': 'Accepts a CharacterController component or its GameObject followed by x,y,z local position coordinates. The older vector-table argument also remains supported. Parents the camera and sets its parent-local position offset, default (0,0.7,0). Mouse yaw turns the character, while pitch stays local and clamps to +/-89 degrees. Existing Camera APIs remain available on the camera GameObject; FPSCamera also forwards Camera settings and methods.',
     'FPSCamera.setIsFreecam': 'Unparented FPS cameras with isFreecam=true use native WASD and Q/E movement while Game input is focused. False disables translation, not mouse look. Parented FPS cameras never translate freely. Mouse look requires a locked cursor; mouseLook=false leaves rotation to scripts.',
 
     'destroyGameObject': 'Immediately destroys the GameObject and all descendants, including inactive children. Attached scripts receive onDestroy once. To keep a child, detach it with child:setParent(nil) before deleting its parent. Editor deletion also removes the entire subtree and supports undo/redo.',

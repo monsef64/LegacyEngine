@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <map>
 #include <unordered_map>
 
 namespace {
@@ -132,8 +133,10 @@ bool isUsable(const Transform& transform, const BoxCollider* collider, const Rig
          !isUsable(collider->height * transform.scale.y))) {
         return false;
     }
-    if (rigidBody && (!isUsable(rigidBody->mass) || !isUsable(rigidBody->linearVelocity) ||
-                      !isUsable(rigidBody->angularVelocity))) {
+    if (rigidBody &&
+        (!isUsable(rigidBody->mass) || !isUsable(rigidBody->linearVelocity) ||
+         !isUsable(rigidBody->angularVelocity) || !isUsable(rigidBody->drag) ||
+         !isUsable(rigidBody->angularDrag) || rigidBody->drag < 0 || rigidBody->angularDrag < 0)) {
         return false;
     }
     return true;
@@ -167,7 +170,8 @@ OrientedBox toOrientedBox(const Pose& pose, const Box& box) {
 // Where a ray enters a box: how far along the ray, and through a side that
 // faces which way. `direction` is a unit vector. Returns false if the ray
 // misses the box or starts inside it.
-bool rayEnters(Vec3 origin, Vec3 direction, const OrientedBox& box, float& distance, Vec3& normal) {
+[[maybe_unused]] bool
+rayEnters(Vec3 origin, Vec3 direction, const OrientedBox& box, float& distance, Vec3& normal) {
     // A box is what three slabs have in common, each one the space between
     // two opposite sides. The ray is inside the box where it is inside all
     // three slabs: from the last slab it enters to the first one it leaves.
@@ -271,6 +275,7 @@ struct Physics::Impl {
     rp3d::ConvexMesh* coneMesh = nullptr;
 
     std::unordered_map<std::uint64_t, Body> bodies;
+    std::map<std::pair<std::uint64_t, std::uint64_t>, std::pair<Entity, Entity>> triggerPairs;
     float pendingSeconds = 0.0f; // time that has passed but is not simulated yet
 
     // ReactPhysics3D puts bodies that lie still to sleep: it leaves them out of
@@ -530,6 +535,21 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                                                             ? rp3d::Vector3(0, 0, 0)
                                                             : rp3d::Vector3(1, 1, 1));
                 }
+                if (body.body) {
+                    if (body.collider) {
+                        body.collider->setIsTrigger(boxCollider && boxCollider->isTrigger);
+                    }
+                    if (rigidBody) {
+                        const auto desired = rigidBody->isKinematic ? rp3d::BodyType::KINEMATIC
+                                             : rigidBody->mass > 0  ? rp3d::BodyType::DYNAMIC
+                                                                    : rp3d::BodyType::STATIC;
+                        if (body.body->getType() != desired) {
+                            body.body->setType(desired);
+                        }
+                        body.body->setLinearDamping(std::max(0.f, rigidBody->drag));
+                        body.body->setAngularDamping(std::max(0.f, rigidBody->angularDrag));
+                    }
+                }
                 body.reported = false;
             } else {
                 // Left out, and left alone, until game code has repaired it.
@@ -575,6 +595,25 @@ void Physics::update(World& world, float seconds, const std::function<void(float
             beforeStep(kStepSeconds);
             synchronize();
         }
+        world.each<RigidBody>([&](Entity e, RigidBody& rb) {
+            auto found = impl.bodies.find(keyOf(e));
+            if (found == impl.bodies.end() || !found->second.body || rb.mass <= 0 ||
+                rb.isKinematic) {
+                return;
+            }
+            auto* body = found->second.body;
+            if (rb.impulse != Vec3{}) {
+                body->setIsSleeping(false);
+                body->setLinearVelocity(body->getLinearVelocity() +
+                                        toRp3d(rb.impulse * (1 / rb.mass)));
+                rb.impulse = {};
+            }
+            if (rb.force != Vec3{}) {
+                body->setIsSleeping(false);
+                body->applyWorldForceAtCenterOfMass(toRp3d(rb.force));
+                rb.force = {};
+            }
+        });
         impl.world->update(kStepSeconds);
         for (auto& entry : impl.bodies) {
             Impl::Body& body = entry.second;
@@ -626,45 +665,120 @@ void Physics::update(World& world, float seconds, const std::function<void(float
         rigidBody.linearVelocity = body.rigidBody.linearVelocity;
         rigidBody.angularVelocity = body.rigidBody.angularVelocity;
     }
-}
-
-bool Physics::raycast(const Ray& ray, float maxDistance, RayHit& hit) const {
-    const Vec3 direction = normalize(ray.direction);
-    if (!isUsable(ray.origin) || !isUsable(direction) || direction == Vec3{} ||
-        !(maxDistance > 0.0f)) { // also false for NaN
-        return false;
-    }
-
-    bool found = false;
-    for (const auto& entry : impl_->bodies) {
-        const Impl::Body& body = entry.second;
-        if (!body.body || !body.hasBox) {
-            continue; // left out of the simulation, or nothing solid about it
-        }
-        if (body.box.shape != ColliderShape::Box) {
-            const float reach = std::min(maxDistance, kLargestNumber);
-            rp3d::RaycastInfo info;
-            if (body.collider->raycast(
-                    rp3d::Ray(toRp3d(ray.origin), toRp3d(ray.origin + direction * reach)), info)) {
-                const float distance = static_cast<float>(info.hitFraction) * reach;
-                if (!found || distance <= hit.distance) {
-                    hit = {
-                        body.entity, toVec3(info.worldPoint), toVec3(info.worldNormal), distance};
-                    found = true;
+    triggerEvents.clear();
+    if (seconds > 0) {
+        decltype(impl.triggerPairs) pairs;
+        for (auto a = impl.bodies.begin(); a != impl.bodies.end(); ++a) {
+            if (!a->second.body || !a->second.collider ||
+                !world.get<Collider>(a->second.entity).isTrigger) {
+                continue;
+            }
+            for (auto b = impl.bodies.begin(); b != impl.bodies.end(); ++b) {
+                if (a == b || !b->second.body || !b->second.collider) {
+                    continue;
+                }
+                const auto key = std::minmax(a->first, b->first);
+                if (pairs.count(key)) {
+                    continue;
+                }
+                if (impl.world->testOverlap(a->second.body, b->second.body)) {
+                    auto x = a->second.entity, y = b->second.entity;
+                    pairs[key] = {x, y};
+                    const int phase = impl.triggerPairs.count(key) ? 1 : 0;
+                    triggerEvents.push_back({x, y, phase});
+                    triggerEvents.push_back({y, x, phase});
                 }
             }
+        }
+        for (const auto& old : impl.triggerPairs) {
+            if (!pairs.count(old.first)) {
+                auto [x, y] = old.second;
+                triggerEvents.push_back({x, y, 2});
+                triggerEvents.push_back({y, x, 2});
+            }
+        }
+        impl.triggerPairs = std::move(pairs);
+    }
+}
+
+std::vector<RayHit> Physics::raycastAll(const Ray& ray,
+                                        float maxDistance,
+                                        const std::function<bool(Entity)>& filter) const {
+    std::vector<RayHit> hits;
+    const auto direction = normalize(ray.direction);
+    if (!isUsable(ray.origin) || !isUsable(direction) || direction == Vec3{} ||
+        !std::isfinite(maxDistance) || maxDistance <= 0) {
+        return hits;
+    }
+    for (const auto& entry : impl_->bodies) {
+        const auto& body = entry.second;
+        if (!body.body || !body.collider || (filter && !filter(body.entity))) {
             continue;
         }
-        float distance = 0.0f;
-        Vec3 normal;
-        if (rayEnters(
-                ray.origin, direction, toOrientedBox(body.current, body.box), distance, normal) &&
-            distance <= (found ? hit.distance : maxDistance)) {
-            hit = {body.entity, ray.origin + direction * distance, normal, distance};
-            found = true;
+        rp3d::RaycastInfo info;
+        if (body.collider->raycast(
+                rp3d::Ray(toRp3d(ray.origin),
+                          toRp3d(ray.origin + direction * std::min(maxDistance, kLargestNumber))),
+                info)) {
+            hits.push_back({body.entity,
+                            toVec3(info.worldPoint),
+                            toVec3(info.worldNormal),
+                            float(info.hitFraction) * std::min(maxDistance, kLargestNumber)});
         }
     }
-    return found;
+    std::sort(hits.begin(), hits.end(), [](const auto& a, const auto& b) {
+        return a.distance < b.distance;
+    });
+    return hits;
+}
+bool Physics::raycast(const Ray& ray, float distance, RayHit& hit) const {
+    auto hits = raycastAll(ray, distance);
+    if (hits.empty()) {
+        return false;
+    }
+    hit = hits.front();
+    return true;
+}
+std::vector<RayHit>
+Physics::overlapSphere(Vec3 origin, float radius, const std::function<bool(Entity)>& filter) const {
+    std::vector<RayHit> hits;
+    if (!isUsable(origin) || !std::isfinite(radius) || radius <= 0 || radius > kLargestNumber) {
+        return hits;
+    }
+    auto* shape = impl_->common.createSphereShape(radius);
+    auto* probe = impl_->world->createRigidBody(toRp3d(Pose{origin, {}}));
+    probe->setType(rp3d::BodyType::STATIC);
+    probe->addCollider(shape, rp3d::Transform::identity());
+    for (const auto& entry : impl_->bodies) {
+        const auto& body = entry.second;
+        if (!body.body || !body.collider || (filter && !filter(body.entity))) {
+            continue;
+        }
+        if (impl_->world->testOverlap(probe, body.body)) {
+            Vec3 point = origin, normal{};
+            float distance = 0;
+            const auto delta =
+                toVec3(body.collider->getLocalToWorldTransform().getPosition()) - origin;
+            rp3d::RaycastInfo info;
+            if (dot(delta, delta) > 1e-8f &&
+                body.collider->raycast(
+                    rp3d::Ray(toRp3d(origin),
+                              toRp3d(origin +
+                                     normalize(delta) * (radius + std::sqrt(dot(delta, delta))))),
+                    info)) {
+                point = toVec3(info.worldPoint);
+                normal = toVec3(info.worldNormal);
+                distance = std::sqrt(dot(point - origin, point - origin));
+            }
+            hits.push_back({body.entity, point, normal, distance});
+        }
+    }
+    impl_->world->destroyRigidBody(probe);
+    impl_->common.destroySphereShape(shape);
+    std::sort(hits.begin(), hits.end(), [](const auto& a, const auto& b) {
+        return a.distance < b.distance;
+    });
+    return hits;
 }
 
 bool Physics::checkBox(Vec3 center, Vec3 size) const {
@@ -702,4 +816,5 @@ bool Physics::checkBox(Vec3 center, Vec3 size) const {
 
 void Physics::reset() {
     impl_ = std::make_unique<Impl>();
+    triggerEvents.clear();
 }

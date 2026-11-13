@@ -201,3 +201,6 @@ Editor deletion follows the same subtree rule and supports undo/redo.
 See [Character controllers and FPS cameras](first-person.md) for movement APIs,
 state flags, GameObject direction vectors, and the complete attached-script example
 in `scripts/examples/character_controller_fps.ls`.
+
+[Physics scripting and queries](physics-queries.md) covers RigidBody methods,
+`color.red`-style RGB values, Collider trigger callbacks, Raycast results and layer masks.

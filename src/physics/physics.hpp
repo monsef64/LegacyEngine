@@ -25,20 +25,23 @@
 
 #include "core/ecs.hpp"
 #include "core/math.hpp"
+#include "physics/queries.hpp"
 
 #include <functional>
 #include <memory>
 
-// What Physics::raycast() found.
-struct RayHit {
-    Entity entity;         // the entity whose Collider the ray met
-    Vec3 point;            // where it met it
-    Vec3 normal;           // unit vector pointing straight out of the surface there
-    float distance = 0.0f; // metres from the origin of the ray to `point`
-};
-
 class Physics {
   public:
+    struct TriggerEvent {
+        Entity receiver, other;
+        int phase;
+    }; // 0 enter, 1 stay, 2 exit
+    std::vector<TriggerEvent> triggerEvents;
+    std::vector<RayHit> raycastAll(const Ray& ray,
+                                   float distance,
+                                   const std::function<bool(Entity)>& filter = {}) const;
+    std::vector<RayHit>
+    overlapSphere(Vec3 origin, float radius, const std::function<bool(Entity)>& filter = {}) const;
     Physics();
     ~Physics();
     void reset(); // Discard solver bodies, contacts and accumulated time.

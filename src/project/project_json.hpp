@@ -28,6 +28,10 @@ inline Json read(std::istream& in, std::initializer_list<Field> fields) {
                 bool value = false;
                 in >> value;
                 values.push_back(value);
+            } else if (field.type == 'u') {
+                unsigned value = 0;
+                in >> value;
+                values.push_back(value);
             } else if (field.type == 'i') {
                 int value = 0;
                 in >> value;
@@ -60,6 +64,12 @@ inline void write(std::ostream& out, const Json& object, std::initializer_list<F
                 out << std::quoted(value.get<std::string>());
             } else if (field.type == 'b') {
                 out << value.get<bool>();
+            } else if (field.type == 'u') {
+                if (!value.is_number_integer() || value.get<std::int64_t>() < 0 ||
+                    value.get<std::uint64_t>() > UINT32_MAX) {
+                    throw std::runtime_error("Invalid unsigned mask");
+                }
+                out << value.get<unsigned>();
             } else if (field.type == 'i') {
                 if (!value.is_number_integer()) {
                     throw std::runtime_error("Expected integer in scene JSON");
@@ -98,9 +108,16 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"bounciness", 'f'},
       {"shape", 'i'},
       {"radius", 'f'},
-      {"height", 'f'}}},
+      {"height", 'f'},
+      {"isTrigger", 'b'}}},
     {"RigidBody",
-     {{"mass", 'f'}, {"useGravity", 'b'}, {"linearVelocity", 'f', 3}, {"angularVelocity", 'f', 3}}},
+     {{"mass", 'f'},
+      {"useGravity", 'b'},
+      {"linearVelocity", 'f', 3},
+      {"angularVelocity", 'f', 3},
+      {"drag", 'f'},
+      {"angularDrag", 'f'},
+      {"isKinematic", 'b'}}},
     {"LuaScript", {}},
     {"Camera",
      {{"active", 'b'},
@@ -181,7 +198,18 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"canMove", 'b'},
       {"canJump", 'b'},
       {"canSprint", 'b'}}},
-    {"FPSCamera", {{"isFreecam", 'b'}, {"mouseLook", 'b'}, {"sensitivity", 'f'}, {"speed", 'f'}}}};
+    {"FPSCamera", {{"isFreecam", 'b'}, {"mouseLook", 'b'}, {"sensitivity", 'f'}, {"speed", 'f'}}},
+    {"ObjectLayer", {{"value", 'i'}}},
+    {"InspectorOrder", {{"types", 'j'}}},
+    {"Raycast",
+     {{"type", 'i'},
+      {"distance", 'f'},
+      {"radius", 'f'},
+      {"angle", 'f'},
+      {"samples", 'i'},
+      {"offset", 'f', 3},
+      {"layerMask", 'u'},
+      {"includeTriggers", 'b'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     Json result = Json::object();
@@ -197,6 +225,15 @@ inline void writeSchema(std::ostream& out, const Json& original, const std::vect
         object["cubemap"] = "";
     }
     for (auto f : fields) {
+        const std::string name = f.name;
+        if (!object.contains(name) && (name == "isTrigger" || name == "isKinematic")) {
+            out << false << ' ';
+            continue;
+        }
+        if (!object.contains(name) && (name == "drag" || name == "angularDrag")) {
+            out << 0 << ' ';
+            continue;
+        }
         if (std::string(f.name) == "shadowQuality" && !object.contains(f.name)) {
             out << 3 << ' ';
         } else if (!object.contains(f.name) && std::string(f.name) == "material") {
@@ -251,7 +288,7 @@ inline Json fromLegacy(const std::string& text) {
     in >> magic >> version;
     Json doc = read(in, {{"script", 's'}, {"assets", 's'}});
     doc["format"] = "LegacyEngine";
-    doc["version"] = 10;
+    doc["version"] = 11;
     doc["editorCamera"] = read(in,
                                {{"target", 'f', 3},
                                 {"yaw", 'f'},
@@ -291,12 +328,13 @@ inline Json fromLegacy(const std::string& text) {
     return doc;
 }
 inline std::string toLegacy(const Json& doc) {
-    if (doc.at("format") != "LegacyEngine" || (doc.at("version") != 9 && doc.at("version") != 10) ||
+    if (doc.at("format") != "LegacyEngine" ||
+        (doc.at("version") != 9 && doc.at("version") != 10 && doc.at("version") != 11) ||
         !doc.at("objects").is_array() || doc.at("objects").size() > 10000) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 15\n";
+    out << std::setprecision(17) << "LegacyEngineProject 16\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),

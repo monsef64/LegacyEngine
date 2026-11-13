@@ -44,7 +44,8 @@ class LuaConsole {
     bool bindObject(Entity entity);
     bool bindExports(const std::vector<ScriptField>& fields);
     void update(float deltaTime);
-    void objectEvent(Entity entity, const char* name);
+    void
+    objectEvent(Entity entity, const char* name, Entity other = {}, bool colliderArgument = false);
     void message(std::string_view text) {
         append(Kind::Info, text);
     }

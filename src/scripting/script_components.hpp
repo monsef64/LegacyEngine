@@ -18,10 +18,11 @@ class ScriptComponents {
         meshes_[4] = plane;
         sync();
     }
-    void objectEvent(Entity entity, const char* name) {
+    void
+    objectEvent(Entity entity, const char* name, Entity other = {}, bool colliderArgument = false) {
         for (auto& entry : entries_) {
             if (entry.console && entry.entity == entity) {
-                entry.console->objectEvent(entity, name);
+                entry.console->objectEvent(entity, name, other, colliderArgument);
             }
         }
     }

@@ -65,3 +65,8 @@ Unparent children first to preserve them; editor Undo restores the deleted hiera
 - Hard/Soft project shadow filtering, independent of CSM/single-map mode and resolution.
 - Scripted upright capsule CharacterController and FPSCamera components, creation menus,
   persisted configuration, direction helpers and a [first-person example](first-person.md).
+
+- Drag scripts from Script Explorer; reorder Inspector components by dragging headers.
+- Folder-aware, type-filtered asset slot popup menus.
+- RigidBody damping/kinematic and force/impulse APIs, RGB color names, Collider triggers.
+- Line/fan/sphere queries with multiple hits and project-owned layer masks.

@@ -565,8 +565,76 @@ CharacterController = nil
 ---@field mouseLook boolean Writable; native mouse look while cursor is locked
 ---@field speed number Freecam metres per second
 ---@field sensitivity number Degrees per mouse pixel
----@field linkToCharacter fun(self:FPSCamera,character:CharacterController|GameObject,offset:Vec3) Parent to character using local position offset
+---@field linkToCharacter fun(self:FPSCamera,controller:CharacterController|GameObject,x:number,y:number,z:number) Parent using local position offset
 ---@field setIsFreecam fun(self:FPSCamera,enabled:boolean)
 ---@field getIsFreecam fun(self:FPSCamera):boolean
 ---@type ComponentToken
 FPSCamera = nil
+
+---@class ColorPalette
+---@field red Vec3
+---@field green Vec3
+---@field blue Vec3
+---@field white Vec3
+---@field black Vec3
+---@field yellow Vec3
+---@field cyan Vec3
+---@field magenta Vec3
+---@field gray Vec3
+---@field orange Vec3
+---@field purple Vec3
+---@field pink Vec3
+---@type ColorPalette
+color = nil
+---@class GameObject
+---@field layer string Layer name, defaults to Default; assign an existing name or slot number
+---@field onTriggerEnter fun(collider:Collider|nil)|nil
+---@field onTriggerStay fun(collider:Collider|nil)|nil
+---@field onTriggerExit fun(collider:Collider|nil)|nil
+---@class Collider
+---@field isTrigger boolean Non-solid overlap sensor
+---@field gameObject GameObject Collider owner; inspect name, layer and components
+---@field transform Transform Collider owner transform
+---@class RigidBody
+---@field velocity Vec3 Alias of linearVelocity
+---@field drag number Nonnegative linear damping
+---@field angularDrag number Nonnegative angular damping
+---@field isKinematic boolean Move under script control rather than gravity/forces
+---@field addForce fun(self:RigidBody,x:number,y:number,z:number) World force consumed on next physics step
+---@field addImpulse fun(self:RigidBody,x:number,y:number,z:number) Instant world impulse at next physics step
+---@field setVelocity fun(self:RigidBody,x:number,y:number,z:number)
+---@field getVelocity fun(self:RigidBody):Vec3
+---@field addVelocity fun(self:RigidBody,x:number,y:number,z:number)
+---@field movePosition fun(self:RigidBody,x:number,y:number,z:number) Set world position
+---@field moveRotation fun(self:RigidBody,x:number,y:number,z:number) Euler degrees, or quaternion table
+---@field stop fun(self:RigidBody) Clear velocities and queued forces/impulses
+---@class RaycastHit
+---@field collider Collider
+---@field transform Transform
+---@field gameObject GameObject
+---@field point Vec3 World hit point; sphere query uses center-directed surface point
+---@field normal Vec3 World surface normal; zero when sphere origin is inside a collider
+---@field distance number World distance from query origin
+---@class Raycast
+---@field type integer Raycast.Line, Raycast.LineOfSight or Raycast.Sphere
+---@field distance number Positive ray range
+---@field radius number Positive sphere overlap radius
+---@field angle number Fan aperture in degrees, 0 to 360
+---@field samples integer Fan rays, 2 to 181
+---@field offset Vec3 Local origin offset
+---@field includeTriggers boolean Whether sensors can be hit
+---@field cast fun(self:Raycast):RaycastHit|nil Nearest matching hit
+---@field castAll fun(self:Raycast):RaycastHit[] Matching distinct objects, nearest first
+---@field setLayers fun(self:Raycast,names:table) Replace layer mask with an array of names; empty array selects none
+---@class RaycastType
+---@field Line integer
+---@field LineOfSight integer
+---@field Sphere integer
+---@type RaycastType
+Raycast = nil
+---@param collider Collider|nil Other collider; nil if destroyed before delivery
+function onTriggerEnter(collider) end
+---@param collider Collider|nil
+function onTriggerStay(collider) end
+---@param collider Collider|nil
+function onTriggerExit(collider) end

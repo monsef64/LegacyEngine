@@ -11,7 +11,7 @@ inline bool exportReferenceType(const std::string& type) {
            type == "LuaScript" || type == "Camera" || type == "AudioSource" ||
            type == "AudioListener" || type == "DirectionalLight" || type == "PointLight" ||
            type == "SpotLight" || type == "Skybox" || type == "CharacterController" ||
-           type == "FPSCamera";
+           type == "FPSCamera" || type == "Raycast";
 }
 inline bool exportAssetType(const std::string& type) {
     return type == "Asset" || type == "AudioClip" || type == "Texture";
@@ -43,7 +43,8 @@ inline bool exportName(const std::string& name) {
         }
     }
     return name != "self" && name != "onStart" && name != "onUpdate" && name != "onFixedUpdate" &&
-           name != "onDestroy";
+           name != "onDestroy" && name != "onTriggerEnter" && name != "onTriggerStay" &&
+           name != "onTriggerExit";
 }
 inline void syncScriptExports(std::string_view source, std::vector<ScriptField>& fields) {
     std::vector<ScriptField> next;
@@ -124,6 +125,7 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(Skybox);
     EXPORT_COMPONENT(CharacterController);
     EXPORT_COMPONENT(FPSCamera);
+    EXPORT_COMPONENT(Raycast);
 #undef EXPORT_COMPONENT
     return false;
 }
