@@ -23,7 +23,7 @@ inline bool visibleSphere(const Mat4& vp,Vec3 center,float radius){
 inline std::vector<Light> gather(World& world,const Mat4& vp,Vec3 eye){
     std::vector<Light> lights;
     auto collect=[&](int type,Entity e,const LightSettings& l,const Transform& t){
-        if(!l.enabled || l.intensity<=0 || !validLight(l))return;
+        if(!l.enabled || l.intensity<=0 || !validLight(l) || !std::isfinite(t.position.x) || !std::isfinite(t.position.y) || !std::isfinite(t.position.z))return;
         if(type!=0 && !visibleSphere(vp,t.position,l.range))return;
         auto r=rotationMatrix(normalize(t.rotation));
         Light light{e,l,t.position,normalize(Vec3{-r.m[6],-r.m[7],-r.m[8]}),type};
@@ -34,8 +34,9 @@ inline std::vector<Light> gather(World& world,const Mat4& vp,Vec3 eye){
     world.each<DirectionalLight,Transform>([&](Entity e,const DirectionalLight& l,const Transform& t){collect(0,e,l,t);});
     world.each<PointLight,Transform>([&](Entity e,const PointLight& l,const Transform& t){collect(1,e,l,t);});
     world.each<SpotLight,Transform>([&](Entity e,const SpotLight& l,const Transform& t){collect(2,e,l,t);});
-    std::sort(lights.begin(),lights.end(),[](const Light& a,const Light& b){if(a.priority!=b.priority)return a.priority<b.priority;if(a.entity.index!=b.entity.index)return a.entity.index<b.entity.index;return a.type<b.type;});
-    if(lights.size()>maxLights)lights.resize(maxLights);
+    auto priority=[](const Light& a,const Light& b){if(a.priority!=b.priority)return a.priority<b.priority;if(a.entity.index!=b.entity.index)return a.entity.index<b.entity.index;return a.type<b.type;};
+    if(lights.size()>maxLights){std::partial_sort(lights.begin(),lights.begin()+maxLights,lights.end(),priority);lights.resize(maxLights);}
+    else std::sort(lights.begin(),lights.end(),priority);
     int layers=0;
     for(auto& l:lights){const int count=l.type==1?6:1;if(l.settings.shadows && layers+count<=maxShadowLayers){l.shadowLayer=layers;layers+=count;}}
     return lights;

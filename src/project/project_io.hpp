@@ -78,7 +78,7 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
         }
         if(auto* a=world.tryGet<AudioSource>(e))out<<std::quoted(a->clip)<<' '<<a->volume<<' '<<a->pitch<<' '<<a->pan<<' '<<a->distance<<' '<<a->looping<<' '<<a->muted<<' '<<a->playOnStart<<' '<<a->blend<<' ';
         if(auto* listener=world.tryGet<AudioListener>(e))out<<listener->enabled<<' ';
-        auto writeLight=[&](const LightSettings& l){require(validLight(l));writeVec(out,l.color);out<<l.intensity<<' '<<l.enabled<<' '<<l.shadows<<' '<<l.range<<' '<<l.innerAngle<<' '<<l.outerAngle<<' '<<l.shadowDistance<<' '<<l.shadowBias<<' ';};
+        auto writeLight=[&](const LightSettings& l){require(validLight(l) && world.has<Transform>(e));writeVec(out,l.color);out<<l.intensity<<' '<<l.enabled<<' '<<l.shadows<<' '<<l.range<<' '<<l.innerAngle<<' '<<l.outerAngle<<' '<<l.shadowDistance<<' '<<l.shadowBias<<' ';};
         if(auto* l=world.tryGet<DirectionalLight>(e))writeLight(*l);
         if(auto* l=world.tryGet<PointLight>(e))writeLight(*l);
         if(auto* l=world.tryGet<SpotLight>(e))writeLight(*l);

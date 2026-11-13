@@ -30,8 +30,10 @@ int main(){
         const auto shadowed=read();world.get<T>(lamp).shadows=false;const auto unshadowed=read();
         const int shadowDiff=difference(shadowed,unshadowed);std::printf("shadow difference: %d\n",shadowDiff);assert(shadowDiff>100);
         world.get<T>(lamp).shadows=true;world.get<Transform>(box).position.x=2;const auto moved=read();assert(difference(shadowed,moved)>100);
+        world.get<T>(lamp).shadows=false;assert(difference(moved,read())>100);world.get<T>(lamp).shadows=true;
         world.get<Transform>(box).position.x=0;world.get<Transform>(lamp).rotation=rotationFromEuler({-40,25,0});world.get<Transform>(lamp).position.x=3;
         const auto movedLight=read();assert(difference(shadowed,movedLight)>100);
+        world.get<T>(lamp).shadows=false;assert(difference(movedLight,read())>100);
         world.remove<T>(lamp);world.get<Transform>(lamp)=t;
     };
     check(DirectionalLight{});check(PointLight{});check(SpotLight{});

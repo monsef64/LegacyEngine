@@ -27,9 +27,9 @@ template<class T> inline bool componentHeader(World& world,Entity entity,const c
     bool remove=false;
     if(ImGui::BeginPopupContextItem(name)){
         bool allowed=true;
-        if constexpr(std::is_same_v<T,Transform>)allowed=!world.has<Camera>(entity) && !world.has<AudioListener>(entity);
+        if constexpr(std::is_same_v<T,Transform>)allowed=!world.has<Camera>(entity) && !world.has<AudioListener>(entity) && !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) && !world.has<SpotLight>(entity);
         remove=ImGui::MenuItem("Remove component",nullptr,false,allowed);
-        if(!allowed)ImGui::TextDisabled("Remove Camera / AudioListener first");
+        if(!allowed)ImGui::TextDisabled("Remove Camera / AudioListener / lights first");
         ImGui::EndPopup();
     }
     if(ImGui::BeginDragDropSource()){

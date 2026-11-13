@@ -39,3 +39,10 @@ test('input APIs are suggested with signatures',()=>{
 test('debug exposes only safe logging methods',()=>{
  assert.deepEqual(f.completion(...input('debug.')).map(x=>x.label).sort(),['error','log','warning']);
 });
+
+test('dynamic light APIs and properties are available',()=>{
+ const globals=f.completion(...input(''));
+ for(const name of ['DirectionalLight','PointLight','SpotLight'])assert(globals.some(x=>x.label===name));
+ const fields=f.completion(...input('light.'));
+ for(const name of ['color','intensity','enabled','shadows','range','innerAngle','outerAngle','shadowDistance','shadowBias'])assert(fields.some(x=>x.label===name));
+});

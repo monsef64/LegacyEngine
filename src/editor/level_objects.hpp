@@ -128,6 +128,9 @@ inline void hierarchyIcon(World& world,Entity e,ImVec2 p) {
     auto at=[&](float x,float y){return ImVec2(p.x+x,p.y+y);};
     if(world.has<Camera>(e)){
         draw->AddRect(at(1,4),at(10,12),color,1);draw->AddTriangle(at(10,6),at(15,3),at(15,13),color);
+    }else if(world.has<DirectionalLight>(e) || world.has<PointLight>(e) || world.has<SpotLight>(e)){
+        draw->AddCircle(at(8,8),3,color,12);
+        for(int i=0;i<8;++i){float a=i*kPi/4;draw->AddLine(at(8+5*std::cos(a),8+5*std::sin(a)),at(8+8*std::cos(a),8+8*std::sin(a)),color);}
     }else if(world.has<AudioSource>(e)){
         draw->AddRect(at(1,6),at(5,11),color);draw->AddTriangle(at(5,6),at(10,2),at(10,15),color);
         draw->AddLine(at(13,4),at(15,8),color);draw->AddLine(at(15,8),at(13,13),color);

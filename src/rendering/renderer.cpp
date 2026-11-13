@@ -199,7 +199,6 @@ bool Renderer::init()
     litModelViewProjection_   = glGetUniformLocation(litProgram_, "uModelViewProjection");
     litNormalMatrix_          = glGetUniformLocation(litProgram_, "uNormalMatrix");
     litColor_                 = glGetUniformLocation(litProgram_, "uColor");
-    litLightDirection_        = glGetUniformLocation(litProgram_, "uLightDirection");
 
     lightCountLocation_=glGetUniformLocation(litProgram_,"uLightCount");
     shadowSamplerLocation_=glGetUniformLocation(litProgram_,"uShadowTexture");
@@ -306,6 +305,8 @@ void Renderer::draw(World& world, const Mat4& viewProjection, int width, int hei
                 return; // no mesh to draw
             }
             const GpuMesh& mesh = meshes_[renderer.mesh.id];
+            const float bound=mesh.radius*std::max({std::abs(transform.scale.x),std::abs(transform.scale.y),std::abs(transform.scale.z)});
+            if(!Lighting::visibleSphere(viewProjection,transform.position,bound))return;
 
             const Mat4 model =
                 transformMatrix(transform.position, transform.rotation, transform.scale);
@@ -401,6 +402,14 @@ void Renderer::prepareLighting(World& world,const Mat4& viewProjection,Vec3 came
         const float border[]{1,1,1,1};glTexParameterfv(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_BORDER_COLOR,border);
         glGenFramebuffers(1,&shadowFramebuffer_);
     }
+    struct Caster{const GpuMesh* mesh;Mat4 model;Vec3 position;float radius;bool mirrored;};
+    std::vector<Caster> casters;
+    if(needsShadows)world.each<Transform,MeshRenderer>([&](Entity e,const Transform& t,const MeshRenderer& r){
+        if(world.has<Camera>(e) || r.mesh.id>=meshes_.size())return;
+        const auto& mesh=meshes_[r.mesh.id];if(mesh.lines)return;
+        casters.push_back({&mesh,transformMatrix(t.position,t.rotation,t.scale),t.position,
+            mesh.radius*std::max({std::abs(t.scale.x),std::abs(t.scale.y),std::abs(t.scale.z)}),t.scale.x*t.scale.y*t.scale.z<0});
+    });
     std::array<Mat4,Lighting::maxShadowLayers> matrices{};
     if(needsShadows){
         glBindFramebuffer(GL_FRAMEBUFFER,shadowFramebuffer_);glDrawBuffer(GL_NONE);glReadBuffer(GL_NONE);
@@ -417,16 +426,13 @@ void Renderer::prepareLighting(World& world,const Mat4& viewProjection,Vec3 came
                 const Mat4 vp=Lighting::shadowMatrix(light,cameraPosition,face);matrices[layer]=vp;
                 glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,shadowTexture_,0,layer);
                 glClear(GL_DEPTH_BUFFER_BIT);
-                world.each<Transform,MeshRenderer>([&](Entity e,const Transform& t,const MeshRenderer& r){
-                    if(world.has<Camera>(e) || r.mesh.id>=meshes_.size())return;
-                    const auto& mesh=meshes_[r.mesh.id];if(mesh.lines)return;
-                    const float radius=mesh.radius*std::max({std::abs(t.scale.x),std::abs(t.scale.y),std::abs(t.scale.z)});
-                    if(!Lighting::visibleSphere(vp,t.position,radius))return;
-                    const Mat4 mvp=multiply(vp,transformMatrix(t.position,t.rotation,t.scale));
+                for(const auto& caster:casters){
+                    if(!Lighting::visibleSphere(vp,caster.position,caster.radius))continue;
+                    const Mat4 mvp=multiply(vp,caster.model);
                     glUniformMatrix4fv(unlitModelViewProjection_,1,GL_FALSE,mvp.m);
-                    glFrontFace(t.scale.x*t.scale.y*t.scale.z<0?GL_CW:GL_CCW);
-                    glBindVertexArray(mesh.vertexArray);glDrawArrays(GL_TRIANGLES,0,mesh.vertexCount);
-                });
+                    glFrontFace(caster.mirrored?GL_CW:GL_CCW);
+                    glBindVertexArray(caster.mesh->vertexArray);glDrawArrays(GL_TRIANGLES,0,caster.mesh->vertexCount);
+                }
             }
         }
         glPolygonOffset(1,1);glFrontFace(frontFace);glBindVertexArray(0);

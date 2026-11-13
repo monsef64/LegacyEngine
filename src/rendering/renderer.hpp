@@ -57,7 +57,7 @@ private:
     int          unlitModelViewProjection_ = -1;
     int          unlitColor_ = -1;
 
-    // Colour shaded by a single directional light, for surfaces.
+    // Bounded dynamic directional/point/spot lighting and shadows for surfaces.
     unsigned int checkerTexture_ = 0;
     unsigned int litProgram_ = 0;
     int          litModel_ = -1;
@@ -68,5 +68,4 @@ private:
     int          litModelViewProjection_ = -1;
     int          litNormalMatrix_ = -1;
     int          litColor_ = -1;
-    int          litLightDirection_ = -1;
 };
