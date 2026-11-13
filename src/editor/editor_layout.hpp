@@ -34,7 +34,7 @@ struct EditorLayout {
 // Tests/legacy callers retain the fixed-layout fallback; the application opts in.
 inline bool dockedEditor=false;
 inline bool panelOpen[7]{true,true,true,true,true,true,true};
-inline const char* panelNames[]{"Hierarchy","Inspector","Scene","Lua Editor","Lua Console","Assets","Game"};
+inline const char* panelNames[]{"Hierarchy","Inspector","Scene","Script Editor","Console","Assets","Game"};
 inline bool* panelVisibility(const char* name) {
     if(dockedEditor)for(int i=0;i<7;++i)if(!std::strcmp(name,panelNames[i]))return &panelOpen[i];
     return nullptr;

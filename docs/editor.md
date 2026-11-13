@@ -8,7 +8,7 @@
   Each row has **three binding buttons**, accepting a keyboard key, mouse button,
   or gamepad button. Right-click a slot to clear it; Remove deletes the row.
   Enter commits a renamed action. Escape cancels capture.
-- **Settings → Editor Settings:** Dark/Grey theme and internal/external code editor.
+- **Settings → Editor Settings:** Legacy Dark, Grey, or Unity 5 Classic theme and internal/external code editor.
 - **Help:** repository link and About.
 
 Right-click an Inspector component header to remove it. Transform removal is
@@ -31,8 +31,11 @@ external editor setting is enabled.
 
 Scene navigation: hold **right mouse** to look and move with WASD/QE. The cursor
 is hidden during look and restored on release or focus loss. Shift moves faster;
-Shift+wheel while looking tunes boosted speed. Outside right-mouse look, **W/E/R**
-in Scene select Move/Rotate/Scale. Ctrl/Alt/Super block camera navigation. Escape does not quit.
+Wheel while looking/moving adjusts normal freecam speed; Shift+wheel tunes the
+boost multiplier. When not looking/moving, vertical wheel zooms and horizontal
+wheel pans. **Alt+left-drag** orbits around the selected object's world position,
+controlled by mouse movement. Outside right-mouse look, **W/E/R** in Scene select
+Move/Rotate/Scale. Ctrl/Super block navigation; Alt is reserved for orbit. Escape does not quit.
 F5 starts Play, F6 pauses/resumes, F7 stops. Play-time changes are discarded on Stop.
 
 ## Focus the selected object
@@ -48,7 +51,7 @@ Objects without a Transform are ignored.
 
 **Create → Shape → Plane** (also in the Hierarchy context menu) creates a lit,
 UV-mapped 16×16 XZ plane with a thin static box collider. Its size can be changed
-with Transform scale; it has no RigidBody by default. **Create → Skybox** creates
+with Transform scale; it has no RigidBody by default. **Create → Rendering → Skybox** creates
 a GameObject with a Skybox component, ready for six textures or an HDR panorama.
 MeshRenderer's mesh dropdown and `mesh.mesh = "Plane"` also support planes.
 
@@ -62,3 +65,41 @@ The internal code editor uses one syntax-colored text layer while retaining
 native caret, selection, scrolling, completion and undo. UI text uses embedded
 18 px Roboto with antialiased rasterization and matching icon sizing (previously
 16 px); framebuffer-density support remains enabled for high-DPI displays.
+
+
+Assets is the selected bottom tab on startup. **Script Editor** and **Console**
+remain available from the window menu. File rename edits the base name and keeps
+its original extension automatically; folder rename still edits the full name.
+
+Right-click the Hierarchy level root and choose **Rename Level...** to rename
+both the saved level and its registry entry (outside Play). The root remains
+nonmovable and cannot be parented.
+
+Creation menus group **Audio Source** under **Audio**, and **Skybox / Camera**
+under **Rendering**. **Settings > Editor Settings > Always Show Colliders** shows
+unselected Scene colliders in translucent green; the selected collider stays
+bright green. **Debug > Show Game Colliders** controls the separate Game overlay.
+
+**Unity 5 Classic** uses light-grey panels, blue selections, bordered controls and
+top-lit glossy buttons inspired by the older editor. Select it under
+**Settings > Editor Settings > Theme**; the choice persists between launches.
+
+## Reference layout and orientation gizmo
+
+The default workspace follows the classic editor arrangement: Hierarchy at the
+upper left, Scene and Game as central tabs, a full-height Inspector on the right,
+and Assets/Console/Script Editor tabs across the bottom left and center. Assets
+is initially selected. **Windows > Reset layout** restores this arrangement.
+The updated default uses a new dockspace identifier so older saved layouts do
+not hide the change; subsequent custom arrangements are still saved normally.
+
+Choose **Settings > Editor Settings > Theme > Unity Dark Classic** for the
+reference-inspired charcoal panels, grey glossy buttons and muted blue selections.
+The earlier light **Unity 5 Classic** theme remains available.
+
+The Scene viewport's upper-right orientation gizmo shows colored X/Y/Z axes.
+Click a colored axis endpoint to snap to the positive direction, or a pale
+opposite endpoint to view from the negative direction. Drag within the gizmo to
+orbit around the Scene camera's current pivot. Snapping preserves that pivot and
+viewing distance, including stable straight-down/straight-up views. This is
+Scene navigation only: it does not rotate selected objects or the Game camera.

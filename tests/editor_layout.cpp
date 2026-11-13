@@ -1,4 +1,6 @@
 #include "editor/editor_layout.hpp"
+#include "editor/dock_workspace.hpp"
+#include "editor/scene_orientation.hpp"
 #include "editor/inspector.hpp"
 #include "editor/create_menu.hpp"
 #include "editor/script_editor.hpp"
@@ -24,7 +26,7 @@ int main(){
         require(pixels.width>0 && pixels.height>0 && pixels.bottom(720*density)>=0,"Scene rectangle maps to framebuffer pixels");
         require(pixels.x==static_cast<int>(l.scene.x*density),"high-DPI viewport origin consistent");
     }
-    ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;
+    ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;io.ConfigFlags|=ImGuiConfigFlags_DockingEnable;
     io.DisplaySize=ImVec2(1280,720);io.DeltaTime=1.0f/60;
     unsigned char* pixels;int w,h;io.Fonts->GetTexDataAsRGBA32(&pixels,&w,&h);
     World world;
@@ -68,7 +70,21 @@ int main(){
     io.AddMousePosEvent(popup->Pos.x+30,popup->Pos.y+ImGui::GetStyle().WindowPadding.y+7);componentFrame();
     io.AddMouseButtonEvent(0,true);componentFrame();io.AddMouseButtonEvent(0,false);componentFrame();
     require(!world.has<AudioSource>(object),"context menu removes component");
-    ImGui::DestroyContext();
+    bool reset=true;dockedEditor=true;
+    for(int i=0;i<3;++i){
+        ImGui::NewFrame();drawWorkspace({0,0,1280,40},reset);
+        for(const char* name:panelNames){ImGui::Begin(name);ImGui::TextUnformatted("Panel");ImGui::End();}
+        ImGui::Render();
+    }
+    auto* hierarchy=ImGui::FindWindowByName("Hierarchy");auto* inspector=ImGui::FindWindowByName("Inspector");
+    auto* scene=ImGui::FindWindowByName("Scene");auto* game=ImGui::FindWindowByName("Game");
+    auto* assets=ImGui::FindWindowByName("Assets");auto* console=ImGui::FindWindowByName("Console");
+    require(scene->DockId==game->DockId && assets->DockId==console->DockId,"Scene/Game and Assets/Console share tabs");
+    require(assets->Pos.x<scene->Pos.x && assets->Pos.y>hierarchy->Pos.y,"assets spans below hierarchy and scene");
+    require(inspector->Pos.x>scene->Pos.x && inspector->Size.y>scene->Size.y,"Inspector occupies full right column");
+    OrbitCamera orientation;
+    ImGui::NewFrame();ImGui::Begin("Orientation test");drawSceneOrientation(orientation,{0,0,400,300},true);ImGui::End();ImGui::Render();
+    ImGui::DestroyContext();dockedEditor=false;
     // Objects stay alive below the former cleanup cutoff, with their body intact.
     Physics physics;world.get<Transform>(object).position={20,-300,0};
     for(int i=0;i<600;++i)physics.update(world,1.0f/60);

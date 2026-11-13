@@ -486,7 +486,7 @@ int LuaScene::materialMethod(lua_State* L){
     if(op==1){edited.color={number(L,1),number(L,2),number(L,3)};mask|=MaterialColor;}
     if(op==2){edited.texture=lua_isnil(L,1)?"":luaL_checkstring(L,1);mask|=MaterialTexture;}
     if(op==3){edited.normalMap=lua_isnil(L,1)?"":luaL_checkstring(L,1);mask|=MaterialNormal;}
-    if(op==4){const char* shader=luaL_checkstring(L,1);if(std::strcmp(shader,"Diffuse") && std::strcmp(shader,"Bumped Diffuse") && std::strcmp(shader,"Diffuse Transparent"))return luaL_error(L,"Expected Diffuse, Bumped Diffuse or Diffuse Transparent");edited.shader=!std::strcmp(shader,"Diffuse Transparent")?2:!std::strcmp(shader,"Bumped Diffuse");mask|=MaterialShader;}
+    if(op==4){const char* shader=luaL_checkstring(L,1);if(!std::strcmp(shader,"Bumped Diffuse"))shader="Diffuse Bumped";if(std::strcmp(shader,"Diffuse") && std::strcmp(shader,"Diffuse Bumped") && std::strcmp(shader,"Diffuse Transparent"))return luaL_error(L,"Expected Diffuse, Diffuse Bumped or Diffuse Transparent");edited.shader=!std::strcmp(shader,"Diffuse Transparent")?2:!std::strcmp(shader,"Diffuse Bumped");mask|=MaterialShader;}
     if(op==5){edited.normalStrength=number(L,1);mask|=MaterialStrength;}
     if(op==6){edited.tilingX=number(L,1);edited.tilingY=number(L,2);mask|=MaterialTiling;}
     if(op==7){edited.specular=number(L,1);mask|=MaterialSpecular;}

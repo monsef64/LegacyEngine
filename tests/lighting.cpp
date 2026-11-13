@@ -12,6 +12,11 @@ int main(){
     auto point=world.create();world.add(point,Transform{{0,0,-3}});PointLight p;p.color={1,.2f,.1f};p.range=12;world.add(point,p);
     auto spot=world.create();world.add(spot,Transform{{0,2,-2}});world.add(spot,SpotLight{});
     const Mat4 vp=multiply(perspective(kPi/2,1,.1f,100),lookAt({0,0,5},{0,0,0},{0,1,0}));
+    Lighting::Frustum frustum(vp);
+    for(int x=-30;x<=30;++x)for(int y=-20;y<=20;++y)for(int z=-10;z<10;++z){
+        Vec3 center{float(x)+.137f,float(y)+.219f,float(z)+.347f};
+        assert(frustum.visible(center,.673f)==Lighting::visibleSphere(vp,center,.673f));
+    }
     auto lights=Lighting::gather(world,vp,{0,0,5});assert(lights.size()==3);
     int layers=0;for(const auto& l:lights){assert(l.shadowLayer>=0);layers+=l.type==1?6:1;
         for(int face=0;face<(l.type==1?6:1);++face){const auto m=Lighting::shadowMatrix(l,{0,0,5},face);for(float f:m.m)assert(std::isfinite(f));}}

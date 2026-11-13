@@ -43,7 +43,7 @@
 ---@field setMaterialColor fun(self:MeshRenderer,r:number,g:number,b:number)
 ---@field setMaterialTexture fun(self:MeshRenderer,texture:Texture|nil)
 ---@field setMaterialNormalMap fun(self:MeshRenderer,texture:Texture|nil)
----@field setMaterialShader fun(self:MeshRenderer,shader:string) Diffuse, Bumped Diffuse or Diffuse Transparent
+---@field setMaterialShader fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped or Diffuse Transparent
 ---@field setMaterialNormalStrength fun(self:MeshRenderer,value:number)
 ---@field setMaterialTiling fun(self:MeshRenderer,x:number,y:number)
 ---@field setMaterialSpecular fun(self:MeshRenderer,value:number)
@@ -420,3 +420,33 @@ function isCursorLocked() end
 ---@field setHDR fun(self:Skybox,texture:Texture|nil)
 ---@field setFace fun(self:Skybox,face:string,texture:Texture|nil)
 ---@field setTextures fun(self:Skybox,right:Texture,left:Texture,top:Texture,bottom:Texture,front:Texture,back:Texture)
+
+---Request a deferred level switch. Returns acceptance, not completion.
+---@param name? string
+---@return boolean accepted
+---@return string? error
+function loadLevel(name) end
+---Read the level in a worker; validate/apply at the next safe frame boundary.
+---@param name? string
+---@return boolean accepted
+---@return string? error
+function loadLevelAsync(name) end
+---@param name? string
+---@return boolean accepted
+---@return string? error
+function unloadLevel(name) end
+---@return boolean accepted
+---@return string? error
+function restartLevel() end
+---@return string? name
+function getCurrentLevel() end
+---@param name string
+---@return boolean accepted
+---@return string? error
+function setCurrentLevel(name) end
+---@return boolean accepted
+---@return string? error
+function nextLevel() end
+---@return boolean accepted
+---@return string? error
+function previousLevel() end

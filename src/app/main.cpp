@@ -16,6 +16,8 @@
 #include "rendering/renderer.hpp"
 #include "platform/engine_log.hpp"
 #include "editor/profiler_window.hpp"
+#include "levels/level_system.hpp"
+#include "project/rendering_settings.hpp"
 #include "editor/transform_editor.hpp"
 #include "editor/script_editor.hpp"
 #include "editor/level_objects.hpp"
@@ -30,6 +32,7 @@
 #include "audio/audio_system.hpp"
 #include "scripting/script_components.hpp"
 #include "editor/dock_workspace.hpp"
+#include "editor/scene_orientation.hpp"
 #include "rendering/scene_surface.hpp"
 #include "scene/scene_camera.hpp"
 #include "editor/editor_input.hpp"
@@ -220,7 +223,7 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
 // The scene and the main loop
 // ---------------------------------------------------------------------------
 
-static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const char* screenshotPath=nullptr)
+static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest)
 {
     World   world;
     Physics physics;
@@ -269,6 +272,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     bool spawnMode = false;
     bool freeCamera = true;
     float cameraBoost=3.0f;
+    float cameraSpeed=5.0f;
     Entity selectedEntity;
     ScriptEditor scripts;
     scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh,planeMesh);
@@ -285,6 +289,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     TransformEditor editor;
     OrbitCamera camera;
     const ProjectIO::Meshes projectMeshes{gridMesh,planeMesh,cubeMesh,sphereMesh,capsuleMesh,coneMesh};
+    LevelSystem levels(projectMeshes);levels.setRoot(browser.assets.root);LevelSystem::active=&levels;
+    RenderingSettings renderingSettings;
+    std::string editLevelName,editSource;
+    OrbitCamera editCamera;
+    EditorHistory editHistory(world);
+    bool renameLevelPopup=false;char renameLevelName[129]{};
+    bool newLevelPopup=false;char newLevelName[129]="New Level";
     ProjectDialog projectDialog;
     std::string currentProject,projectError,savedProjectState,lastWindowTitle;
     bool projectDirty=true;
@@ -304,8 +315,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     float       pressY     = 0.0f;
     std::size_t clickCubes  = 0;     // how many cubes clicks have created
 
-    bool cameraLooking=false;
-    bool screenshotSaved=false;
+    bool cameraLooking=false,orientationInteracting=false;
     unsigned renderedFrames = 0;
     constexpr unsigned smokeFrames = 120;
     while (running) {
@@ -315,6 +325,21 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         EditorLayout layout=EditorLayout::calculate(static_cast<float>(windowWidth),static_cast<float>(windowHeight),std::max(20.0f,ImGui::GetFrameHeight()));
         layout.scene=sceneRect;
         inputSettings.load(browser.assets,input);
+        renderingSettings.load(browser.assets);
+        if(levels.root()!=browser.assets.root)levels.setRoot(browser.assets.root);
+        if(auto transition=levels.poll()){
+            levels.suspended=true;
+            editor.finish(world);audio.clear();componentScripts.stop();scripts.shutdown();input.releaseMouse();
+            world.restore(transition->level->world);camera=transition->level->camera;
+            scripts.resetRuntime();scripts.setSource(transition->level->source);
+            selectedEntity={};history=EditorHistory(world);physics.reset();clicking=false;spawnMode=false;
+            try{levels.commit(transition->name,!playMode.active());}catch(const std::exception& error){levels.error=error.what();}
+            levels.suspended=false;
+            if(playMode.active()){
+                audio.start(world);scripts.setAssetContext("",{});scripts.startPlay();
+                const MeshHandle runtimeMeshes[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};componentScripts.start(world,browser.assets,runtimeMeshes,planeMesh);
+            }
+        }
         input.enabled=(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS) && playMode.playing() && (gameFocused || sceneHovered || input.mouseLocked) && !ImGui::GetIO().WantTextInput && !inputSettings.visible;
         input.mouseEnabled=gameHovered || sceneHovered || input.mouseLocked;input.beginFrame();
         SDL_Event event;
@@ -329,8 +354,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                 event.type == SDL_EVENT_MOUSE_BUTTON_UP || event.type == SDL_EVENT_MOUSE_MOTION ||
                 event.type == SDL_EVENT_MOUSE_WHEEL;
+            float pointerX=0,pointerY=0;SDL_GetMouseState(&pointerX,&pointerY);
+            if(mouseEvent && !cameraLooking && (orientationInteracting ||
+                (sceneHovered && layout.scene.width>=100 && layout.scene.height>=100 && orientationRect(layout.scene).contains(pointerX,pointerY)))){
+                clicking=false;continue;
+            }
             if (mouseEvent && (projectDialog.pending() || browser.dialog.pending() || (ImGui::GetIO().WantCaptureMouse && !sceneHovered && !cameraLooking) ||
-                (!spawnMode && editor.capturesMouse()))) {
+                (!spawnMode && editor.capturesMouse() && !(SDL_GetModState()&SDL_KMOD_ALT)))) {
                 clicking = false;
                 continue;
             }
@@ -355,7 +385,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                     cameraLooking=SDL_SetWindowRelativeMouseMode(window,true);clicking=false;
                 }
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    clicking = true;
+                    clicking = !(SDL_GetModState()&SDL_KMOD_ALT);
                     pressX   = event.button.x;
                     pressY   = event.button.y;
                 }
@@ -367,6 +397,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 }
                 // Right-drag looks around from the camera's position. Left-drag
                 // cancels a click but never moves the camera or selects/spawns.
+                if(!playMode.active() && sceneHovered && !editor.dragging() &&
+                   (event.motion.state&SDL_BUTTON_LMASK) && (SDL_GetModState()&SDL_KMOD_ALT) &&
+                   !(SDL_GetModState()&(SDL_KMOD_CTRL|SDL_KMOD_GUI))){
+                    clicking=false;
+                    if(const auto* t=world.tryGet<Transform>(selectedEntity))camera.orbit(t->position,event.motion.xrel,event.motion.yrel);
+                }
                 if (event.motion.state & SDL_BUTTON_RMASK) {
                     clicking = false;
                     if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) camera.look(event.motion.xrel, event.motion.yrel);
@@ -411,10 +447,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
-                // Dolly in freecam; the static view ignores all navigation input.
-                if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) {
-                    if(SDL_GetModState()&SDL_KMOD_SHIFT)cameraBoost=adjustSceneCameraBoost(cameraBoost,event.wheel.y);
-                    else camera.move(event.wheel.y,0,0,std::abs(event.wheel.y));
+                if(!playMode.active() && freeCamera && (sceneHovered || cameraLooking) && !cameraModifiersHeld(SDL_GetModState()) && !ImGui::GetIO().WantTextInput){
+                    if(cameraLooking){
+                        if(SDL_GetModState()&SDL_KMOD_SHIFT)cameraBoost=adjustSceneCameraBoost(cameraBoost,event.wheel.y);
+                        else cameraSpeed=std::clamp(cameraSpeed*std::pow(1.2f,event.wheel.y),.1f,500.0f);
+                    }else{camera.zoom(event.wheel.y);camera.pan(-event.wheel.x);}
                 }
                 break;
             }
@@ -428,7 +465,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
         bool openProject=false,saveProject=false,saveAsProject=false;
-        const bool projectEnabled=!playMode.active() && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
+        const bool projectEnabled=!levels.busy() && !playMode.active() && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
         profiler.checkpoint(ProfilePart::Events);
         if(ImGui::BeginMainMenuBar()) {
             if(ImGui::BeginMenu("File")) {
@@ -447,8 +484,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         }
         auto saveTo=[&](const std::string& path) {
             auto assetRoot=projectAssetsPath(path);
-            try { browser.assets.copyTo(assetRoot);
+            try { levels.saveCurrent(world,scripts.source(),camera);
+                browser.assets.copyTo(assetRoot);
                 AssetManager destination;destination.root=assetRoot;
+                renderingSettings.save(destination);
                 inputSettings.save(destination,input);if(!inputSettings.error.empty())throw std::runtime_error(inputSettings.error);
             }
             catch(const std::exception& e){projectError=e.what();return;}
@@ -489,6 +528,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                     if(ProjectIO::load(result->path,loadedWorld,source,loadedCamera,projectMeshes,projectError,&assetDirectory)) {
                         audio.clear();componentScripts.stop();scripts.shutdown();world.restore(loadedWorld);camera=loadedCamera;
                         browser.setRoot(assetDirectory.empty()?existingProjectAssetsPath(result->path):std::filesystem::absolute(result->path).parent_path()/assetDirectory);
+                        levels.setRoot(browser.assets.root);if(!levels.current().empty())levels.load();
                         scripts.resetRuntime();scripts.setSource(source);
                         selectedEntity={};history=EditorHistory(world);physics.reset();
                         clicking=false;spawnMode=false;currentProject=result->path;
@@ -543,12 +583,25 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         }
         bool showAbout=false;
         if(ImGui::BeginMainMenuBar()) {
-            if(ImGui::BeginMenu("Project")){if(ImGui::MenuItem("Input Settings"))inputSettings.visible=true;ImGui::EndMenu();}
+            if(ImGui::BeginMenu("Project")){
+                if(ImGui::MenuItem("Input Settings"))inputSettings.visible=true;
+                if(ImGui::BeginMenu("Project Settings")){if(ImGui::MenuItem("Rendering"))renderingSettings.visible=true;ImGui::EndMenu();}
+                if(ImGui::BeginMenu("Levels",!playMode.active() && !levels.busy() && !projectDialog.pending())){
+                    if(ImGui::MenuItem("New Level..."))newLevelPopup=true;
+                    if(ImGui::MenuItem("Save Current Level"))try{levels.saveCurrent(world,scripts.source(),camera);}catch(const std::exception& e){levels.error=e.what();}
+                    ImGui::Separator();
+                    for(const auto name:std::vector<std::string>(levels.names()))if(ImGui::MenuItem(name.c_str(),nullptr,name==levels.current()))try{
+                        levels.saveCurrent(world,scripts.source(),camera);levels.load(name);
+                    }catch(const std::exception& e){levels.error=e.what();}
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
             if(ImGui::BeginMenu("Settings")){if(ImGui::MenuItem("Editor Settings"))browser.settings.visible=true;ImGui::EndMenu();}
             if(ImGui::BeginMenu("Debug")) {
                 ImGui::MenuItem("Show FPS",nullptr,&showFPS);
                 ImGui::MenuItem("Profiler",nullptr,&showProfiler);
-                ImGui::MenuItem("Show Colliders in Game",nullptr,&showGameColliders);
+                ImGui::MenuItem("Show Game Colliders",nullptr,&showGameColliders);
                 ImGui::EndMenu();
             }
             if(ImGui::BeginMenu("Help")) {
@@ -556,6 +609,37 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 showAbout=ImGui::MenuItem("About");ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
+        }
+        if(renameLevelPopup){
+            std::snprintf(renameLevelName,sizeof(renameLevelName),"%s",levels.current().empty()?"Main":levels.current().c_str());
+            ImGui::OpenPopup("Rename Level");renameLevelPopup=false;
+        }
+        if(ImGui::BeginPopupModal("Rename Level",nullptr,ImGuiWindowFlags_AlwaysAutoResize)){
+            const bool enter=ImGui::InputText("Name",renameLevelName,sizeof(renameLevelName),ImGuiInputTextFlags_EnterReturnsTrue);
+            if(ImGui::Button("Rename") || enter)try{levels.saveCurrent(world,scripts.source(),camera);levels.renameCurrent(renameLevelName);ImGui::CloseCurrentPopup();}catch(const std::exception& e){levels.error=e.what();}
+            ImGui::SameLine();if(ImGui::Button("Cancel"))ImGui::CloseCurrentPopup();
+            if(!levels.error.empty())ImGui::TextWrapped("%s",levels.error.c_str());
+            ImGui::EndPopup();
+        }
+        if(newLevelPopup){ImGui::OpenPopup("New Level");newLevelPopup=false;}
+        if(ImGui::BeginPopupModal("New Level",nullptr,ImGuiWindowFlags_AlwaysAutoResize)){
+            ImGui::TextUnformatted("The current level is saved before creating an empty level.");
+            ImGui::InputText("Name",newLevelName,sizeof(newLevelName));
+            if(ImGui::Button("Create"))try{levels.saveCurrent(world,scripts.source(),camera);levels.create(newLevelName);levels.load(newLevelName);ImGui::CloseCurrentPopup();}catch(const std::exception& e){levels.error=e.what();}
+            ImGui::SameLine();if(ImGui::Button("Cancel"))ImGui::CloseCurrentPopup();
+            if(!levels.error.empty())ImGui::TextWrapped("%s",levels.error.c_str());
+            ImGui::EndPopup();
+        }
+        if(renderingSettings.visible){
+            if(ImGui::Begin("Project Settings",&renderingSettings.visible)){
+                ImGui::SeparatorText("Rendering");
+                if(ImGui::Checkbox("Enable VSync",&renderingSettings.vsync)){
+                    renderingSettings.apply();try{renderingSettings.save(browser.assets);}catch(const std::exception& e){renderingSettings.error=e.what();}
+                }
+                int interval=0;if(SDL_GL_GetSwapInterval(&interval))ImGui::Text("Driver swap interval: %d",interval);
+                ImGui::TextWrapped("Disable VSync to measure uncapped performance. Use Debug > Profiler to distinguish rendering cost from presentation wait.");
+                if(!renderingSettings.error.empty())ImGui::TextWrapped("%s",renderingSettings.error.c_str());
+            }ImGui::End();
         }
         if(showAbout)ImGui::OpenPopup("About LegacyEngine");
         if(ImGui::BeginPopupModal("About LegacyEngine",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -623,11 +707,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         const bool stopKey=playbackKeys && ImGui::Shortcut(ImGuiKey_F7,ImGuiInputFlags_RouteGlobal);
         const float playbackWidth=90+2*ImGui::GetStyle().ItemSpacing.x;
         ImGui::SetCursorPosX((layout.toolbar.width-playbackWidth)*0.5f);
-        ImGui::BeginDisabled(playMode.active());
-        if (playbackButton("##Play","Play (F5)",PlaybackIcon::Play,playMode.active()) || (playKey && !playMode.active())) {
+        ImGui::BeginDisabled(playMode.active() || levels.busy());
+        if (playbackButton("##Play","Play (F5)",PlaybackIcon::Play,playMode.active()) || (playKey && !playMode.active() && !levels.busy())) {
             editor.finish(world); clicking=false;
-            editSelection=selectedEntity;
-            history.commit(world,selectedEntity);
+            try{levels.saveCurrent(world,scripts.source(),camera);}catch(const std::exception& e){levels.error=e.what();}
+            editSelection=selectedEntity;editLevelName=levels.current();editSource=scripts.source();editCamera=camera;
+            history.commit(world,selectedEntity);editHistory=std::move(history);history=EditorHistory(world,selectedEntity);
             if (playMode.play(world)) { physics.reset(); audio.start(world);scripts.setAssetContext(browser.openedScript,selectedEntity);scripts.startPlay();
                 const MeshHandle runtimeMeshes[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
                 componentScripts.start(world,browser.assets,runtimeMeshes,planeMesh); }
@@ -641,9 +726,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         if (playbackButton("##Stop","Stop (F7)",PlaybackIcon::Stop) || (stopKey && playMode.active())) {
             editor.finish(world); clicking=false;
             // Run stop callbacks before restoring, so their edits are discarded too.
+            levels.suspended=true;levels.cancel();
             audio.clear();componentScripts.stop();scripts.shutdown();
             playMode.stop(world);input.releaseMouse();
-            physics.reset(); scripts.resetRuntime();
+            physics.reset();scripts.resetRuntime();scripts.setSource(editSource);camera=editCamera;history=std::move(editHistory);
+            levels.commit(editLevelName,false);levels.suspended=false;
             selectedEntity=world.alive(editSelection)?editSelection:Entity{};
         }
         ImGui::EndDisabled(); ImGui::SameLine();
@@ -663,8 +750,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         }
         ImGui::End();
         bool hierarchyFocused=false;int hierarchyCreate=-1;
-        const std::string hierarchyLevelName=currentProject.empty()?"Untitled":std::filesystem::path(currentProject).stem().string();
-        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused,&hierarchyCreate,hierarchyLevelName.c_str())) {editor.finish(world);clicking=false;}
+        const std::string hierarchyLevelName=!levels.current().empty()?levels.current():currentProject.empty()?"Untitled":std::filesystem::path(currentProject).stem().string();
+        if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused,&hierarchyCreate,hierarchyLevelName.c_str(),editAllowed?&renameLevelPopup:nullptr)) {editor.finish(world);clicking=false;}
         if(hierarchyCreate>=0)createObject(hierarchyCreate);
         const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh,planeMesh};
         drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging(),&browser.assets,5);
@@ -683,8 +770,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         terminalErrors.report("Editor settings",browser.settings.error);
         terminalErrors.report("Input settings",inputSettings.error);
         terminalErrors.report("History",history.error);
+        terminalErrors.report("Levels",levels.error);
+        terminalErrors.report("Rendering settings",renderingSettings.error);
         ImDrawList* sceneDrawList=nullptr;bool sceneVisible=false,sceneFocused=false;
-        sceneHovered=false;sceneRect={};
+        sceneHovered=false;sceneRect={};orientationInteracting=false;
         if(panelOpen[2]) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
             if(beginEditorPanel("Scene")) {
@@ -709,8 +798,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                     if(ImGui::IsKeyPressed(ImGuiKey_E,false))editor.setTool(TransformTool::Rotate);
                     if(ImGui::IsKeyPressed(ImGuiKey_R,false))editor.setTool(TransformTool::Scale);
                 }
-                editor.draw(world,selectedEntity,!spawnMode && !cameraLooking,camera,static_cast<float>(sceneSurface.width)/sceneSurface.height,&sceneRect,sceneDrawList);
-                if(editor.capturesMouse())clicking=false;
+                orientationInteracting=drawSceneOrientation(camera,sceneRect,editAllowed && !cameraLooking && !editor.dragging());
+                editor.draw(world,selectedEntity,!orientationInteracting && !spawnMode && !cameraLooking && !(SDL_GetModState()&SDL_KMOD_ALT),camera,static_cast<float>(sceneSurface.width)/sceneSurface.height,&sceneRect,sceneDrawList);
+                if(editor.capturesMouse() || orientationInteracting)clicking=false;
             }
             ImGui::End();ImGui::PopStyleVar();
         }
@@ -780,7 +870,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 ImGui::IsMouseDown(ImGuiMouseButton_Left));
         }
         ImGui::EndDisabled();
+        if(renderedFrames==0)ImGui::SetWindowFocus("Assets");
         ImGui::Render();
+        finishEditorTheme(ImGui::GetDrawData());
         profiler.checkpoint(ProfilePart::Editor);
 
         // The time that has passed since the previous frame.
@@ -795,7 +887,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         if (cameraLooking && !browser.dialog.pending() && !projectDialog.pending() && !cameraModifiersHeld(SDL_GetModState()) && !editor.dragging() && !ImGui::GetIO().WantTextInput &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
-            const float speed = sceneCameraSpeed(SDL_GetModState(),cameraBoost);
+            const float speed = cameraSpeed*(SDL_GetModState()&SDL_KMOD_SHIFT?cameraBoost:1.0f);
             camera.move(static_cast<float>(keys[SDL_SCANCODE_W]) - keys[SDL_SCANCODE_S],
                         static_cast<float>(keys[SDL_SCANCODE_D]) - keys[SDL_SCANCODE_A],
                         static_cast<float>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],
@@ -828,6 +920,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             const float aspect=static_cast<float>(sceneSurface.width)/sceneSurface.height;
             const Mat4 viewProjection = camera.viewProjection(aspect);
             renderer.draw(world, viewProjection, sceneSurface.width, sceneSurface.height, camera.position());
+            if(browser.settings.alwaysShowColliders)world.each<Transform,Collider>([&](Entity e,const Transform& t,const Collider& c){
+                if(e!=selectedEntity)renderer.drawCollider(t,c,viewProjection,.25f);
+            });
             if (!spawnMode && world.alive(selectedEntity)) {
                 const auto* transform = world.tryGet<Transform>(selectedEntity);
                 const auto* collider = world.tryGet<Collider>(selectedEntity);
@@ -866,39 +961,30 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         }
         const std::string title=projectWindowTitle(currentProject,projectDirty);
         if(title!=lastWindowTitle){SDL_SetWindowTitle(window,title.c_str());lastWindowTitle=title;}
-        if(screenshotPath && renderedFrames==smokeFrames-1 && width>0 && height>0){
-            std::vector<unsigned char> pixels(static_cast<std::size_t>(width)*height*4);
-            glPixelStorei(GL_PACK_ALIGNMENT,4);glReadPixels(0,0,width,height,GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
-            const auto stride=static_cast<std::size_t>(width)*4;
-            for(int y=0;y<height/2;++y)std::swap_ranges(pixels.begin()+y*stride,pixels.begin()+(y+1)*stride,pixels.begin()+(height-y-1)*stride);
-            auto* image=SDL_CreateSurfaceFrom(width,height,SDL_PIXELFORMAT_RGBA32,pixels.data(),width*4);
-            screenshotSaved=image && SDL_SaveBMP(image,screenshotPath);if(image)SDL_DestroySurface(image);
-            if(!screenshotSaved)SDL_Log("Screenshot failed: %s",SDL_GetError());
-        }
         profiler.checkpoint(ProfilePart::Other);
         SDL_GL_SwapWindow(window);
         profiler.checkpoint(ProfilePart::Present);
         profiler.end();
         if (width > 0 && height > 0) {
             ++renderedFrames;
-            if ((smokeTest || screenshotPath) && renderedFrames >= smokeFrames){SDL_Log("Shutdown requested: completed %u automated frames",renderedFrames);running = false;}
+            if (smokeTest && renderedFrames >= smokeFrames){SDL_Log("Shutdown requested: completed %u automated frames",renderedFrames);running = false;}
         }
     }
+    levels.suspended=true;
     activeProfiler=nullptr;
     editor.finish(world);
     audio.clear();componentScripts.stop();scripts.shutdown();input.releaseMouse();
-    return (!smokeTest || renderedFrames >= smokeFrames) && (!screenshotPath || screenshotSaved);
+    return (!smokeTest || renderedFrames >= smokeFrames);
 }
 
 int engineMain(int argc, char** argv)
 {
-    bool smokeTest = false;const char* screenshotPath=nullptr;
+    bool smokeTest = false;
     for (int i=1; i<argc; ++i) {
         if (std::strcmp(argv[i], "--smoke-test") == 0) smokeTest = true;
-        else if(std::strcmp(argv[i],"--screenshot")==0 && i+1<argc)screenshotPath=argv[++i];
         else { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Unknown argument: %s", argv[i]); return 1; }
     }
-    SDL_Log("Run mode: %s",smokeTest?"smoke test (120 frames)":screenshotPath?"screenshot (120 frames)":"interactive editor");
+    SDL_Log("Run mode: %s",smokeTest?"smoke test (120 frames)":"interactive editor");
     SDL_Log("Initializing SDL video");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not start SDL: %s", SDL_GetError());
@@ -933,7 +1019,7 @@ int engineMain(int argc, char** argv)
         ImGui::CreateContext();
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         dockedEditor=true;
-        ImGui::GetIO().IniFilename = screenshotPath?nullptr:"legacy-layout.ini";
+        ImGui::GetIO().IniFilename = "legacy-layout.ini";
         applyEditorTheme();
         if (!ImGui_ImplSDL3_InitForOpenGL(window, context) ||
             !ImGui_ImplOpenGL3_Init("#version 330 core")) {
@@ -946,7 +1032,7 @@ int engineMain(int argc, char** argv)
             return 1;
         }
         SDL_Log("Editor started");
-        runSucceeded = run(window, renderer, smokeTest,screenshotPath);
+        runSucceeded = run(window, renderer, smokeTest);
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplSDL3_Shutdown();
         ImGui::DestroyContext();

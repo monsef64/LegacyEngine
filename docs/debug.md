@@ -2,7 +2,7 @@
 The top bar's **Debug** menu has two session-only toggles (off by default):
 - **Show FPS** displays the editor's rolling frame rate over the Game view. This
   measures the whole editor frame, not an isolated player-render benchmark.
-- **Show Colliders in Game** overlays all collider wireframes in green using the
+- **Show Game Colliders** overlays all collider wireframes in green using the
   active Game camera, including during Play. Hidden edges are visible for debugging.
 
 These options do not change the scene or saved project. Without an active camera,
@@ -26,3 +26,18 @@ execution time**, the audio device callback, or individual functions/scripts.
 Vsync can dominate the Present row. Asset decoding performed during a frame is
 included in the calling section. Sampling is disabled while the profiler is
 closed; histories are bounded, session-only, and do not dirty the project.
+
+## VSync and rendering cost
+
+**Project > Project Settings > Rendering > Enable VSync** changes the OpenGL
+swap interval and persists it in the project's `Settings/Rendering.json`.
+New projects default to VSync on. Driver overrides can still affect presentation;
+the panel shows the interval reported by SDL and reports failures rather than
+silently treating an unsupported request as successful.
+
+Disable VSync when comparing uncapped performance, then use **Debug > Profiler**
+to compare Scene, Game, light/shadow setup and presentation wait. Both visible
+viewports render independently. CPU timings do not measure GPU execution time.
+Frustum planes are now normalized once per view/shadow face rather than once per
+object test. This reduces CPU culling cost without changing shadow quality, but
+is not evidence of a particular FPS gain on your GPU.

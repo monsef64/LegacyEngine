@@ -9,6 +9,7 @@ on:
     branches: ["**"]
     tags: ["v*"]
     paths:
+      - 'data/**'
       - 'src/**'
       - 'tests/**'
       - 'third_party/**'
@@ -20,6 +21,7 @@ on:
       - '.github/workflows/release.yml'
   pull_request:
     paths:
+      - 'data/**'
       - 'src/**'
       - 'tests/**'
       - 'third_party/**'
@@ -30,11 +32,6 @@ on:
       - 'extensions/legacyscript/**'
       - '.github/workflows/release.yml'
   workflow_dispatch:
-    inputs:
-      update_screenshot:
-        description: Commit the captured screenshot to the selected branch
-        type: boolean
-        default: false
 
 permissions:
   contents: write # needed to create the release
@@ -148,36 +145,6 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: xvfb-run -a -s "-screen 0 640x480x24" timeout -k 5s 60s build/lighting_render_tests
 
-      - name: Capture current editor screenshot
-        timeout-minutes: 2
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: |
-          xvfb-run -a -s "-screen 0 1600x900x24" \
-            timeout -k 5s 60s build/LegacyEngine --screenshot build/editor-screenshot.bmp
-          python3 -c "from PIL import Image; Image.open('build/editor-screenshot.bmp').save('build/editor-screenshot.png')"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: editor-screenshot
-          path: build/editor-screenshot.png
-          if-no-files-found: error
-
-      - name: Update README screenshot on this branch
-        if: github.event_name == 'workflow_dispatch' && inputs.update_screenshot && github.ref_type == 'branch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cp build/editor-screenshot.png docs/screenshot.png
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/screenshot.png
-          if ! git diff --cached --quiet; then
-            git commit -m "Refresh editor screenshot from graphical build"
-            git -c 'credential.helper=!f() { echo username=x-access-token; echo password=$GH_TOKEN; }; f' \
-              push origin "HEAD:$GITHUB_REF_NAME"
-          fi
-
       # README.md says which glibc the binary needs. The number depends on what
       # is linked into the binary, so show it on the page of the run.
       - name: Report the glibc version the binary needs
@@ -212,6 +179,7 @@ jobs:
           cp LICENSE "$package/"
           cp -r build/docs "$package/docs"
           cp -r scripts "$package/"
+          cp -r data "$package/"
           cp .luarc.json "$package/"
           cp build/_deps/sdl3-src/LICENSE.txt "$package/licenses/SDL3.txt"
           cp build/_deps/reactphysics3d-src/LICENSE "$package/licenses/ReactPhysics3D.txt"
@@ -225,7 +193,6 @@ jobs:
           cp third_party/fontawesome/LICENSE.txt "$package/licenses/FontAwesome.txt"
           cp third_party/stb/LICENSE "$package/licenses/stb.txt"
           cp third_party/json/LICENSE.MIT "$package/licenses/nlohmann-json.txt"
-          cp build/editor-screenshot.png "$package/"
           tar -czf "$package.tar.gz" "$package"
 
           echo "PACKAGE=$package" >> "$GITHUB_ENV"

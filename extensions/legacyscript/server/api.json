@@ -1,5 +1,37 @@
 [
   {
+    "name": "loadLevel",
+    "signature": "loadLevel(name=nil) -> accepted, error; switch at next frame boundary"
+  },
+  {
+    "name": "loadLevelAsync",
+    "signature": "loadLevelAsync(name=nil) -> accepted, error; background file read"
+  },
+  {
+    "name": "unloadLevel",
+    "signature": "unloadLevel(name=nil) -> accepted, error; unload current level"
+  },
+  {
+    "name": "restartLevel",
+    "signature": "restartLevel() -> accepted, error; reload current level from disk"
+  },
+  {
+    "name": "getCurrentLevel",
+    "signature": "getCurrentLevel() -> string or nil"
+  },
+  {
+    "name": "setCurrentLevel",
+    "signature": "setCurrentLevel(name) -> accepted, error; alias for loadLevel"
+  },
+  {
+    "name": "nextLevel",
+    "signature": "nextLevel() -> accepted, error; next registered level, no wrapping"
+  },
+  {
+    "name": "previousLevel",
+    "signature": "previousLevel() -> accepted, error; previous registered level, no wrapping"
+  },
+  {
     "name": "createAudioSource",
     "signature": "createAudioSource(owner=self, clipPath=nil) -> AudioSource"
   },
@@ -457,7 +489,7 @@
   },
   {
     "name": "setMaterialShader",
-    "signature": "mesh:setMaterialShader('Diffuse'|'Bumped Diffuse'|'Diffuse Transparent')"
+    "signature": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent')"
   },
   {
     "name": "setMaterialNormalStrength",

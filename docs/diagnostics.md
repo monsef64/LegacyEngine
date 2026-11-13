@@ -50,8 +50,8 @@ sharing them.
 
 ## Unexpected exits
 
-Startup logs identify interactive, smoke-test, or screenshot mode. Smoke tests
-and screenshots intentionally exit after 120 frames. Shutdown-request logs identify
+Startup logs identify interactive or smoke-test mode. Smoke tests
+intentionally exit after 120 frames. Shutdown-request logs identify
 SDL quit events, **File → Quit**, or completion of automated frames. A clean
 shutdown message indicates that the editor loop and normal teardown completed;
 it is not itself evidence of a crash. If the window exits unexpectedly, include

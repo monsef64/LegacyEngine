@@ -44,3 +44,12 @@ and the [VS Code extension guide](docs/vscode.md).
 
 **GNU General Public License, version 2 only** (`GPL-2.0-only`). See [LICENSE](LICENSE).
 Third-party dependencies and assets retain their respective licenses and notices.
+
+### Levels and rendering settings
+
+Create and switch project-owned levels through **Project > Levels**. LegacyScript
+supports `loadLevel`, `loadLevelAsync`, `unloadLevel`, `restartLevel`,
+`getCurrentLevel`, `setCurrentLevel`, `nextLevel` and `previousLevel`; see
+[Levels](docs/projects.md#levels) for deferred-transition behavior.
+Toggle VSync in **Project > Project Settings > Rendering**. Engine GLSL lives in
+`data/shaders/`; keep the packaged `data/` directory beside the executable.

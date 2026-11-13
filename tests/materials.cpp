@@ -11,6 +11,7 @@ int main(){
     auto p=loadMaterial(assets,path);assert(p.shader==0 && p.color.x==1 && p.texture.empty());
     p.shader=1;p.texture="Textures/color.png";p.normalMap="Textures/normal.tga";p.color={.3f,.5f,.7f};p.tilingY=2;saveMaterial(assets,path,p);
     auto loaded=loadMaterial(assets,path);assert(loaded.normalMap==p.normalMap && loaded.shader==1 && loaded.tilingY==2);
+    assert(materialJson(p)["shader"]=="Diffuse Bumped");auto legacy=materialJson(p);legacy["shader"]="Bumped Diffuse";assert(parseMaterial(legacy).shader==1);
     p.shader=2;saveMaterial(assets,"Transparent.mat",p);assert(loadMaterial(assets,"Transparent.mat").shader==2);
     MaterialAssetCache cache;assert(cache.get(assets,path).color.x==.3f);
     bool rejected=false;try{loadMaterial(assets,"../outside.mat");}catch(...){rejected=true;}assert(rejected);
@@ -20,7 +21,7 @@ int main(){
     LuaConsole console;console.bindWorld(world);console.bindObject(e);
     assert(console.execute(R"(local m=self:getComponent(MeshRenderer)
         m:setMaterialColor(0.2,0.4,0.6);m:setMaterialTexture('Textures/new.png');m:setMaterialNormalMap('Textures/newnormal.png')
-        m:setMaterialShader('Bumped Diffuse');m:setMaterialTiling(2,3);m:setMaterialNormalStrength(0.5);m:setMaterialSpecular(0.25)
+        m:setMaterialShader('Diffuse Bumped');m:setMaterialTiling(2,3);m:setMaterialNormalStrength(0.5);m:setMaterialSpecular(0.25)
     )"));
     auto& renderer=world.get<MeshRenderer>(e);assert(renderer.materialOverrides==127);assert(renderer.materialValues.tilingY==3);
     assert(loadMaterial(assets,path).texture=="Textures/color.png"); // instance edits never write asset

@@ -24,7 +24,6 @@ int main() {
     assert(adjustSceneCameraBoost(3,1)>3 && adjustSceneCameraBoost(3,-1)<3);
     assert(cameraModifiersHeld(SDL_KMOD_CTRL|SDL_KMOD_SHIFT));
     assert(!cameraModifiersHeld(SDL_KMOD_SHIFT));
-    assert(makeCameraModel().topology==MeshData::Topology::Lines);
     const auto temp=std::filesystem::temp_directory_path()/
         ("legacy-multiscript-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     AssetManager assets;assets.root=temp;
@@ -113,6 +112,10 @@ int main() {
     std::filesystem::create_directory(temp/"Taken");
     bool rejected=false;try{browser.renameSelected(world,"Taken");}catch(...){rejected=true;}assert(rejected);
     rejected=false;try{browser.renameSelected(world,"../Escape");}catch(...){rejected=true;}assert(rejected);
+    browser.selected="Final/Nested/Test.ls";browser.renameSelected(world,"Player");
+    assert(browser.selected=="Final/Nested/Player.ls" && browser.openedScript==browser.selected);
+    assert(std::filesystem::exists(temp/"Final/Nested/Player.ls"));
+    browser.renameSelected(world,"PlayerTwo.ls");assert(browser.selected=="Final/Nested/PlayerTwo.ls");
     ImGui::DestroyContext();
     std::filesystem::remove_all(temp);
 }

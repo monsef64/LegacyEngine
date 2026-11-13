@@ -4,6 +4,14 @@
 
 struct LuaDefinition { const char* name; const char* signature; };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"loadLevel","loadLevel(name=nil) -> accepted, error; switch at next frame boundary"},
+    {"loadLevelAsync","loadLevelAsync(name=nil) -> accepted, error; background file read"},
+    {"unloadLevel","unloadLevel(name=nil) -> accepted, error; unload current level"},
+    {"restartLevel","restartLevel() -> accepted, error; reload current level from disk"},
+    {"getCurrentLevel","getCurrentLevel() -> string or nil"},
+    {"setCurrentLevel","setCurrentLevel(name) -> accepted, error; alias for loadLevel"},
+    {"nextLevel","nextLevel() -> accepted, error; next registered level, no wrapping"},
+    {"previousLevel","previousLevel() -> accepted, error; previous registered level, no wrapping"},
     {"createAudioSource","createAudioSource(owner=self, clipPath=nil) -> AudioSource"},
     {"AudioClip","AudioClip(projectRelativeAudioPath) -> AudioClip path"},
     {"DirectionalLight","DirectionalLight - dynamic directional illumination and shadows"},
@@ -119,7 +127,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"setMaterialColor","mesh:setMaterialColor(r,g,b) - instance color override"},
     {"setMaterialTexture","mesh:setMaterialTexture(Texture) - instance albedo override; nil clears"},
     {"setMaterialNormalMap","mesh:setMaterialNormalMap(Texture) - instance normal map override; nil clears"},
-    {"setMaterialShader","mesh:setMaterialShader('Diffuse'|'Bumped Diffuse'|'Diffuse Transparent')"},
+    {"setMaterialShader","mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent')"},
     {"setMaterialNormalStrength","mesh:setMaterialNormalStrength(value) - 0..4"},
     {"setMaterialTiling","mesh:setMaterialTiling(x,y) - nonzero UV repeat scale"},
     {"setMaterialSpecular","mesh:setMaterialSpecular(value) - 0..1"},

@@ -34,7 +34,7 @@ public:
     void draw(World& world, const Mat4& viewProjection, int width, int height, Vec3 cameraPosition, int x=0, int y=0, bool editorView=true);
 
     // Green collider overlay for a selected object, drawn over the scene.
-    void drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection);
+    void drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection,float opacity=1.0f);
 
     void drawCamera(const Transform& transform,const Camera& camera,const Mat4& viewProjection);
     void drawAudioSource(const Transform& transform,const AudioSource& source,const Mat4& viewProjection);
@@ -46,13 +46,12 @@ private:
     MaterialTextureCache materialTextures_;
     int litTransparent_=-1;
     int litTexture_=-1,litNormalTexture_=-1,litHasTexture_=-1,litBumped_=-1,litStrength_=-1,litTiling_=-1;
-    void drawWire(const MeshData& wire,const Transform& transform,const Mat4& viewProjection,Vec3 color);
+    void drawWire(const MeshData& wire,const Transform& transform,const Mat4& viewProjection,Vec3 color,float opacity=1.0f);
     int lightCountLocation_=-1,shadowSamplerLocation_=-1;
     int lightLocations_[16][4]{},shadowMatrixLocations_[12]{};
     unsigned int shadowTexture_=0,shadowFramebuffer_=0;
     void prepareLighting(World& world,const Mat4& viewProjection,Vec3 cameraPosition);
     MeshHandle audioModel_;
-    MeshHandle cameraModel_;
     unsigned int colliderVertexArray_ = 0;
     unsigned int colliderVertexBuffer_ = 0;
     struct GpuMesh {

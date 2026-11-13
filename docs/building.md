@@ -23,12 +23,14 @@ For headless graphical checks on Linux:
 
 ```sh
 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a build/LegacyEngine --smoke-test
-LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s '-screen 0 1600x900x24' \
-  build/LegacyEngine --screenshot build/editor.bmp
 ```
 
-Both modes finish after 120 rendered frames. `--screenshot` captures the actual
-OpenGL/ImGui framebuffer as BMP and ignores the saved layout for a reproducible view.
-CI converts this to PNG and uploads it as **editor-screenshot**. A manual run can
-also enable **update_screenshot** to commit the captured image back to its selected
-branch; ordinary builds never modify the repository.
+Smoke tests finish after 120 rendered frames. Screenshot capture is no longer
+part of the editor or Actions artifacts.
+
+Engine GLSL sources live in `data/shaders/` (lit, unlit/shadow, and skybox vertex
+and fragment files). CMake copies `data/` beside the executable, and release
+archives include it. Keep that directory beside the engine when moving binaries;
+shader files are loaded from the executable's directory, not the working directory.
+Missing shader data is reported as an initialization/render error. Edit these
+files and rebuild to refresh the runtime copy; no C++ shader strings are maintained.

@@ -18,7 +18,7 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
                             ImGuiCond_FirstUseEver,ImVec2(1,0));
     ImGui::SetNextWindowSize(ImVec2(450,320),ImGuiCond_FirstUseEver);
     }
-    if (beginEditorPanel("Lua Editor",layout?fixedPanelFlags:0)) {
+    if (beginEditorPanel("Script Editor",layout?fixedPanelFlags:0)) {
         ImGui::BeginDisabled(!executionEnabled);
         if (ImGui::Button("Execute")) {
             ownerError_=!executeSource();
@@ -81,7 +81,7 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
                             viewport->WorkPos.y+viewport->WorkSize.y-16),ImGuiCond_FirstUseEver,ImVec2(1,1));
     ImGui::SetNextWindowSize(ImVec2(450,250),ImGuiCond_FirstUseEver);
     }
-    if (beginEditorPanel("Lua Console",layout?fixedPanelFlags:0)) {
+    if (beginEditorPanel("Console",layout?fixedPanelFlags:0)) {
         if (ImGui::Button("Clear")) console_.clear();
         ImGui::SameLine();
         ImGui::Checkbox("Auto-scroll",&autoScroll_);ImGui::SameLine();

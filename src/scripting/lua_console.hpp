@@ -45,6 +45,7 @@ private:
     std::unique_ptr<LuaScene> scene_;
     void installScene();
     void installInput();
+    void installLevels();
     void beginBudget();
     void endBudget();
     std::size_t allocated_ = 0;

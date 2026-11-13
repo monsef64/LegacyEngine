@@ -18,6 +18,14 @@ struct OrbitCamera {
         return target + direction * distance;
     }
 
+    Vec3 right()const{return {std::cos(yaw),0,-std::sin(yaw)};}
+    Vec3 up()const{return normalize(cross(right(),normalize(target-position())));}
+    void snapAxis(int axis,int sign){
+        if(axis<0 || axis>2)return;
+        pitch=axis==1?sign*kPi*.5f:0;
+        yaw=axis==0?sign*kPi*.5f:axis==2?(sign>0?0:kPi):yaw;
+    }
+
     // Frame a world-space bounding sphere while preserving viewing direction.
     void focus(Vec3 centre,float radius=1.0f,float aspect=1.0f)
     {
@@ -41,11 +49,21 @@ struct OrbitCamera {
         target = eye - offset * distance;
     }
 
+    void orbit(Vec3 pivot,float dx,float dy){
+        const Vec3 offset=position()-pivot;
+        distance=std::clamp(std::sqrt(dot(offset,offset)),.1f,10000.0f);
+        yaw=std::atan2(offset.x,offset.z)-dx*.005f;
+        pitch=std::clamp(std::asin(std::clamp(offset.y/distance,-1.0f,1.0f))+dy*.005f,radians(-89.0f),radians(89.0f));
+        target=pivot;
+    }
+    void zoom(float wheel){distance=std::clamp(distance*std::pow(.85f,wheel),.1f,10000.0f);}
+    void pan(float wheel){const auto right=this->right();target=target+right*(wheel*distance*.05f);}
+
     // Local forward/right and world-up movement, normalized to avoid faster diagonals.
     void move(float forwardInput, float rightInput, float upInput, float metres)
     {
         const Vec3 forward = normalize(target - position());
-        const Vec3 right = normalize(cross(forward, {0, 1, 0}));
+        const Vec3 right = this->right();
         const Vec3 direction = forward * forwardInput + right * rightInput + Vec3{0, upInput, 0};
         if (dot(direction, direction) > 0) target = target + normalize(direction) * metres;
     }
@@ -55,7 +73,7 @@ struct OrbitCamera {
     Mat4 viewProjection(float aspect) const
     {
         const Mat4 projection = perspective(fieldOfView, aspect, 0.1f, 200.0f);
-        const Mat4 view       = lookAt(position(), target, {0.0f, 1.0f, 0.0f});
+        const Mat4 view       = lookAt(position(), target, up());
         return multiply(projection, view);
     }
 
@@ -68,7 +86,7 @@ struct OrbitCamera {
     {
         const Vec3 eye     = position();
         const Vec3 forward = normalize(target - eye);
-        const Vec3 right   = normalize(cross(forward, {0.0f, 1.0f, 0.0f}));
+        const Vec3 right   = this->right();
         const Vec3 up      = cross(right, forward);
 
         // Half the height of the picture, taken as a rectangle that stands
