@@ -35,7 +35,7 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
     require(source.size()<=maxScript);
     const auto entities=world.entities();require(entities.size()<=maxObjects);
     auto entityIndex=[&](Entity target){int index=-1;for(std::size_t i=0;i<entities.size();++i)if(entities[i]==target)index=static_cast<int>(i);return index;};
-    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 8\n";
+    std::ostringstream out;out<<std::setprecision(9)<<"LegacyEngineProject 9\n";
     out<<std::quoted(std::string(source))<<'\n'<<std::quoted(std::string(assetDirectory))<<'\n';
     writeVec(out,camera.target);out<<camera.yaw<<' '<<camera.pitch<<' '<<camera.distance<<' '<<camera.fieldOfView<<'\n';
     out<<entities.size()<<'\n';
@@ -46,7 +46,7 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
     };
     for(Entity e:entities) {
         unsigned mask=(world.has<ObjectName>(e)?1:0)|(world.has<Transform>(e)?2:0)|
-            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0)|(world.has<Camera>(e)?64:0)|(world.has<AudioSource>(e)?128:0)|(world.has<AudioListener>(e)?256:0);
+            (world.has<MeshRenderer>(e)?4:0)|(world.has<Collider>(e)?8:0)|(world.has<RigidBody>(e)?16:0)|(world.has<LuaScript>(e)?32:0)|(world.has<Camera>(e)?64:0)|(world.has<AudioSource>(e)?128:0)|(world.has<AudioListener>(e)?256:0)|(world.has<DirectionalLight>(e)?512:0)|(world.has<PointLight>(e)?1024:0)|(world.has<SpotLight>(e)?2048:0);
         int parent=-1;const Entity p=getParent(world,e);
         for(std::size_t i=0;i<entities.size();++i)if(entities[i]==p)parent=static_cast<int>(i);
         out<<mask<<' '<<parent<<' ';
@@ -78,6 +78,10 @@ inline std::string encodeLegacy(World& world,std::string_view source,const Orbit
         }
         if(auto* a=world.tryGet<AudioSource>(e))out<<std::quoted(a->clip)<<' '<<a->volume<<' '<<a->pitch<<' '<<a->pan<<' '<<a->distance<<' '<<a->looping<<' '<<a->muted<<' '<<a->playOnStart<<' '<<a->blend<<' ';
         if(auto* listener=world.tryGet<AudioListener>(e))out<<listener->enabled<<' ';
+        auto writeLight=[&](const LightSettings& l){require(validLight(l));writeVec(out,l.color);out<<l.intensity<<' '<<l.enabled<<' '<<l.shadows<<' '<<l.range<<' '<<l.innerAngle<<' '<<l.outerAngle<<' '<<l.shadowDistance<<' '<<l.shadowBias<<' ';};
+        if(auto* l=world.tryGet<DirectionalLight>(e))writeLight(*l);
+        if(auto* l=world.tryGet<PointLight>(e))writeLight(*l);
+        if(auto* l=world.tryGet<SpotLight>(e))writeLight(*l);
         out<<'\n';
     }
     auto text=out.str();require(text.size()<=maxBytes);return text;
@@ -86,7 +90,7 @@ struct Loaded { World world; std::string source,assetDirectory; OrbitCamera came
 inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& meshes) {
     require(text.size()<=maxBytes);
     std::istringstream in(text);std::string magic;int version=0;
-    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=8));
+    in>>magic>>version;require(magic=="LegacyEngineProject" && (version>=1 && version<=9));
     in>>std::quoted(result.source);require(result.source.size()<=maxScript && result.source.find('\0')==std::string::npos);
     if(version>=4) {
         in>>std::quoted(result.assetDirectory);
@@ -107,7 +111,7 @@ inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& me
     };
     for(int i=0;i<count;++i) {
         unsigned mask=0;int parent=-1;in>>mask>>parent;
-        require(bool(in) && mask<=(version==1?31u:version==2?63u:version<6?127u:version<7?255u:511u) && parent>=-1 && parent<count && parent!=i);
+        require(bool(in) && mask<=(version==1?31u:version==2?63u:version<6?127u:version<7?255u:version<9?511u:4095u) && parent>=-1 && parent<count && parent!=i);
         const Entity e=result.world.create();entities.push_back(e);parents.push_back(parent);cameraTargets.push_back(-1);
         if(mask&1) {std::string name;in>>std::quoted(name);require(name.size()<=4096);result.world.add(e,ObjectName{name});}
         if(mask&2)result.world.add(e,readTransform(in));
@@ -153,6 +157,10 @@ inline void decodeLegacy(const std::string& text,Loaded& result,const Meshes& me
             require(a.blend>=0 && a.blend<=1);
             require(a.volume>=0 && a.volume<=1 && a.pitch>=.1f && a.pitch<=4 && a.pan>=-1 && a.pan<=1 && a.distance>=0);result.world.add(e,a);}
         if(mask&256){AudioListener listener;in>>listener.enabled;result.world.add(e,listener);}
+        auto readLight=[&](auto light){light.color=readVec(in);light.intensity=number(in);in>>light.enabled>>light.shadows;light.range=number(in);light.innerAngle=number(in);light.outerAngle=number(in);light.shadowDistance=number(in);light.shadowBias=number(in);require(validLight(light) && (mask&2));result.world.add(e,light);};
+        if(mask&512)readLight(DirectionalLight{});
+        if(mask&1024)readLight(PointLight{});
+        if(mask&2048)readLight(SpotLight{});
         require(bool(in));
     }
     result.world.each<LuaScript>([&](Entity,LuaScript& scripts){

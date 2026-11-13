@@ -136,6 +136,12 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x720x24" \
             timeout -k 5s 60s build/LegacyEngine --smoke-test
 
+      - name: Dynamic light and shadow rendering tests
+        timeout-minutes: 2
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a -s "-screen 0 640x480x24" timeout -k 5s 60s build/lighting_render_tests
+
       - name: Capture current editor screenshot
         timeout-minutes: 2
         env:

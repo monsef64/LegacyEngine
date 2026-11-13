@@ -42,12 +42,15 @@ template<class T> inline bool componentHeader(World& world,Entity entity,const c
         if constexpr(std::is_same_v<T,Camera>)type=6;
         if constexpr(std::is_same_v<T,AudioSource>)type=7;
         if constexpr(std::is_same_v<T,AudioListener>)type=8;
+        if constexpr(std::is_same_v<T,DirectionalLight>)type=9;
+        if constexpr(std::is_same_v<T,PointLight>)type=10;
+        if constexpr(std::is_same_v<T,SpotLight>)type=11;
         EditorComponentPayload payload{entity,type};ImGui::SetDragDropPayload("EDITOR_COMPONENT",&payload,sizeof(payload));ImGui::TextUnformatted(name);ImGui::EndDragDropSource();
     }
     if(remove){world.remove<T>(entity);return false;}return open;
 }
 inline void drawScriptExports(World& world,std::vector<ScriptField>& fields){
-    const char* componentTypes[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener"};
+    const char* componentTypes[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener","DirectionalLight","PointLight","SpotLight"};
     for(auto& field:fields){
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)",field.name.c_str(),field.type.c_str());
@@ -64,7 +67,7 @@ inline void drawScriptExports(World& world,std::vector<ScriptField>& fields){
                 if(asset){if(auto* p=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string path=static_cast<const char*>(p->Data);if(field.type!="AudioClip" || audioAsset(path))field.text=path;}}
                 else{
                     if(auto* p=ImGui::AcceptDragDropPayload("LEVEL_OBJECT")){Entity target=*static_cast<const Entity*>(p->Data);if(exportHasComponent(world,target,field.type))field.entity=target;}
-                    if(auto* p=ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")){auto target=*static_cast<const EditorComponentPayload*>(p->Data);if(target.type>=0 && target.type<9 && (field.type=="GameObject" || field.type==componentTypes[target.type]) && exportHasComponent(world,target.entity,field.type))field.entity=target.entity;}
+                    if(auto* p=ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")){auto target=*static_cast<const EditorComponentPayload*>(p->Data);if(target.type>=0 && target.type<12 && (field.type=="GameObject" || field.type==componentTypes[target.type]) && exportHasComponent(world,target.entity,field.type))field.entity=target.entity;}
                 }
                 ImGui::EndDragDropTarget();
             }
@@ -161,6 +164,21 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 if(validCamera(edited))*camera=edited;
                 if(ImGui::Button("Clear camera target")){camera->tracking=false;camera->following=false;camera->targetEntity={};}
             }
+            auto lightInspector=[&](auto tag,const char* title,int kind){
+                using T=decltype(tag);auto* light=world.tryGet<T>(selected);
+                if(!light || !componentHeader<T>(world,selected,title))return;
+                T edited=*light;ImGui::PushID(title);
+                ImGui::Checkbox("Enabled",&edited.enabled);ImGui::ColorEdit3("Color",&edited.color.x);
+                ImGui::DragFloat("Intensity",&edited.intensity,.05f,0,1000);
+                if(kind!=0)ImGui::DragFloat("Range",&edited.range,.1f,.1f,10000);
+                if(kind==2){ImGui::DragFloat("Inner angle",&edited.innerAngle,.1f,0,edited.outerAngle-.1f);ImGui::DragFloat("Outer angle",&edited.outerAngle,.1f,edited.innerAngle+.1f,85);}
+                ImGui::Checkbox("Cast dynamic shadows",&edited.shadows);
+                if(kind==0)ImGui::DragFloat("Shadow coverage",&edited.shadowDistance,.5f,1,1000);
+                ImGui::DragFloat("Shadow bias",&edited.shadowBias,.0001f,0,.05f,"%.4f");
+                ImGui::TextWrapped("Emission follows local -Z. Shadow maps use a shared 12-layer budget; a point light uses six layers.");
+                if(validLight(edited))*light=edited;ImGui::PopID();
+            };
+            lightInspector(DirectionalLight{},"DirectionalLight",0);lightInspector(PointLight{},"PointLight",1);lightInspector(SpotLight{},"SpotLight",2);
             if(auto* listener=world.tryGet<AudioListener>(selected);listener && componentHeader<AudioListener>(world,selected,"AudioListener")){
                 ImGui::Checkbox("Listener enabled",&listener->enabled);
                 ImGui::TextWrapped("Receives audio at this object's world position. With multiple enabled listeners, the lowest entity ID is used.");
@@ -203,6 +221,11 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
             }
             if(ImGui::Button("Add Component"))ImGui::OpenPopup("AddComponent");
             if(ImGui::BeginPopup("AddComponent")) {
+                if(world.has<Transform>(selected)){
+                    if(!world.has<DirectionalLight>(selected) && ImGui::MenuItem("DirectionalLight"))world.add(selected,DirectionalLight{});
+                    if(!world.has<PointLight>(selected) && ImGui::MenuItem("PointLight"))world.add(selected,PointLight{});
+                    if(!world.has<SpotLight>(selected) && ImGui::MenuItem("SpotLight"))world.add(selected,SpotLight{});
+                }
                 if(!world.has<AudioListener>(selected) && world.has<Transform>(selected) && ImGui::MenuItem("AudioListener"))world.add(selected,AudioListener{});
                 if(!world.has<AudioSource>(selected) && ImGui::MenuItem("AudioSource"))world.add(selected,AudioSource{});
                 if(!world.has<Transform>(selected) && ImGui::MenuItem("Transform"))world.add(selected,Transform{});

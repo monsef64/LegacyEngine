@@ -314,3 +314,40 @@ function isButtonDown(name) end
 ---@field warning fun(...:any)
 ---@type LegacyDebug
 debug = nil
+
+-- Dynamic lights: emission follows the owning Transform local -Z axis.
+---@class DirectionalLight
+---@field color Vec3
+---@field intensity number
+---@field enabled boolean
+---@field shadows boolean
+---@field range number
+---@field innerAngle number
+---@field outerAngle number
+---@field shadowDistance number
+---@field shadowBias number
+DirectionalLight = nil
+
+---@class PointLight
+---@field color Vec3
+---@field intensity number
+---@field enabled boolean
+---@field shadows boolean
+---@field range number
+---@field innerAngle number
+---@field outerAngle number
+---@field shadowDistance number
+---@field shadowBias number
+PointLight = nil
+
+---@class SpotLight
+---@field color Vec3
+---@field intensity number
+---@field enabled boolean
+---@field shadows boolean
+---@field range number
+---@field innerAngle number
+---@field outerAngle number
+---@field shadowDistance number
+---@field shadowBias number
+SpotLight = nil

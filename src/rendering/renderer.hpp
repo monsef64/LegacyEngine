@@ -34,6 +34,10 @@ public:
 
 private:
     void drawWire(const MeshData& wire,const Transform& transform,const Mat4& viewProjection,Vec3 color);
+    int lightCountLocation_=-1,shadowSamplerLocation_=-1;
+    int lightLocations_[16][4]{},shadowMatrixLocations_[12]{};
+    unsigned int shadowTexture_=0,shadowFramebuffer_=0;
+    void prepareLighting(World& world,const Mat4& viewProjection,Vec3 cameraPosition);
     MeshHandle audioModel_;
     MeshHandle cameraModel_;
     unsigned int colliderVertexArray_ = 0;
@@ -42,6 +46,7 @@ private:
         unsigned int vertexArray  = 0;
         unsigned int vertexBuffer = 0;
         int          vertexCount  = 0;
+        float        radius=0;
         bool         lines        = false;
     };
 

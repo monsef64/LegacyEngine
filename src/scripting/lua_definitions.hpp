@@ -6,6 +6,9 @@ struct LuaDefinition { const char* name; const char* signature; };
 inline constexpr LuaDefinition luaDefinitions[]{
     {"createAudioSource","createAudioSource(owner=self, clipPath=nil) -> AudioSource"},
     {"AudioClip","AudioClip(projectRelativeAudioPath) -> AudioClip path"},
+    {"DirectionalLight","DirectionalLight - dynamic directional illumination and shadows"},
+    {"PointLight","PointLight - dynamic omnidirectional light with range and six shadow faces"},
+    {"SpotLight","SpotLight - dynamic cone light with innerAngle and outerAngle in degrees"},
     {"AudioListener","AudioListener - receives sound at its GameObject world position; pause() disables reception, start() enables it"},
     {"spatialBlend","audio:spatialBlend(value) -> 0 (2D) to 1 (3D)"},
     {"setSpatialBlend","audio:setSpatialBlend(value) -> alias for spatialBlend"},

@@ -14,12 +14,12 @@ namespace {
 struct Handle { LuaScene* scene; World* world; Entity entity; };
 struct Component { Handle object; int type; };
 struct Vector { Component component; char field[32]; };
-const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener"};
+const char* types[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener","DirectionalLight","PointLight","SpotLight"};
 int componentType(lua_State* L,int index) {
     if (auto* type=static_cast<int*>(luaL_testudata(L,index,"ComponentType"))) return *type;
     const char* name=luaL_checkstring(L,index);
     if (!std::strcmp(name,"BoxCollider")) return 2;
-    for (int i=0;i<9;++i) if (!std::strcmp(name,types[i])) return i;
+    for (int i=0;i<12;++i) if (!std::strcmp(name,types[i])) return i;
     return luaL_error(L,"Unknown component type: %s",name);
 }
 Handle& handle(lua_State* L,int index) {
@@ -37,7 +37,11 @@ bool has(const Handle& h,int type) {
     case 5:return h.world->has<LuaScript>(h.entity);
     case 6:return h.world->has<Camera>(h.entity);
     case 7:return h.world->has<AudioSource>(h.entity);
-    default:return h.world->has<AudioListener>(h.entity);
+    case 8:return h.world->has<AudioListener>(h.entity);
+    case 9:return h.world->has<DirectionalLight>(h.entity);
+    case 10:return h.world->has<PointLight>(h.entity);
+    case 11:return h.world->has<SpotLight>(h.entity);
+    default:return false;
     }
 }
 enum class Kind { Missing, Number, Boolean, String, Vec, Quat, Shape, Mesh };
@@ -46,6 +50,12 @@ Field field(lua_State* L,const Component& c,const char* key) {
     const Handle& h=c.object;
     if (!h.world->alive(h.entity) || !has(h,c.type)) luaL_error(L,"Component no longer exists");
 #define FIELD(name,kind) if (!std::strcmp(key,#name)) return {Kind::kind,&v.name}
+    if(c.type>=9 && c.type<=11){
+        LightSettings& v=c.type==9?static_cast<LightSettings&>(h.world->get<DirectionalLight>(h.entity)):
+            c.type==10?static_cast<LightSettings&>(h.world->get<PointLight>(h.entity)):static_cast<LightSettings&>(h.world->get<SpotLight>(h.entity));
+        FIELD(color,Vec);FIELD(intensity,Number);FIELD(enabled,Boolean);FIELD(shadows,Boolean);FIELD(range,Number);
+        FIELD(innerAngle,Number);FIELD(outerAngle,Number);FIELD(shadowDistance,Number);FIELD(shadowBias,Number);
+    }
     switch(c.type) {
     case 0:{auto& v=h.world->get<Transform>(h.entity); FIELD(position,Vec);FIELD(rotation,Quat);FIELD(scale,Vec);break;}
     case 1:{auto& v=h.world->get<RigidBody>(h.entity); FIELD(mass,Number);FIELD(useGravity,Boolean);FIELD(linearVelocity,Vec);FIELD(angularVelocity,Vec);break;}
@@ -125,7 +135,7 @@ LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,M
     luaL_newmetatable(L,"ComponentType");
     lua_pushlightuserdata(L,this);lua_pushcclosure(L,componentTypeIndex,1);lua_setfield(L,-2,"__index");
     lua_pushliteral(L,"locked");lua_setfield(L,-2,"__metatable");lua_pop(L,1);
-    for (int i=0;i<9;++i) {
+    for (int i=0;i<12;++i) {
         auto* type=static_cast<int*>(lua_newuserdatauv(L,sizeof(int),0));
         *type=i;luaL_setmetatable(L,"ComponentType");
         if(i==2) { lua_pushvalue(L,-1);lua_setglobal(L,"BoxCollider"); }
@@ -194,6 +204,9 @@ int LuaScene::api(lua_State* L) {
         case 3:self.world_.each<MeshRenderer>([&](Entity e,MeshRenderer&){collect(e);});break;
         case 4:self.world_.each<ObjectName>([&](Entity e,ObjectName&){collect(e);});break;
         case 5:self.world_.each<LuaScript>([&](Entity e,LuaScript&){collect(e);});break;
+        case 9:self.world_.each<DirectionalLight>([&](Entity e,DirectionalLight&){collect(e);});break;
+        case 10:self.world_.each<PointLight>([&](Entity e,PointLight&){collect(e);});break;
+        case 11:self.world_.each<SpotLight>([&](Entity e,SpotLight&){collect(e);});break;
         case 8:self.world_.each<AudioListener>([&](Entity e,AudioListener&){collect(e);});break;
         case 7:self.world_.each<AudioSource>([&](Entity e,AudioSource&){collect(e);});break;
         case 6:self.world_.each<Camera>([&](Entity e,Camera&){collect(e);});break;
@@ -217,6 +230,9 @@ int LuaScene::api(lua_State* L) {
         case 6:self.world_.remove<Camera>(h.entity);break;
         case 7:self.world_.remove<AudioSource>(h.entity);break;
         case 8:self.world_.remove<AudioListener>(h.entity);break;
+        case 9:self.world_.remove<DirectionalLight>(h.entity);break;
+        case 10:self.world_.remove<PointLight>(h.entity);break;
+        case 11:self.world_.remove<SpotLight>(h.entity);break;
         } return 0;
     }
     if(!has(h,type)) switch(type) {
@@ -228,6 +244,9 @@ int LuaScene::api(lua_State* L) {
     case 5:self.world_.add(h.entity,LuaScript{});break;
     case 6:self.world_.add(h.entity,Camera{});break;
     case 7:self.world_.add(h.entity,AudioSource{});break;
+    case 9:if(!self.world_.has<Transform>(h.entity))self.world_.add(h.entity,Transform{});self.world_.add(h.entity,DirectionalLight{});break;
+    case 10:if(!self.world_.has<Transform>(h.entity))self.world_.add(h.entity,Transform{});self.world_.add(h.entity,PointLight{});break;
+    case 11:if(!self.world_.has<Transform>(h.entity))self.world_.add(h.entity,Transform{});self.world_.add(h.entity,SpotLight{});break;
     case 8:if(!self.world_.has<Transform>(h.entity))self.world_.add(h.entity,Transform{});self.world_.add(h.entity,AudioListener{});break;
     }
     component(L,h,type);return 1;
@@ -446,7 +465,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields){
         else if(field.type=="string" || exportAssetType(field.type))lua_pushlstring(state_,field.text.data(),field.text.size());
         else if(exportHasComponent(world_,field.entity,field.type)){
             if(field.type=="GameObject")pushObject(field.entity);
-            else{int type=0;for(;type<9;++type)if(field.type==types[type])break;component(state_,Handle{this,&world_,field.entity},type);}
+            else{int type=0;for(;type<12;++type)if(field.type==types[type])break;component(state_,Handle{this,&world_,field.entity},type);}
         }else lua_pushnil(state_);
         lua_setglobal(state_,field.name.c_str());
     }

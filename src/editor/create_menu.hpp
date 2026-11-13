@@ -9,6 +9,12 @@ inline int drawCreateItems() {
     if(ImGui::MenuItem("Empty GameObject"))item=0;
     if(ImGui::MenuItem("Camera"))item=5;
     if(ImGui::MenuItem("Audio Source"))item=6;
+    if(ImGui::BeginMenu("Light")){
+        if(ImGui::MenuItem("Directional Light"))item=7;
+        if(ImGui::MenuItem("Point Light"))item=8;
+        if(ImGui::MenuItem("Spot Light"))item=9;
+        ImGui::EndMenu();
+    }
     if(ImGui::BeginMenu("Shape")) {
         const char* names[]{"Capsule","Cone","Cube","Sphere"};
         for(int i=0;i<4;++i)if(ImGui::MenuItem(names[i]))item=i+1;
