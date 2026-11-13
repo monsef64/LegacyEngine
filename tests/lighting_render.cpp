@@ -10,6 +10,8 @@
 #include <cassert>
 #include <cstdio>
 #include <vector>
+#include <set>
+#include <type_traits>
 
 int main(){
     assert(SDL_Init(SDL_INIT_VIDEO));
@@ -33,10 +35,28 @@ int main(){
         std::vector<unsigned char> pixels(192*192*3);glReadPixels(0,0,192,192,GL_RGB,GL_UNSIGNED_BYTE,pixels.data());return pixels;
     };
     auto difference=[](const auto& a,const auto& b){int sum=0;for(std::size_t i=0;i<a.size();++i)sum+=std::abs(int(a[i])-int(b[i]));return sum;};
+    // Game debug collider overlays use the Game camera and work without mesh
+    // geometry on the collider entity. Drawing is opt-in, after the normal pass.
+    const auto withoutOverlay=read();auto colliderOnly=world.create();world.add(colliderOnly,Transform{{0,2,0}});world.add(colliderOnly,Collider{});
+    world.each<Transform,Collider>([&](Entity,const Transform& transform,const Collider& collider){renderer.drawCollider(transform,collider,vp);});glFinish();
+    std::vector<unsigned char> withOverlay(192*192*3);glReadPixels(0,0,192,192,GL_RGB,GL_UNSIGNED_BYTE,withOverlay.data());
+    assert(glGetError()==GL_NO_ERROR && difference(withoutOverlay,withOverlay)>100);world.destroy(colliderOnly);
     auto check=[&](auto tag){
         using T=decltype(tag);T light;light.intensity=4;light.range=25;light.shadowDistance=20;world.add(lamp,light);
         const auto shadowed=read();world.get<T>(lamp).shadows=false;const auto unshadowed=read();
-        for(int quality=1;quality<=3;++quality){world.get<T>(lamp).shadowQuality=quality;world.get<T>(lamp).shadows=true;assert(difference(read(),unshadowed)>100);}
+        for(int quality=1;quality<=3;++quality){
+            world.get<T>(lamp).shadowQuality=quality;world.get<T>(lamp).shadows=true;const auto filtered=read();assert(difference(filtered,unshadowed)>100);
+            // A flat, uniformly lit gray floor had binary edges with nearest
+            // Low sampling. Require multiple fractional coverage levels now.
+            if constexpr(std::is_same_v<T,DirectionalLight>){
+                std::set<int> coverage;
+                for(std::size_t pixel=0;pixel<filtered.size();pixel+=3){
+                    int value=filtered[pixel];
+                    if(value==filtered[pixel+1] && value==filtered[pixel+2] && value>30 && value+5<unshadowed[pixel])coverage.insert(value);
+                }
+                std::printf("quality %d fractional shadow levels: %zu\n",quality,coverage.size());assert(coverage.size()>=6);
+            }
+        }
         world.get<T>(lamp).shadowQuality=0;assert(difference(read(),unshadowed)==0);world.get<T>(lamp).shadowQuality=3;world.get<T>(lamp).shadows=false;
         const int shadowDiff=difference(shadowed,unshadowed);std::printf("shadow difference: %d\n",shadowDiff);assert(shadowDiff>100);
         world.get<T>(lamp).shadows=true;world.get<Transform>(box).position.x=2;const auto moved=read();assert(difference(shadowed,moved)>100);
@@ -54,6 +74,41 @@ int main(){
     TexturePreviewCache previews;previews.beginFrame(assets);const auto texture=previews.texture(assets,"red.tga");assert(texture!=0);
     glBindTexture(GL_TEXTURE_2D,texture);TextureThumbnail pixels;glGetTexImage(GL_TEXTURE_2D,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels.pixels.data());
     assert(pixels.pixels[0]==255 && pixels.pixels[3]==255 && glGetError()==GL_NO_ERROR);
-    bool cacheHit=false;loadTextureThumbnail(assets,"red.tga",&cacheHit);assert(cacheHit);previews.clear();std::filesystem::remove_all(temp);
+    bool cacheHit=false;loadTextureThumbnail(assets,"red.tga",&cacheHit);assert(cacheHit);previews.clear();
+    renderer.setAssetRoot(assets.root);
+    MaterialProperties material;material.texture="red.tga";saveMaterial(assets,"Test.mat",material);
+    const auto plain=read();world.get<MeshRenderer>(box).material="Test.mat";world.get<MeshRenderer>(floor).material="Test.mat";
+    const auto textured=read();assert(difference(plain,textured)>1000);
+    auto& mesh=world.get<MeshRenderer>(floor);mesh.materialValues.normalMap="normal.tga";mesh.materialValues.shader=1;mesh.materialOverrides=MaterialNormal|MaterialShader;
+    {std::ofstream image(assets.root/"normal.tga",std::ios::binary);unsigned char header[18]{};header[2]=2;header[12]=2;header[14]=2;header[16]=24;image.write(reinterpret_cast<char*>(header),18);for(int i=0;i<4;++i){image.put(char(192));image.put(char(128));image.put(char(240));}}
+    DirectionalLight lit;lit.shadows=false;world.add(lamp,lit);
+    mesh.materialOverrides=0;const auto diffuse=read();mesh.materialOverrides=MaterialNormal|MaterialShader;const auto bumped=read();assert(difference(diffuse,bumped)>100);
+    assert(renderer.materialError.empty());
+    mesh.materialValues.texture="missing.png";mesh.materialOverrides|=MaterialTexture;read();assert(!renderer.materialError.empty());
+    // Six independently colored faces verify axis mapping, camera translation
+    // invariance, color tinting, HDR decoding and foreground depth occlusion.
+    World skyWorld;auto skyEntity=skyWorld.create();skyWorld.add(skyEntity,Skybox{});
+    auto& sky=skyWorld.get<Skybox>(skyEntity);
+    const unsigned char colors[6][3]{{255,0,0},{0,255,0},{0,0,255},{255,255,0},{255,0,255},{0,255,255}};
+    int faceIndex=0;for(auto* path:{&sky.right,&sky.left,&sky.top,&sky.bottom,&sky.front,&sky.back}){
+        *path="sky"+std::to_string(faceIndex)+".tga";
+        std::ofstream image(assets.root/ *path,std::ios::binary);unsigned char header[18]{};header[2]=2;header[12]=2;header[14]=2;header[16]=24;image.write(reinterpret_cast<char*>(header),18);
+        for(int i=0;i<4;++i){image.put(char(colors[faceIndex][2]));image.put(char(colors[faceIndex][1]));image.put(char(colors[faceIndex][0]));}++faceIndex;
+    }
+    auto skyRead=[&](Vec3 position,Vec3 direction,Vec3 up=Vec3{0,1,0}){
+        auto matrix=multiply(perspective(kPi/3,1,.1f,100),lookAt(position,position+direction,up));
+        renderer.draw(skyWorld,matrix,192,192,position,0,0,false);glFinish();assert(glGetError()==GL_NO_ERROR);
+        std::array<unsigned char,3> pixel{};glReadPixels(96,96,1,1,GL_RGB,GL_UNSIGNED_BYTE,pixel.data());return pixel;
+    };
+    const Vec3 directions[]{{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,-1},{0,0,1}};
+    for(int i=0;i<6;++i){auto pixel=skyRead({},directions[i],i==2 || i==3?Vec3{0,0,1}:Vec3{0,1,0});for(int c=0;c<3;++c)assert(std::abs(int(pixel[c])-colors[i][c])<=1);}
+    assert(skyRead({20,10,30},{1,0,0})==skyRead({},{1,0,0}));
+    sky.color={.5f,1,1};auto tinted=skyRead({},{1,0,0});assert(tinted[0]>=126 && tinted[0]<=129);sky.color={1,1,1};
+    {std::ofstream hdr(assets.root/"studio.hdr",std::ios::binary);hdr<<"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 2 +X 2\n";for(int i=0;i<4;++i){hdr.put(char(128));hdr.put(char(128));hdr.put(char(128));hdr.put(char(129));}}
+    sky.type=1;sky.hdr="studio.hdr";auto hdrPixel=skyRead({},{0,0,-1});for(auto c:hdrPixel)assert(c>=184 && c<=188);assert(renderer.skyboxError().empty());
+    auto foreground=skyWorld.create();skyWorld.add(foreground,Transform{{0,0,-3}});skyWorld.add(foreground,MeshRenderer{cube,{1,0,0}});
+    auto objectPixel=skyRead({},{0,0,-1});assert(objectPixel[1]<10 && objectPixel[2]<10);skyWorld.destroy(foreground);
+    sky.enabled=false;auto disabled=skyRead({},{0,0,-1});assert(disabled[0]<40 && disabled[1]<40);
+    std::filesystem::remove_all(temp);
     renderer.shutdown();SDL_GL_DestroyContext(context);SDL_DestroyWindow(window);SDL_Quit();
 }

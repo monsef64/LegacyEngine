@@ -24,6 +24,7 @@ inline std::string sceneSignature(World& world) {
         component(e,LuaScript{},[&](const LuaScript& script){scalar(script.path.size());result+=script.path;scalar(script.enabled);fields(script.fields);scalar(script.additional.size());for(const auto& entry:script.additional){scalar(entry.path.size());result+=entry.path;scalar(entry.enabled);fields(entry.fields);}});
         auto light=[&](const LightSettings& l){vec(l.color);scalar(l.intensity);scalar(l.enabled);scalar(l.shadows);scalar(l.range);scalar(l.innerAngle);scalar(l.outerAngle);scalar(l.shadowDistance);scalar(l.shadowBias);scalar(l.shadowQuality);};
         component(e,DirectionalLight{},light);component(e,PointLight{},light);component(e,SpotLight{},light);
+        component(e,Skybox{},[&](const Skybox& sky){scalar(sky.type);vec(sky.color);scalar(sky.enabled);for(const auto* p:{&sky.right,&sky.left,&sky.top,&sky.bottom,&sky.front,&sky.back,&sky.hdr}){scalar(p->size());result+=*p;}});
         component(e,AudioListener{},[&](const AudioListener& listener){scalar(listener.enabled);});
         component(e,AudioSource{},[&](const AudioSource& a){scalar(a.clip.size());result+=a.clip;scalar(a.volume);scalar(a.pitch);scalar(a.pan);scalar(a.distance);scalar(a.blend);scalar(a.looping);scalar(a.muted);scalar(a.playOnStart);});
         component(e,Camera{},[&](const Camera& c){
@@ -32,7 +33,8 @@ inline std::string sceneSignature(World& world) {
             scalar(c.targetEntity.index);scalar(c.targetEntity.generation);vec(c.target);vec(c.followOffset);scalar(c.tracking);scalar(c.following);
         });
         component(e,Transform{},transform);
-        component(e,MeshRenderer{},[&](const MeshRenderer& m){scalar(m.mesh.id);vec(m.color);scalar(m.checkerboard);scalar(m.specular);});
+        component(e,MeshRenderer{},[&](const MeshRenderer& m){scalar(m.mesh.id);vec(m.color);scalar(m.checkerboard);scalar(m.specular);scalar(m.material.size());result+=m.material;scalar(m.materialOverrides);const auto& p=m.materialValues;
+            scalar(p.shader);vec(p.color);scalar(p.texture.size());result+=p.texture;scalar(p.normalMap.size());result+=p.normalMap;scalar(p.normalStrength);scalar(p.tilingX);scalar(p.tilingY);scalar(p.specular);});
         component(e,Collider{},[&](const Collider& c){vec(c.size);vec(c.center);scalar(c.friction);scalar(c.bounciness);scalar(c.shape);scalar(c.radius);scalar(c.height);});
         component(e,RigidBody{},[&](const RigidBody& b){scalar(b.mass);scalar(b.useGravity);vec(b.linearVelocity);vec(b.angularVelocity);});
         component(e,Parent{},[&](const Parent& p){scalar(p.entity.index);scalar(p.entity.generation);transform(p.previous);});

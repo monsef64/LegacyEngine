@@ -408,8 +408,72 @@
     "signature": "BoxCollider - alias of Collider"
   },
   {
+    "name": "Skybox",
+    "signature": "Skybox - component type token; first enabled Skybox supplies scene background"
+  },
+  {
+    "name": "setType",
+    "signature": "sky:setType('Textures'|'HDR') - six-face or HDR skybox"
+  },
+  {
+    "name": "setHDR",
+    "signature": "sky:setHDR(Texture) - project .hdr panorama; nil clears"
+  },
+  {
+    "name": "setFace",
+    "signature": "sky:setFace(face,Texture) - right/left/top/bottom/front/back; nil clears"
+  },
+  {
+    "name": "setTextures",
+    "signature": "sky:setTextures(right,left,top,bottom,front,back)"
+  },
+  {
+    "name": "hdr",
+    "signature": "Skybox.hdr: project-relative Radiance .hdr panorama"
+  },
+  {
     "name": "MeshRenderer",
     "signature": "MeshRenderer - component type token"
+  },
+  {
+    "name": "material",
+    "signature": "MeshRenderer.material: project-relative .mat asset path"
+  },
+  {
+    "name": "setMaterial",
+    "signature": "mesh:setMaterial(path) - assign .mat asset, reset overrides"
+  },
+  {
+    "name": "setMaterialColor",
+    "signature": "mesh:setMaterialColor(r,g,b) - instance color override"
+  },
+  {
+    "name": "setMaterialTexture",
+    "signature": "mesh:setMaterialTexture(Texture) - instance albedo override; nil clears"
+  },
+  {
+    "name": "setMaterialNormalMap",
+    "signature": "mesh:setMaterialNormalMap(Texture) - instance normal map override; nil clears"
+  },
+  {
+    "name": "setMaterialShader",
+    "signature": "mesh:setMaterialShader('Diffuse'|'Bumped Diffuse')"
+  },
+  {
+    "name": "setMaterialNormalStrength",
+    "signature": "mesh:setMaterialNormalStrength(value) - 0..4"
+  },
+  {
+    "name": "setMaterialTiling",
+    "signature": "mesh:setMaterialTiling(x,y) - nonzero UV repeat scale"
+  },
+  {
+    "name": "setMaterialSpecular",
+    "signature": "mesh:setMaterialSpecular(value) - 0..1"
+  },
+  {
+    "name": "resetMaterialOverrides",
+    "signature": "mesh:resetMaterialOverrides() - restore shared asset properties"
   },
   {
     "name": "ObjectName",

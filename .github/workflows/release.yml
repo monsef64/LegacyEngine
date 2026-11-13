@@ -188,6 +188,7 @@ jobs:
 
           mkdir -p "$package/licenses"
           cp build/LegacyEngine "$package/"
+          cp LICENSE "$package/"
           cp -r scripts "$package/"
           cp .luarc.json "$package/"
           cp build/_deps/sdl3-src/LICENSE.txt "$package/licenses/SDL3.txt"

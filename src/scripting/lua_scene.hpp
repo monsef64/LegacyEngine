@@ -32,6 +32,8 @@ private:
     void tick(const char* name,float dt);
     static int api(lua_State* state);
     static int audioApi(lua_State* state);
+    static int skyboxMethod(lua_State* state);
+    static int materialMethod(lua_State* state);
     static int lightMethod(lua_State* state);
     static int listenerMethod(lua_State* state);
     static int audioMethod(lua_State* state);

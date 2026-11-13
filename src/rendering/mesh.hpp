@@ -13,6 +13,7 @@
 struct Vertex {
     Vec3 position;
     Vec3 normal; // unit vector pointing away from the surface; lighting needs it
+    float u=0,v=0;
 };
 
 struct MeshData {

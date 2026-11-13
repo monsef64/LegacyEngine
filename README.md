@@ -165,18 +165,28 @@ a second rendering framework. Its cost controls are:
   shadows. Disable shadows on fill lights to reserve budget for key lights.
 - Shadow-caster sphere/frustum culling, cached mesh bounds/uniform locations, and
   model matrices prepared once per view. Wire geometry does not cast shadows.
-- Per-light quality: Off skips shadow passes, Low uses 256²/one sample, Medium
-  512²/four PCF taps, and High 1024²/nine PCF taps. Lower qualities use a smaller
-  region of their fixed atlas layer: they reduce raster/filtering work but do not
+- Per-light quality: Off skips shadow passes. Low uses 256² with one bilinear
+  comparison lookup, Medium uses 512² with a weighted 3×3 tent (four bilinear
+  lookups), and High uses 1024² with a weighted 5×5 tent (nine bilinear lookups).
+  Each hardware lookup interpolates four depth-comparison results, so edges
+  transition continuously instead of jumping between nearest-depth texels.
+  Lower qualities use a smaller region of their fixed atlas layer: they reduce raster/filtering work but do not
   shrink the shared texture allocation.
-- Adjustable slope-aware bias; directional coverage is
-  texel-snapped to reduce shimmering.
+- Receiver-plane depth correction adjusts comparison depth across the filter
+  footprint on sloped surfaces; degenerate gradients fall back safely. Adjustable
+  slope-aware bias remains available. World-space derivatives are evaluated before
+  divergent light branches, then projected analytically for each light.
+- Directional coverage is texel-snapped to reduce shimmering.
 
 Shadow maps are refreshed for each rendered view, so moving lights **and** moving
 casters update immediately. This is not clustered rendering, cascaded directional
 shadows, baked lighting, global illumination or unlimited lights. Two visible
 Scene/Game views incur separate shadow passes. Point shadows are more expensive;
 profile your target scenes/hardware and tune range, coverage and shadow toggles.
+Tent PCF smooths jagged edges; it does not recover geometry smaller than a shadow
+texel or simulate contact-hardening area-light shadows. Large directional coverage
+can still lose detail, and point-shadow face boundaries are clamped rather than
+filtered across faces. Use tighter coverage or High quality where detail matters.
 CI checks all three light types with real OpenGL pixel comparisons for shadow
 toggles, moving casters and moving lights; no hardware FPS claim is implied.
 
@@ -347,3 +357,139 @@ The engine is experimental. Arbitrary imported meshes/material pipelines, OGG,
 folder rename/trash, named analog bindings and a full Lua debugger are not implemented.
 System Trash is Linux-tested; platform-dependent dialogs, clipboard, VS Code URI
 launching, real audio hardware and physical gamepads need target-platform testing.
+
+### Materials
+
+Create a **Material (.mat)** from the Asset Browser's **Create** context menu,
+then assign it using the **MeshRenderer → Material** dropdown or drag the asset
+onto that slot. An empty slot also offers **Create Material** (seeded with the
+mesh's current color/specular). Materials are owned by the project's `Assets`
+folder, use numeric duplicate suffixes, and persist as readable JSON.
+
+Expand **Material properties** in MeshRenderer to edit the shared asset:
+- **Diffuse** (default): color, albedo texture, UV tiling and specular.
+- **Bumped Diffuse**: the same controls plus a tangent-space **Normal map** and
+  normal strength. Use OpenGL-style (+Y/green-up) normal maps; this is normal
+  mapping, not grayscale height/displacement mapping.
+- Texture dropdowns accept PNG, JPEG, BMP and TGA; you can also drag textures
+  from the Asset Browser. `None` removes a texture. All built-in solids and the
+  plane have UVs. Surfaces remain opaque; texture alpha is not transparency.
+
+Inspector edits are saved immediately to the **shared material asset**, affecting
+all users; asset-file edits are not part of scene undo. Script changes are
+**per-MeshRenderer overrides**, so Play/Stop restores the scene without modifying
+material files. Reset overrides to use shared values again. Old projects without
+materials keep their inline colors, checkerboard and specular.
+
+```lua
+@export albedo Texture
+@export normals Texture
+
+function onStart()
+    local mesh = self:getComponent(MeshRenderer)
+    mesh:setMaterial("Stone.mat")
+    mesh:setMaterialColor(0.8, 0.9, 1)
+    mesh:setMaterialTexture(albedo)
+    mesh:setMaterialShader("Bumped Diffuse")
+    mesh:setMaterialNormalMap(normals)
+    mesh:setMaterialNormalStrength(1)
+    mesh:setMaterialTiling(2, 2)
+    mesh:setMaterialSpecular(0.2)
+    -- mesh:resetMaterialOverrides()
+end
+```
+
+`Texture` is **export-only**: assign its asset in the script Inspector. It is a
+project-relative asset reference, not a texture-loading constructor/API. Passing
+`nil` to either texture setter clears that instance's texture. Material scripts
+and `.ls` autocomplete expose all methods above. `mesh.material` also assigns a
+`.mat` path and resets overrides. The older `color`/`specular` fields remain the
+inline fallback when no material is assigned.
+
+Rendering uses full-resolution textures with mipmaps and repeat wrapping (not
+Asset Browser thumbnails); each image is limited to 32 MiB encoded and
+4096×4096 pixels. The GPU texture cache is capped at 128 MiB/128 entries and
+checks changed files once per second. Material assets refresh within 250 ms;
+missing/invalid assets report errors and fall back safely. Large first-use
+texture loads are synchronous. No transparency, custom GLSL, height maps, or
+standalone texture-loading scripting API is included.
+
+Asset Browser folders can be renamed with **F2** after selecting them, or with
+**right-click → Rename…**, in either List or Grid view. Renaming a folder keeps
+nested script, audio, exported asset and material references up to date, including
+texture paths stored in `.mat` files. Existing destination names are rejected;
+folder deletion remains unavailable.
+
+### Skybox component
+
+Select a GameObject and choose **Add Component → Skybox**. Its **Skybox type** is:
+
+- **Multi Texture Skybox**: assign six PNG/JPEG/BMP/TGA faces using dropdowns or
+  Asset Browser drag/drop: **Right (+X), Left (-X), Top (+Y), Bottom (-Y),
+  Front (-Z), Back (+Z)**. Images must be equally sized squares, up to 2048².
+  Faces use the standard OpenGL cubemap layout (no automatic vertical flip).
+- **Skybox HDR**: assign a Radiance **`.hdr` equirectangular panorama**, up to
+  4096×2048. OpenEXR is not supported. HDR uses Reinhard tone mapping followed
+  by gamma correction for display; it is not clamped to an LDR input texture.
+
+**Skybox color** multiplies the texture (white preserves its color). Disable the
+component to turn it off. The first enabled Skybox in component iteration order supplies the
+background in Scene and Game views; disable it to select another. With no enabled
+Skybox, the existing clear background remains. Missing or invalid images produce
+an error and a solid tint fallback. Each encoded image is limited to 64 MiB;
+only the active sky's texture is retained on the GPU. Files refresh within one
+second. Initial image loading is synchronous.
+
+The background follows camera orientation, not position, and stays behind scene
+geometry. The owning object's Transform does not rotate or move it. Skyboxes are
+backgrounds only: they do not provide image-based lighting, reflections or ambient
+light. Components persist in projects and participate in duplication, undo/redo,
+Play/Stop restoration and Asset Browser path renames.
+
+```lua
+@export panorama Texture
+@export right Texture
+@export left Texture
+@export top Texture
+@export bottom Texture
+@export front Texture
+@export back Texture
+
+function onStart()
+    local sky = self:getComponent(Skybox)
+    if sky == nil then sky = self:addComponent(Skybox) end
+    sky:setEnabled(true)
+    sky:setColor(1, 1, 1)
+    sky:setType("HDR")
+    sky:setHDR(panorama)
+    -- Or use six face textures:
+    -- sky:setType("Textures")
+    -- sky:setTextures(right, left, top, bottom, front, back)
+    -- sky:setFace("front", front)
+end
+```
+
+`Skybox` can itself be exported as a component reference. Direct fields are
+`type` (0 = textures, 1 = HDR), `color`, `enabled`, `hdr`, `right`, `left`, `top`,
+`bottom`, `front` and `back`. Texture fields are project-relative paths; `Texture`
+exports now also accept `.hdr` for skyboxes, still without a texture-loading API.
+Use `setHDR(nil)` or `setFace(name, nil)` to clear a slot. The scripting methods
+and properties are included in `.ls` editor/VS Code completion.
+
+### Debug menu
+
+The top bar's **Debug** menu has two session-only toggles (off by default):
+- **Show FPS** displays the editor's rolling frame rate over the Game view. This
+  measures the whole editor frame, not an isolated player-render benchmark.
+- **Show Colliders in Game** overlays all collider wireframes in green using the
+  active Game camera, including during Play. Hidden edges are visible for debugging.
+
+These options do not change the scene or saved project. Without an active camera,
+the Game view continues to show only its centered no-camera message.
+
+## License
+
+LegacyEngine and the LegacyScript extension are licensed under the
+**GNU General Public License, version 2 only** (`GPL-2.0-only`). See [LICENSE](LICENSE)
+for the full terms. Third-party dependencies, fonts, and other vendored assets
+retain their respective licenses and notices.

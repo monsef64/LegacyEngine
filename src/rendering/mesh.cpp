@@ -13,8 +13,9 @@ void addQuad(MeshData& mesh, Vec3 centre, Vec3 right, Vec3 up)
         centre + right + up,
         centre - right + up,
     };
+    const float uv[4][2]{{0,0},{1,0},{1,1},{0,1}};
     for (int index : {0, 1, 2, 0, 2, 3}) {
-        mesh.vertices.push_back({corners[index], normal});
+        mesh.vertices.push_back({corners[index], normal,uv[index][0],uv[index][1]});
     }
 }
 
@@ -75,7 +76,7 @@ MeshData makeCapsule(float radius, float height)
                           std::cos(angle) * std::sin(longitude)};
         Vec3 position = normal * radius;
         position.y += ring <= rings / 2 ? -height * 0.5f : height * 0.5f;
-        return Vertex{position, normal};
+        return Vertex{position, normal,float(slice)/slices,float(ring)/(rings+1)};
     };
     for (int r = 0; r <= rings; ++r) {
         for (int i = 0; i < slices; ++i) {
@@ -98,8 +99,8 @@ MeshData makeCone(float radius,float height) {
     for(int i=0;i<kConeSegments;++i) {
         const Vec3 a=hull[1+i]*scale,b=hull[1+(i+1)%kConeSegments]*scale;
         const Vec3 n=normalize(cross(tip-a,b-a));
-        for(Vec3 p:{a,tip,b})mesh.vertices.push_back({p,n});
-        for(Vec3 p:{a,b,Vec3{0,-height*0.5f,0}})mesh.vertices.push_back({p,{0,-1,0}});
+        mesh.vertices.push_back({a,n,float(i)/kConeSegments,0});mesh.vertices.push_back({tip,n,(i+.5f)/kConeSegments,1});mesh.vertices.push_back({b,n,float(i+1)/kConeSegments,0});
+        for(Vec3 p:{a,b,Vec3{0,-height*0.5f,0}})mesh.vertices.push_back({p,{0,-1,0},.5f+p.x/std::max(2*radius,.001f),.5f+p.z/std::max(2*radius,.001f)});
     }
     return mesh;
 }

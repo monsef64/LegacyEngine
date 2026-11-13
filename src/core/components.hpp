@@ -6,9 +6,11 @@
 
 #include "core/math.hpp"
 #include "lighting/light.hpp"
+#include "materials/material.hpp"
 #include "audio/audio_source.hpp"
 #include "core/ecs.hpp"
 #include "rendering/mesh.hpp"
+#include "rendering/skybox.hpp"
 #include <string>
 #include <vector>
 
@@ -28,6 +30,9 @@ struct MeshRenderer {
     Vec3       color = {1.0f, 1.0f, 1.0f}; // red, green and blue, each from 0 to 1
     bool       checkerboard = false;         // repeating 1 m squares in local XZ
     float      specular = 0.0f;              // highlight strength (0 is matte)
+    std::string material; // project-relative .mat; empty uses legacy Diffuse values
+    MaterialProperties materialValues;
+    unsigned materialOverrides=0; // per-instance script overrides; never edits shared asset
 };
 
 enum class ColliderShape { Box, Sphere, Capsule, Cone };

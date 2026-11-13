@@ -6,6 +6,7 @@
 #include "editor/transform_edit.hpp"
 #include "scripting/script_exports.hpp"
 #include "audio/audio_clip.hpp"
+#include "materials/material_io.hpp"
 #include <ImGuizmo.h>
 #include <cstdio>
 #include <cmath>
@@ -45,12 +46,13 @@ template<class T> inline bool componentHeader(World& world,Entity entity,const c
         if constexpr(std::is_same_v<T,DirectionalLight>)type=9;
         if constexpr(std::is_same_v<T,PointLight>)type=10;
         if constexpr(std::is_same_v<T,SpotLight>)type=11;
+        if constexpr(std::is_same_v<T,Skybox>)type=12;
         EditorComponentPayload payload{entity,type};ImGui::SetDragDropPayload("EDITOR_COMPONENT",&payload,sizeof(payload));ImGui::TextUnformatted(name);ImGui::EndDragDropSource();
     }
     if(remove){world.remove<T>(entity);return false;}return open;
 }
 inline void drawScriptExports(World& world,std::vector<ScriptField>& fields){
-    const char* componentTypes[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener","DirectionalLight","PointLight","SpotLight"};
+    const char* componentTypes[]{"Transform","RigidBody","Collider","MeshRenderer","ObjectName","LuaScript","Camera","AudioSource","AudioListener","DirectionalLight","PointLight","SpotLight","Skybox"};
     for(auto& field:fields){
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)",field.name.c_str(),field.type.c_str());
@@ -64,10 +66,10 @@ inline void drawScriptExports(World& world,std::vector<ScriptField>& fields){
             const std::string value=asset?(field.text.empty()?"None (drop asset)":field.text):exportHasComponent(world,field.entity,field.type)?(name?name->value:"GameObject"):"None (drop object / component)";
             ImGui::Button(value.c_str(),ImVec2(std::max(40.0f,ImGui::GetContentRegionAvail().x-36),0));
             if(ImGui::BeginDragDropTarget()){
-                if(asset){if(auto* p=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string path=static_cast<const char*>(p->Data);if(field.type!="AudioClip" || audioAsset(path))field.text=path;}}
+                if(asset){if(auto* p=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string path=static_cast<const char*>(p->Data);if((field.type!="AudioClip" || audioAsset(path)) && (field.type!="Texture" || (!path.empty() && (materialTexturePath(path) || skyboxHDRPath(path)))))field.text=path;}}
                 else{
                     if(auto* p=ImGui::AcceptDragDropPayload("LEVEL_OBJECT")){Entity target=*static_cast<const Entity*>(p->Data);if(exportHasComponent(world,target,field.type))field.entity=target;}
-                    if(auto* p=ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")){auto target=*static_cast<const EditorComponentPayload*>(p->Data);if(target.type>=0 && target.type<12 && (field.type=="GameObject" || field.type==componentTypes[target.type]) && exportHasComponent(world,target.entity,field.type))field.entity=target.entity;}
+                    if(auto* p=ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")){auto target=*static_cast<const EditorComponentPayload*>(p->Data);if(target.type>=0 && target.type<13 && (field.type=="GameObject" || field.type==componentTypes[target.type]) && exportHasComponent(world,target.entity,field.type))field.entity=target.entity;}
                 }
                 ImGui::EndDragDropTarget();
             }
@@ -124,10 +126,59 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                     }
                     ImGui::EndCombo();
                 }
+                if(assets){
+                    static std::string materialError;
+                    try{
+                        static std::filesystem::path listedRoot;static std::vector<std::string> materialFiles;static std::chrono::steady_clock::time_point listedAt;
+                        auto now=std::chrono::steady_clock::now();if(listedRoot!=assets->root || now-listedAt>std::chrono::seconds(1)){materialFiles=assets->files();listedRoot=assets->root;listedAt=now;}
+                        if(ImGui::BeginCombo("Material",r->material.empty()?"None (Diffuse)":r->material.c_str())){
+                            if(ImGui::Selectable("None (Diffuse)",r->material.empty())){r->material.clear();r->materialOverrides=0;}
+                            for(const auto& path:materialFiles)if(materialAsset(path) && ImGui::Selectable(path.c_str(),r->material==path)){r->material=path;r->materialOverrides=0;}
+                            ImGui::EndCombo();
+                        }
+                        if(ImGui::BeginDragDropTarget()){
+                            if(const auto* payload=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string path=static_cast<const char*>(payload->Data);if(materialAsset(path)){r->material=path;r->materialOverrides=0;}}
+                            ImGui::EndDragDropTarget();
+                        }
+                        auto create=[&](){auto path=createMaterial(*assets);MaterialProperties p;p.color=r->color;p.specular=r->specular;saveMaterial(*assets,path,p);r->material=path;r->materialOverrides=0;};
+                        bool createRequested=false;
+                        if(ImGui::BeginPopupContextItem("Material slot actions")){createRequested=ImGui::MenuItem("Create Material");ImGui::EndPopup();}
+                        if(createRequested)create();
+                        if(r->material.empty() && ImGui::SmallButton("Create Material"))create();
+                        if(!r->material.empty()){
+                            auto edited=loadMaterial(*assets,r->material);
+                            if(ImGui::TreeNodeEx("Material properties",ImGuiTreeNodeFlags_DefaultOpen)){bool changed=false;
+                            changed|=ImGui::Combo("Shader",&edited.shader,"Diffuse\0Bumped Diffuse\0");
+                            changed|=ImGui::ColorEdit3("Material color",&edited.color.x);
+                            auto textureField=[&](const char* label,std::string& path){
+                                ImGui::PushID(label);bool editedTexture=false;
+                                if(ImGui::BeginCombo(label,path.empty()?"None (drop Texture)":path.c_str())){
+                                    if(ImGui::Selectable("None",path.empty())){path.clear();editedTexture=true;}
+                                    for(const auto& file:materialFiles)if(materialTexturePath(file) && ImGui::Selectable(file.c_str(),file==path)){path=file;editedTexture=true;}
+                                    ImGui::EndCombo();
+                                }
+                                if(ImGui::BeginDragDropTarget()){if(const auto* payload=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string value=static_cast<const char*>(payload->Data);if(!value.empty() && materialTexturePath(value)){path=value;editedTexture=true;}}ImGui::EndDragDropTarget();}
+                                ImGui::PopID();return editedTexture;
+                            };
+                            changed|=textureField("Texture",edited.texture);
+                            if(edited.shader==1){changed|=textureField("Normal map",edited.normalMap);changed|=ImGui::SliderFloat("Normal strength",&edited.normalStrength,0,4);}
+                            float tiling[]{edited.tilingX,edited.tilingY};if(ImGui::DragFloat2("UV tiling",tiling,.05f,-1000,1000)){edited.tilingX=tiling[0];edited.tilingY=tiling[1];changed=true;}
+                            changed|=ImGui::SliderFloat("Material specular",&edited.specular,0,1);
+                            ImGui::TextDisabled("Shared asset: edits affect all meshes using this material.");
+                            if(changed && validMaterial(edited))try{saveMaterial(*assets,r->material,edited);materialError.clear();}catch(const std::exception& e){materialError=e.what();}
+                            if(r->materialOverrides){ImGui::TextDisabled("This mesh has instance overrides.");if(ImGui::SmallButton("Reset material overrides"))r->materialOverrides=0;}
+                            ImGui::TreePop();
+                            }
+                        }
+                    }catch(const std::exception& e){materialError=e.what();}
+                    if(!materialError.empty())ImGui::TextWrapped("%s",materialError.c_str());
+                }
+                if(r->material.empty()){
                 float color[]{r->color.x,r->color.y,r->color.z};
                 if(ImGui::ColorEdit3("Color",color))r->color={color[0],color[1],color[2]};
                 ImGui::Checkbox("Checkerboard",&r->checkerboard);
                 ImGui::SliderFloat("Specular",&r->specular,0,1);
+                }
             }
             if(auto* c=world.tryGet<Collider>(selected);c && componentHeader<Collider>(world,selected,"Collider")) {
                 const char* names[]{"Box","Sphere","Capsule","Cone"};int shape=static_cast<int>(c->shape);
@@ -179,6 +230,26 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 ImGui::TextWrapped("Emission follows local -Z. Shadow maps use a shared 12-layer budget; a point light uses six layers.");
                 if(validLight(edited))*light=edited;ImGui::PopID();
             };
+            if(auto* sky=world.tryGet<Skybox>(selected);sky && componentHeader<Skybox>(world,selected,"Skybox")){
+                ImGui::Checkbox("Skybox enabled",&sky->enabled);
+                ImGui::Combo("Skybox type",&sky->type,"Multi Texture Skybox\0Skybox HDR\0");
+                ImGui::ColorEdit3("Skybox color",&sky->color.x);
+                auto slot=[&](const char* label,std::string& path,bool hdr){
+                    ImGui::PushID(label);
+                    if(ImGui::BeginCombo(label,path.empty()?"None (drop texture)":path.c_str())){
+                        if(ImGui::Selectable("None",path.empty()))path.clear();
+                        if(assets)for(const auto& file:assets->files())if((hdr?skyboxHDRPath(file):materialTexturePath(file)) && ImGui::Selectable(file.c_str(),file==path))path=file;
+                        ImGui::EndCombo();
+                    }
+                    if(ImGui::BeginDragDropTarget()){
+                        if(const auto* payload=ImGui::AcceptDragDropPayload("ASSET_PATH")){std::string value=static_cast<const char*>(payload->Data);if(!value.empty() && (hdr?skyboxHDRPath(value):materialTexturePath(value)))path=value;}
+                        ImGui::EndDragDropTarget();
+                    }
+                    ImGui::PopID();
+                };
+                if(sky->type==1)slot("HDR panorama",sky->hdr,true);
+                else{slot("Right (+X)",sky->right,false);slot("Left (-X)",sky->left,false);slot("Top (+Y)",sky->top,false);slot("Bottom (-Y)",sky->bottom,false);slot("Front (-Z)",sky->front,false);slot("Back (+Z)",sky->back,false);}
+            }
             lightInspector(DirectionalLight{},"DirectionalLight",0);lightInspector(PointLight{},"PointLight",1);lightInspector(SpotLight{},"SpotLight",2);
             if(auto* listener=world.tryGet<AudioListener>(selected);listener && componentHeader<AudioListener>(world,selected,"AudioListener")){
                 ImGui::Checkbox("Listener enabled",&listener->enabled);
@@ -228,6 +299,7 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                     if(!world.has<SpotLight>(selected) && ImGui::MenuItem("SpotLight"))world.add(selected,SpotLight{});
                 }
                 if(!world.has<AudioListener>(selected) && world.has<Transform>(selected) && ImGui::MenuItem("AudioListener"))world.add(selected,AudioListener{});
+                if(!world.has<Skybox>(selected) && ImGui::MenuItem("Skybox"))world.add(selected,Skybox{});
                 if(!world.has<AudioSource>(selected) && ImGui::MenuItem("AudioSource"))world.add(selected,AudioSource{});
                 if(!world.has<Transform>(selected) && ImGui::MenuItem("Transform"))world.add(selected,Transform{});
                 if(!world.has<MeshRenderer>(selected) && ImGui::MenuItem("MeshRenderer"))world.add(selected,MeshRenderer{meshes[0]});
