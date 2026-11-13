@@ -47,7 +47,7 @@ full repository. Run it after API changes, then test and package.
 
 ## Download from GitHub Actions
 
-The **LegacyScript VSIX** workflow tests and builds automatically on pushes and
+The **LegacyScript VSIX** workflow builds automatically on pushes and
 pull requests affecting the extension or engine API definitions. You can also
 run it manually via **Actions → LegacyScript VSIX → Run workflow** once the
 workflow is available on the default branch.

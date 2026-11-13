@@ -73,5 +73,5 @@ Tent PCF smooths jagged edges; it does not recover geometry smaller than a shado
 texel or simulate contact-hardening area-light shadows. Large directional coverage
 can still lose detail, and point-shadow face boundaries are clamped rather than
 filtered across faces. Use tighter coverage or High quality where detail matters.
-CI checks all three light types with real OpenGL pixel comparisons for shadow
+The optional local graphical regression executable checks all three light types with real OpenGL pixel comparisons for shadow
 toggles, moving casters and moving lights; no hardware FPS claim is implied.

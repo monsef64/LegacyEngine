@@ -408,7 +408,7 @@ if(BUILD_TESTING)
     endif()
   endforeach()
   add_test(NAME lighting COMMAND lighting_tests)
-  # lighting_render_tests needs a real GL context; CI invokes it under Xvfb.
+  # lighting_render_tests needs a real GL context; run it manually under Xvfb.
 endif()
 
 # Standalone project tests do not otherwise link an engine subsystem.
