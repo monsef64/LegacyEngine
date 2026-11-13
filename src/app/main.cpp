@@ -25,6 +25,7 @@
 #include "editor/scene_orientation.hpp"
 #include "editor/script_editor.hpp"
 #include "editor/transform_editor.hpp"
+#include "gameplay/first_person.hpp"
 #include "levels/level_system.hpp"
 #include "physics/collider_debug.hpp"
 #include "physics/physics.hpp"
@@ -931,10 +932,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     });
                 }
                 const auto shadowsBefore = renderingSettings.shadows;
-                bool shadowChanged =
-                    ImGui::Combo("Shadow mapping",
-                                 &renderingSettings.shadows.mode,
-                                 "Cascaded (CSM) - primary\0Single-map PCF (PCM)\0");
+                bool shadowChanged = ImGui::Combo("Shadow mapping",
+                                                  &renderingSettings.shadows.mode,
+                                                  "Cascaded (CSM)\0Single-map PCF (PCM)\0");
+                int filtering = renderingSettings.shadows.soft ? 1 : 0;
+                if (ImGui::Combo("Shadow filtering", &filtering, "Hard\0Soft (PCF)\0")) {
+                    renderingSettings.shadows.soft = filtering == 1;
+                    shadowChanged = true;
+                }
                 const int sizes[]{256, 512, 1024, 2048};
                 int resolution = 0;
                 for (int i = 0; i < 4; ++i) {
@@ -1001,7 +1006,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui::SetNextWindowSize(ImVec2(layout.toolbar.width, layout.toolbar.height));
         ImGui::Begin("Scene controls",
                      nullptr,
-                     fixedPanelFlags | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoDocking);
+                     fixedPanelFlags | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoDocking |
+                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         if (editAllowed) {
             if (copyRequested && objectSelected) {
                 clipboard.copy(world, selectedEntity);
@@ -1436,8 +1442,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
             if (beginEditorPanel("Scene")) {
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 3));
-                ImGui::BeginChild(
-                    "Scene toolbar", ImVec2(0, 30), ImGuiChildFlags_AlwaysUseWindowPadding);
+                ImGui::BeginChild("Scene toolbar",
+                                  ImVec2(0, 30),
+                                  ImGuiChildFlags_AlwaysUseWindowPadding,
+                                  ImGuiWindowFlags_NoScrollbar |
+                                      ImGuiWindowFlags_NoScrollWithMouse);
                 editor.drawToolbar();
                 ImGui::EndChild();
                 ImGui::PopStyleVar();
@@ -1593,7 +1602,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             editor.finish(world);
             clicking = false;
             history.commit(world, selectedEntity);
-            deleteLevelObject(world, selectedEntity);
+            deleteHierarchySelection(world, selectedEntity);
             selectedEntity = {};
             history.commit(world, selectedEntity);
             physics.reset();
@@ -1648,6 +1657,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
         if (playMode.playing()) {
+            updateFPSCameras(world, std::min(seconds, .25f), input);
             Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
             scripts.update(std::min(seconds, 0.25f));
             componentScripts.update(std::min(seconds, 0.25f));
@@ -1663,6 +1673,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         physics.update(world, playMode.playing() ? seconds : 0.0f, [&](float dt) {
             scripts.fixedUpdate(dt);
             componentScripts.fixedUpdate(dt);
+            updateCharacterControllers(world, physics);
             updateHierarchy(world);
         });
         profiler.checkpoint(ProfilePart::Physics);

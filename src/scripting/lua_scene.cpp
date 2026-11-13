@@ -44,7 +44,9 @@ const char* types[]{"Transform",
                     "DirectionalLight",
                     "PointLight",
                     "SpotLight",
-                    "Skybox"};
+                    "Skybox",
+                    "CharacterController",
+                    "FPSCamera"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -53,7 +55,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 13; ++i) {
+    for (int i = 0; i < 15; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -95,6 +97,10 @@ bool has(const Handle& h, int type) {
         return h.world->has<SpotLight>(h.entity);
     case 12:
         return h.world->has<Skybox>(h.entity);
+    case 13:
+        return h.world->has<CharacterController>(h.entity);
+    case 14:
+        return h.world->has<FPSCamera>(h.entity);
     default:
         return false;
     }
@@ -131,6 +137,29 @@ Field field(lua_State* L, const Component& c, const char* key) {
         FIELD(shadowQuality, Integer);
     }
     switch (c.type) {
+    case 13: {
+        auto& v = h.world->get<CharacterController>(h.entity);
+        FIELD(speed, Number);
+        FIELD(sprintMultiplier, Number);
+        FIELD(jumpSpeed, Number);
+        FIELD(groundProbe, Number);
+        FIELD(canMove, Boolean);
+        FIELD(canJump, Boolean);
+        FIELD(canSprint, Boolean);
+        FIELD(isGrounded, Boolean);
+        FIELD(isJumping, Boolean);
+        FIELD(isMoving, Boolean);
+        FIELD(isSprinting, Boolean);
+        break;
+    }
+    case 14: {
+        auto& v = h.world->get<FPSCamera>(h.entity);
+        FIELD(isFreecam, Boolean);
+        FIELD(mouseLook, Boolean);
+        FIELD(sensitivity, Number);
+        FIELD(speed, Number);
+        return field(L, Component{h, 6}, key);
+    }
     case 0: {
         auto& v = h.world->get<Transform>(h.entity);
         FIELD(position, Vec);
@@ -348,7 +377,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 13; ++i) {
+    for (int i = 0; i < 15; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -548,6 +577,13 @@ int LuaScene::api(lua_State* L) {
         case 11:
             self.world_.each<SpotLight>([&](Entity e, SpotLight&) { collect(e); });
             break;
+        case 13:
+            self.world_.each<CharacterController>(
+                [&](Entity e, CharacterController&) { collect(e); });
+            break;
+        case 14:
+            self.world_.each<FPSCamera>([&](Entity e, FPSCamera&) { collect(e); });
+            break;
         case 12:
             self.world_.each<Skybox>([&](Entity e, Skybox&) { collect(e); });
             break;
@@ -587,6 +623,11 @@ int LuaScene::api(lua_State* L) {
         return 1;
     }
     if (op == 4) {
+        if (((type == 0 || type == 1 || type == 2) &&
+             self.world_.has<CharacterController>(h.entity)) ||
+            ((type == 0 || type == 6) && self.world_.has<FPSCamera>(h.entity))) {
+            return luaL_error(L, "Remove the dependent CharacterController or FPSCamera first");
+        }
         switch (type) {
         case 0:
             self.world_.remove<Transform>(h.entity);
@@ -623,6 +664,12 @@ int LuaScene::api(lua_State* L) {
             break;
         case 11:
             self.world_.remove<SpotLight>(h.entity);
+            break;
+        case 13:
+            self.world_.remove<CharacterController>(h.entity);
+            break;
+        case 14:
+            self.world_.remove<FPSCamera>(h.entity);
             break;
         case 12:
             self.world_.remove<Skybox>(h.entity);
@@ -667,6 +714,12 @@ int LuaScene::api(lua_State* L) {
                 self.world_.add(h.entity, Transform{});
             }
             self.world_.add(h.entity, PointLight{});
+            break;
+        case 13:
+            addCharacterController(self.world_, h.entity);
+            break;
+        case 14:
+            addFPSCamera(self.world_, h.entity);
             break;
         case 12:
             self.world_.add(h.entity, Skybox{});
@@ -727,21 +780,13 @@ int LuaScene::objectIndex(lua_State* L) {
         const char* name;
         int operation;
     };
-    const Method objectMethods[]{{"setActive", 210},
-                                 {"isActive", 211},
-                                 {"setPosition", 200},
-                                 {"getPosition", 201},
-                                 {"setRotation", 202},
-                                 {"getRotation", 203},
-                                 {"setScale", 204},
-                                 {"getScale", 205},
-                                 {"translate", 206},
-                                 {"lookAt", 207},
-                                 {"setParent", 7},
-                                 {"getParent", 8},
-                                 {"destroy", 1},
-                                 {"setName", 208},
-                                 {"getName", 209}};
+    const Method objectMethods[]{{"setActive", 210},   {"isActive", 211},    {"setPosition", 200},
+                                 {"getPosition", 201}, {"setRotation", 202}, {"getRotation", 203},
+                                 {"setScale", 204},    {"getScale", 205},    {"translate", 206},
+                                 {"lookAt", 207},      {"setParent", 7},     {"getParent", 8},
+                                 {"destroy", 1},       {"setName", 208},     {"getName", 209},
+                                 {"getForward", 220},  {"getBackward", 221}, {"getRight", 222},
+                                 {"getLeft", 223},     {"getUp", 224},       {"getDown", 225}};
     for (const auto& method : objectMethods) {
         if (!std::strcmp(key, method.name)) {
             lua_pushlightuserdata(L, h.scene);
@@ -750,6 +795,19 @@ int LuaScene::objectIndex(lua_State* L) {
             lua_pushcclosure(L, objectMethod, 3);
             return 1;
         }
+    }
+    if ((h.world->has<CharacterController>(h.entity) &&
+         (!std::strcmp(key, "move") || !std::strcmp(key, "jump") || !std::strcmp(key, "sprint"))) ||
+        (h.world->has<FPSCamera>(h.entity) &&
+         (!std::strcmp(key, "linkToCharacter") || !std::strcmp(key, "setIsFreecam") ||
+          !std::strcmp(key, "getIsFreecam")))) {
+        const int type =
+            (!std::strcmp(key, "move") || !std::strcmp(key, "jump") || !std::strcmp(key, "sprint"))
+                ? 13
+                : 14;
+        component(L, h, type);
+        lua_replace(L, 1);
+        return componentIndex(L);
     }
     if (h.world->has<Camera>(h.entity)) {
         const Method cameraMethods[]{{"setActive", 101},
@@ -775,6 +833,10 @@ int LuaScene::objectIndex(lua_State* L) {
             }
         }
     }
+    if (!std::strcmp(key, "isFreecam") && h.world->has<FPSCamera>(h.entity)) {
+        lua_pushboolean(L, h.world->get<FPSCamera>(h.entity).isFreecam);
+        return 1;
+    }
     if (!std::strcmp(key, "parent")) {
         const Entity p = getParent(*h.world, h.entity);
         if (p == Entity{}) {
@@ -797,6 +859,11 @@ int LuaScene::objectIndex(lua_State* L) {
 int LuaScene::objectNewIndex(lua_State* L) {
     auto& h = handle(L, 1);
     const char* key = luaL_checkstring(L, 2);
+    if (!std::strcmp(key, "isFreecam") && h.world->has<FPSCamera>(h.entity)) {
+        luaL_checktype(L, 3, LUA_TBOOLEAN);
+        h.world->get<FPSCamera>(h.entity).isFreecam = lua_toboolean(L, 3);
+        return 0;
+    }
     if (!std::strcmp(key, "parent")) {
         const Entity p = lua_isnil(L, 3) ? Entity{} : handle(L, 3).entity;
         if (!setParent(*h.world, h.entity, p)) {
@@ -818,6 +885,50 @@ int LuaScene::objectNewIndex(lua_State* L) {
 int LuaScene::componentIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
     const char* key = luaL_checkstring(L, 2);
+    if (c.type == 13 || c.type == 14) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
+            return luaL_error(L, "Component no longer exists");
+        }
+        const char* names[]{
+            "move", "jump", "sprint", "linkToCharacter", "setIsFreecam", "getIsFreecam"};
+        for (int i = 0; i < 6; ++i) {
+            if (!std::strcmp(key, names[i]) &&
+                ((c.type == 13 && i < 3) || (c.type == 14 && i >= 3))) {
+                lua_pushvalue(L, 1);
+                lua_pushinteger(L, i);
+                lua_pushcclosure(L, gameplayMethod, 2);
+                return 1;
+            }
+        }
+    }
+    if (c.type == 14) {
+        struct CameraMethod {
+            const char* name;
+            int operation;
+        };
+        const CameraMethod methods[]{{"setActive", 101},
+                                     {"setFieldOfView", 106},
+                                     {"setProjectionMode", 107},
+                                     {"setNearClipPlane", 108},
+                                     {"setFarClipPlane", 109},
+                                     {"setViewport", 110},
+                                     {"setTarget", 111},
+                                     {"setCameraTarget", 111},
+                                     {"setFollowTarget", 112},
+                                     {"setShake", 113},
+                                     {"setCameraShake", 113},
+                                     {"worldToScreen", 114},
+                                     {"screenToWorld", 115}};
+        for (const auto& method : methods) {
+            if (!std::strcmp(key, method.name)) {
+                lua_pushlightuserdata(L, c.object.scene);
+                lua_pushinteger(L, method.operation);
+                lua_pushvalue(L, 1);
+                lua_pushcclosure(L, fpsCameraMethod, 3);
+                return 1;
+            }
+        }
+    }
     if (c.type == 12) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, 12)) {
             return luaL_error(L, "Skybox no longer exists");
@@ -984,6 +1095,19 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 14) {
+        const char* key = luaL_checkstring(L, 2);
+        if (!std::strcmp(key, "active") || !std::strcmp(key, "orthographic") ||
+            !std::strcmp(key, "fieldOfView") || !std::strcmp(key, "nearClip") ||
+            !std::strcmp(key, "farClip") || !std::strcmp(key, "orthographicSize")) {
+            if (!c.object.world->alive(c.object.entity) || !has(c.object, 14)) {
+                return luaL_error(L, "FPSCamera no longer exists");
+            }
+            component(L, c.object, 6);
+            lua_replace(L, 1);
+            return componentNewIndex(L);
+        }
+    }
     if (c.type == 7) {
         if (!c.object.world->alive(c.object.entity) ||
             !c.object.world->has<AudioSource>(c.object.entity)) {
@@ -1009,6 +1133,12 @@ int LuaScene::componentNewIndex(lua_State* L) {
         r.materialOverrides = 0;
         return 0;
     }
+    const char* gameplayKey = luaL_checkstring(L, 2);
+    if (c.type == 13 &&
+        (!std::strcmp(gameplayKey, "isGrounded") || !std::strcmp(gameplayKey, "isJumping") ||
+         !std::strcmp(gameplayKey, "isMoving") || !std::strcmp(gameplayKey, "isSprinting"))) {
+        return luaL_error(L, "Controller state is read-only");
+    }
     const Field f = field(L, c, luaL_checkstring(L, 2));
     if (c.type == 6 && !std::strcmp(lua_tostring(L, 2), "active")) {
         luaL_checktype(L, 3, LUA_TBOOLEAN);
@@ -1031,9 +1161,16 @@ int LuaScene::componentNewIndex(lua_State* L) {
         *static_cast<int*>(f.value) = int(value);
         break;
     }
-    case Kind::Number:
-        *static_cast<float*>(f.value) = number(L, 3);
+    case Kind::Number: {
+        const float value = number(L, 3);
+        if ((c.type == 13 || c.type == 14) &&
+            (value < 0 || value > 1000 ||
+             (!std::strcmp(gameplayKey, "sprintMultiplier") && value < 1))) {
+            return luaL_error(L, "Gameplay setting out of range");
+        }
+        *static_cast<float*>(f.value) = value;
         break;
+    }
     case Kind::Boolean:
         luaL_checktype(L, 3, LUA_TBOOLEAN);
         *static_cast<bool*>(f.value) = lua_toboolean(L, 3) != 0;
@@ -1750,6 +1887,112 @@ int LuaScene::audioMethod(lua_State* L) {
     return 0;
 }
 
+int LuaScene::fpsCameraMethod(lua_State* L) {
+    const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(3), "Component"));
+    if (!c.object.world->alive(c.object.entity) || !has(c.object, 14)) {
+        return luaL_error(L, "FPSCamera no longer exists");
+    }
+    if (auto* receiver = static_cast<Component*>(luaL_testudata(L, 1, "Component"))) {
+        if (receiver->type == 14 && receiver->object.world == c.object.world &&
+            receiver->object.entity == c.object.entity) {
+            lua_remove(L, 1);
+        }
+    }
+    c.object.scene->pushObject(c.object.entity);
+    lua_insert(L, 1);
+    return cameraApi(L);
+}
+
+int LuaScene::gameplayMethod(lua_State* L) {
+    const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
+    auto& world = *c.object.world;
+    const Entity e = c.object.entity;
+    if (!world.alive(e) || !has(c.object, c.type)) {
+        return luaL_error(L, "Component no longer exists");
+    }
+    if (auto* receiver = static_cast<Component*>(luaL_testudata(L, 1, "Component"))) {
+        if (receiver->type == c.type && receiver->object.world == &world &&
+            receiver->object.entity == e) {
+            lua_remove(L, 1);
+        }
+    } else if (auto* receiver = static_cast<Handle*>(luaL_testudata(L, 1, "GameObject"))) {
+        if (receiver->world == &world && receiver->entity == e) {
+            lua_remove(L, 1);
+        }
+    }
+    const int op = int(lua_tointeger(L, lua_upvalueindex(2)));
+    if (c.type == 13) {
+        auto& controller = world.get<CharacterController>(e);
+        if (op == 0) {
+            Vec3 movement;
+            if (lua_type(L, 1) == LUA_TTABLE) {
+                movement = vectorArgument(L, 1);
+            } else if (lua_gettop(L) >= 3) {
+                movement = {number(L, 1), number(L, 2), number(L, 3)};
+            } else {
+                movement = {number(L, 1), 0, number(L, 2)};
+            }
+            movement.y = 0;
+            const float length = std::sqrt(dot(movement, movement));
+            if (length > 1) {
+                movement = movement * (1 / length);
+            }
+            controller.movement = movement;
+        }
+        if (op == 1) {
+            controller.jumpRequested = true;
+        }
+        if (op == 2) {
+            if (!lua_isnone(L, 1)) {
+                luaL_checktype(L, 1, LUA_TBOOLEAN);
+            }
+            controller.sprintRequested = lua_isnone(L, 1) || lua_toboolean(L, 1);
+        }
+        return 0;
+    }
+    auto& fps = world.get<FPSCamera>(e);
+    if (op == 4) {
+        luaL_checktype(L, 1, LUA_TBOOLEAN);
+        fps.isFreecam = lua_toboolean(L, 1);
+        return 0;
+    }
+    if (op == 5) {
+        lua_pushboolean(L, fps.isFreecam);
+        return 1;
+    }
+    Entity character;
+    if (auto* ref = static_cast<Component*>(luaL_testudata(L, 1, "Component"))) {
+        if (ref->type != 13 || ref->object.world != &world) {
+            return luaL_error(L, "Expected CharacterController");
+        }
+        character = ref->object.entity;
+    } else {
+        auto target = handle(L, 1);
+        if (target.world != &world) {
+            return luaL_error(L, "Foreign character");
+        }
+        character = target.entity;
+    }
+    if (!world.has<CharacterController>(character) || !world.has<Transform>(character)) {
+        return luaL_error(L, "Expected CharacterController GameObject");
+    }
+    const Vec3 offset = lua_isnoneornil(L, 2) ? Vec3{0, .7f, 0} : vectorArgument(L, 2);
+    if (!setParent(world, e, character)) {
+        return luaL_error(L, "Invalid character parent");
+    }
+    auto pose = localTransform(world, e);
+    pose.position = offset;
+    pose.rotation = {};
+    setLocalTransform(world, e, pose);
+    fps.yaw = fps.pitch = 0;
+    fps.initialized = true;
+    if (auto* camera = world.tryGet<Camera>(e)) {
+        camera->tracking = false;
+        camera->following = false;
+    }
+    return 0;
+}
+
 void LuaScene::setExports(const std::vector<ScriptField>& fields) {
     for (const auto& field : fields) {
         if (!exportName(field.name)) {
@@ -1769,7 +2012,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 13; ++type) {
+                for (; type < 15; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }

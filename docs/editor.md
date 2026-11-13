@@ -183,3 +183,18 @@ copies the displayed parent-local pose for children (world pose for roots), so
 pasting makes the destination Inspector values match without reparenting it.
 Use within the same project: asset handles and script object references are copied
 as-is, not cloned or remapped. AudioSource copies its full state as well as settings.
+
+### Hierarchy groups and folding
+
+Click a row for primary selection, Ctrl-click to add/remove rows, or Shift-click
+to select a visible range. The primary row drives Inspector and the transform gizmo.
+Delete removes selected roots and their subtrees; Unparent and drag/drop operate
+on selected roots, without processing selected descendants twice. Drop on another
+object to parent the group, or on blank Hierarchy space / the level root to unparent
+while preserving world poses. Cyclic group reparenting is rejected. Arrows beside
+parents fold/unfold their children; search temporarily reveals matching descendants.
+Multi-selection does not apply Inspector field edits or gizmo transforms to the group.
+
+Scene transform and playback toolbars do not scroll. Asset navigation uses an
+up-arrow button (hover for “Up one folder”). Create menus include Character
+Controller and FPS Camera; see [first-person setup](first-person.md).

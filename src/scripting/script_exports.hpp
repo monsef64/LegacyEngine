@@ -10,7 +10,8 @@ inline bool exportReferenceType(const std::string& type) {
            type == "Collider" || type == "MeshRenderer" || type == "ObjectName" ||
            type == "LuaScript" || type == "Camera" || type == "AudioSource" ||
            type == "AudioListener" || type == "DirectionalLight" || type == "PointLight" ||
-           type == "SpotLight" || type == "Skybox";
+           type == "SpotLight" || type == "Skybox" || type == "CharacterController" ||
+           type == "FPSCamera";
 }
 inline bool exportAssetType(const std::string& type) {
     return type == "Asset" || type == "AudioClip" || type == "Texture";
@@ -121,6 +122,8 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(PointLight);
     EXPORT_COMPONENT(SpotLight);
     EXPORT_COMPONENT(Skybox);
+    EXPORT_COMPONENT(CharacterController);
+    EXPORT_COMPONENT(FPSCamera);
 #undef EXPORT_COMPONENT
     return false;
 }

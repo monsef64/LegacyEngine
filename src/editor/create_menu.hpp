@@ -1,13 +1,21 @@
 #pragma once
 #include "core/components.hpp"
 #include "core/ecs.hpp"
+#include "core/hierarchy.hpp"
 #include <imgui.h>
 
-// IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox.
+// IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox; 12
+// character; 13 FPS camera.
 inline int drawCreateItems() {
     int item = -1;
     if (ImGui::MenuItem("Empty GameObject")) {
         item = 0;
+    }
+    if (ImGui::MenuItem("Character Controller")) {
+        item = 12;
+    }
+    if (ImGui::MenuItem("FPS Camera")) {
+        item = 13;
     }
     if (ImGui::BeginMenu("Audio")) {
         if (ImGui::MenuItem("Audio Source")) {
@@ -99,8 +107,10 @@ inline Entity createEditorObject(World& world,
                                "Point Light",
                                "Spot Light",
                                "Plane",
-                               "Skybox"};
-    if (item < 0 || item > 11) {
+                               "Skybox",
+                               "Character Controller",
+                               "FPS Camera"};
+    if (item < 0 || item > 13) {
         return {};
     }
     const MeshHandle meshes[]{MeshHandle{}, capsule, cone, cube, sphere};
@@ -115,7 +125,13 @@ inline Entity createEditorObject(World& world,
                                     item > 0 && item < 5 ? meshes[item] : MeshHandle{},
                                     item > 0 && item < 5 ? shapes[item] : ColliderShape::Box,
                                     item == 0 || item >= 5);
-    if (item == 5) {
+    if (item == 12) {
+        addCharacterController(world, entity);
+    }
+    if (item == 13) {
+        addFPSCamera(world, entity);
+    }
+    if (item == 5 || item == 13) {
         Camera camera;
         bool found = false;
         world.each<Camera>([&](Entity, const Camera& c) { found |= c.active; });

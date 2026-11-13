@@ -1,7 +1,7 @@
 const api = require('./api.json');
 const members = require('./members.json');
 const keywords = 'and break do else elseif end false for function goto if in local nil not or repeat return then true until while'.split(' ');
-const objectMembers = { ...members.GameObject, ...members.MeshRenderer, ...members.CameraObject, ...members.AudioSource, ...members.AudioListener, ...members.DirectionalLight, ...members.PointLight, ...members.Skybox, ...members.SpotLight };
+const objectMembers = { ...members.GameObject, ...members.MeshRenderer, ...members.CameraObject, ...members.AudioSource, ...members.AudioListener, ...members.DirectionalLight, ...members.PointLight, ...members.Skybox, ...members.SpotLight, ...members.CharacterController, ...members.FPSCamera };
 function memberTable(receiver) {
   if (receiver === 'GameObject') return members.GameObjectConstructor;
   if (receiver === 'Camera') return members.CameraConstructor;

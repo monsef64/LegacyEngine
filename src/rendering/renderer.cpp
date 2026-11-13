@@ -108,6 +108,7 @@ bool Renderer::init() {
 
     lightCountLocation_ = glGetUniformLocation(litProgram_, "uLightCount");
     shadowSamplerLocation_ = glGetUniformLocation(litProgram_, "uShadowTexture");
+    softShadowLocation_ = glGetUniformLocation(litProgram_, "uSoftShadows");
     shadowViewLocation_ = glGetUniformLocation(litProgram_, "uShadowView");
     for (int i = 0; i < 16; ++i) {
         cascadeCountLocations_[i] =
@@ -649,6 +650,18 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
     glUseProgram(litProgram_);
     glUniform1i(lightCountLocation_, static_cast<int>(lights.size()));
     glUniform1i(shadowSamplerLocation_, 1);
+    glUniform1i(softShadowLocation_, shadowSettings_.soft);
+    if (shadowTexture_) {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, shadowTexture_);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY,
+                        GL_TEXTURE_MIN_FILTER,
+                        shadowSettings_.soft ? GL_LINEAR : GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY,
+                        GL_TEXTURE_MAG_FILTER,
+                        shadowSettings_.soft ? GL_LINEAR : GL_NEAREST);
+        glActiveTexture(GL_TEXTURE0);
+    }
     glUniform4f(shadowViewLocation_,
                 shadowForward.x,
                 shadowForward.y,

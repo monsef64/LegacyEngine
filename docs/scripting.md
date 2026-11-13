@@ -197,3 +197,7 @@ including inactive children. `destroyGameObject(object)` is immediate;
 Attached scripts receive `onDestroy` once. To preserve a child, call
 `child:setParent(nil)` **before** deleting its parent (this preserves world pose).
 Editor deletion follows the same subtree rule and supports undo/redo.
+
+See [Character controllers and FPS cameras](first-person.md) for movement APIs,
+state flags, GameObject direction vectors, and the complete attached-script example
+in `scripts/examples/character_controller_fps.ls`.

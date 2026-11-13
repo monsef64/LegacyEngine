@@ -87,6 +87,21 @@ inline std::string sceneSignature(World& world) {
         component(e, DirectionalLight{}, light);
         component(e, PointLight{}, light);
         component(e, SpotLight{}, light);
+        component(e, CharacterController{}, [&](const CharacterController& c) {
+            scalar(c.speed);
+            scalar(c.sprintMultiplier);
+            scalar(c.jumpSpeed);
+            scalar(c.groundProbe);
+            scalar(c.canMove);
+            scalar(c.canJump);
+            scalar(c.canSprint);
+        });
+        component(e, FPSCamera{}, [&](const FPSCamera& f) {
+            scalar(f.isFreecam);
+            scalar(f.mouseLook);
+            scalar(f.speed);
+            scalar(f.sensitivity);
+        });
         component(e, Skybox{}, [&](const Skybox& sky) {
             scalar(sky.cubemap.size());
             result += sky.cubemap;

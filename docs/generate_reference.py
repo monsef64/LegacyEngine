@@ -74,6 +74,7 @@ for name in ('lockCursor', 'unlockCursor', 'hideCursor', 'showCursor', 'isCursor
     GLOBALS[name] = f'local result = {name}()\ndebug.log(result)'
 
 METHOD_ARGS = {
+'move':'0, -1', 'sprint':'true', 'setIsFreecam':'false',
 'getComponent':'Transform', 'addComponent':'Collider', 'removeComponent':'Collider',
 'setPosition':'1, 2, 3', 'setRotation':'0, 45, 0', 'setScale':'1, 1, 1', 'translate':'0, 0, 1',
 'lookAt':'0, 0, -5', 'setParent':'nil', 'setName':'"Player"',
@@ -93,7 +94,7 @@ METHOD_ARGS = {
 'setCubemap':'"Sky/Evening.cubemap"', 'setHDR':'"Sky/studio.hdr"', 'setFace':'"front", "Sky/front.png"',
 'setTextures':', '.join(f'"Sky/{face}.png"' for face in ('right','left','top','bottom','front','back')),
 }
-NO_ARGS = set('isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
+NO_ARGS = set('getForward getBackward getRight getLeft getUp getDown jump getIsFreecam isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
 
 
 def inventory():
@@ -149,6 +150,8 @@ def example(entry):
         prefix = f'local component = self:getComponent({owner}) or self:addComponent({owner})'
         if owner == 'AudioSource':
             prefix += '\ncomponent.clip = AudioClip("Audio/example.wav")'
+    if name == 'linkToCharacter':
+        return 'local character = self:getComponent(CharacterController) or self:addComponent(CharacterController)\nlocal camera = Camera.new("Player FPS Camera")\nlocal fps = camera:addComponent(FPSCamera)\nfps:linkToCharacter(character, {x=0,y=0.7,z=0})'
     if name == 'fadeTo':
         return 'local skybox1 = self:getComponent(Skybox) or self:addComponent(Skybox)\nlocal skybox2 = GameObject.new("Skybox2"):addComponent(Skybox)\nskybox2:setColor(0.3, 0.1, 0.05)\nskybox2:setEnabled(false)\nskybox1:fadeTo(skybox2, 0.5)'
     if name in NO_ARGS:
@@ -159,6 +162,12 @@ def example(entry):
 
 
 CALLABLE_DETAILS = {
+    'CharacterController.move': 'Sets persistent local X/Z input, clamped to unit length. Call move(0,0) to stop. Applied by fixed physics steps; do not multiply by deltaTime. Requires Transform, Collider and dynamic RigidBody (added automatically). Upright rotation is locked against physics torque. State flags update on fixed steps.',
+    'CharacterController.jump': 'Queues one grounded jump. Requests while airborne or canJump=false are discarded; holding a button does not automatically retrigger unless your script requests another jump. isJumping means airborne and ascending, not falling.',
+    'CharacterController.sprint': 'Stores sprint intent; true when omitted. isSprinting requires canMove, canSprint and nonzero movement input.',
+    'FPSCamera.linkToCharacter': 'Accepts a CharacterController component or its GameObject. Parents the camera and sets its parent-local position offset, default (0,0.7,0). Mouse yaw turns the character, while pitch stays local and clamps to +/-89 degrees. Existing Camera APIs remain available on the camera GameObject; FPSCamera also forwards Camera settings and methods.',
+    'FPSCamera.setIsFreecam': 'Unparented FPS cameras with isFreecam=true use native WASD and Q/E movement while Game input is focused. False disables translation, not mouse look. Parented FPS cameras never translate freely. Mouse look requires a locked cursor; mouseLook=false leaves rotation to scripts.',
+
     'destroyGameObject': 'Immediately destroys the GameObject and all descendants, including inactive children. Attached scripts receive onDestroy once. To keep a child, detach it with child:setParent(nil) before deleting its parent. Editor deletion also removes the entire subtree and supports undo/redo.',
     'spawn': 'Creates a prefab asset instance or copies a GameObject subtree and returns its new root. Prefab paths are project-relative .prefab strings, not component tokens. Position is world-space; rotation accepts Euler degrees or a quaternion. Internal object references are remapped; external references are cleared. See the Prefab workflow guide.',
     'destroy': 'Destroys the root and its descendants now (omitted/zero delay) or after nonnegative playing seconds. Pause freezes delayed destruction. A later schedule replaces the delay; pending timers are not serialized.',

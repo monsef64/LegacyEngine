@@ -36,6 +36,10 @@
     "title": "LegacyScript"
   },
   {
+    "file": "first-person.md",
+    "title": "Character controller and FPS camera"
+  },
+  {
     "file": "scripting-reference.md",
     "title": "Scripting Reference"
   },

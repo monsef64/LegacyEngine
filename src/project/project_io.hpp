@@ -68,7 +68,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 14\n";
+    out << std::setprecision(9) << "LegacyEngineProject 15\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -98,7 +98,8 @@ inline std::string encodeLegacy(World& world,
             (world.has<AudioListener>(e) ? 256 : 0) | (world.has<DirectionalLight>(e) ? 512 : 0) |
             (world.has<PointLight>(e) ? 1024 : 0) | (world.has<SpotLight>(e) ? 2048 : 0) |
             (world.has<Skybox>(e) ? 4096 : 0) | (world.has<ObjectActivity>(e) ? 8192 : 0) |
-            (world.has<PrefabInstance>(e) ? 16384 : 0);
+            (world.has<PrefabInstance>(e) ? 16384 : 0) |
+            (world.has<CharacterController>(e) ? 32768 : 0) | (world.has<FPSCamera>(e) ? 65536 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -216,6 +217,17 @@ inline std::string encodeLegacy(World& world,
         if (const auto* link = world.tryGet<PrefabInstance>(e)) {
             out << std::quoted(link->asset) << ' ';
         }
+        if (const auto* c = world.tryGet<CharacterController>(e)) {
+            require(c->speed >= 0 && c->sprintMultiplier >= 1 && c->jumpSpeed >= 0 &&
+                    c->groundProbe >= 0);
+            out << c->speed << ' ' << c->sprintMultiplier << ' ' << c->jumpSpeed << ' '
+                << c->groundProbe << ' ' << c->canMove << ' ' << c->canJump << ' ' << c->canSprint
+                << ' ';
+        }
+        if (const auto* f = world.tryGet<FPSCamera>(e)) {
+            out << f->isFreecam << ' ' << f->mouseLook << ' ' << f->sensitivity << ' ' << f->speed
+                << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -233,7 +245,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 14));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 15));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -294,7 +306,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 12 ? 4095u
                          : version < 13 ? 8191u
                          : version < 14 ? 16383u
-                                        : 32767u) &&
+                         : version < 15 ? 32767u
+                                        : 131071u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -479,6 +492,25 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> std::quoted(path);
             require(materialPathValid(path) && AssetManager::extension(path) == ".prefab");
             result.world.add(e, PrefabInstance{path});
+        }
+        if (mask & 32768) {
+            CharacterController c;
+            c.speed = number(in);
+            c.sprintMultiplier = number(in);
+            c.jumpSpeed = number(in);
+            c.groundProbe = number(in);
+            in >> c.canMove >> c.canJump >> c.canSprint;
+            require(c.speed >= 0 && c.sprintMultiplier >= 1 && c.jumpSpeed >= 0 &&
+                    c.groundProbe >= 0);
+            result.world.add(e, c);
+        }
+        if (mask & 65536) {
+            FPSCamera f;
+            in >> f.isFreecam >> f.mouseLook;
+            f.sensitivity = number(in);
+            f.speed = number(in);
+            require(f.sensitivity >= 0 && f.speed >= 0);
+            result.world.add(e, f);
         }
         require(bool(in));
     }

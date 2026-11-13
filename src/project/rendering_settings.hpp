@@ -33,12 +33,13 @@ struct RenderingSettings {
             auto path = file(assets);
             if (std::filesystem::exists(path)) {
                 auto json = readJsonFile(path, 4096);
-                if ((json.at("version") != 1 && json.at("version") != 2) ||
+                if ((json.at("version") != 1 && json.at("version") != 2 &&
+                     json.at("version") != 3) ||
                     !json.at("vsync").is_boolean()) {
                     throw std::runtime_error("Invalid rendering settings");
                 }
                 vsync = json.at("vsync").get<bool>();
-                if (json.at("version") == 2) {
+                if (json.at("version") >= 2) {
                     if (!json.at("shadowMode").is_number_integer() ||
                         !json.at("shadowResolution").is_number_integer()) {
                         throw std::runtime_error("Invalid shadow settings");
@@ -47,6 +48,12 @@ struct RenderingSettings {
                                           json.at("shadowResolution").get<int>()};
                     if (!loaded.valid()) {
                         throw std::runtime_error("Invalid shadow mode or resolution");
+                    }
+                    if (json.at("version") == 3) {
+                        if (!json.at("softShadows").is_boolean()) {
+                            throw std::runtime_error("Invalid shadow filtering");
+                        }
+                        loaded.soft = json.at("softShadows").get<bool>();
                     }
                     shadows = loaded;
                 }
@@ -59,7 +66,8 @@ struct RenderingSettings {
     }
     void save(const AssetManager& assets) const {
         writeJsonFile(file(assets),
-                      Json{{"version", 2},
+                      Json{{"version", 3},
+                           {"softShadows", shadows.soft},
                            {"vsync", vsync},
                            {"shadowMode", shadows.mode},
                            {"shadowResolution", shadows.resolution}});
