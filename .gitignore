@@ -4,3 +4,6 @@
 /Assets/
 
 .cache/
+
+.venv/
+__pycache__/

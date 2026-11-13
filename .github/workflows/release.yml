@@ -13,6 +13,8 @@ on:
       - 'tests/**'
       - 'third_party/**'
       - 'CMakeLists.txt'
+      - 'docs/**'
+      - 'README.md'
       - 'scripts/**'
       - 'extensions/legacyscript/**'
       - '.github/workflows/release.yml'
@@ -22,6 +24,8 @@ on:
       - 'tests/**'
       - 'third_party/**'
       - 'CMakeLists.txt'
+      - 'docs/**'
+      - 'README.md'
       - 'scripts/**'
       - 'extensions/legacyscript/**'
       - '.github/workflows/release.yml'
@@ -181,6 +185,23 @@ jobs:
           needed=$(objdump -T build/LegacyEngine | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
           echo "::notice::The binary needs glibc ${needed#GLIBC_} or newer"
 
+      - name: Build and validate offline documentation
+        run: |
+          python3 -m venv "$RUNNER_TEMP/docs-tools"
+          "$RUNNER_TEMP/docs-tools/bin/python" -m pip install -r docs/requirements.txt
+          "$RUNNER_TEMP/docs-tools/bin/python" -m unittest discover -s docs/tests
+          "$RUNNER_TEMP/docs-tools/bin/python" docs/build.py --output build/docs --revision "$GITHUB_SHA"
+          cd build/docs
+          "$RUNNER_TEMP/docs-tools/bin/python" -m zipfile -c ../legacyengine-docs.zip *.html style.css screenshot.png LICENSE
+
+      - name: Upload offline HTML documentation
+        uses: actions/upload-artifact@v7
+        with:
+          name: legacyengine-docs
+          path: build/docs/
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Package
         run: |
           timestamp=$(date -u +%Y%m%d-%H%M%S)
@@ -189,6 +210,7 @@ jobs:
           mkdir -p "$package/licenses"
           cp build/LegacyEngine "$package/"
           cp LICENSE "$package/"
+          cp -r build/docs "$package/docs"
           cp -r scripts "$package/"
           cp .luarc.json "$package/"
           cp build/_deps/sdl3-src/LICENSE.txt "$package/licenses/SDL3.txt"
@@ -223,9 +245,9 @@ jobs:
         run: |
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
             # The workflow was run again for the same tag: replace the file.
-            gh release upload "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" --clobber
+            gh release upload "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" build/legacyengine-docs.zip --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" \
+            gh release create "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" build/legacyengine-docs.zip \
               --verify-tag --generate-notes --title "LegacyEngine $GITHUB_REF_NAME"
           fi
 

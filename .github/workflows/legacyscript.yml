@@ -4,12 +4,14 @@ on:
   workflow_dispatch:
   push:
     paths:
+      - 'docs/**'
       - 'extensions/legacyscript/**'
       - 'src/scripting/lua_definitions.hpp'
       - 'scripts/definitions/legacyengine.lua'
       - '.github/workflows/legacyscript.yml'
   pull_request:
     paths:
+      - 'docs/**'
       - 'extensions/legacyscript/**'
       - 'src/scripting/lua_definitions.hpp'
       - 'scripts/definitions/legacyengine.lua'
@@ -57,6 +59,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Build and validate offline documentation
+        working-directory: .
+        run: |
+          python3 -m venv "$RUNNER_TEMP/docs-tools"
+          "$RUNNER_TEMP/docs-tools/bin/python" -m pip install -r docs/requirements.txt
+          "$RUNNER_TEMP/docs-tools/bin/python" -m unittest discover -s docs/tests
+          "$RUNNER_TEMP/docs-tools/bin/python" docs/build.py --output build/docs --revision "$GITHUB_SHA"
+
+      - name: Upload offline HTML documentation
+        uses: actions/upload-artifact@v7
+        with:
+          name: legacyengine-docs
+          path: build/docs/
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Installation instructions
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
@@ -64,6 +82,8 @@ jobs:
           Download **legacyscript-vsix** from this run's **Artifacts** section and extract the ZIP.
           In VS Code choose **Extensions → … → Install from VSIX…** and select `legacyscript.vsix`.
           Open a `.ls` file and check that the language is **LegacyScript**.
+
+          Offline documentation is also available as **legacyengine-docs**. Extract it and open `index.html`.
 
           Artifacts are retained for 30 days. This workflow does not publish to the Marketplace.
           EOF
