@@ -10,6 +10,14 @@
 
 static bool close(float a,float b,float tolerance=.002f){return std::abs(a-b)<tolerance;}
 int main() {
+    OrbitCamera sceneCamera;const float initialYaw=sceneCamera.yaw,initialPitch=sceneCamera.pitch;
+    sceneCamera.focus({20,4,-7},2,1.5f);
+    assert(close(sceneCamera.target.x,20) && close(sceneCamera.target.y,4) && close(sceneCamera.target.z,-7));
+    assert(sceneCamera.yaw==initialYaw && sceneCamera.pitch==initialPitch && sceneCamera.distance>2);
+    const float wideDistance=sceneCamera.distance;sceneCamera.focus({20,4,-7},2,.5f);assert(sceneCamera.distance>wideDistance);
+    sceneCamera.focus({0,0,0},10000,1);assert(sceneCamera.distance==150);
+    sceneCamera.focus({0,0,0},0,1);assert(sceneCamera.distance>=2);
+
     Transform transform;Camera camera;camera.aspect=1.5f;
     aimCamera(transform,{2,3,-8});
     auto front=rotateVector(transform.rotation,{0,0,-1});

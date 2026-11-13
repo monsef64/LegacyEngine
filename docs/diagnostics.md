@@ -47,3 +47,17 @@ severe stack corruption, or an OS/driver failure may prevent any final message.
 Use a debugger or operating-system crash dump for deeper investigation. Script
 messages and asset paths can contain project information; review logs before
 sharing them.
+
+## Unexpected exits
+
+Startup logs identify interactive, smoke-test, or screenshot mode. Smoke tests
+and screenshots intentionally exit after 120 frames. Shutdown-request logs identify
+SDL quit events, **File → Quit**, or completion of automated frames. A clean
+shutdown message indicates that the editor loop and normal teardown completed;
+it is not itself evidence of a crash. If the window exits unexpectedly, include
+these lines and the shell exit status (`echo $?` immediately after running on
+Linux/macOS) when reporting the issue.
+
+Missing skybox/material/audio assets continue to be reported to the terminal,
+but do not automatically open ImGui error windows. Inline Inspector/Asset Browser
+validation messages remain available.

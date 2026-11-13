@@ -34,3 +34,12 @@ is hidden during look and restored on release or focus loss. Shift moves faster;
 Shift+wheel while looking tunes boosted speed. Outside right-mouse look, **W/E/R**
 in Scene select Move/Rotate/Scale. Ctrl/Alt/Super block camera navigation. Escape does not quit.
 F5 starts Play, F6 pauses/resumes, F7 stops. Play-time changes are discarded on Stop.
+
+## Focus the selected object
+
+Select a GameObject in Hierarchy or Scene and press **F** while either panel is
+focused to frame it in the Scene camera. Viewing direction is preserved; camera
+distance adapts to object scale/collider bounds and the viewport's aspect ratio.
+This affects the editor camera only, not the Game camera. It is disabled while
+playing, typing, dragging a widget, navigating with RMB, or using Ctrl/Alt/GUI.
+Objects without a Transform are ignored.
