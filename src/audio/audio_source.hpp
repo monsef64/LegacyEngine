@@ -3,7 +3,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
-struct AudioListener { bool enabled=true; };
+struct AudioListener { bool enabled=true; void pause(){enabled=false;} void start(){enabled=true;} };
 struct AudioSource {
     std::string clip;
     float volume=1,pitch=1,pan=0,distance=50,blend=0;

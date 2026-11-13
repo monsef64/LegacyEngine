@@ -9,7 +9,7 @@
   },
   {
     "name": "AudioListener",
-    "signature": "AudioListener - receives sound at its GameObject world position"
+    "signature": "AudioListener - receives sound at its GameObject world position; pause() disables reception, start() enables it"
   },
   {
     "name": "spatialBlend",

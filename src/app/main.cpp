@@ -765,6 +765,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 const auto* transform = world.tryGet<Transform>(selectedEntity);
                 const auto* collider = world.tryGet<Collider>(selectedEntity);
                 if (transform && collider) renderer.drawCollider(*transform, *collider, viewProjection);
+                const auto* audioSource=world.tryGet<AudioSource>(selectedEntity);
+                if(transform && audioSource)renderer.drawAudioSource(*transform,*audioSource,viewProjection);
             } else {
                 selectedEntity = {};
             }

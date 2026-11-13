@@ -1,4 +1,5 @@
 #include "audio/audio_system.hpp"
+#include "audio/audio_gizmo.hpp"
 #include "audio/audio_preview.hpp"
 #include "scripting/lua_console.hpp"
 #include "scripting/lua_highlight.hpp"
@@ -7,10 +8,30 @@
 #include "editor/editor_history.hpp"
 #include <cassert>
 int main(){
+    assert(audioSourceGlyph().topology==MeshData::Topology::Lines);
+    AudioSource gizmoSource;gizmoSource.blend=1;gizmoSource.distance=12;
+    auto range=audioSourceRange(gizmoSource);assert(range.vertices.size()==384);
+    for(const auto& v:range.vertices)assert(std::abs(dot(v.position,v.position)-144)<.001f);
+    gizmoSource.blend=0;assert(audioSourceRange(gizmoSource).vertices.empty());
+    gizmoSource.blend=1;gizmoSource.distance=0;assert(audioSourceRange(gizmoSource).vertices.empty());
+
     RotationEditorState rotation;rotation.apply({900,-900,10000});assert(rotation.angles.x==360 && rotation.angles.y==-360 && rotation.angles.z==360);
     auto tokens=luaTokens("function onStart() -- comment\nself:play('sound') --[=[multi\nline]=]\nend");
     bool comment=false,string=false,keyword=false;for(auto t:tokens){comment|=t.kind==LuaToken::Comment;string|=t.kind==LuaToken::String;keyword|=t.kind==LuaToken::Keyword;}assert(comment && string && keyword);
     World world;auto e=world.create();world.add(e,Transform{});LuaConsole console;console.bindWorld(world);assert(console.bindObject(e));
+    assert(console.execute(R"(
+      listener = self:addComponent(AudioListener)
+      listener:pause(); assert(listener.enabled == false)
+      listener:start(); assert(listener.enabled == true)
+      listener.pause(); assert(listener.enabled == false)
+      listener.start(); assert(listener.enabled == true)
+    )"));
+    assert(world.has<AudioListener>(e) && world.get<AudioListener>(e).enabled);
+    world.get<AudioListener>(e).pause();assert(activeAudioListener(world)==Entity{});
+    world.get<AudioListener>(e).start();assert(activeAudioListener(world)==e);
+    assert(console.execute("savedListenerStart = listener.start; self:removeComponent(AudioListener)"));
+    assert(!console.execute("savedListenerStart()"));console.clear();
+
     console.execute(R"(
       local audio = createAudioSource(self, AudioClip("tone.wav"))
       assert(self:getComponent(AudioSource) ~= nil)

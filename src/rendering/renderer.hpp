@@ -30,7 +30,11 @@ public:
     // Green collider overlay for a selected object, drawn over the scene.
     void drawCollider(const Transform& transform, const Collider& collider, const Mat4& viewProjection);
 
+    void drawAudioSource(const Transform& transform,const AudioSource& source,const Mat4& viewProjection);
+
 private:
+    void drawWire(const MeshData& wire,const Transform& transform,const Mat4& viewProjection,Vec3 color);
+    MeshHandle audioModel_;
     MeshHandle cameraModel_;
     unsigned int colliderVertexArray_ = 0;
     unsigned int colliderVertexBuffer_ = 0;

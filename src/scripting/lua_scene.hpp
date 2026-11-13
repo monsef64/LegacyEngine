@@ -32,6 +32,7 @@ private:
     void tick(const char* name,float dt);
     static int api(lua_State* state);
     static int audioApi(lua_State* state);
+    static int listenerMethod(lua_State* state);
     static int audioMethod(lua_State* state);
     static int cameraApi(lua_State* state);
     static int objectApi(lua_State* state);

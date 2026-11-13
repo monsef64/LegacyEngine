@@ -183,6 +183,14 @@ function onStart()
 end
 ```
 
+AudioSources show a wireframe speaker glyph only in the Scene editor. Selecting a
+spatial source also shows its maximum hearing range as three wire circles in
+world units (independent of Transform scale). These gizmos never appear in Game.
+
+Use `self:getComponent(AudioListener):pause()` to disable reception and
+`:start()` to enable it again. Sources continue their playback timelines while
+the listener is paused; this does not pause or restart individual clips.
+
 Add an enabled AudioListener to the camera/player: gameplay audio is silent without
 one, even in 2D. 3D audio uses source/listener world positions and listener rotation;
 gain falls linearly to zero at Max Distance. Multiple listeners use the enabled one

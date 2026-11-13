@@ -281,6 +281,10 @@ int LuaScene::objectNewIndex(lua_State* L) {
 }
 int LuaScene::componentIndex(lua_State* L) {
     const auto c=*static_cast<Component*>(luaL_checkudata(L,1,"Component"));const char* key=luaL_checkstring(L,2);
+    if(c.type==8 && (!std::strcmp(key,"pause") || !std::strcmp(key,"start"))) {
+        if(!c.object.world->alive(c.object.entity) || !c.object.world->has<AudioListener>(c.object.entity))return luaL_error(L,"AudioListener no longer exists");
+        lua_pushvalue(L,1);lua_pushboolean(L,!std::strcmp(key,"start"));lua_pushcclosure(L,listenerMethod,2);return 1;
+    }
     if(c.type==7){
         if(!c.object.world->alive(c.object.entity) || !c.object.world->has<AudioSource>(c.object.entity))return luaL_error(L,"AudioSource no longer exists");
         const char* names[]{"play","stop","pause","resume","setPitch","fadeIn","fadeOut","setVolume","mute","unmute","setLooping","setPan","setDistance","isPlaying","playOneShot","spatialBlend","setSpatialBlend"};
@@ -408,6 +412,13 @@ int LuaScene::audioApi(lua_State* L) {
     if(!self.world_.has<AudioSource>(h.entity))self.world_.add(h.entity,AudioSource{});
     if(!lua_isnoneornil(L,2))self.world_.get<AudioSource>(h.entity).clip=luaL_checkstring(L,2);
     component(L,h,7);return 1;
+}
+int LuaScene::listenerMethod(lua_State* L){
+    const auto c=*static_cast<Component*>(luaL_checkudata(L,lua_upvalueindex(1),"Component"));
+    if(!c.object.world->alive(c.object.entity) || !c.object.world->has<AudioListener>(c.object.entity))return luaL_error(L,"AudioListener no longer exists");
+    auto& listener=c.object.world->get<AudioListener>(c.object.entity);
+    if(lua_toboolean(L,lua_upvalueindex(2)))listener.start();else listener.pause();
+    return 0;
 }
 int LuaScene::audioMethod(lua_State* L){
     const auto c=*static_cast<Component*>(luaL_checkudata(L,lua_upvalueindex(1),"Component"));
