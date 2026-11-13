@@ -16,11 +16,14 @@ inline void updateCharacterControllers(World& world, Physics& physics) {
                 : collider.shape == ColliderShape::Sphere
                     ? collider.radius * std::abs(t.scale.y)
                     : collider.size.y * .5f * std::abs(t.scale.y);
-            RayHit hit;
             const Vec3 origin = t.position + rotateVector(t.rotation, collider.center * t.scale);
-            c.isGrounded = body.linearVelocity.y <= .1f &&
-                           physics.raycast({origin, {0, -1, 0}}, halfHeight + c.groundProbe, hit) &&
-                           hit.entity != e && hit.normal.y > .55f;
+            auto groundHits = physics.raycastAll(
+                {origin, {0, -1, 0}}, halfHeight + c.groundProbe, [&](Entity target) {
+                    return target != e && world.has<Collider>(target) &&
+                           !world.get<Collider>(target).isTrigger;
+                });
+            c.isGrounded = body.linearVelocity.y <= .1f && !groundHits.empty() &&
+                           groundHits.front().normal.y > .55f;
             Vec3 direction = rotateVector(t.rotation, c.movement);
             direction.y = 0;
             const float length = std::sqrt(dot(direction, direction));
@@ -48,32 +51,27 @@ inline void updateFPSCameras(World& world, float dt, InputState& input) {
                 return;
             }
             auto local = localTransform(world, e);
-            if (!fps.mouseLook) {
-                fps.initialized = false;
-            }
-            if (fps.mouseLook && !fps.initialized) {
-                auto angles = rotationToEuler(local.rotation);
-                fps.yaw = angles.y;
-                fps.pitch = angles.x;
-                fps.initialized = true;
-            }
-            if (input.enabled && input.mouseEnabled && input.mouseLocked && fps.mouseLook) {
-                fps.yaw -= input.dx * fps.sensitivity;
-                fps.pitch = std::clamp(fps.pitch - input.dy * fps.sensitivity, -89.f, 89.f);
-            }
             const Entity parent = getParent(world, e);
-            if (fps.mouseLook && parent != Entity{} && world.has<CharacterController>(parent)) {
-                auto& character = world.get<Transform>(parent);
-                // Camera yaw is transferred to the upright character; local pitch remains
-                // independent.
-                character.rotation =
-                    composeRotation(character.rotation, axisAngle({0, 1, 0}, fps.yaw * kPi / 180));
-                fps.yaw = 0;
-                updateHierarchy(world);
-                local = localTransform(world, e);
-            }
-            if (fps.mouseLook) {
-                local.rotation = rotationFromEuler({fps.pitch, fps.yaw, 0});
+            const bool looking =
+                input.enabled && input.mouseEnabled && fps.mouseLook &&
+                (input.mouseLocked || (parent == Entity{} && input.mouse[SDL_BUTTON_RIGHT]));
+            if (looking) {
+                const Vec3 forward = rotateVector(local.rotation, {0, 0, -1});
+                float pitch = std::asin(std::clamp(forward.y, -1.f, 1.f)) * 180 / kPi;
+                float yaw = std::atan2(-forward.x, -forward.z) * 180 / kPi;
+                pitch = std::clamp(pitch - input.dy * fps.sensitivity, -89.f, 89.f);
+                const float delta = -input.dx * fps.sensitivity;
+                if (parent != Entity{} && world.has<CharacterController>(parent)) {
+                    auto& character = world.get<Transform>(parent);
+                    character.rotation = composeRotation(
+                        character.rotation, axisAngle({0, 1, 0}, radians(yaw + delta)));
+                    updateHierarchy(world);
+                    local = localTransform(world, e);
+                    yaw = 0;
+                } else {
+                    yaw += delta;
+                }
+                local.rotation = rotationFromEuler({pitch, yaw, 0});
             }
             if (parent == Entity{} && fps.isFreecam && input.enabled) {
                 Vec3 direction{

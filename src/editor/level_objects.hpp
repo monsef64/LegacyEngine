@@ -97,6 +97,9 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(Camera{});
     component(CharacterController{});
     component(FPSCamera{});
+    component(Raycast{});
+    component(ObjectLayer{});
+    component(InspectorOrder{});
     if (auto* scripts = world.tryGet<LuaScript>(copy)) {
         auto remap = [&](std::vector<ScriptField>& fields) {
             for (auto& field : fields) {
@@ -386,12 +389,17 @@ inline bool drawLevelObjects(World& world,
                 });
             const auto key = hierarchyKey(object.entity);
             if (hasChildren) {
+                // Let the Hierarchy background show through in every button state.
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
                 if (ImGui::ArrowButton("##Fold",
                                        collapsed.count(key) ? ImGuiDir_Right : ImGuiDir_Down)) {
                     if (!collapsed.erase(key)) {
                         collapsed.insert(key);
                     }
                 }
+                ImGui::PopStyleColor(3);
                 ImGui::SameLine(0, 2);
             } else {
                 ImGui::Dummy(ImVec2(ImGui::GetFrameHeight(), 1));

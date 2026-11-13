@@ -13,7 +13,7 @@ function onStart()
 
     camera = Camera.new("Player FPS Camera")
     local fps = camera:addComponent(FPSCamera)
-    fps:linkToCharacter(controller, {x=0, y=0.7, z=0})
+    fps:linkToCharacter(controller, 0, 0.7, 0)
     fps.isFreecam = false
     fps.sensitivity = 0.12
     camera:setFieldOfView(75)

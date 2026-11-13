@@ -2,6 +2,7 @@
 int LuaScene::componentTypeIndex(lua_State* L) {
     const auto type=*static_cast<int*>(luaL_checkudata(L,1,"ComponentType"));
     const char* key=luaL_checkstring(L,2);
+    if(type==15) {const char* names[]{"Line","LineOfSight","Sphere"};for(int i=0;i<3;++i)if(!std::strcmp(key,names[i])){lua_pushinteger(L,i);return 1;}}
     if(type==6 && (!std::strcmp(key,"new") || !std::strcmp(key,"getActive"))) {
         lua_pushvalue(L,lua_upvalueindex(1));lua_pushinteger(L,!std::strcmp(key,"new")?0:2);
         lua_pushcclosure(L,cameraApi,2);return 1;

@@ -334,11 +334,11 @@ bool LuaConsole::bindExports(const std::vector<ScriptField>& fields) {
     return true;
 }
 
-void LuaConsole::objectEvent(Entity entity, const char* name) {
+void LuaConsole::objectEvent(Entity entity, const char* name, Entity other, bool colliderArgument) {
     if (!scene_) {
         return;
     }
     beginBudget();
-    scene_->objectEvent(entity, name);
+    scene_->objectEvent(entity, name, other, colliderArgument);
     endBudget();
 }

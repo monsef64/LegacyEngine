@@ -1129,6 +1129,48 @@ local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=0, z=0})
 destroy(copy, 5)
 ```
 
+### onTriggerEnter
+
+`onTriggerEnter(collider) - non-solid overlap begins`
+
+- `param collider Collider|nil Other collider; nil if destroyed before delivery`
+
+```lua
+local camera = Camera.new("Reference Camera")
+camera:setPosition(0, 2, 6)
+local result = onTriggerEnter(camera, function onTriggerEnter(collider)
+    if collider then debug.log("Entered", collider.gameObject:getName()) end
+end)
+```
+
+### onTriggerStay
+
+`onTriggerStay(collider) - non-solid overlap persists`
+
+- `param collider Collider|nil`
+
+```lua
+local camera = Camera.new("Reference Camera")
+camera:setPosition(0, 2, 6)
+local result = onTriggerStay(camera, function onTriggerStay(collider)
+    if collider then debug.log("Overlapping", collider.gameObject.layer) end
+end)
+```
+
+### onTriggerExit
+
+`onTriggerExit(collider) - overlap ends; collider may be nil if destroyed`
+
+- `param collider Collider|nil`
+
+```lua
+local camera = Camera.new("Reference Camera")
+camera:setPosition(0, 2, 6)
+local result = onTriggerExit(camera, function onTriggerExit(collider)
+    debug.log(collider and collider.gameObject:getName() or "Destroyed collider", "left")
+end)
+```
+
 ### print
 
 `print(...) - log tab-separated values`
@@ -1573,6 +1615,42 @@ object:getUp()
 ```lua
 local object = self
 object:getDown()
+```
+
+### GameObject.onTriggerEnter
+
+`onTriggerEnter(collider:Collider|nil)|nil`
+
+- `onTriggerEnter(collider) - non-solid overlap begins`
+
+```lua
+self.onTriggerEnter = function(collider)
+    if collider then debug.log(collider.gameObject:getName()) end
+end
+```
+
+### GameObject.onTriggerStay
+
+`onTriggerStay(collider:Collider|nil)|nil`
+
+- `onTriggerStay(collider) - non-solid overlap persists`
+
+```lua
+self.onTriggerStay = function(collider)
+    if collider then debug.log(collider.gameObject:getName()) end
+end
+```
+
+### GameObject.onTriggerExit
+
+`onTriggerExit(collider:Collider|nil)|nil`
+
+- `onTriggerExit(collider) - overlap ends; collider may be nil if destroyed`
+
+```lua
+self.onTriggerExit = function(collider)
+    if collider then debug.log(collider.gameObject:getName()) end
+end
 ```
 
 ## MeshRenderer
@@ -2473,17 +2551,17 @@ component:sprint(true)
 
 ### FPSCamera.linkToCharacter
 
-`linkToCharacter(self:FPSCamera,character:CharacterController|GameObject,offset:Vec3) Parent to character using local position offset`
+`linkToCharacter(self:FPSCamera,controller:CharacterController|GameObject,x:number,y:number,z:number) Parent using local position offset`
 
-Accepts a CharacterController component or its GameObject. Parents the camera and sets its parent-local position offset, default (0,0.7,0). Mouse yaw turns the character, while pitch stays local and clamps to +/-89 degrees. Existing Camera APIs remain available on the camera GameObject; FPSCamera also forwards Camera settings and methods.
+Accepts a CharacterController component or its GameObject followed by x,y,z local position coordinates. The older vector-table argument also remains supported. Parents the camera and sets its parent-local position offset, default (0,0.7,0). Mouse yaw turns the character, while pitch stays local and clamps to +/-89 degrees. Existing Camera APIs remain available on the camera GameObject; FPSCamera also forwards Camera settings and methods.
 
-- `fps:linkToCharacter(characterController, offset) - parent using local position offset`
+- `fps:linkToCharacter(controller, x,y,z) - parent using local position offset`
 
 ```lua
 local character = self:getComponent(CharacterController) or self:addComponent(CharacterController)
 local camera = Camera.new("Player FPS Camera")
 local fps = camera:addComponent(FPSCamera)
-fps:linkToCharacter(character, {x=0,y=0.7,z=0})
+fps:linkToCharacter(character, 0, 0.7, 0)
 ```
 
 ### FPSCamera.setIsFreecam
@@ -2508,6 +2586,139 @@ component:setIsFreecam(false)
 ```lua
 local component = self:getComponent(FPSCamera) or self:addComponent(FPSCamera)
 component:getIsFreecam()
+```
+
+## RigidBody
+
+### RigidBody.addForce
+
+`addForce(self:RigidBody,x:number,y:number,z:number) World force consumed on next physics step`
+
+Accumulates world force for the next fixed physics step. Apply from onFixedUpdate for continuous thrust; mass zero or kinematic bodies ignore force. addImpulse applies velocity change impulse/mass without deltaTime multiplication.
+
+- `body:addForce(x,y,z) - world force for next fixed step; also accepts a vector table`
+
+```lua
+local component = self:getComponent(RigidBody) or self:addComponent(RigidBody)
+component:addForce(0, 10, 0)
+```
+
+### RigidBody.addImpulse
+
+`addImpulse(self:RigidBody,x:number,y:number,z:number) Instant world impulse at next physics step`
+
+- `body:addImpulse(x,y,z) - world impulse for next fixed step`
+
+```lua
+local component = self:getComponent(RigidBody) or self:addComponent(RigidBody)
+component:addImpulse(0, 3, 0)
+```
+
+### RigidBody.setVelocity
+
+`setVelocity(self:RigidBody,x:number,y:number,z:number)`
+
+- `body:setVelocity(x,y,z) - metres per second`
+
+```lua
+local component = self:getComponent(RigidBody) or self:addComponent(RigidBody)
+component:setVelocity(1, 0, 0)
+```
+
+### RigidBody.getVelocity
+
+`getVelocity(self:RigidBody):Vec3`
+
+- `body:getVelocity() -> world velocity vector`
+
+```lua
+local component = self:getComponent(RigidBody) or self:addComponent(RigidBody)
+component:getVelocity()
+```
+
+### RigidBody.addVelocity
+
+`addVelocity(self:RigidBody,x:number,y:number,z:number)`
+
+- `body:addVelocity(x,y,z)`
+
+```lua
+local component = self:getComponent(RigidBody) or self:addComponent(RigidBody)
+component:addVelocity(0, 1, 0)
+```
+
+### RigidBody.movePosition
+
+`movePosition(self:RigidBody,x:number,y:number,z:number) Set world position`
+
+Changes world position (teleports); this is not a swept collision-aware character move. Use velocity or CharacterController for simulated movement.
+
+- `body:movePosition(x,y,z) - world position, teleport rather than sweep`
+
+```lua
+local component = self:getComponent(RigidBody) or self:addComponent(RigidBody)
+component:movePosition(0, 2, 0)
+```
+
+### RigidBody.moveRotation
+
+`moveRotation(self:RigidBody,x:number,y:number,z:number) Euler degrees, or quaternion table`
+
+- `body:moveRotation(x,y,z) - Euler degrees, or quaternion table`
+
+```lua
+local component = self:getComponent(RigidBody) or self:addComponent(RigidBody)
+component:moveRotation(0, 90, 0)
+```
+
+### RigidBody.stop
+
+`stop(self:RigidBody) Clear velocities and queued forces/impulses`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local component = self:getComponent(RigidBody) or self:addComponent(RigidBody)
+component:stop()
+```
+
+## Raycast
+
+### Raycast.cast
+
+`cast(self:Raycast):RaycastHit|nil Nearest matching hit`
+
+Queries current synchronized collider poses. Unselected layers are ignored before hit selection, so rays pass through them. Returns a generation-safe collider/transform and world point, normal and distance, or nil. The owner is excluded.
+
+- `query:cast() -> nearest hit or nil`
+
+```lua
+local component = self:getComponent(Raycast) or self:addComponent(Raycast)
+component:cast()
+```
+
+### Raycast.castAll
+
+`castAll(self:Raycast):RaycastHit[] Matching distinct objects, nearest first`
+
+Line queries return all distinct hit objects; LineOfSight samples an adjustable fan in local XZ and returns the nearest selected blocker on each ray, deduplicated and distance sorted. Sphere queries return overlapping collider objects; point/normal are the surface intersection toward collider center, or origin/zero if inside. This is not a swept sphere cast.
+
+- `query:castAll() -> distance-sorted distinct hit objects`
+
+```lua
+local component = self:getComponent(Raycast) or self:addComponent(Raycast)
+component:castAll()
+```
+
+### Raycast.setLayers
+
+`setLayers(self:Raycast,names:table) Replace layer mask with an array of names; empty array selects none`
+
+- `query:setLayers({'Default','Enemies'}) - ignore other layers before finding hits`
+
+```lua
+local component = self:getComponent(Raycast) or self:addComponent(Raycast)
+component:setLayers({'Default'})
 ```
 
 ## Component fields and type tokens
@@ -2537,6 +2748,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | --- | --- |
 | `name` | `string` |
 | `parent` | `GameObject / nil` |
+| `layer` | `string Layer name, defaults to Default; assign an existing name or slot number` |
 
 ### Transform fields
 
@@ -2554,6 +2766,10 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `useGravity` | `boolean` |
 | `linearVelocity` | `Vec3` |
 | `angularVelocity` | `Vec3` |
+| `velocity` | `Vec3 Alias of linearVelocity` |
+| `drag` | `number Nonnegative linear damping` |
+| `angularDrag` | `number Nonnegative angular damping` |
+| `isKinematic` | `boolean Move under script control rather than gravity/forces` |
 
 ### Collider fields
 
@@ -2566,6 +2782,9 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `height` | `number` |
 | `friction` | `number` |
 | `bounciness` | `number` |
+| `isTrigger` | `boolean Non-solid overlap sensor` |
+| `gameObject` | `GameObject Collider owner; inspect name, layer and components` |
+| `transform` | `Transform Collider owner transform` |
 
 ### MeshRenderer fields
 
@@ -2715,6 +2934,54 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `mouseLook` | `boolean Writable; native mouse look while cursor is locked` |
 | `speed` | `number Freecam metres per second` |
 | `sensitivity` | `number Degrees per mouse pixel` |
+
+### ColorPalette fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `red` | `Vec3` |
+| `green` | `Vec3` |
+| `blue` | `Vec3` |
+| `white` | `Vec3` |
+| `black` | `Vec3` |
+| `yellow` | `Vec3` |
+| `cyan` | `Vec3` |
+| `magenta` | `Vec3` |
+| `gray` | `Vec3` |
+| `orange` | `Vec3` |
+| `purple` | `Vec3` |
+| `pink` | `Vec3` |
+
+### RaycastHit fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `collider` | `Collider` |
+| `transform` | `Transform` |
+| `gameObject` | `GameObject` |
+| `point` | `Vec3 World hit point; sphere query uses center-directed surface point` |
+| `normal` | `Vec3 World surface normal; zero when sphere origin is inside a collider` |
+| `distance` | `number World distance from query origin` |
+
+### Raycast fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `type` | `integer Raycast.Line, Raycast.LineOfSight or Raycast.Sphere` |
+| `distance` | `number Positive ray range` |
+| `radius` | `number Positive sphere overlap radius` |
+| `angle` | `number Fan aperture in degrees, 0 to 360` |
+| `samples` | `integer Fan rays, 2 to 181` |
+| `offset` | `Vec3 Local origin offset` |
+| `includeTriggers` | `boolean Whether sensors can be hit` |
+
+### RaycastType fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `Line` | `integer` |
+| `LineOfSight` | `integer` |
+| `Sphere` | `integer` |
 
 ## Skybox1 to Skybox2 transition
 

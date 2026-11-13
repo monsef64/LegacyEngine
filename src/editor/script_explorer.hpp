@@ -40,6 +40,11 @@ struct ScriptTree {
             if (ImGui::Selectable(name.c_str(), selected == path)) {
                 result = path;
             }
+            if (ImGui::BeginDragDropSource()) {
+                ImGui::SetDragDropPayload("ASSET_PATH", path.c_str(), path.size() + 1);
+                ImGui::TextUnformatted(name.c_str());
+                ImGui::EndDragDropSource();
+            }
         }
         return result;
     }

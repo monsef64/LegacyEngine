@@ -198,3 +198,20 @@ Multi-selection does not apply Inspector field edits or gizmo transforms to the 
 Scene transform and playback toolbars do not scroll. Asset navigation uses an
 up-arrow button (hover for “Up one folder”). Create menus include Character
 Controller and FPS Camera; see [first-person setup](first-person.md).
+
+### Inspector order and filtered asset menus
+
+Drag a component header onto another component header **on the same GameObject**
+to place it before that component. This changes display order only (not script or
+physics execution order), supports Undo/Redo, and persists with scenes/prefabs.
+Component dragging onto exported fields still assigns component references.
+Script Explorer files now drag as Assets too, so drop them onto Hierarchy objects
+or Inspector script slots just like files from Assets.
+
+Material, texture, cubemap/HDR, audio and script slots open filtered popup menus
+showing only supported files, grouped into their Assets folder hierarchy. Exported
+asset slots use the same picker. Drag/drop and None clearing remain available.
+Character ability toggles are horizontal without the old debug-state text.
+Audio range visualization uses three simple wire circles, without changing its
+actual hearing range. See [physics queries](physics-queries.md) for trigger and
+Raycast Inspector settings and Project layer management.

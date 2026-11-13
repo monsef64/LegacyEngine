@@ -70,6 +70,7 @@ class Renderer {
                       float opacity = 1.0f);
 
     void drawCamera(const Transform& transform, const Camera& camera, const Mat4& viewProjection);
+    void drawRaycast(const Transform& transform, const Raycast& query, const Mat4& viewProjection);
     void drawAudioSource(const Transform& transform,
                          const AudioSource& source,
                          const Mat4& viewProjection);

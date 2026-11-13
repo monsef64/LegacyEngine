@@ -146,6 +146,23 @@ inline std::string sceneSignature(World& world) {
             scalar(c.tracking);
             scalar(c.following);
         });
+        component(e, ObjectLayer{}, [&](const ObjectLayer& layer) { scalar(layer.value); });
+        component(e, InspectorOrder{}, [&](const InspectorOrder& order) {
+            scalar(order.types.size());
+            for (int id : order.types) {
+                scalar(id);
+            }
+        });
+        component(e, Raycast{}, [&](const Raycast& q) {
+            scalar(q.type);
+            scalar(q.distance);
+            scalar(q.radius);
+            scalar(q.angle);
+            scalar(q.samples);
+            vec(q.offset);
+            scalar(q.layerMask);
+            scalar(q.includeTriggers);
+        });
         component(e, Transform{}, transform);
         component(e, MeshRenderer{}, [&](const MeshRenderer& m) {
             scalar(m.mesh.id);
@@ -175,12 +192,16 @@ inline std::string sceneSignature(World& world) {
             scalar(c.shape);
             scalar(c.radius);
             scalar(c.height);
+            scalar(c.isTrigger);
         });
         component(e, RigidBody{}, [&](const RigidBody& b) {
             scalar(b.mass);
             scalar(b.useGravity);
             vec(b.linearVelocity);
             vec(b.angularVelocity);
+            scalar(b.drag);
+            scalar(b.angularDrag);
+            scalar(b.isKinematic);
         });
         component(e, Parent{}, [&](const Parent& p) {
             scalar(p.entity.index);

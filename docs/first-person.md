@@ -64,7 +64,7 @@ remove those dependencies. Use scripts to supply input; it has no automatic WASD
 local character = self:getComponent(CharacterController)
 local camera = Camera.new("Player FPS Camera")
 local fps = camera:addComponent(FPSCamera)
-fps:linkToCharacter(character, {x=0, y=0.7, z=0})
+fps:linkToCharacter(character, 0, 0.7, 0)
 fps.isFreecam = false
 camera:setFieldOfView(75)
 camera:setNearClipPlane(0.05)
@@ -73,8 +73,8 @@ lockCursor()
 hideCursor()
 ```
 
-`linkToCharacter(characterController, offset)` accepts a component or its GameObject.
-It parents the camera and sets the **local** position offset, default `(0, 0.7, 0)`.
+`linkToCharacter(controller, x, y, z)` accepts a component or its GameObject.
+The old vector-table offset remains accepted for compatibility. It parents the camera and sets the **local** position offset, default `(0, 0.7, 0)`.
 The offset is measured from the capsule center, not its feet. Character yaw follows
 mouse look; camera pitch stays local, clamped to ±89°. Linking resets local rotation
 and disables the Camera's separate target/follow mode. Other Camera features
@@ -89,7 +89,9 @@ while Game input is focused. Parented cameras never move freely. `isFreecam=fals
 disables translation, not looking. `fps:setIsFreecam(bool)` and `fps:getIsFreecam()`
 are method equivalents. `fps.speed` controls freecam speed (6 m/s),
 `fps.sensitivity` controls degrees per mouse pixel (0.12), and `fps.mouseLook`
-enables/disables native look. Looking requires Game mouse input and a locked cursor.
+enables/disables native look. Looking requires Game input and a locked cursor; an unparented freecam can also look
+while the right mouse button is held. Look is evaluated after physics, using current
+orientation rather than stale accumulated angles.
 Only the active, effectively enabled camera updates. Pause freezes both systems.
 
 Configuration survives level/prefab save/load, duplication and undo/redo; transient

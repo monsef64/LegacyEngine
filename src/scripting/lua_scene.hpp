@@ -26,7 +26,8 @@ class LuaScene {
     }
     void setExports(const std::vector<ScriptField>& fields);
     void start();
-    void objectEvent(Entity entity, const char* name);
+    void
+    objectEvent(Entity entity, const char* name, Entity other = {}, bool colliderArgument = false);
     bool receivesEvents() const {
         return active_ && (selfEntity_ == Entity{} || isActive(world_, selfEntity_));
     }
@@ -66,7 +67,12 @@ class LuaScene {
     std::vector<Entity> query_;
     bool active_ = false, stopping_ = false, started_ = false;
     void pushObject(Entity e, bool owned = false);
-    void call(const char* name, int reference, float dt, bool delta);
+    void call(const char* name,
+              int reference,
+              float dt,
+              bool delta,
+              Entity other = {},
+              bool colliderArgument = false);
     void destroy(Entity e);
     void tick(const char* name, float dt);
     static int api(lua_State* state);
@@ -82,6 +88,8 @@ class LuaScene {
     static int cameraApi(lua_State* state);
     static int objectApi(lua_State* state);
     static int gameplayMethod(lua_State* state);
+    static int rigidBodyMethod(lua_State* state);
+    static int queryMethod(lua_State* state);
     static int fpsCameraMethod(lua_State* state);
     static int componentTypeIndex(lua_State* state);
     static int objectMethod(lua_State* state);

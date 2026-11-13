@@ -26,6 +26,7 @@
 #include "editor/script_editor.hpp"
 #include "editor/transform_editor.hpp"
 #include "gameplay/first_person.hpp"
+#include "gameplay/raycast.hpp"
 #include "levels/level_system.hpp"
 #include "physics/collider_debug.hpp"
 #include "physics/physics.hpp"
@@ -187,6 +188,8 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
 static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     World world;
     Physics physics;
+    LayerSettings layerSettings;
+    sceneQuery = [&](World& w, Entity e, const Raycast& q) { return queryScene(w, physics, e, q); };
 
     // Meshes are created once and can be shared by any number of entities.
     const MeshHandle gridMesh = renderer.createMesh(makeGrid(kGridCells, kCellSize));
@@ -299,6 +302,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         scripts.console().setAssetRoot(browser.assets.root);
         inputSettings.load(browser.assets, input);
         renderingSettings.load(browser.assets);
+        layerSettings.load(browser.assets);
         if (levels.root() != browser.assets.root) {
             levels.setRoot(browser.assets.root);
         }
@@ -351,9 +355,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         const bool externalFocus =
             gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS);
         input.window = externalFocus ? gameWindow : window;
+        input.mouseLocked = input.window && SDL_GetWindowRelativeMouseMode(input.window);
         input.enabled = ((SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) || externalFocus) &&
                         playMode.playing() && (gameFocused || externalFocus || input.mouseLocked) &&
-                        !ImGui::GetIO().WantTextInput && !inputSettings.visible;
+                        (!ImGui::GetIO().WantTextInput || input.mouseLocked) &&
+                        !inputSettings.visible;
         input.mouseEnabled = externalFocus || gameHovered || sceneHovered || input.mouseLocked;
         input.beginFrame();
         SDL_Event event;
@@ -699,7 +705,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         auto createObject = [&](int created) {
             editor.finish(world);
             clicking = false;
-            if (created < 0 || created > 11) {
+            if (!validEditorObjectType(created)) {
                 return;
             }
             const ColliderShape shapes[]{ColliderShape::Box,
@@ -773,6 +779,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     inputSettings.visible = true;
                 }
                 if (ImGui::BeginMenu("Project Settings")) {
+                    if (ImGui::MenuItem("Layers")) {
+                        layerSettings.visible = true;
+                    }
                     if (ImGui::MenuItem("Rendering")) {
                         renderingSettings.visible = true;
                     }
@@ -972,6 +981,54 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     "Disable VSync to measure uncapped performance. Use Debug > Profiler to distinguish rendering cost from presentation wait.");
                 if (!renderingSettings.error.empty()) {
                     ImGui::TextWrapped("%s", renderingSettings.error.c_str());
+                }
+            }
+            ImGui::End();
+        }
+        if (layerSettings.visible) {
+            if (ImGui::Begin("Layers", &layerSettings.visible)) {
+                ImGui::TextUnformatted("Default (built-in)");
+                for (int i = 1; i < 32; ++i) {
+                    if (!LayerSettings::names[i].empty()) {
+                        ImGui::PushID(i);
+                        ImGui::TextUnformatted(LayerSettings::names[i].c_str());
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("Remove")) {
+                            LayerSettings::names[i].clear();
+                            world.each<ObjectLayer>([&](Entity, ObjectLayer& layer) {
+                                if (layer.value == i) {
+                                    layer.value = 0;
+                                }
+                            });
+                            world.each<Raycast>(
+                                [&](Entity, Raycast& query) { query.layerMask &= ~(1u << i); });
+                            layerSettings.save(browser.assets);
+                        }
+                        ImGui::PopID();
+                    }
+                }
+                static char newLayer[65]{};
+                ImGui::InputText("Layer name", newLayer, sizeof(newLayer));
+                ImGui::SameLine();
+                if (ImGui::Button("Add") && newLayer[0]) {
+                    if (LayerSettings::find(newLayer) >= 0) {
+                        layerSettings.error = "Layer already exists";
+                    } else {
+                        int slot = 1;
+                        while (slot < 32 && !LayerSettings::names[slot].empty()) {
+                            ++slot;
+                        }
+                        if (slot == 32) {
+                            layerSettings.error = "Maximum 32 layers";
+                        } else {
+                            LayerSettings::names[slot] = newLayer;
+                            newLayer[0] = 0;
+                            layerSettings.save(browser.assets);
+                        }
+                    }
+                }
+                if (!layerSettings.error.empty()) {
+                    ImGui::TextWrapped("%s", layerSettings.error.c_str());
                 }
             }
             ImGui::End();
@@ -1241,19 +1298,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 "Assign six square textures of matching size. Front is -Z, back is +Z.");
             for (int i = 0; i < 6; ++i) {
                 auto& path = cubemapDraft.faces[i];
-                if (ImGui::BeginCombo(CubemapAsset::names[i],
-                                      path.empty() ? "None (drop texture)" : path.c_str())) {
-                    if (ImGui::Selectable("None", path.empty())) {
-                        path.clear();
-                    }
-                    for (const auto& file : browser.assets.files()) {
-                        if (materialTexturePath(file) &&
-                            ImGui::Selectable(file.c_str(), file == path)) {
-                            path = file;
-                        }
-                    }
-                    ImGui::EndCombo();
-                }
+                assetPicker(CubemapAsset::names[i],
+                            path,
+                            &browser.assets,
+                            [](const std::string& file) { return materialTexturePath(file); });
                 if (ImGui::BeginDragDropTarget()) {
                     if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                         std::string value = static_cast<const char*>(drop->Data);
@@ -1657,7 +1705,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
         if (playMode.playing()) {
-            updateFPSCameras(world, std::min(seconds, .25f), input);
             Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
             scripts.update(std::min(seconds, 0.25f));
             componentScripts.update(std::min(seconds, 0.25f));
@@ -1676,9 +1723,21 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             updateCharacterControllers(world, physics);
             updateHierarchy(world);
         });
+        if (playMode.playing()) {
+            const auto events = physics.triggerEvents;
+            const char* names[]{"onTriggerEnter", "onTriggerStay", "onTriggerExit"};
+            for (const auto& event : events) {
+                scripts.console().objectEvent(
+                    event.receiver, names[event.phase], event.other, true);
+                componentScripts.objectEvent(event.receiver, names[event.phase], event.other, true);
+            }
+        }
         profiler.checkpoint(ProfilePart::Physics);
         updateHierarchy(world);
         profiler.checkpoint(ProfilePart::Hierarchy);
+        if (playMode.playing()) {
+            updateFPSCameras(world, std::min(seconds, .25f), input);
+        }
         updateCameras(world, playMode.playing() ? std::min(seconds, .25f) : 0);
         updateHierarchy(world);
         if (!(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) && !externalFocus) {
@@ -1787,6 +1846,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     const auto* collider = world.tryGet<Collider>(selectedEntity);
                     if (transform && collider) {
                         renderer.drawCollider(*transform, *collider, viewProjection);
+                    }
+                    if (transform) {
+                        if (const auto* query = world.tryGet<Raycast>(selectedEntity)) {
+                            renderer.drawRaycast(*transform, *query, viewProjection);
+                        }
                     }
                     const auto* audioSource = world.tryGet<AudioSource>(selectedEntity);
                     if (transform && audioSource) {

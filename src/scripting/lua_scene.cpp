@@ -1,7 +1,9 @@
 #include "scripting/lua_scene.hpp"
 #include "assets/cubemap.hpp"
 #include "core/hierarchy.hpp"
+#include "physics/queries.hpp"
 #include "prefabs/prefab.hpp"
+#include "project/layers.hpp"
 #include "scene/scene_camera.hpp"
 #include "scene/skybox_transition.hpp"
 #include "scripting/script_exports.hpp"
@@ -46,7 +48,8 @@ const char* types[]{"Transform",
                     "SpotLight",
                     "Skybox",
                     "CharacterController",
-                    "FPSCamera"};
+                    "FPSCamera",
+                    "Raycast"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -55,7 +58,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 15; ++i) {
+    for (int i = 0; i < 16; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -101,6 +104,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<CharacterController>(h.entity);
     case 14:
         return h.world->has<FPSCamera>(h.entity);
+    case 15:
+        return h.world->has<Raycast>(h.entity);
     default:
         return false;
     }
@@ -152,6 +157,17 @@ Field field(lua_State* L, const Component& c, const char* key) {
         FIELD(isSprinting, Boolean);
         break;
     }
+    case 15: {
+        auto& v = h.world->get<Raycast>(h.entity);
+        FIELD(type, Integer);
+        FIELD(distance, Number);
+        FIELD(radius, Number);
+        FIELD(angle, Number);
+        FIELD(samples, Integer);
+        FIELD(offset, Vec);
+        FIELD(includeTriggers, Boolean);
+        break;
+    }
     case 14: {
         auto& v = h.world->get<FPSCamera>(h.entity);
         FIELD(isFreecam, Boolean);
@@ -173,12 +189,16 @@ Field field(lua_State* L, const Component& c, const char* key) {
         FIELD(useGravity, Boolean);
         FIELD(linearVelocity, Vec);
         FIELD(angularVelocity, Vec);
+        FIELD(drag, Number);
+        FIELD(angularDrag, Number);
+        FIELD(isKinematic, Boolean);
         break;
     }
     case 2: {
         auto& v = h.world->get<Collider>(h.entity);
         FIELD(size, Vec);
         FIELD(center, Vec);
+        FIELD(isTrigger, Boolean);
         FIELD(friction, Number);
         FIELD(bounciness, Number);
         FIELD(radius, Number);
@@ -356,6 +376,36 @@ LuaScene::LuaScene(lua_State* L,
         lua_pushboolean(L, 1);
         lua_setfield(L, LUA_REGISTRYINDEX, key);
     }
+    lua_newtable(L);
+    const char* colorNames[]{"red",
+                             "green",
+                             "blue",
+                             "white",
+                             "black",
+                             "yellow",
+                             "cyan",
+                             "magenta",
+                             "gray",
+                             "orange",
+                             "purple",
+                             "pink"};
+    const Vec3 colors[]{{1, 0, 0},
+                        {0, 1, 0},
+                        {0, 0, 1},
+                        {1, 1, 1},
+                        {0, 0, 0},
+                        {1, 1, 0},
+                        {0, 1, 1},
+                        {1, 0, 1},
+                        {.5f, .5f, .5f},
+                        {1, .5f, 0},
+                        {.5f, 0, .5f},
+                        {1, .4f, .7f}};
+    for (int i = 0; i < 12; ++i) {
+        pushVector(L, colors[i]);
+        lua_setfield(L, -2, colorNames[i]);
+    }
+    lua_setglobal(L, "color");
     const char* metas[]{"GameObject", "Component", "Vector"};
     const lua_CFunction reads[]{objectIndex, componentIndex, vectorIndex};
     const lua_CFunction writes[]{objectNewIndex, componentNewIndex, vectorNewIndex};
@@ -377,7 +427,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 15; ++i) {
+    for (int i = 0; i < 16; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -581,6 +631,9 @@ int LuaScene::api(lua_State* L) {
             self.world_.each<CharacterController>(
                 [&](Entity e, CharacterController&) { collect(e); });
             break;
+        case 15:
+            self.world_.each<Raycast>([&](Entity e, Raycast&) { collect(e); });
+            break;
         case 14:
             self.world_.each<FPSCamera>([&](Entity e, FPSCamera&) { collect(e); });
             break;
@@ -668,6 +721,9 @@ int LuaScene::api(lua_State* L) {
         case 13:
             self.world_.remove<CharacterController>(h.entity);
             break;
+        case 15:
+            self.world_.remove<Raycast>(h.entity);
+            break;
         case 14:
             self.world_.remove<FPSCamera>(h.entity);
             break;
@@ -717,6 +773,12 @@ int LuaScene::api(lua_State* L) {
             break;
         case 13:
             addCharacterController(self.world_, h.entity);
+            break;
+        case 15:
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            self.world_.add(h.entity, Raycast{});
             break;
         case 14:
             addFPSCamera(self.world_, h.entity);
@@ -837,6 +899,11 @@ int LuaScene::objectIndex(lua_State* L) {
         lua_pushboolean(L, h.world->get<FPSCamera>(h.entity).isFreecam);
         return 1;
     }
+    if (!std::strcmp(key, "layer")) {
+        lua_pushstring(L,
+                       LayerSettings::names[LayerSettings::effective(*h.world, h.entity)].c_str());
+        return 1;
+    }
     if (!std::strcmp(key, "parent")) {
         const Entity p = getParent(*h.world, h.entity);
         if (p == Entity{}) {
@@ -864,6 +931,15 @@ int LuaScene::objectNewIndex(lua_State* L) {
         h.world->get<FPSCamera>(h.entity).isFreecam = lua_toboolean(L, 3);
         return 0;
     }
+    if (!std::strcmp(key, "layer")) {
+        int layer = lua_type(L, 3) == LUA_TNUMBER ? int(luaL_checkinteger(L, 3))
+                                                  : LayerSettings::find(luaL_checkstring(L, 3));
+        if (layer < 0 || layer > 31 || LayerSettings::names[layer].empty()) {
+            return luaL_error(L, "Unknown layer");
+        }
+        h.world->add(h.entity, ObjectLayer{layer});
+        return 0;
+    }
     if (!std::strcmp(key, "parent")) {
         const Entity p = lua_isnil(L, 3) ? Entity{} : handle(L, 3).entity;
         if (!setParent(*h.world, h.entity, p)) {
@@ -885,6 +961,60 @@ int LuaScene::objectNewIndex(lua_State* L) {
 int LuaScene::componentIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
     const char* key = luaL_checkstring(L, 2);
+    if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
+        return luaL_error(L, "Component no longer exists");
+    }
+    if (!std::strcmp(key, "gameObject")) {
+        c.object.scene->pushObject(c.object.entity);
+        return 1;
+    }
+    if (!std::strcmp(key, "transform")) {
+        if (c.object.world->has<Transform>(c.object.entity)) {
+            component(L, c.object, 0);
+        } else {
+            lua_pushnil(L);
+        }
+        return 1;
+    }
+    if (c.type == 1) {
+        if (!std::strcmp(key, "velocity")) {
+            auto alias = c;
+            const auto f = field(L, alias, "linearVelocity");
+            auto* v = static_cast<Vector*>(lua_newuserdatauv(L, sizeof(Vector), 0));
+            *v = {alias, {}};
+            std::strcpy(v->field, "linearVelocity");
+            luaL_setmetatable(L, "Vector");
+            (void)f;
+            return 1;
+        }
+        const char* methods[]{"addForce",
+                              "addImpulse",
+                              "setVelocity",
+                              "getVelocity",
+                              "addVelocity",
+                              "movePosition",
+                              "moveRotation",
+                              "stop"};
+        for (int i = 0; i < 8; ++i) {
+            if (!std::strcmp(key, methods[i])) {
+                lua_pushvalue(L, 1);
+                lua_pushinteger(L, i);
+                lua_pushcclosure(L, rigidBodyMethod, 2);
+                return 1;
+            }
+        }
+    }
+    if (c.type == 15) {
+        const char* methods[]{"cast", "castAll", "setLayers"};
+        for (int i = 0; i < 3; ++i) {
+            if (!std::strcmp(key, methods[i])) {
+                lua_pushvalue(L, 1);
+                lua_pushinteger(L, i);
+                lua_pushcclosure(L, queryMethod, 2);
+                return 1;
+            }
+        }
+    }
     if (c.type == 13 || c.type == 14) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
             return luaL_error(L, "Component no longer exists");
@@ -1095,6 +1225,10 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 1 && !std::strcmp(luaL_checkstring(L, 2), "velocity")) {
+        lua_pushliteral(L, "linearVelocity");
+        lua_replace(L, 2);
+    }
     if (c.type == 14) {
         const char* key = luaL_checkstring(L, 2);
         if (!std::strcmp(key, "active") || !std::strcmp(key, "orthographic") ||
@@ -1155,18 +1289,32 @@ int LuaScene::componentNewIndex(lua_State* L) {
     switch (f.kind) {
     case Kind::Integer: {
         auto value = luaL_checkinteger(L, 3);
-        if (value < 0 || value > (c.type == 12 ? 1 : 3)) {
+        if (value < 0 || value > (c.type == 15   ? (!std::strcmp(gameplayKey, "samples") ? 181 : 2)
+                                  : c.type == 12 ? 1
+                                                 : 3)) {
             return luaL_error(L, "Component integer out of range");
+        }
+        if (c.type == 15 && !std::strcmp(gameplayKey, "samples") && value < 2) {
+            return luaL_error(L, "At least two fan samples required");
         }
         *static_cast<int*>(f.value) = int(value);
         break;
     }
     case Kind::Number: {
         const float value = number(L, 3);
-        if ((c.type == 13 || c.type == 14) &&
+        if ((c.type == 13 || c.type == 14 || c.type == 15 ||
+             (c.type == 1 &&
+              (!std::strcmp(gameplayKey, "drag") || !std::strcmp(gameplayKey, "angularDrag") ||
+               !std::strcmp(gameplayKey, "mass")))) &&
             (value < 0 || value > 1000 ||
              (!std::strcmp(gameplayKey, "sprintMultiplier") && value < 1))) {
             return luaL_error(L, "Gameplay setting out of range");
+        }
+        if (c.type == 15 &&
+            ((!std::strcmp(gameplayKey, "angle") && value > 360) ||
+             ((!std::strcmp(gameplayKey, "radius") || !std::strcmp(gameplayKey, "distance")) &&
+              value <= 0))) {
+            return luaL_error(L, "Invalid raycast extent");
         }
         *static_cast<float*>(f.value) = value;
         break;
@@ -1294,7 +1442,8 @@ void LuaScene::resume(Task& task, int arguments) {
     }
     lua_settop(task.thread, 0);
 }
-void LuaScene::call(const char* name, int reference, float dt, bool delta) {
+void LuaScene::call(
+    const char* name, int reference, float dt, bool delta, Entity other, bool colliderArgument) {
     if (tasks_.size() >= 128) {
         error_("Too many waiting callbacks");
         active_ = false;
@@ -1325,6 +1474,14 @@ void LuaScene::call(const char* name, int reference, float dt, bool delta) {
     if (delta) {
         lua_pushnumber(thread, dt);
     }
+    if (colliderArgument) {
+        if (world_.alive(other) && world_.has<Collider>(other)) {
+            component(state_, Handle{this, &world_, other}, 2);
+        } else {
+            lua_pushnil(state_);
+        }
+        lua_xmove(state_, thread, 1);
+    }
     tasks_.push_back({thread, ref, reference, name});
     auto it = std::prev(tasks_.end());
     it->owner = selfEntity_;
@@ -1336,7 +1493,7 @@ void LuaScene::call(const char* name, int reference, float dt, bool delta) {
             }
         }
     }
-    resume(*it, delta ? 1 : 0);
+    resume(*it, delta || colliderArgument ? 1 : 0);
     if (it->seconds < 0) {
         luaL_unref(state_, LUA_REGISTRYINDEX, it->reference);
         tasks_.erase(it);
@@ -1412,17 +1569,17 @@ int LuaScene::waitAPI(lua_State* L) {
     }
     return lua_yield(L, 0);
 }
-void LuaScene::objectEvent(Entity entity, const char* name) {
+void LuaScene::objectEvent(Entity entity, const char* name, Entity other, bool colliderArgument) {
     if (!active_ || !isActive(world_, entity)) {
         return;
     }
     if (selfEntity_ == entity) {
-        call(name, LUA_NOREF, 0, false);
+        call(name, LUA_NOREF, 0, false, other, colliderArgument);
     }
     const auto count = entries_.size();
     for (std::size_t i = 0; i < count && active_; ++i) {
         if (entries_[i].entity == entity && !entries_[i].destroying) {
-            call(name, entries_[i].reference, 0, false);
+            call(name, entries_[i].reference, 0, false, other, colliderArgument);
         }
     }
 }
@@ -1903,6 +2060,112 @@ int LuaScene::fpsCameraMethod(lua_State* L) {
     return cameraApi(L);
 }
 
+int LuaScene::rigidBodyMethod(lua_State* L) {
+    const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
+    if (!c.object.world->alive(c.object.entity) || !has(c.object, 1)) {
+        return luaL_error(L, "RigidBody no longer exists");
+    }
+    if (auto* receiver = static_cast<Component*>(luaL_testudata(L, 1, "Component"));
+        receiver && receiver->object.entity == c.object.entity && receiver->type == 1) {
+        lua_remove(L, 1);
+    }
+    auto& rb = c.object.world->get<RigidBody>(c.object.entity);
+    const int op = int(lua_tointeger(L, lua_upvalueindex(2)));
+    if (op == 3) {
+        pushVector(L, rb.linearVelocity);
+        return 1;
+    }
+    if (op == 7) {
+        rb.linearVelocity = rb.angularVelocity = rb.force = rb.impulse = {};
+        return 0;
+    }
+    const auto value = vectorArgument(L, 1);
+    if (op == 0) {
+        rb.force = rb.force + value;
+    }
+    if (op == 1) {
+        rb.impulse = rb.impulse + value;
+    }
+    if (op == 2) {
+        rb.linearVelocity = value;
+    }
+    if (op == 4) {
+        rb.linearVelocity = rb.linearVelocity + value;
+    }
+    if (op == 5 || op == 6) {
+        auto* pose = c.object.world->tryGet<Transform>(c.object.entity);
+        if (!pose) {
+            return luaL_error(L, "Transform required");
+        }
+        if (op == 5) {
+            pose->position = value;
+        } else {
+            pose->rotation = rotationArgument(L, 1);
+        }
+    }
+    return 0;
+}
+int LuaScene::queryMethod(lua_State* L) {
+    const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
+    if (!c.object.world->alive(c.object.entity) || !has(c.object, 15)) {
+        return luaL_error(L, "Raycast no longer exists");
+    }
+    if (auto* receiver = static_cast<Component*>(luaL_testudata(L, 1, "Component"));
+        receiver && receiver->object.entity == c.object.entity && receiver->type == 15) {
+        lua_remove(L, 1);
+    }
+    auto& query = c.object.world->get<Raycast>(c.object.entity);
+    const int op = int(lua_tointeger(L, lua_upvalueindex(2)));
+    if (op == 2) {
+        luaL_checktype(L, 1, LUA_TTABLE);
+        unsigned mask = 0;
+        for (lua_Integer i = 1; i <= luaL_len(L, 1); ++i) {
+            lua_geti(L, 1, i);
+            const int id = LayerSettings::find(luaL_checkstring(L, -1));
+            lua_pop(L, 1);
+            if (id < 0) {
+                return luaL_error(L, "Unknown layer");
+            }
+            mask |= 1u << id;
+        }
+        query.layerMask = mask;
+        return 0;
+    }
+    const auto hits =
+        sceneQuery ? sceneQuery(*c.object.world, c.object.entity, query) : std::vector<RayHit>{};
+    auto pushHit = [&](const RayHit& hit) {
+        lua_createtable(L, 0, 6);
+        const Handle h{c.object.scene, c.object.world, hit.entity};
+        component(L, h, 2);
+        lua_setfield(L, -2, "collider");
+        component(L, h, 0);
+        lua_setfield(L, -2, "transform");
+        c.object.scene->pushObject(hit.entity);
+        lua_setfield(L, -2, "gameObject");
+        pushVector(L, hit.point);
+        lua_setfield(L, -2, "point");
+        pushVector(L, hit.normal);
+        lua_setfield(L, -2, "normal");
+        lua_pushnumber(L, hit.distance);
+        lua_setfield(L, -2, "distance");
+    };
+    if (op == 0) {
+        if (hits.empty()) {
+            lua_pushnil(L);
+        } else {
+            pushHit(hits.front());
+        }
+        return 1;
+    }
+    lua_createtable(L, int(hits.size()), 0);
+    int index = 1;
+    for (const auto& hit : hits) {
+        pushHit(hit);
+        lua_rawseti(L, -2, index++);
+    }
+    return 1;
+}
+
 int LuaScene::gameplayMethod(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
     auto& world = *c.object.world;
@@ -2012,7 +2275,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 15; ++type) {
+                for (; type < 16; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }

@@ -47,7 +47,11 @@
     "getRight": "fun(self:GameObject):Vec3 World-space local +X axis",
     "getLeft": "fun(self:GameObject):Vec3 World-space local -X axis",
     "getUp": "fun(self:GameObject):Vec3 World-space local +Y axis",
-    "getDown": "fun(self:GameObject):Vec3 World-space local -Y axis"
+    "getDown": "fun(self:GameObject):Vec3 World-space local -Y axis",
+    "layer": "string Layer name, defaults to Default; assign an existing name or slot number",
+    "onTriggerEnter": "fun(collider:Collider|nil)|nil",
+    "onTriggerStay": "fun(collider:Collider|nil)|nil",
+    "onTriggerExit": "fun(collider:Collider|nil)|nil"
   },
   "Transform": {
     "position": "Vec3",
@@ -58,7 +62,19 @@
     "mass": "number",
     "useGravity": "boolean",
     "linearVelocity": "Vec3",
-    "angularVelocity": "Vec3"
+    "angularVelocity": "Vec3",
+    "velocity": "Vec3 Alias of linearVelocity",
+    "drag": "number Nonnegative linear damping",
+    "angularDrag": "number Nonnegative angular damping",
+    "isKinematic": "boolean Move under script control rather than gravity/forces",
+    "addForce": "fun(self:RigidBody,x:number,y:number,z:number) World force consumed on next physics step",
+    "addImpulse": "fun(self:RigidBody,x:number,y:number,z:number) Instant world impulse at next physics step",
+    "setVelocity": "fun(self:RigidBody,x:number,y:number,z:number)",
+    "getVelocity": "fun(self:RigidBody):Vec3",
+    "addVelocity": "fun(self:RigidBody,x:number,y:number,z:number)",
+    "movePosition": "fun(self:RigidBody,x:number,y:number,z:number) Set world position",
+    "moveRotation": "fun(self:RigidBody,x:number,y:number,z:number) Euler degrees, or quaternion table",
+    "stop": "fun(self:RigidBody) Clear velocities and queued forces/impulses"
   },
   "Collider": {
     "shape": "'Box'|'Sphere'|'Capsule'|'Cone'",
@@ -67,7 +83,10 @@
     "radius": "number",
     "height": "number",
     "friction": "number",
-    "bounciness": "number"
+    "bounciness": "number",
+    "isTrigger": "boolean Non-solid overlap sensor",
+    "gameObject": "GameObject Collider owner; inspect name, layer and components",
+    "transform": "Transform Collider owner transform"
   },
   "MeshRenderer": {
     "material": "string Project-relative .mat asset path; empty uses inline Diffuse",
@@ -266,8 +285,47 @@
     "mouseLook": "boolean Writable; native mouse look while cursor is locked",
     "speed": "number Freecam metres per second",
     "sensitivity": "number Degrees per mouse pixel",
-    "linkToCharacter": "fun(self:FPSCamera,character:CharacterController|GameObject,offset:Vec3) Parent to character using local position offset",
+    "linkToCharacter": "fun(self:FPSCamera,controller:CharacterController|GameObject,x:number,y:number,z:number) Parent using local position offset",
     "setIsFreecam": "fun(self:FPSCamera,enabled:boolean)",
     "getIsFreecam": "fun(self:FPSCamera):boolean"
+  },
+  "ColorPalette": {
+    "red": "Vec3",
+    "green": "Vec3",
+    "blue": "Vec3",
+    "white": "Vec3",
+    "black": "Vec3",
+    "yellow": "Vec3",
+    "cyan": "Vec3",
+    "magenta": "Vec3",
+    "gray": "Vec3",
+    "orange": "Vec3",
+    "purple": "Vec3",
+    "pink": "Vec3"
+  },
+  "RaycastHit": {
+    "collider": "Collider",
+    "transform": "Transform",
+    "gameObject": "GameObject",
+    "point": "Vec3 World hit point; sphere query uses center-directed surface point",
+    "normal": "Vec3 World surface normal; zero when sphere origin is inside a collider",
+    "distance": "number World distance from query origin"
+  },
+  "Raycast": {
+    "type": "integer Raycast.Line, Raycast.LineOfSight or Raycast.Sphere",
+    "distance": "number Positive ray range",
+    "radius": "number Positive sphere overlap radius",
+    "angle": "number Fan aperture in degrees, 0 to 360",
+    "samples": "integer Fan rays, 2 to 181",
+    "offset": "Vec3 Local origin offset",
+    "includeTriggers": "boolean Whether sensors can be hit",
+    "cast": "fun(self:Raycast):RaycastHit|nil Nearest matching hit",
+    "castAll": "fun(self:Raycast):RaycastHit[] Matching distinct objects, nearest first",
+    "setLayers": "fun(self:Raycast,names:table) Replace layer mask with an array of names; empty array selects none"
+  },
+  "RaycastType": {
+    "Line": "integer",
+    "LineOfSight": "integer",
+    "Sphere": "integer"
   }
 }

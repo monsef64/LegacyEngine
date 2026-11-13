@@ -68,7 +68,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 15\n";
+    out << std::setprecision(9) << "LegacyEngineProject 16\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -99,7 +99,9 @@ inline std::string encodeLegacy(World& world,
             (world.has<PointLight>(e) ? 1024 : 0) | (world.has<SpotLight>(e) ? 2048 : 0) |
             (world.has<Skybox>(e) ? 4096 : 0) | (world.has<ObjectActivity>(e) ? 8192 : 0) |
             (world.has<PrefabInstance>(e) ? 16384 : 0) |
-            (world.has<CharacterController>(e) ? 32768 : 0) | (world.has<FPSCamera>(e) ? 65536 : 0);
+            (world.has<CharacterController>(e) ? 32768 : 0) |
+            (world.has<FPSCamera>(e) ? 65536 : 0) | (world.has<ObjectLayer>(e) ? 131072 : 0) |
+            (world.has<InspectorOrder>(e) ? 262144 : 0) | (world.has<Raycast>(e) ? 524288 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -134,12 +136,13 @@ inline std::string encodeLegacy(World& world,
             writeVec(out, c->size);
             writeVec(out, c->center);
             out << c->friction << ' ' << c->bounciness << ' ' << static_cast<int>(c->shape) << ' '
-                << c->radius << ' ' << c->height << ' ';
+                << c->radius << ' ' << c->height << ' ' << c->isTrigger << ' ';
         }
         if (auto* b = world.tryGet<RigidBody>(e)) {
             out << b->mass << ' ' << b->useGravity << ' ';
             writeVec(out, b->linearVelocity);
             writeVec(out, b->angularVelocity);
+            out << b->drag << ' ' << b->angularDrag << ' ' << b->isKinematic << ' ';
         }
         if (auto* script = world.tryGet<LuaScript>(e)) {
             require(script->additional.size() <= 63);
@@ -228,6 +231,19 @@ inline std::string encodeLegacy(World& world,
             out << f->isFreecam << ' ' << f->mouseLook << ' ' << f->sensitivity << ' ' << f->speed
                 << ' ';
         }
+        if (const auto* layer = world.tryGet<ObjectLayer>(e)) {
+            require(layer->value >= 0 && layer->value < 32);
+            out << layer->value << ' ';
+        }
+        if (const auto* order = world.tryGet<InspectorOrder>(e)) {
+            out << std::quoted(Json(order->types).dump()) << ' ';
+        }
+        if (const auto* q = world.tryGet<Raycast>(e)) {
+            out << q->type << ' ' << q->distance << ' ' << q->radius << ' ' << q->angle << ' '
+                << q->samples << ' ';
+            writeVec(out, q->offset);
+            out << q->layerMask << ' ' << q->includeTriggers << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -245,7 +261,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 15));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 16));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -307,7 +323,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 13 ? 8191u
                          : version < 14 ? 16383u
                          : version < 15 ? 32767u
-                                        : 131071u) &&
+                         : version < 16 ? 131071u
+                                        : 1048575u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -353,6 +370,9 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             c.radius = number(in);
             c.height = number(in);
             require(c.radius > 0 && c.height >= 0);
+            if (version >= 16) {
+                in >> c.isTrigger;
+            }
             result.world.add(e, c);
         }
         if (mask & 16) {
@@ -361,7 +381,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> b.useGravity;
             b.linearVelocity = readVec(in);
             b.angularVelocity = readVec(in);
-            require(b.mass >= 0);
+            if (version >= 16) {
+                b.drag = number(in);
+                b.angularDrag = number(in);
+                in >> b.isKinematic;
+            }
+            require(b.mass >= 0 && b.drag >= 0 && b.angularDrag >= 0);
             result.world.add(e, b);
         }
         if (mask & 32) {
@@ -511,6 +536,38 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             f.speed = number(in);
             require(f.sensitivity >= 0 && f.speed >= 0);
             result.world.add(e, f);
+        }
+        if (mask & 131072) {
+            int layer = 0;
+            in >> layer;
+            require(layer >= 0 && layer < 32);
+            result.world.add(e, ObjectLayer{layer});
+        }
+        if (mask & 262144) {
+            std::string text;
+            in >> std::quoted(text);
+            auto types = parseJson(text).get<std::vector<int>>();
+            require(types.size() <= 16);
+            std::vector<int> seen;
+            for (int id : types) {
+                require(id >= 0 && id < 16 &&
+                        std::find(seen.begin(), seen.end(), id) == seen.end());
+                seen.push_back(id);
+            }
+            result.world.add(e, InspectorOrder{types});
+        }
+        if (mask & 524288) {
+            Raycast q;
+            in >> q.type;
+            q.distance = number(in);
+            q.radius = number(in);
+            q.angle = number(in);
+            in >> q.samples;
+            q.offset = readVec(in);
+            in >> q.layerMask >> q.includeTriggers;
+            require(q.type >= 0 && q.type <= 2 && q.distance > 0 && q.radius > 0 && q.angle >= 0 &&
+                    q.angle <= 360 && q.samples >= 2 && q.samples <= 181);
+            result.world.add(e, q);
         }
         require(bool(in));
     }

@@ -1,5 +1,65 @@
 [
   {
+    "name": "Raycast",
+    "signature": "Raycast - Line, adjustable LineOfSight fan, or Sphere overlap query component"
+  },
+  {
+    "name": "color",
+    "signature": "color.red, green, blue, white, black, yellow, cyan, magenta, gray, orange, purple, pink - RGB vectors"
+  },
+  {
+    "name": "cast",
+    "signature": "query:cast() -> nearest hit or nil"
+  },
+  {
+    "name": "castAll",
+    "signature": "query:castAll() -> distance-sorted distinct hit objects"
+  },
+  {
+    "name": "setLayers",
+    "signature": "query:setLayers({'Default','Enemies'}) - ignore other layers before finding hits"
+  },
+  {
+    "name": "addForce",
+    "signature": "body:addForce(x,y,z) - world force for next fixed step; also accepts a vector table"
+  },
+  {
+    "name": "addImpulse",
+    "signature": "body:addImpulse(x,y,z) - world impulse for next fixed step"
+  },
+  {
+    "name": "setVelocity",
+    "signature": "body:setVelocity(x,y,z) - metres per second"
+  },
+  {
+    "name": "getVelocity",
+    "signature": "body:getVelocity() -> world velocity vector"
+  },
+  {
+    "name": "addVelocity",
+    "signature": "body:addVelocity(x,y,z)"
+  },
+  {
+    "name": "movePosition",
+    "signature": "body:movePosition(x,y,z) - world position, teleport rather than sweep"
+  },
+  {
+    "name": "moveRotation",
+    "signature": "body:moveRotation(x,y,z) - Euler degrees, or quaternion table"
+  },
+  {
+    "name": "onTriggerEnter",
+    "signature": "onTriggerEnter(collider) - non-solid overlap begins"
+  },
+  {
+    "name": "onTriggerStay",
+    "signature": "onTriggerStay(collider) - non-solid overlap persists"
+  },
+  {
+    "name": "onTriggerExit",
+    "signature": "onTriggerExit(collider) - overlap ends; collider may be nil if destroyed"
+  },
+  {
     "name": "CharacterController",
     "signature": "CharacterController - upright capsule movement, grounded jumping and sprinting"
   },
@@ -21,7 +81,7 @@
   },
   {
     "name": "linkToCharacter",
-    "signature": "fps:linkToCharacter(characterController, offset) - parent using local position offset"
+    "signature": "fps:linkToCharacter(controller, x,y,z) - parent using local position offset"
   },
   {
     "name": "setIsFreecam",

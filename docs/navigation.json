@@ -40,6 +40,10 @@
     "title": "Character controller and FPS camera"
   },
   {
+    "file": "physics-queries.md",
+    "title": "Physics, triggers, raycasts and layers"
+  },
+  {
     "file": "scripting-reference.md",
     "title": "Scripting Reference"
   },

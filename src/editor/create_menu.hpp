@@ -6,6 +6,10 @@
 
 // IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox; 12
 // character; 13 FPS camera.
+inline constexpr int editorObjectTypeCount = 15;
+inline bool validEditorObjectType(int item) {
+    return item >= 0 && item < editorObjectTypeCount;
+}
 inline int drawCreateItems() {
     int item = -1;
     if (ImGui::MenuItem("Empty GameObject")) {
@@ -16,6 +20,9 @@ inline int drawCreateItems() {
     }
     if (ImGui::MenuItem("FPS Camera")) {
         item = 13;
+    }
+    if (ImGui::MenuItem("Raycast")) {
+        item = 14;
     }
     if (ImGui::BeginMenu("Audio")) {
         if (ImGui::MenuItem("Audio Source")) {
@@ -109,8 +116,10 @@ inline Entity createEditorObject(World& world,
                                "Plane",
                                "Skybox",
                                "Character Controller",
-                               "FPS Camera"};
-    if (item < 0 || item > 13) {
+                               "FPS Camera",
+                               "Raycast"};
+    static_assert(sizeof(names) / sizeof(names[0]) == editorObjectTypeCount);
+    if (!validEditorObjectType(item)) {
         return {};
     }
     const MeshHandle meshes[]{MeshHandle{}, capsule, cone, cube, sphere};
@@ -125,6 +134,9 @@ inline Entity createEditorObject(World& world,
                                     item > 0 && item < 5 ? meshes[item] : MeshHandle{},
                                     item > 0 && item < 5 ? shapes[item] : ColliderShape::Box,
                                     item == 0 || item >= 5);
+    if (item == 14) {
+        world.add(entity, Raycast{});
+    }
     if (item == 12) {
         addCharacterController(world, entity);
     }

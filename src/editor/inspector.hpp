@@ -2,17 +2,20 @@
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
+#include "editor/asset_picker.hpp"
 #include "editor/component_clipboard.hpp"
 #include "editor/editor_layout.hpp"
 #include "editor/level_objects.hpp"
 #include "editor/rotation_editor.hpp"
 #include "editor/transform_edit.hpp"
 #include "materials/material_io.hpp"
+#include "project/layers.hpp"
 #include "scene/scene_camera.hpp"
 #include "scripting/script_exports.hpp"
 #include <ImGuizmo.h>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 inline bool editVector(const char* label,
                        Vec3& value,
@@ -135,10 +138,55 @@ template <class T> inline bool componentHeader(World& world, Entity entity, cons
         if constexpr (std::is_same_v<T, FPSCamera>) {
             type = 14;
         }
+        if constexpr (std::is_same_v<T, Raycast>) {
+            type = 15;
+        }
         EditorComponentPayload payload{entity, type};
         ImGui::SetDragDropPayload("EDITOR_COMPONENT", &payload, sizeof(payload));
         ImGui::TextUnformatted(name);
         ImGui::EndDragDropSource();
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        if (const auto* payload = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
+            const auto source = *static_cast<const EditorComponentPayload*>(payload->Data);
+            int target = -1;
+            const char* names[]{"Transform",
+                                "RigidBody",
+                                "Collider",
+                                "MeshRenderer",
+                                "ObjectName",
+                                "LegacyScripts",
+                                "Camera",
+                                "AudioSource",
+                                "AudioListener",
+                                "DirectionalLight",
+                                "PointLight",
+                                "SpotLight",
+                                "Skybox",
+                                "CharacterController",
+                                "FPSCamera",
+                                "Raycast"};
+            for (int i = 0; i < 16; ++i) {
+                if (!std::strcmp(name, names[i])) {
+                    target = i;
+                }
+            }
+            if (source.entity == entity && target >= 0 && source.type != target) {
+                auto& order =
+                    world.has<InspectorOrder>(entity)
+                        ? world.get<InspectorOrder>(entity)
+                        : world.add(
+                              entity,
+                              InspectorOrder{{0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15}});
+                auto from = std::find(order.types.begin(), order.types.end(), source.type);
+                if (from != order.types.end()) {
+                    order.types.erase(from);
+                }
+                auto to = std::find(order.types.begin(), order.types.end(), target);
+                order.types.insert(to, source.type);
+            }
+        }
+        ImGui::EndDragDropTarget();
     }
     if (remove) {
         world.remove<T>(entity);
@@ -146,7 +194,9 @@ template <class T> inline bool componentHeader(World& world, Entity entity, cons
     }
     return open;
 }
-inline void drawScriptExports(World& world, std::vector<ScriptField>& fields) {
+inline void drawScriptExports(World& world,
+                              std::vector<ScriptField>& fields,
+                              const AssetManager* assets = nullptr) {
     const char* componentTypes[]{"Transform",
                                  "RigidBody",
                                  "Collider",
@@ -161,7 +211,8 @@ inline void drawScriptExports(World& world, std::vector<ScriptField>& fields) {
                                  "SpotLight",
                                  "Skybox",
                                  "CharacterController",
-                                 "FPSCamera"};
+                                 "FPSCamera",
+                                 "Raycast"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -189,8 +240,17 @@ inline void drawScriptExports(World& world, std::vector<ScriptField>& fields) {
                                       : exportHasComponent(world, field.entity, field.type)
                                           ? (name ? name->value : "GameObject")
                                           : "None (drop object / component)";
-            ImGui::Button(value.c_str(),
-                          ImVec2(std::max(40.0f, ImGui::GetContentRegionAvail().x - 36), 0));
+            if (asset) {
+                assetPicker("##Asset", field.text, assets, [&](const std::string& path) {
+                    return field.type == "AudioClip" ? audioAsset(path)
+                           : field.type == "Texture"
+                               ? (materialTexturePath(path) || skyboxHDRPath(path))
+                               : true;
+                });
+            } else {
+                ImGui::Button(value.c_str(),
+                              ImVec2(std::max(40.0f, ImGui::GetContentRegionAvail().x - 36), 0));
+            }
             if (ImGui::BeginDragDropTarget()) {
                 if (asset) {
                     if (auto* p = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
@@ -211,7 +271,7 @@ inline void drawScriptExports(World& world, std::vector<ScriptField>& fields) {
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 15 &&
+                        if (target.type >= 0 && target.type < 16 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -261,6 +321,16 @@ inline void drawInspector(World& world,
             if (ImGui::InputText("Name", name, sizeof(name))) {
                 world.add(selected, ObjectName{name});
             }
+            int layer = LayerSettings::effective(world, selected);
+            if (ImGui::BeginCombo("Layer", LayerSettings::names[layer].c_str())) {
+                for (int i = 0; i < 32; ++i) {
+                    if (!LayerSettings::names[i].empty() &&
+                        ImGui::Selectable(LayerSettings::names[i].c_str(), layer == i)) {
+                        world.add(selected, ObjectLayer{i});
+                    }
+                }
+                ImGui::EndCombo();
+            }
             const Entity parent = getParent(world, selected);
             const auto* parentName = world.tryGet<ObjectName>(parent);
             if (ImGui::BeginCombo("Parent",
@@ -281,558 +351,594 @@ inline void drawInspector(World& world,
                 }
                 ImGui::EndCombo();
             }
-            if (auto* t = world.tryGet<Transform>(selected);
-                t && componentHeader<Transform>(world, selected, "Transform")) {
-                const bool child = getParent(world, selected) != Entity{};
-                auto edited = localTransform(world, selected);
-                bool transformChanged =
-                    editVector(child ? "Local position" : "Position", edited.position);
-                static RotationEditorState rotationState;
-                rotationState.sync(selected, edited.rotation);
-                Vec3 rotation = rotationState.angles;
-                if (editVector("Rotation (deg)", rotation, .5f, -360, 360)) {
-                    edited.rotation = rotationState.apply(rotation);
-                    transformChanged = true;
+            auto ordered =
+                world.has<InspectorOrder>(selected)
+                    ? world.get<InspectorOrder>(selected).types
+                    : std::vector<int>{0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15};
+            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15}) {
+                if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
+                    ordered.push_back(id);
                 }
-                const auto* c = world.tryGet<Collider>(selected);
-                if (c && c->shape != ColliderShape::Box) {
-                    float size = edited.scale.x;
-                    if (ImGui::DragFloat("Uniform scale",
-                                         &size,
-                                         0.02f,
-                                         0.05f,
-                                         100,
-                                         "%.3f",
-                                         ImGuiSliderFlags_AlwaysClamp) &&
-                        std::isfinite(size)) {
-                        edited.scale = {size, size, size};
+            }
+            for (int componentID : ordered) {
+                if (auto* t = world.tryGet<Transform>(selected);
+                    componentID == 0 && t &&
+                    componentHeader<Transform>(world, selected, "Transform")) {
+                    const bool child = getParent(world, selected) != Entity{};
+                    auto edited = localTransform(world, selected);
+                    bool transformChanged =
+                        editVector(child ? "Local position" : "Position", edited.position);
+                    static RotationEditorState rotationState;
+                    rotationState.sync(selected, edited.rotation);
+                    Vec3 rotation = rotationState.angles;
+                    if (editVector("Rotation (deg)", rotation, .5f, -360, 360)) {
+                        edited.rotation = rotationState.apply(rotation);
                         transformChanged = true;
                     }
-                } else {
-                    transformChanged |= editVector("Scale", edited.scale, 0.02f, 0.05f, 100);
-                }
-                if (transformChanged) {
-                    setLocalTransform(world, selected, edited);
-                }
-            }
-            if (auto* r = world.tryGet<MeshRenderer>(selected);
-                r && componentHeader<MeshRenderer>(world, selected, "MeshRenderer")) {
-                const char* names[]{"Cube", "Sphere", "Capsule", "Cone", "Plane"};
-                int current = -1;
-                for (int i = 0; i < std::min(meshCount, 5); ++i) {
-                    if (r->mesh.id == meshes[i].id) {
-                        current = i;
-                    }
-                }
-                if (ImGui::BeginCombo("Mesh", current < 0 ? "Custom" : names[current])) {
-                    for (int i = 0; i < std::min(meshCount, 5); ++i) {
-                        if (ImGui::Selectable(names[i], current == i)) {
-                            r->mesh = meshes[i];
-                            if (i != 0) {
-                                if (auto* t = world.tryGet<Transform>(selected)) {
-                                    const float scale = std::clamp(std::max({std::abs(t->scale.x),
-                                                                             std::abs(t->scale.y),
-                                                                             std::abs(t->scale.z)}),
-                                                                   0.05f,
-                                                                   100.0f);
-                                    t->scale = {scale, scale, scale};
-                                }
-                            }
-                            if (auto* c = world.tryGet<Collider>(selected)) {
-                                c->shape =
-                                    i == 4 ? ColliderShape::Box : static_cast<ColliderShape>(i);
-                                c->size = i == 4 ? Vec3{16, .1f, 16} : Vec3{1, 1, 1};
-                                c->center = i == 4 ? Vec3{0, -.05f, 0} : Vec3{};
-                                c->radius = 0.5f;
-                                c->height = 1;
-                            }
+                    const auto* c = world.tryGet<Collider>(selected);
+                    if (c && c->shape != ColliderShape::Box) {
+                        float size = edited.scale.x;
+                        if (ImGui::DragFloat("Uniform scale",
+                                             &size,
+                                             0.02f,
+                                             0.05f,
+                                             100,
+                                             "%.3f",
+                                             ImGuiSliderFlags_AlwaysClamp) &&
+                            std::isfinite(size)) {
+                            edited.scale = {size, size, size};
+                            transformChanged = true;
                         }
-                    }
-                    ImGui::EndCombo();
-                }
-                if (assets) {
-                    static std::string materialError;
-                    try {
-                        static std::filesystem::path listedRoot;
-                        static std::vector<std::string> materialFiles;
-                        static std::chrono::steady_clock::time_point listedAt;
-                        auto now = std::chrono::steady_clock::now();
-                        if (listedRoot != assets->root ||
-                            now - listedAt > std::chrono::seconds(1)) {
-                            materialFiles = assets->files();
-                            listedRoot = assets->root;
-                            listedAt = now;
-                        }
-                        ImGui::TextWrapped("Material: %s",
-                                           r->material.empty() ? "None (Diffuse)"
-                                                               : r->material.c_str());
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton("...##MaterialPicker")) {
-                            ImGui::OpenPopup("Select Material");
-                        }
-                        ImGui::SetNextWindowSize(ImVec2(650, 480), ImGuiCond_FirstUseEver);
-                        if (ImGui::BeginPopupModal(
-                                "Select Material", nullptr, ImGuiWindowFlags_None)) {
-                            static TexturePreviewCache materialPreviews;
-                            materialPreviews.beginFrame(*assets);
-                            if (ImGui::Button("None (Diffuse)")) {
-                                r->material.clear();
-                                r->materialOverrides = 0;
-                                ImGui::CloseCurrentPopup();
-                            }
-                            ImGui::SameLine();
-                            if (ImGui::Button("Close")) {
-                                ImGui::CloseCurrentPopup();
-                            }
-                            ImGui::BeginChild("Material choices");
-                            if (ImGui::BeginTable(
-                                    "Material tiles", 4, ImGuiTableFlags_SizingStretchSame)) {
-                                for (const auto& path : materialFiles) {
-                                    if (materialAsset(path)) {
-                                        ImGui::TableNextColumn();
-                                        ImGui::PushID(path.c_str());
-                                        const auto texture =
-                                            materialPreviews.texture(*assets, path);
-                                        if (texture) {
-                                            ImGui::Image(static_cast<ImTextureID>(texture),
-                                                         ImVec2(96, 96));
-                                        }
-                                        if (ImGui::Selectable(path.c_str(), r->material == path)) {
-                                            r->material = path;
-                                            r->materialOverrides = 0;
-                                            ImGui::CloseCurrentPopup();
-                                        }
-                                        ImGui::PopID();
-                                    }
-                                }
-                                ImGui::EndTable();
-                            }
-                            ImGui::EndChild();
-                            ImGui::EndPopup();
-                        }
-                        if (ImGui::BeginDragDropTarget()) {
-                            if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                                std::string path = static_cast<const char*>(payload->Data);
-                                if (materialAsset(path)) {
-                                    r->material = path;
-                                    r->materialOverrides = 0;
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
-                        auto create = [&]() {
-                            auto path = createMaterial(*assets);
-                            MaterialProperties p;
-                            p.color = r->color;
-                            p.specular = r->specular;
-                            saveMaterial(*assets, path, p);
-                            r->material = path;
-                            r->materialOverrides = 0;
-                        };
-                        bool createRequested = false;
-                        if (ImGui::BeginPopupContextItem("Material slot actions")) {
-                            createRequested = ImGui::MenuItem("Create Material");
-                            ImGui::EndPopup();
-                        }
-                        if (createRequested) {
-                            create();
-                        }
-                        if (r->material.empty() && ImGui::SmallButton("Create Material")) {
-                            create();
-                        }
-                        if (!r->material.empty()) {
-                            auto edited = loadMaterial(*assets, r->material);
-                            if (ImGui::TreeNodeEx("Material properties",
-                                                  ImGuiTreeNodeFlags_DefaultOpen)) {
-                                bool changed = false;
-                                changed |=
-                                    ImGui::Combo("Shader",
-                                                 &edited.shader,
-                                                 "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0");
-                                changed |= ImGui::ColorEdit3("Material color", &edited.color.x);
-                                auto textureField = [&](const char* label, std::string& path) {
-                                    ImGui::PushID(label);
-                                    bool editedTexture = false;
-                                    if (ImGui::BeginCombo(label,
-                                                          path.empty() ? "None (drop Texture)"
-                                                                       : path.c_str())) {
-                                        if (ImGui::Selectable("None", path.empty())) {
-                                            path.clear();
-                                            editedTexture = true;
-                                        }
-                                        for (const auto& file : materialFiles) {
-                                            if (materialTexturePath(file) &&
-                                                ImGui::Selectable(file.c_str(), file == path)) {
-                                                path = file;
-                                                editedTexture = true;
-                                            }
-                                        }
-                                        ImGui::EndCombo();
-                                    }
-                                    if (ImGui::BeginDragDropTarget()) {
-                                        if (const auto* payload =
-                                                ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                                            std::string value =
-                                                static_cast<const char*>(payload->Data);
-                                            if (!value.empty() && materialTexturePath(value)) {
-                                                path = value;
-                                                editedTexture = true;
-                                            }
-                                        }
-                                        ImGui::EndDragDropTarget();
-                                    }
-                                    ImGui::PopID();
-                                    return editedTexture;
-                                };
-                                changed |= textureField("Texture", edited.texture);
-                                if (edited.shader == 1) {
-                                    changed |= textureField("Normal map", edited.normalMap);
-                                    changed |= ImGui::SliderFloat(
-                                        "Normal strength", &edited.normalStrength, 0, 4);
-                                }
-                                float tiling[]{edited.tilingX, edited.tilingY};
-                                if (ImGui::DragFloat2("UV tiling", tiling, .05f, -1000, 1000)) {
-                                    edited.tilingX = tiling[0];
-                                    edited.tilingY = tiling[1];
-                                    changed = true;
-                                }
-                                changed |=
-                                    ImGui::SliderFloat("Material specular", &edited.specular, 0, 1);
-                                ImGui::TextDisabled(
-                                    "Shared asset: edits affect all meshes using this material.");
-                                if (changed && validMaterial(edited)) {
-                                    try {
-                                        saveMaterial(*assets, r->material, edited);
-                                        materialError.clear();
-                                    } catch (const std::exception& e) {
-                                        materialError = e.what();
-                                    }
-                                }
-                                if (r->materialOverrides) {
-                                    ImGui::TextDisabled("This mesh has instance overrides.");
-                                    if (ImGui::SmallButton("Reset material overrides")) {
-                                        r->materialOverrides = 0;
-                                    }
-                                }
-                                ImGui::TreePop();
-                            }
-                        }
-                    } catch (const std::exception& e) {
-                        materialError = e.what();
-                    }
-                    if (!materialError.empty()) {
-                        ImGui::TextWrapped("%s", materialError.c_str());
-                    }
-                }
-                if (r->material.empty()) {
-                    float color[]{r->color.x, r->color.y, r->color.z};
-                    if (ImGui::ColorEdit3("Color", color)) {
-                        r->color = {color[0], color[1], color[2]};
-                    }
-                    ImGui::Checkbox("Checkerboard", &r->checkerboard);
-                    ImGui::SliderFloat("Specular", &r->specular, 0, 1);
-                }
-            }
-            if (auto* c = world.tryGet<Collider>(selected);
-                c && componentHeader<Collider>(world, selected, "Collider")) {
-                const char* names[]{"Box", "Sphere", "Capsule", "Cone"};
-                int shape = static_cast<int>(c->shape);
-                if (ImGui::Combo("Collider shape", &shape, names, 4)) {
-                    c->shape = static_cast<ColliderShape>(shape);
-                }
-                editVector("Center", c->center);
-                if (c->shape == ColliderShape::Box) {
-                    editVector("Size", c->size, 0.02f, 0.01f, 10000);
-                } else {
-                    ImGui::DragFloat("Radius",
-                                     &c->radius,
-                                     0.02f,
-                                     0.01f,
-                                     10000,
-                                     "%.3f",
-                                     ImGuiSliderFlags_AlwaysClamp);
-                    if (c->shape != ColliderShape::Sphere) {
-                        ImGui::DragFloat("Height",
-                                         &c->height,
-                                         0.02f,
-                                         0.01f,
-                                         10000,
-                                         "%.3f",
-                                         ImGuiSliderFlags_AlwaysClamp);
-                    }
-                }
-                ImGui::SliderFloat("Friction", &c->friction, 0, 1);
-                ImGui::SliderFloat("Bounciness", &c->bounciness, 0, 1);
-            }
-            if (auto* rb = world.tryGet<RigidBody>(selected);
-                rb && componentHeader<RigidBody>(world, selected, "RigidBody")) {
-                ImGui::DragFloat(
-                    "Mass", &rb->mass, 0.1f, 0, 1000000, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                ImGui::Checkbox("Use gravity", &rb->useGravity);
-                editVector("Linear velocity", rb->linearVelocity);
-                editVector("Angular velocity", rb->angularVelocity);
-            }
-            if (auto* camera = world.tryGet<Camera>(selected);
-                camera && componentHeader<Camera>(world, selected, "Camera")) {
-                Camera edited = *camera;
-                bool active = camera->active;
-                if (ImGui::Checkbox("Active camera", &active)) {
-                    if (active) {
-                        activateCamera(world, selected);
                     } else {
-                        camera->active = false;
+                        transformChanged |= editVector("Scale", edited.scale, 0.02f, 0.05f, 100);
+                    }
+                    if (transformChanged) {
+                        setLocalTransform(world, selected, edited);
                     }
                 }
-                edited.active = camera->active;
-                ImGui::Checkbox("Orthographic", &edited.orthographic);
-                ImGui::DragFloat("Field of view (degrees)", &edited.fieldOfView, .1f, 1, 178);
-                ImGui::DragFloat("Orthographic size", &edited.orthographicSize, .1f, .01f, 1000000);
-                ImGui::DragFloat(
-                    "Near clip", &edited.nearClip, .01f, .001f, edited.farClip - .001f);
-                ImGui::DragFloat("Far clip", &edited.farClip, 1, edited.nearClip + .001f, 1000000);
-                float viewport[]{edited.viewportX,
-                                 edited.viewportY,
-                                 edited.viewportWidth,
-                                 edited.viewportHeight};
-                if (ImGui::DragFloat4("Viewport", viewport, .005f, 0, 1)) {
-                    edited.viewportX = viewport[0];
-                    edited.viewportY = viewport[1];
-                    edited.viewportWidth = viewport[2];
-                    edited.viewportHeight = viewport[3];
-                }
-                if (validCamera(edited)) {
-                    *camera = edited;
-                }
-                if (ImGui::Button("Clear camera target")) {
-                    camera->tracking = false;
-                    camera->following = false;
-                    camera->targetEntity = {};
-                }
-            }
-            auto lightInspector = [&](auto tag, const char* title, int kind) {
-                using T = decltype(tag);
-                auto* light = world.tryGet<T>(selected);
-                if (!light || !componentHeader<T>(world, selected, title)) {
-                    return;
-                }
-                T edited = *light;
-                ImGui::PushID(title);
-                ImGui::Checkbox("Enabled", &edited.enabled);
-                ImGui::ColorEdit3("Color", &edited.color.x);
-                ImGui::DragFloat("Intensity", &edited.intensity, .05f, 0, 1000);
-                if (kind != 0) {
-                    ImGui::DragFloat("Range", &edited.range, .1f, .1f, 10000);
-                }
-                if (kind == 2) {
-                    ImGui::DragFloat(
-                        "Inner angle", &edited.innerAngle, .1f, 0, edited.outerAngle - .1f);
-                    ImGui::DragFloat(
-                        "Outer angle", &edited.outerAngle, .1f, edited.innerAngle + .1f, 85);
-                }
-                ImGui::Checkbox("Cast dynamic shadows", &edited.shadows);
-                ImGui::Combo("Shadow quality",
-                             &edited.shadowQuality,
-                             "Off\0Low (256)\0Medium (512)\0High (1024)\0");
-                if (kind == 0) {
-                    ImGui::DragFloat("Shadow coverage", &edited.shadowDistance, .5f, 1, 1000);
-                }
-                ImGui::DragFloat("Shadow bias", &edited.shadowBias, .0001f, 0, .05f, "%.4f");
-                ImGui::TextWrapped(
-                    "Emission follows local -Z. Shadow maps use a shared 12-layer budget; a point light uses six layers.");
-                if (validLight(edited)) {
-                    *light = edited;
-                }
-                ImGui::PopID();
-            };
-            if (auto* sky = world.tryGet<Skybox>(selected);
-                sky && componentHeader<Skybox>(world, selected, "Skybox")) {
-                ImGui::Checkbox("Skybox enabled", &sky->enabled);
-                ImGui::Combo("Skybox type", &sky->type, "Cubemap asset\0HDR panorama\0");
-                ImGui::ColorEdit3("Skybox color", &sky->color.x);
-                auto slot = [&](const char* label, std::string& path, bool hdr) {
-                    ImGui::PushID(label);
-                    if (ImGui::BeginCombo(label,
-                                          path.empty() ? "None (drop texture)" : path.c_str())) {
-                        if (ImGui::Selectable("None", path.empty())) {
-                            path.clear();
+                if (auto* r = world.tryGet<MeshRenderer>(selected);
+                    componentID == 3 && r &&
+                    componentHeader<MeshRenderer>(world, selected, "MeshRenderer")) {
+                    const char* names[]{"Cube", "Sphere", "Capsule", "Cone", "Plane"};
+                    int current = -1;
+                    for (int i = 0; i < std::min(meshCount, 5); ++i) {
+                        if (r->mesh.id == meshes[i].id) {
+                            current = i;
                         }
-                        if (assets) {
-                            for (const auto& file : assets->files()) {
-                                if ((hdr ? skyboxHDRPath(file) : cubemapAsset(file)) &&
-                                    ImGui::Selectable(file.c_str(), file == path)) {
-                                    path = file;
+                    }
+                    if (ImGui::BeginCombo("Mesh", current < 0 ? "Custom" : names[current])) {
+                        for (int i = 0; i < std::min(meshCount, 5); ++i) {
+                            if (ImGui::Selectable(names[i], current == i)) {
+                                r->mesh = meshes[i];
+                                if (i != 0) {
+                                    if (auto* t = world.tryGet<Transform>(selected)) {
+                                        const float scale =
+                                            std::clamp(std::max({std::abs(t->scale.x),
+                                                                 std::abs(t->scale.y),
+                                                                 std::abs(t->scale.z)}),
+                                                       0.05f,
+                                                       100.0f);
+                                        t->scale = {scale, scale, scale};
+                                    }
+                                }
+                                if (auto* c = world.tryGet<Collider>(selected)) {
+                                    c->shape =
+                                        i == 4 ? ColliderShape::Box : static_cast<ColliderShape>(i);
+                                    c->size = i == 4 ? Vec3{16, .1f, 16} : Vec3{1, 1, 1};
+                                    c->center = i == 4 ? Vec3{0, -.05f, 0} : Vec3{};
+                                    c->radius = 0.5f;
+                                    c->height = 1;
                                 }
                             }
                         }
                         ImGui::EndCombo();
                     }
+                    if (assets) {
+                        static std::string materialError;
+                        try {
+                            static std::filesystem::path listedRoot;
+                            static std::vector<std::string> materialFiles;
+                            static std::chrono::steady_clock::time_point listedAt;
+                            auto now = std::chrono::steady_clock::now();
+                            if (listedRoot != assets->root ||
+                                now - listedAt > std::chrono::seconds(1)) {
+                                materialFiles = assets->files();
+                                listedRoot = assets->root;
+                                listedAt = now;
+                            }
+                            if (assetPicker(
+                                    "Material", r->material, assets, [](const std::string& file) {
+                                        return materialAsset(file);
+                                    })) {
+                                r->materialOverrides = 0;
+                            }
+                            if (ImGui::BeginDragDropTarget()) {
+                                if (const auto* payload =
+                                        ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                                    std::string path = static_cast<const char*>(payload->Data);
+                                    if (materialAsset(path)) {
+                                        r->material = path;
+                                        r->materialOverrides = 0;
+                                    }
+                                }
+                                ImGui::EndDragDropTarget();
+                            }
+                            auto create = [&]() {
+                                auto path = createMaterial(*assets);
+                                MaterialProperties p;
+                                p.color = r->color;
+                                p.specular = r->specular;
+                                saveMaterial(*assets, path, p);
+                                r->material = path;
+                                r->materialOverrides = 0;
+                            };
+                            bool createRequested = false;
+                            if (ImGui::BeginPopupContextItem("Material slot actions")) {
+                                createRequested = ImGui::MenuItem("Create Material");
+                                ImGui::EndPopup();
+                            }
+                            if (createRequested) {
+                                create();
+                            }
+                            if (r->material.empty() && ImGui::SmallButton("Create Material")) {
+                                create();
+                            }
+                            if (!r->material.empty()) {
+                                auto edited = loadMaterial(*assets, r->material);
+                                if (ImGui::TreeNodeEx("Material properties",
+                                                      ImGuiTreeNodeFlags_DefaultOpen)) {
+                                    bool changed = false;
+                                    changed |= ImGui::Combo(
+                                        "Shader",
+                                        &edited.shader,
+                                        "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0");
+                                    changed |= ImGui::ColorEdit3("Material color", &edited.color.x);
+                                    auto textureField = [&](const char* label, std::string& path) {
+                                        ImGui::PushID(label);
+                                        bool editedTexture = false;
+                                        editedTexture |= assetPicker(
+                                            label, path, assets, [](const std::string& file) {
+                                                return materialTexturePath(file);
+                                            });
+                                        if (ImGui::BeginDragDropTarget()) {
+                                            if (const auto* payload =
+                                                    ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                                                std::string value =
+                                                    static_cast<const char*>(payload->Data);
+                                                if (!value.empty() && materialTexturePath(value)) {
+                                                    path = value;
+                                                    editedTexture = true;
+                                                }
+                                            }
+                                            ImGui::EndDragDropTarget();
+                                        }
+                                        ImGui::PopID();
+                                        return editedTexture;
+                                    };
+                                    changed |= textureField("Texture", edited.texture);
+                                    if (edited.shader == 1) {
+                                        changed |= textureField("Normal map", edited.normalMap);
+                                        changed |= ImGui::SliderFloat(
+                                            "Normal strength", &edited.normalStrength, 0, 4);
+                                    }
+                                    float tiling[]{edited.tilingX, edited.tilingY};
+                                    if (ImGui::DragFloat2("UV tiling", tiling, .05f, -1000, 1000)) {
+                                        edited.tilingX = tiling[0];
+                                        edited.tilingY = tiling[1];
+                                        changed = true;
+                                    }
+                                    changed |= ImGui::SliderFloat(
+                                        "Material specular", &edited.specular, 0, 1);
+                                    ImGui::TextDisabled(
+                                        "Shared asset: edits affect all meshes using this material.");
+                                    if (changed && validMaterial(edited)) {
+                                        try {
+                                            saveMaterial(*assets, r->material, edited);
+                                            materialError.clear();
+                                        } catch (const std::exception& e) {
+                                            materialError = e.what();
+                                        }
+                                    }
+                                    if (r->materialOverrides) {
+                                        ImGui::TextDisabled("This mesh has instance overrides.");
+                                        if (ImGui::SmallButton("Reset material overrides")) {
+                                            r->materialOverrides = 0;
+                                        }
+                                    }
+                                    ImGui::TreePop();
+                                }
+                            }
+                        } catch (const std::exception& e) {
+                            materialError = e.what();
+                        }
+                        if (!materialError.empty()) {
+                            ImGui::TextWrapped("%s", materialError.c_str());
+                        }
+                    }
+                    if (r->material.empty()) {
+                        float color[]{r->color.x, r->color.y, r->color.z};
+                        if (ImGui::ColorEdit3("Color", color)) {
+                            r->color = {color[0], color[1], color[2]};
+                        }
+                        ImGui::Checkbox("Checkerboard", &r->checkerboard);
+                        ImGui::SliderFloat("Specular", &r->specular, 0, 1);
+                    }
+                }
+                if (auto* c = world.tryGet<Collider>(selected);
+                    componentID == 2 && c &&
+                    componentHeader<Collider>(world, selected, "Collider")) {
+                    const char* names[]{"Box", "Sphere", "Capsule", "Cone"};
+                    int shape = static_cast<int>(c->shape);
+                    if (ImGui::Combo("Collider shape", &shape, names, 4)) {
+                        c->shape = static_cast<ColliderShape>(shape);
+                    }
+                    editVector("Center", c->center);
+                    if (c->shape == ColliderShape::Box) {
+                        editVector("Size", c->size, 0.02f, 0.01f, 10000);
+                    } else {
+                        ImGui::DragFloat("Radius",
+                                         &c->radius,
+                                         0.02f,
+                                         0.01f,
+                                         10000,
+                                         "%.3f",
+                                         ImGuiSliderFlags_AlwaysClamp);
+                        if (c->shape != ColliderShape::Sphere) {
+                            ImGui::DragFloat("Height",
+                                             &c->height,
+                                             0.02f,
+                                             0.01f,
+                                             10000,
+                                             "%.3f",
+                                             ImGuiSliderFlags_AlwaysClamp);
+                        }
+                    }
+                    ImGui::Checkbox("Is trigger", &c->isTrigger);
+                    ImGui::SliderFloat("Friction", &c->friction, 0, 1);
+                    ImGui::SliderFloat("Bounciness", &c->bounciness, 0, 1);
+                }
+                if (auto* rb = world.tryGet<RigidBody>(selected);
+                    componentID == 1 && rb &&
+                    componentHeader<RigidBody>(world, selected, "RigidBody")) {
+                    ImGui::DragFloat(
+                        "Mass", &rb->mass, 0.1f, 0, 1000000, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::Checkbox("Use gravity", &rb->useGravity);
+                    ImGui::Checkbox("Kinematic", &rb->isKinematic);
+                    ImGui::DragFloat(
+                        "Drag", &rb->drag, .01f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::DragFloat("Angular drag",
+                                     &rb->angularDrag,
+                                     .01f,
+                                     0,
+                                     100,
+                                     "%.2f",
+                                     ImGuiSliderFlags_AlwaysClamp);
+                    editVector("Linear velocity", rb->linearVelocity);
+                    editVector("Angular velocity", rb->angularVelocity);
+                }
+                if (auto* camera = world.tryGet<Camera>(selected);
+                    componentID == 6 && camera &&
+                    componentHeader<Camera>(world, selected, "Camera")) {
+                    Camera edited = *camera;
+                    bool active = camera->active;
+                    if (ImGui::Checkbox("Active camera", &active)) {
+                        if (active) {
+                            activateCamera(world, selected);
+                        } else {
+                            camera->active = false;
+                        }
+                    }
+                    edited.active = camera->active;
+                    ImGui::Checkbox("Orthographic", &edited.orthographic);
+                    ImGui::DragFloat("Field of view (degrees)", &edited.fieldOfView, .1f, 1, 178);
+                    ImGui::DragFloat(
+                        "Orthographic size", &edited.orthographicSize, .1f, .01f, 1000000);
+                    ImGui::DragFloat(
+                        "Near clip", &edited.nearClip, .01f, .001f, edited.farClip - .001f);
+                    ImGui::DragFloat(
+                        "Far clip", &edited.farClip, 1, edited.nearClip + .001f, 1000000);
+                    float viewport[]{edited.viewportX,
+                                     edited.viewportY,
+                                     edited.viewportWidth,
+                                     edited.viewportHeight};
+                    if (ImGui::DragFloat4("Viewport", viewport, .005f, 0, 1)) {
+                        edited.viewportX = viewport[0];
+                        edited.viewportY = viewport[1];
+                        edited.viewportWidth = viewport[2];
+                        edited.viewportHeight = viewport[3];
+                    }
+                    if (validCamera(edited)) {
+                        *camera = edited;
+                    }
+                    if (ImGui::Button("Clear camera target")) {
+                        camera->tracking = false;
+                        camera->following = false;
+                        camera->targetEntity = {};
+                    }
+                }
+                auto lightInspector = [&](auto tag, const char* title, int kind) {
+                    using T = decltype(tag);
+                    auto* light = world.tryGet<T>(selected);
+                    if (!light || !componentHeader<T>(world, selected, title)) {
+                        return;
+                    }
+                    T edited = *light;
+                    ImGui::PushID(title);
+                    ImGui::Checkbox("Enabled", &edited.enabled);
+                    ImGui::ColorEdit3("Color", &edited.color.x);
+                    ImGui::DragFloat("Intensity", &edited.intensity, .05f, 0, 1000);
+                    if (kind != 0) {
+                        ImGui::DragFloat("Range", &edited.range, .1f, .1f, 10000);
+                    }
+                    if (kind == 2) {
+                        ImGui::DragFloat(
+                            "Inner angle", &edited.innerAngle, .1f, 0, edited.outerAngle - .1f);
+                        ImGui::DragFloat(
+                            "Outer angle", &edited.outerAngle, .1f, edited.innerAngle + .1f, 85);
+                    }
+                    ImGui::Checkbox("Cast dynamic shadows", &edited.shadows);
+                    ImGui::Combo("Shadow quality",
+                                 &edited.shadowQuality,
+                                 "Off\0Low (256)\0Medium (512)\0High (1024)\0");
+                    if (kind == 0) {
+                        ImGui::DragFloat("Shadow coverage", &edited.shadowDistance, .5f, 1, 1000);
+                    }
+                    ImGui::DragFloat("Shadow bias", &edited.shadowBias, .0001f, 0, .05f, "%.4f");
+                    ImGui::TextWrapped(
+                        "Emission follows local -Z. Shadow maps use a shared 12-layer budget; a point light uses six layers.");
+                    if (validLight(edited)) {
+                        *light = edited;
+                    }
+                    ImGui::PopID();
+                };
+                if (auto* sky = world.tryGet<Skybox>(selected);
+                    componentID == 12 && sky &&
+                    componentHeader<Skybox>(world, selected, "Skybox")) {
+                    ImGui::Checkbox("Skybox enabled", &sky->enabled);
+                    ImGui::Combo("Skybox type", &sky->type, "Cubemap asset\0HDR panorama\0");
+                    ImGui::ColorEdit3("Skybox color", &sky->color.x);
+                    auto slot = [&](const char* label, std::string& path, bool hdr) {
+                        ImGui::PushID(label);
+                        assetPicker(label, path, assets, [&](const std::string& file) {
+                            return hdr ? skyboxHDRPath(file) : cubemapAsset(file);
+                        });
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                                std::string value = static_cast<const char*>(payload->Data);
+                                if (!value.empty() &&
+                                    (hdr ? skyboxHDRPath(value) : cubemapAsset(value))) {
+                                    path = value;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                        ImGui::PopID();
+                    };
+                    if (sky->type == 1) {
+                        slot("HDR panorama", sky->hdr, true);
+                    } else {
+                        slot("Cubemap asset", sky->cubemap, false);
+                    }
+                }
+                if (componentID == 9) {
+                    lightInspector(DirectionalLight{}, "DirectionalLight", 0);
+                }
+                if (componentID == 10) {
+                    lightInspector(PointLight{}, "PointLight", 1);
+                }
+                if (componentID == 11) {
+                    lightInspector(SpotLight{}, "SpotLight", 2);
+                }
+                if (auto* listener = world.tryGet<AudioListener>(selected);
+                    componentID == 8 && listener &&
+                    componentHeader<AudioListener>(world, selected, "AudioListener")) {
+                    ImGui::Checkbox("Listener enabled", &listener->enabled);
+                    ImGui::TextWrapped(
+                        "Receives audio at this object's world position. With multiple enabled listeners, the lowest entity ID is used.");
+                }
+                if (auto* a = world.tryGet<AudioSource>(selected);
+                    componentID == 7 && a &&
+                    componentHeader<AudioSource>(world, selected, "AudioSource")) {
+                    assetPicker("Audio clip", a->clip, assets, [](const std::string& path) {
+                        return audioAsset(path);
+                    });
                     if (ImGui::BeginDragDropTarget()) {
-                        if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                            std::string value = static_cast<const char*>(payload->Data);
-                            if (!value.empty() &&
-                                (hdr ? skyboxHDRPath(value) : cubemapAsset(value))) {
-                                path = value;
+                        if (auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                            std::string path = static_cast<const char*>(payload->Data);
+                            if (audioAsset(path)) {
+                                a->clip = path;
                             }
                         }
                         ImGui::EndDragDropTarget();
                     }
-                    ImGui::PopID();
-                };
-                if (sky->type == 1) {
-                    slot("HDR panorama", sky->hdr, true);
-                } else {
-                    slot("Cubemap asset", sky->cubemap, false);
+                    ImGui::SliderFloat(
+                        "Volume", &a->volume, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::SliderFloat(
+                        "Pitch", &a->pitch, .1f, 4, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::SliderFloat("Pan", &a->pan, -1, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::DragFloat("Max Distance",
+                                     &a->distance,
+                                     .1f,
+                                     0,
+                                     10000,
+                                     "%.2f",
+                                     ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::SliderFloat(
+                        "Spatial Blend", &a->blend, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::Checkbox("Looping", &a->looping);
+                    ImGui::Checkbox("Mute", &a->muted);
+                    ImGui::Checkbox("Play on start", &a->playOnStart);
+                    ImGui::TextUnformatted(a->isPlaying()                           ? "Playing"
+                                           : a->state == AudioSource::State::Paused ? "Paused"
+                                                                                    : "Stopped");
                 }
-            }
-            lightInspector(DirectionalLight{}, "DirectionalLight", 0);
-            lightInspector(PointLight{}, "PointLight", 1);
-            lightInspector(SpotLight{}, "SpotLight", 2);
-            if (auto* listener = world.tryGet<AudioListener>(selected);
-                listener && componentHeader<AudioListener>(world, selected, "AudioListener")) {
-                ImGui::Checkbox("Listener enabled", &listener->enabled);
-                ImGui::TextWrapped(
-                    "Receives audio at this object's world position. With multiple enabled listeners, the lowest entity ID is used.");
-            }
-            if (auto* a = world.tryGet<AudioSource>(selected);
-                a && componentHeader<AudioSource>(world, selected, "AudioSource")) {
-                char clip[4097];
-                std::snprintf(clip, sizeof(clip), "%s", a->clip.c_str());
-                if (ImGui::InputText("AudioClip (.wav / .mp3)", clip, sizeof(clip))) {
-                    a->clip = clip;
-                }
-                if (ImGui::BeginDragDropTarget()) {
-                    if (auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                        std::string path = static_cast<const char*>(payload->Data);
-                        if (audioAsset(path)) {
-                            a->clip = path;
+                if (auto* scripts = world.tryGet<LuaScript>(selected);
+                    componentID == 5 && scripts &&
+                    componentHeader<LuaScript>(world, selected, "LegacyScripts")) {
+                    int remove = -1;
+                    auto row = [&](std::string& path,
+                                   bool& enabled,
+                                   std::vector<ScriptField>& fields,
+                                   int index) {
+                        ImGui::PushID(index);
+                        ImGui::SeparatorText(("Script " + std::to_string(index + 1)).c_str());
+                        if (ImGui::BeginPopupContextItem("Script actions")) {
+                            if (ImGui::MenuItem("Remove script")) {
+                                remove = index;
+                            }
+                            ImGui::EndPopup();
                         }
+                        ImGui::Checkbox("Enabled", &enabled);
+                        assetPicker("Script", path, assets, [](const std::string& file) {
+                            return AssetManager::script(file);
+                        });
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                                std::string file = static_cast<const char*>(payload->Data);
+                                if (AssetManager::script(file)) {
+                                    path = file;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                        if (assets && !path.empty()) {
+                            try {
+                                syncScriptExports(assets->readScript(path), fields);
+                            } catch (const std::exception& error) {
+                                ImGui::TextWrapped("%s", error.what());
+                            }
+                        }
+                        drawScriptExports(world, fields, assets);
+                        ImGui::PopID();
+                    };
+                    row(scripts->path, scripts->enabled, scripts->fields, 0);
+                    for (std::size_t i = 0; i < scripts->additional.size(); ++i) {
+                        row(scripts->additional[i].path,
+                            scripts->additional[i].enabled,
+                            scripts->additional[i].fields,
+                            static_cast<int>(i + 1));
+                    }
+                    if (remove == 0) {
+                        if (scripts->additional.empty()) {
+                            world.remove<LuaScript>(selected);
+                        } else {
+                            auto next = scripts->additional.front();
+                            scripts->path = next.path;
+                            scripts->enabled = next.enabled;
+                            scripts->fields = next.fields;
+                            scripts->additional.erase(scripts->additional.begin());
+                        }
+                    } else if (remove > 0) {
+                        scripts->additional.erase(scripts->additional.begin() + remove - 1);
+                    }
+                }
+                ImGui::Button("Drop LegacyScript (.ls) here", ImVec2(-1, 32));
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                        attachScriptAsset(world, selected, static_cast<const char*>(asset->Data));
                     }
                     ImGui::EndDragDropTarget();
                 }
-                ImGui::SliderFloat(
-                    "Volume", &a->volume, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                ImGui::SliderFloat(
-                    "Pitch", &a->pitch, .1f, 4, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                ImGui::SliderFloat("Pan", &a->pan, -1, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                ImGui::DragFloat("Max Distance",
-                                 &a->distance,
-                                 .1f,
-                                 0,
-                                 10000,
-                                 "%.2f",
-                                 ImGuiSliderFlags_AlwaysClamp);
-                ImGui::SliderFloat(
-                    "Spatial Blend", &a->blend, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                ImGui::Checkbox("Looping", &a->looping);
-                ImGui::Checkbox("Mute", &a->muted);
-                ImGui::Checkbox("Play on start", &a->playOnStart);
-                ImGui::TextUnformatted(a->isPlaying()                           ? "Playing"
-                                       : a->state == AudioSource::State::Paused ? "Paused"
-                                                                                : "Stopped");
-            }
-            if (auto* scripts = world.tryGet<LuaScript>(selected);
-                scripts && componentHeader<LuaScript>(world, selected, "LegacyScripts")) {
-                int remove = -1;
-                auto row = [&](std::string& path,
-                               bool& enabled,
-                               std::vector<ScriptField>& fields,
-                               int index) {
-                    ImGui::PushID(index);
-                    ImGui::SeparatorText(("Script " + std::to_string(index + 1)).c_str());
-                    if (ImGui::BeginPopupContextItem("Script actions")) {
-                        if (ImGui::MenuItem("Remove script")) {
-                            remove = index;
+                if (auto* c = world.tryGet<CharacterController>(selected);
+                    componentID == 13 && c &&
+                    componentHeader<CharacterController>(world, selected, "CharacterController")) {
+                    ImGui::DragFloat(
+                        "Move speed", &c->speed, .1f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::DragFloat("Sprint multiplier",
+                                     &c->sprintMultiplier,
+                                     .05f,
+                                     1,
+                                     10,
+                                     "%.2f",
+                                     ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::DragFloat("Jump speed",
+                                     &c->jumpSpeed,
+                                     .1f,
+                                     0,
+                                     100,
+                                     "%.2f",
+                                     ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::Checkbox("Can move", &c->canMove);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Can jump", &c->canJump);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Can sprint", &c->canSprint);
+                }
+                if (auto* f = world.tryGet<FPSCamera>(selected);
+                    componentID == 14 && f &&
+                    componentHeader<FPSCamera>(world, selected, "FPSCamera")) {
+                    ImGui::Checkbox("Freecam", &f->isFreecam);
+                    ImGui::Checkbox("Mouse look", &f->mouseLook);
+                    ImGui::DragFloat("Look sensitivity",
+                                     &f->sensitivity,
+                                     .01f,
+                                     .01f,
+                                     5,
+                                     "%.2f",
+                                     ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::DragFloat("Freecam speed",
+                                     &f->speed,
+                                     .1f,
+                                     0,
+                                     100,
+                                     "%.2f",
+                                     ImGuiSliderFlags_AlwaysClamp);
+                    ImGui::TextWrapped(
+                        "Inherits Camera settings. An unparented freecam uses WASD, Q/E while Game input is focused. Mouse look requires a locked cursor.");
+                }
+                if (auto* ray = world.tryGet<Raycast>(selected);
+                    componentID == 15 && ray &&
+                    componentHeader<Raycast>(world, selected, "Raycast")) {
+                    ImGui::Combo("Query type", &ray->type, "Line\0LineOfSight\0Sphere\0");
+                    editVector("Origin offset", ray->offset);
+                    ImGui::DragFloat("Distance",
+                                     &ray->distance,
+                                     .1f,
+                                     .01f,
+                                     10000,
+                                     "%.2f",
+                                     ImGuiSliderFlags_AlwaysClamp);
+                    if (ray->type == 2) {
+                        ImGui::DragFloat("Radius",
+                                         &ray->radius,
+                                         .1f,
+                                         .01f,
+                                         10000,
+                                         "%.2f",
+                                         ImGuiSliderFlags_AlwaysClamp);
+                    }
+                    if (ray->type == 1) {
+                        ImGui::SliderFloat("Fan angle", &ray->angle, 1, 360);
+                        ImGui::SliderInt("Fan samples", &ray->samples, 2, 181);
+                    }
+                    ImGui::Checkbox("Include triggers", &ray->includeTriggers);
+                    if (ImGui::TreeNode("Query layers")) {
+                        for (int i = 0; i < 32; ++i) {
+                            if (!LayerSettings::names[i].empty()) {
+                                bool enabled = ray->layerMask & (1u << i);
+                                if (ImGui::Checkbox(LayerSettings::names[i].c_str(), &enabled)) {
+                                    if (enabled) {
+                                        ray->layerMask |= 1u << i;
+                                    } else {
+                                        ray->layerMask &= ~(1u << i);
+                                    }
+                                }
+                            }
                         }
-                        ImGui::EndPopup();
+                        ImGui::TreePop();
                     }
-                    ImGui::Checkbox("Enabled", &enabled);
-                    char buffer[4097];
-                    std::snprintf(buffer, sizeof(buffer), "%s", path.c_str());
-                    if (ImGui::InputText("Asset path", buffer, sizeof(buffer))) {
-                        path = buffer;
-                    }
-                    if (assets && !path.empty()) {
-                        try {
-                            syncScriptExports(assets->readScript(path), fields);
-                        } catch (const std::exception& error) {
-                            ImGui::TextWrapped("%s", error.what());
-                        }
-                    }
-                    drawScriptExports(world, fields);
-                    ImGui::PopID();
-                };
-                row(scripts->path, scripts->enabled, scripts->fields, 0);
-                for (std::size_t i = 0; i < scripts->additional.size(); ++i) {
-                    row(scripts->additional[i].path,
-                        scripts->additional[i].enabled,
-                        scripts->additional[i].fields,
-                        static_cast<int>(i + 1));
                 }
-                if (remove == 0) {
-                    if (scripts->additional.empty()) {
-                        world.remove<LuaScript>(selected);
-                    } else {
-                        auto next = scripts->additional.front();
-                        scripts->path = next.path;
-                        scripts->enabled = next.enabled;
-                        scripts->fields = next.fields;
-                        scripts->additional.erase(scripts->additional.begin());
-                    }
-                } else if (remove > 0) {
-                    scripts->additional.erase(scripts->additional.begin() + remove - 1);
-                }
-            }
-            ImGui::Button("Drop LegacyScript (.ls) here", ImVec2(-1, 32));
-            if (ImGui::BeginDragDropTarget()) {
-                if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                    attachScriptAsset(world, selected, static_cast<const char*>(asset->Data));
-                }
-                ImGui::EndDragDropTarget();
-            }
-            if (auto* c = world.tryGet<CharacterController>(selected);
-                c && componentHeader<CharacterController>(world, selected, "CharacterController")) {
-                ImGui::DragFloat(
-                    "Move speed", &c->speed, .1f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                ImGui::DragFloat("Sprint multiplier",
-                                 &c->sprintMultiplier,
-                                 .05f,
-                                 1,
-                                 10,
-                                 "%.2f",
-                                 ImGuiSliderFlags_AlwaysClamp);
-                ImGui::DragFloat(
-                    "Jump speed", &c->jumpSpeed, .1f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                ImGui::Checkbox("Can move", &c->canMove);
-                ImGui::Checkbox("Can jump", &c->canJump);
-                ImGui::Checkbox("Can sprint", &c->canSprint);
-                ImGui::Text("Grounded: %s | Moving: %s | Jumping: %s | Sprinting: %s",
-                            c->isGrounded ? "yes" : "no",
-                            c->isMoving ? "yes" : "no",
-                            c->isJumping ? "yes" : "no",
-                            c->isSprinting ? "yes" : "no");
-                ImGui::TextWrapped(
-                    "Requires Transform, Collider and dynamic RigidBody. Capsule center is the object's origin. Movement is controlled by scripts.");
-            }
-            if (auto* f = world.tryGet<FPSCamera>(selected);
-                f && componentHeader<FPSCamera>(world, selected, "FPSCamera")) {
-                ImGui::Checkbox("Freecam", &f->isFreecam);
-                ImGui::Checkbox("Mouse look", &f->mouseLook);
-                ImGui::DragFloat("Look sensitivity",
-                                 &f->sensitivity,
-                                 .01f,
-                                 .01f,
-                                 5,
-                                 "%.2f",
-                                 ImGuiSliderFlags_AlwaysClamp);
-                ImGui::DragFloat(
-                    "Freecam speed", &f->speed, .1f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                ImGui::TextWrapped(
-                    "Inherits Camera settings. An unparented freecam uses WASD, Q/E while Game input is focused. Mouse look requires a locked cursor.");
             }
             if (ImGui::Button("Add Component")) {
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<Raycast>(selected) && ImGui::MenuItem("Raycast")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, Raycast{});
+                }
                 if (!world.has<CharacterController>(selected) &&
                     ImGui::MenuItem("CharacterController")) {
                     addCharacterController(world, selected);
