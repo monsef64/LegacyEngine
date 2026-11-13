@@ -13,6 +13,7 @@
 #include "rendering/mesh.hpp"
 #include "physics/physics.hpp"
 #include "rendering/renderer.hpp"
+#include "platform/engine_log.hpp"
 #include "editor/transform_editor.hpp"
 #include "editor/script_editor.hpp"
 #include "editor/level_objects.hpp"
@@ -286,6 +287,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     std::string currentProject,projectError,savedProjectState,lastWindowTitle;
     bool projectDirty=true;
     InputState input;input.window=window;InputSettings inputSettings;
+    EngineLog::Errors terminalErrors;
     bool gameHovered=false,gameFocused=false;
     bool showFPS=false,showGameColliders=false;
     Uint64 lastTicks = SDL_GetTicksNS();
@@ -491,6 +493,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             }
         }
         if(!projectError.empty()) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Project: %s",projectError.c_str());
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,"Project error",projectError.c_str(),window);
             projectError.clear();
         }
@@ -670,6 +673,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         browser.draw(window,world,selectedEntity,scripts,editAllowed,&history);
         browser.settings.draw(browser.projectFolder);
         inputSettings.draw(browser.assets,input,editAllowed);
+        terminalErrors.report("Skybox",renderer.skyboxError());
+        terminalErrors.report("Material",renderer.materialError);
+        terminalErrors.report("Audio",audio.error);
+        terminalErrors.report("Assets",browser.assets.error);
+        terminalErrors.report("Asset preview",browser.preview.error);
+        terminalErrors.report("Editor settings",browser.settings.error);
+        terminalErrors.report("Input settings",inputSettings.error);
+        terminalErrors.report("History",history.error);
         if(!renderer.skyboxError().empty()){ImGui::Begin("Skybox errors");ImGui::TextWrapped("%s",renderer.skyboxError().c_str());ImGui::End();}
         if(!renderer.materialError.empty()){ImGui::Begin("Material errors");ImGui::TextWrapped("%s",renderer.materialError.c_str());if(ImGui::Button("Dismiss"))renderer.materialError.clear();ImGui::End();}
         if(!audio.error.empty()){ImGui::Begin("Audio errors");ImGui::TextWrapped("%s",audio.error.c_str());if(ImGui::Button("Dismiss"))audio.error.clear();ImGui::End();}
@@ -811,7 +822,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                     const auto gameVP=cameraMatrix(t,c);
                     renderer.draw(world,gameVP,std::max(1,static_cast<int>(c.viewportWidth*gameSurface.width)),std::max(1,static_cast<int>(c.viewportHeight*gameSurface.height)),cameraEye(t,c),x,y,false);
                     if(showGameColliders)world.each<Transform,Collider>([&](Entity,const Transform& transform,const Collider& collider){renderer.drawCollider(transform,collider,gameVP);});
-                }catch(const std::exception&){glClearColor(.1f,.1f,.1f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);}
+                    terminalErrors.report("Game rendering","");
+                }catch(const std::exception& error){terminalErrors.report("Game rendering",error.what());glClearColor(.1f,.1f,.1f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);}
             }
             glBindFramebuffer(GL_FRAMEBUFFER,0);glViewport(0,0,width,height);
             glDisable(GL_SCISSOR_TEST);glClearColor(.07f,.08f,.10f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -846,14 +858,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     return (!smokeTest || renderedFrames >= smokeFrames) && (!screenshotPath || screenshotSaved);
 }
 
-int main(int argc, char** argv)
+int engineMain(int argc, char** argv)
 {
     bool smokeTest = false;const char* screenshotPath=nullptr;
     for (int i=1; i<argc; ++i) {
         if (std::strcmp(argv[i], "--smoke-test") == 0) smokeTest = true;
         else if(std::strcmp(argv[i],"--screenshot")==0 && i+1<argc)screenshotPath=argv[++i];
-        else { SDL_Log("Unknown argument: %s", argv[i]); return 1; }
+        else { SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Unknown argument: %s", argv[i]); return 1; }
     }
+    SDL_Log("Initializing SDL video");
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not start SDL: %s", SDL_GetError());
         return 1;
@@ -878,6 +891,7 @@ int main(int argc, char** argv)
 
     // If the renderer cannot start, the reason is already logged: skip the
     // loop and exit with an error.
+    SDL_Log("Initializing renderer");
     Renderer   renderer;
     const bool rendererReady = renderer.init();
     bool runSucceeded = false;
@@ -898,6 +912,7 @@ int main(int argc, char** argv)
             SDL_Quit();
             return 1;
         }
+        SDL_Log("Editor started");
         runSucceeded = run(window, renderer, smokeTest,screenshotPath);
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplSDL3_Shutdown();
@@ -910,4 +925,16 @@ int main(int argc, char** argv)
     SDL_Quit();
     if (smokeTest && runSucceeded) SDL_Log("Smoke test passed: rendered 120 frames and shut down cleanly");
     return rendererReady && runSucceeded ? 0 : 1;
+}
+
+int main(int argc,char** argv){
+    EngineLog::initialize();
+    SDL_Log("Starting LegacyEngine");
+    int result=1;
+    try{result=engineMain(argc,argv);}
+    catch(const std::exception& error){SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION,"Unhandled exception: %s",error.what());}
+    catch(...){SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION,"Unhandled non-standard exception");}
+    if(result==0)SDL_Log("LegacyEngine shut down cleanly");
+    else SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"LegacyEngine exited with error code %d",result);
+    return result;
 }

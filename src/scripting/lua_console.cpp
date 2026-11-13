@@ -7,6 +7,7 @@ extern "C" {
 #include <lauxlib.h>
 #include <lualib.h>
 }
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <cstdlib>
 
@@ -35,6 +36,9 @@ void LuaConsole::append(Kind kind, std::string_view text)
     std::string message = kind == Kind::Output ? "lua > " : "";
     message.append(text.substr(0,maxLineBytes));
     if (text.size()>maxLineBytes) message += " [truncated]";
+    if(kind==Kind::Error)SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"LegacyScript: %s",message.c_str());
+    else if(kind==Kind::Warning)SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,"LegacyScript: %s",message.c_str());
+    else SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,"LegacyScript: %s",message.c_str());
     lines_.push_back({kind,std::move(message)});
 }
 
