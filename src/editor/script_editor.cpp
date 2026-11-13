@@ -40,8 +40,11 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
         auto* parent=ImGui::GetCurrentWindow();
         for(auto* child:parent->DC.ChildWindows)if(child->ChildId==sourceID){
             auto* state=ImGui::GetInputTextState(sourceID);
-            auto origin=child->DC.CursorStartPos;
-            origin.x+=ImGui::GetStyle().FramePadding.x;origin.y+=ImGui::GetStyle().FramePadding.y;
+            // Use current scroll, including InputText's same-frame caret-follow
+            // adjustment (CursorStartPos still contains the pre-adjustment value).
+            const auto padding=ImGui::GetStyle().FramePadding;
+            ImVec2 origin(child->Pos.x+child->WindowPadding.x+child->DecoOuterSizeX1+child->DC.ColumnsOffset.x-child->Scroll.x+padding.x,
+                          child->Pos.y+child->WindowPadding.y+child->DecoOuterSizeY1-child->Scroll.y+padding.y);
             if(state && ImGui::GetActiveID()==sourceID)origin.x-=state->Scroll.x;
             auto* draw=child->DrawList;draw->PushClipRect(child->InnerClipRect.Min,child->InnerClipRect.Max,true);
             std::string_view text(source_.data());
