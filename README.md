@@ -20,14 +20,15 @@ LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lu
 - Project-owned Assets with folder browsing, file import/rename/trash, drag-and-drop
   script/reference assignment and listener-independent audio previews.
 - Internal Lua editor with highlighting or external VS Code editing; Dark/Grey themes.
-- Project-defined keyboard buttons and raw keyboard/mouse/gamepad scripting input.
+- Three-slot named keyboard/mouse/gamepad-button mappings, raw input APIs and cursor controls.
 - Structured JSON projects, separate settings files and native Save/Open dialogs.
 
 ## Build and test
 
 Requires a C++17 compiler, CMake 3.16+, Git and platform development libraries.
 CMake fetches SDL3 (if not installed), ReactPhysics3D, Dear ImGui, ImGuizmo and Lua.
-GLAD, the font, miniaudio and the JSON library are included under `third_party/`.
+GLAD, Roboto/Font Awesome fonts, miniaudio, simdjson, nlohmann/json and stb_image
+are included under `third_party/`.
 
 On Debian/Ubuntu, install the window/audio/OpenGL development dependencies used
 in [the engine workflow](.github/workflows/release.yml). Then:
@@ -88,8 +89,10 @@ Includes use subsystem paths such as `physics/physics.hpp`, rooted at `src/`.
   is available by right-clicking empty Hierarchy space.
 - **Edit:** Undo/Redo, copy/paste, duplicate and parenting operations.
 - **Windows:** panel visibility and layout reset.
-- **Project → Input Settings:** define a button name and capture a key; rebind/remove
-  entries later. Escape cancels key capture.
+- **Project → Input Settings:** add or rename an action using its name textbox.
+  Each row has **three binding buttons**, accepting a keyboard key, mouse button,
+  or gamepad button. Right-click a slot to clear it; Remove deletes the row.
+  Enter commits a renamed action. Escape cancels capture.
 - **Settings → Editor Settings:** Dark/Grey theme and internal/external code editor.
 - **Help:** repository link and About.
 
@@ -97,7 +100,14 @@ Right-click an Inspector component header to remove it. Transform removal is
 blocked while a Camera/AudioListener depends on it. Audio transport is script-only.
 Double-click folders in Assets, use **Up one folder** to return, and right-click
 empty space for **New Folder** or script/text creation. List/Grid icons are at the
-bottom-right. Hover WAV/MP3 assets for Play/Stop preview, independent of Play mode.
+bottom-right. Asset types use embedded **Font Awesome Free** icons. PNG, JPEG,
+BMP and TGA textures display small aspect-preserving previews. Thumbnails are
+stored as 64×64 RGBA in **`<project>/.cache/thumbnails/`**, outside `Assets/`.
+The cache checks source size/modification time, regenerates stale/corrupt entries,
+and can be deleted safely. Only visible items request thumbnails; each frame loads
+up to four entries and decodes at most one uncached image. GPU entries are bounded
+to 256; source files are limited to 32 MiB / 16 megapixels. WebP is not supported.
+Hover WAV/MP3 assets for Play/Stop preview, independent of Play mode.
 
 Rename a Hierarchy GameObject with **F2** or a double-click. In Assets, use **F2**
 or right-click **Rename**. Both open a small popup at the mouse; Enter confirms
@@ -119,7 +129,7 @@ spot lights emit along local **-Z**; rotate the object to aim them. The starter
 scene includes a directional light. Older projects without lights receive only
 ambient illumination until a light is added.
 
-Inspector controls include enabled state, color, intensity, shadow casting and
+Inspector controls include enabled state, color, intensity, shadow casting, quality and
 bias, plus range for local lights and inner/outer half-cone angles for spots.
 Directional **Shadow coverage** is the world-space half extent around each view;
 objects outside that region still receive light but are not shadowed by that map.
@@ -134,7 +144,13 @@ light.intensity = 4
 light.range = 25
 light.innerAngle = 20
 light.outerAngle = 35
-light.shadows = true
+light:setShadowQuality(2) -- 0 Off, 1 Low (256), 2 Medium (512), 3 High (1024)
+light:setColor(1, 0.8, 0.6)
+light:setIntensity(4)
+light:setRange(25)
+light:setSpotAngles(20, 35)
+light:setEnabled(true)
+light:setShadows(true)
 -- Move/rotate lamp or change light properties from onUpdate for dynamic lighting.
 ```
 
@@ -149,7 +165,11 @@ a second rendering framework. Its cost controls are:
   shadows. Disable shadows on fill lights to reserve budget for key lights.
 - Shadow-caster sphere/frustum culling, cached mesh bounds/uniform locations, and
   model matrices prepared once per view. Wire geometry does not cast shadows.
-- 3×3 PCF filtering and adjustable slope-aware bias; directional coverage is
+- Per-light quality: Off skips shadow passes, Low uses 256²/one sample, Medium
+  512²/four PCF taps, and High 1024²/nine PCF taps. Lower qualities use a smaller
+  region of their fixed atlas layer: they reduce raster/filtering work but do not
+  shrink the shared texture allocation.
+- Adjustable slope-aware bias; directional coverage is
   texel-snapped to reduce shimmering.
 
 Shadow maps are refreshed for each rendered view, so moving lights **and** moving
@@ -170,13 +190,14 @@ MyProject/
   Assets/                         # scripts, audio and other imported assets
   Settings/
     ProjectSettings.json          # project/editor-camera settings
-    InputSettings.json            # named keyboard-button bindings
+    InputSettings.json            # three-slot named button mappings (v2)
+  .cache/thumbnails/               # disposable texture previews; not source assets
 ```
 
 Save As copies assets/settings to the destination, refusing conflicting asset
 content. Untitled data lives in an isolated temporary project until saved.
 Distribute the entire project directory, not just the `.legacy` file. Projects
-in the same directory share Assets and Settings. Legacy text formats 1–8 and old
+in the same directory share Assets and Settings. Legacy text formats and old
 asset-directory references remain readable; saving writes the current layout
 without deleting old project data. Scene limits: 10,000 objects, 16 MiB project
 JSON and 64 KiB editor source. Runtime state, logs and history are not serialized.
@@ -253,10 +274,24 @@ Input functions include raw `isKeyPressed/Down/Released`, mouse button equivalen
 mouse position/delta/wheel, gamepad button pressed/down, gamepad axes/sticks, and
 named `isButtonPressed/Down/Released`. Digital helpers take defined button names:
 `getInputAxis(negative, positive)` and
-`getInputVector(left, right, down, up)` (normalized diagonals). Named bindings are
-keyboard-only; raw mouse/gamepad APIs work separately. Edges/deltas last one render
+`getInputVector(left, right, down, up)` (normalized diagonals). Named actions accept up to three alternative keyboard, mouse or gamepad-button
+bindings. Existing v1 keyboard settings are read automatically; saves use v2. Edges/deltas last one render
 frame. Gameplay input is gated by focus/Play state and disabled while editing text.
-The first available gamepad is used, with a 0.15 dead zone.
+The first available gamepad is used, with a 0.15 dead zone. Mapping slots are
+buttons, not analog axes; raw stick/axis APIs remain available.
+
+Mouse control functions return a success boolean:
+```lua
+lockCursor()       -- relative motion; cursor hidden while locked
+unlockCursor()     -- leave relative mode
+hideCursor()       -- hide without locking
+showCursor()       -- request visible cursor (relative mode still hides it)
+local visible = isCursorVisible()
+local locked = isCursorLocked()
+```
+Queries report native SDL cursor/window state. Pause, Stop, focus loss and normal
+shutdown release the script cursor so the editor does not trap it. Resume does
+not automatically relock; scripts may lock again when needed.
 
 See [the API/type definitions](scripts/definitions/legacyengine.lua) and
 [the completion catalog](src/scripting/lua_definitions.hpp) for more signatures.
@@ -281,14 +316,28 @@ npm run package
 code --install-extension legacyscript.vsix
 ```
 
-Alternatively download **legacyscript-vsix** from a successful **LegacyScript VSIX**
-Actions run, extract it and use VS Code's **Install from VSIX** command. `.ls` files
+The **engine Release workflow** also tests and builds the extension, publishing
+**`legacyscript.vsix`** as a separate downloadable artifact in the same run. Tagged engine
+releases attach `legacyscript.vsix` alongside the engine package. Use VS Code's
+**Install from VSIX** command with that file. The standalone **LegacyScript VSIX**
+workflow remains available (its artifact is a ZIP to extract first). `.ls` files
 should show **LegacyScript** as their language. It is not on the Marketplace.
+
+## JSON parsing
+
+Project/settings JSON is parsed with **simdjson 3.12.3**, which selects an available
+SIMD implementation at runtime and has a portable fallback. The parsed DOM is
+converted directly to the existing editable Json structure; there is no second
+text parse. nlohmann/json is retained for schema access/editing and serialization.
+Existing JSON project files remain readable. Size, nesting, schema and light/input
+bounds are still validated. End-to-end loading also includes DOM conversion and
+project validation; no measured speedup is claimed without profiling.
 
 ## Automation and limitations
 
 - [Engine workflow](.github/workflows/release.yml): build, regression tests, Xvfb
-  graphical smoke test, screenshot capture and Linux packaging. Tags publish releases;
+  graphical light/shadow/cursor tests, screenshot capture, Linux packaging and a
+  separate VSIX job/artifact. Tags publish engine and VSIX release assets;
   branch/PR/manual runs provide downloadable artifacts.
 - [VSIX workflow](.github/workflows/legacyscript.yml): regenerate engine API catalogs,
   test the LSP and upload the installable extension. Relevant source paths track the

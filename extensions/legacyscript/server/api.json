@@ -96,6 +96,30 @@
     "signature": "audio:playOneShot(AudioClip) - overlapping nonlooping clip"
   },
   {
+    "name": "lockCursor",
+    "signature": "lockCursor() -> boolean; relative motion, cursor hidden"
+  },
+  {
+    "name": "unlockCursor",
+    "signature": "unlockCursor() -> boolean"
+  },
+  {
+    "name": "hideCursor",
+    "signature": "hideCursor() -> boolean"
+  },
+  {
+    "name": "showCursor",
+    "signature": "showCursor() -> boolean"
+  },
+  {
+    "name": "isCursorVisible",
+    "signature": "isCursorVisible() -> boolean"
+  },
+  {
+    "name": "isCursorLocked",
+    "signature": "isCursorLocked() -> boolean"
+  },
+  {
     "name": "isKeyPressed",
     "signature": "isKeyPressed(keyNameOrScancode) -> boolean"
   },

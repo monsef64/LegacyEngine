@@ -173,6 +173,7 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 if(kind!=0)ImGui::DragFloat("Range",&edited.range,.1f,.1f,10000);
                 if(kind==2){ImGui::DragFloat("Inner angle",&edited.innerAngle,.1f,0,edited.outerAngle-.1f);ImGui::DragFloat("Outer angle",&edited.outerAngle,.1f,edited.innerAngle+.1f,85);}
                 ImGui::Checkbox("Cast dynamic shadows",&edited.shadows);
+                ImGui::Combo("Shadow quality",&edited.shadowQuality,"Off\0Low (256)\0Medium (512)\0High (1024)\0");
                 if(kind==0)ImGui::DragFloat("Shadow coverage",&edited.shadowDistance,.5f,1,1000);
                 ImGui::DragFloat("Shadow bias",&edited.shadowBias,.0001f,0,.05f,"%.4f");
                 ImGui::TextWrapped("Emission follows local -Z. Shadow maps use a shared 12-layer budget; a point light uses six layers.");

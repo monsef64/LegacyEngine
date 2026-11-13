@@ -4,7 +4,8 @@
 #include <fstream>
 #include <chrono>
 using Json=nlohmann::json;
-inline Json parseJson(const std::string& text){return Json::parse(text,[](int depth,Json::parse_event_t,Json&){if(depth>64)throw std::runtime_error("JSON nesting exceeds limit");return true;});}
+// SIMD-accelerated parsing; serialization and the editable DOM retain Json.
+Json parseJson(const std::string& text);
 inline Json readJsonFile(const std::filesystem::path& path,std::size_t limit){
     if(std::filesystem::file_size(path)>limit)throw std::runtime_error("JSON file exceeds size limit");
     std::ifstream in(path,std::ios::binary);if(!in)throw std::runtime_error("Cannot read JSON file");return parseJson({std::istreambuf_iterator<char>(in),std::istreambuf_iterator<char>()});

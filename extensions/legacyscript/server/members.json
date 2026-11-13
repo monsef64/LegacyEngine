@@ -136,7 +136,15 @@
     "innerAngle": "number",
     "outerAngle": "number",
     "shadowDistance": "number",
-    "shadowBias": "number"
+    "shadowBias": "number",
+    "shadowQuality": "integer 0=Off, 1=Low (256), 2=Medium (512), 3=High (1024)",
+    "setColor": "fun(self:DirectionalLight|PointLight|SpotLight,r:number,g:number,b:number)",
+    "setIntensity": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)",
+    "setRange": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)",
+    "setEnabled": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)",
+    "setShadows": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)",
+    "setShadowQuality": "fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)",
+    "setSpotAngles": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
   },
   "PointLight": {
     "color": "Vec3",
@@ -147,7 +155,15 @@
     "innerAngle": "number",
     "outerAngle": "number",
     "shadowDistance": "number",
-    "shadowBias": "number"
+    "shadowBias": "number",
+    "shadowQuality": "integer 0=Off, 1=Low (256), 2=Medium (512), 3=High (1024)",
+    "setColor": "fun(self:DirectionalLight|PointLight|SpotLight,r:number,g:number,b:number)",
+    "setIntensity": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)",
+    "setRange": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)",
+    "setEnabled": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)",
+    "setShadows": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)",
+    "setShadowQuality": "fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)",
+    "setSpotAngles": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
   },
   "SpotLight": {
     "color": "Vec3",
@@ -158,6 +174,14 @@
     "innerAngle": "number",
     "outerAngle": "number",
     "shadowDistance": "number",
-    "shadowBias": "number"
+    "shadowBias": "number",
+    "shadowQuality": "integer 0=Off, 1=Low (256), 2=Medium (512), 3=High (1024)",
+    "setColor": "fun(self:DirectionalLight|PointLight|SpotLight,r:number,g:number,b:number)",
+    "setIntensity": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)",
+    "setRange": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)",
+    "setEnabled": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)",
+    "setShadows": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)",
+    "setShadowQuality": "fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)",
+    "setSpotAngles": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
   }
 }

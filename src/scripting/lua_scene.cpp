@@ -44,7 +44,7 @@ bool has(const Handle& h,int type) {
     default:return false;
     }
 }
-enum class Kind { Missing, Number, Boolean, String, Vec, Quat, Shape, Mesh };
+enum class Kind { Missing, Number, Integer, Boolean, String, Vec, Quat, Shape, Mesh };
 struct Field { Kind kind=Kind::Missing; void* value=nullptr; };
 Field field(lua_State* L,const Component& c,const char* key) {
     const Handle& h=c.object;
@@ -54,7 +54,7 @@ Field field(lua_State* L,const Component& c,const char* key) {
         LightSettings& v=c.type==9?static_cast<LightSettings&>(h.world->get<DirectionalLight>(h.entity)):
             c.type==10?static_cast<LightSettings&>(h.world->get<PointLight>(h.entity)):static_cast<LightSettings&>(h.world->get<SpotLight>(h.entity));
         FIELD(color,Vec);FIELD(intensity,Number);FIELD(enabled,Boolean);FIELD(shadows,Boolean);FIELD(range,Number);
-        FIELD(innerAngle,Number);FIELD(outerAngle,Number);FIELD(shadowDistance,Number);FIELD(shadowBias,Number);
+        FIELD(innerAngle,Number);FIELD(outerAngle,Number);FIELD(shadowDistance,Number);FIELD(shadowBias,Number);FIELD(shadowQuality,Integer);
     }
     switch(c.type) {
     case 0:{auto& v=h.world->get<Transform>(h.entity); FIELD(position,Vec);FIELD(rotation,Quat);FIELD(scale,Vec);break;}
@@ -300,6 +300,10 @@ int LuaScene::objectNewIndex(lua_State* L) {
 }
 int LuaScene::componentIndex(lua_State* L) {
     const auto c=*static_cast<Component*>(luaL_checkudata(L,1,"Component"));const char* key=luaL_checkstring(L,2);
+    if(c.type>=9 && c.type<=11){
+        const char* methods[]{"setColor","setIntensity","setRange","setEnabled","setShadows","setShadowQuality","setSpotAngles"};
+        for(int i=0;i<7;++i)if(!std::strcmp(key,methods[i])){lua_pushvalue(L,1);lua_pushinteger(L,i);lua_pushcclosure(L,lightMethod,2);return 1;}
+    }
     if(c.type==8 && (!std::strcmp(key,"pause") || !std::strcmp(key,"start"))) {
         if(!c.object.world->alive(c.object.entity) || !c.object.world->has<AudioListener>(c.object.entity))return luaL_error(L,"AudioListener no longer exists");
         lua_pushvalue(L,1);lua_pushboolean(L,!std::strcmp(key,"start"));lua_pushcclosure(L,listenerMethod,2);return 1;
@@ -314,6 +318,7 @@ int LuaScene::componentIndex(lua_State* L) {
     }
     const Field f=field(L,c,key);
     switch(f.kind) {
+    case Kind::Integer:lua_pushinteger(L,*static_cast<int*>(f.value));break;
     case Kind::Number:lua_pushnumber(L,*static_cast<float*>(f.value));break;
     case Kind::Boolean:lua_pushboolean(L,*static_cast<bool*>(f.value));break;
     case Kind::String:lua_pushstring(L,static_cast<std::string*>(f.value)->c_str());break;
@@ -336,6 +341,7 @@ int LuaScene::componentNewIndex(lua_State* L) {
         return 0;
     }
     switch(f.kind) {
+    case Kind::Integer:{auto value=luaL_checkinteger(L,3);if(value<0 || value>3)return luaL_error(L,"Shadow quality must be 0..3");*static_cast<int*>(f.value)=int(value);break;}
     case Kind::Number:*static_cast<float*>(f.value)=number(L,3);break;
     case Kind::Boolean:luaL_checktype(L,3,LUA_TBOOLEAN);*static_cast<bool*>(f.value)=lua_toboolean(L,3)!=0;break;
     case Kind::String:*static_cast<std::string*>(f.value)=objectName(L,3);break;
@@ -431,6 +437,21 @@ int LuaScene::audioApi(lua_State* L) {
     if(!self.world_.has<AudioSource>(h.entity))self.world_.add(h.entity,AudioSource{});
     if(!lua_isnoneornil(L,2))self.world_.get<AudioSource>(h.entity).clip=luaL_checkstring(L,2);
     component(L,h,7);return 1;
+}
+int LuaScene::lightMethod(lua_State* L){
+    const auto c=*static_cast<Component*>(luaL_checkudata(L,lua_upvalueindex(1),"Component"));
+    if(!c.object.world->alive(c.object.entity) || !has(c.object,c.type))return luaL_error(L,"Light no longer exists");
+    auto& world=*c.object.world;const auto e=c.object.entity;
+    LightSettings& light=c.type==9?static_cast<LightSettings&>(world.get<DirectionalLight>(e)):c.type==10?static_cast<LightSettings&>(world.get<PointLight>(e)):static_cast<LightSettings&>(world.get<SpotLight>(e));
+    if(luaL_testudata(L,1,"Component"))lua_remove(L,1);
+    auto edited=light;const int op=int(lua_tointeger(L,lua_upvalueindex(2)));
+    if(op==0)edited.color={number(L,1),number(L,2),number(L,3)};
+    if(op==1)edited.intensity=number(L,1);
+    if(op==2)edited.range=number(L,1);
+    if(op==3 || op==4){luaL_checktype(L,1,LUA_TBOOLEAN);if(op==3)edited.enabled=lua_toboolean(L,1);else edited.shadows=lua_toboolean(L,1);}
+    if(op==5){auto quality=luaL_checkinteger(L,1);if(quality<0 || quality>3)return luaL_error(L,"Shadow quality must be 0..3");edited.shadowQuality=int(quality);}
+    if(op==6){edited.innerAngle=number(L,1);edited.outerAngle=number(L,2);}
+    if(!validLight(edited))return luaL_error(L,"Invalid light settings");light=edited;return 0;
 }
 int LuaScene::listenerMethod(lua_State* L){
     const auto c=*static_cast<Component*>(luaL_checkudata(L,lua_upvalueindex(1),"Component"));

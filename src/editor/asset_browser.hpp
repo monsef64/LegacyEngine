@@ -8,23 +8,28 @@
 #include "editor/editor_history.hpp"
 #include "platform/system_trash.hpp"
 #include "project/project_assets.hpp"
+#include "assets/texture_preview.hpp"
 
-inline void fileBadge(const std::string& path,ImVec2 pos) {
+// Font Awesome Free Solid glyphs, merged into the embedded editor font.
+inline const char* assetIcon(const std::string& path,bool folder=false){
+    if(folder)return "\xef\x81\xbb"; // folder
     auto ext=AssetManager::extension(path);
-    const char* tag="FILE";ImU32 color=IM_COL32(150,165,185,255);
-    if(ext==".ls" || ext==".lua"){tag="LS";color=IM_COL32(100,165,255,255);}
-    else if(ext==".png" || ext==".jpg" || ext==".jpeg" || ext==".webp" || ext==".bmp"){tag="IMG";color=IM_COL32(110,205,160,255);}
-    else if(ext==".obj" || ext==".fbx" || ext==".gltf" || ext==".glb"){tag="3D";color=IM_COL32(215,165,100,255);}
-    else if(ext==".wav" || ext==".mp3" || ext==".ogg"){tag="SND";color=IM_COL32(200,130,225,255);}
-    else if(ext==".legacy"){tag="PROJ";color=IM_COL32(105,200,225,255);}
-    else if(ext==".txt" || ext==".json" || ext==".md"){tag="TXT";}
-    auto* draw=ImGui::GetWindowDrawList();
-    draw->AddRectFilled(pos,ImVec2(pos.x+40,pos.y+26),IM_COL32(35,45,60,255),4);
-    draw->AddRect(pos,ImVec2(pos.x+40,pos.y+26),color,4);
-    draw->AddText(ImVec2(pos.x+3,pos.y+4),color,tag);
+    if(ext==".ls" || ext==".lua")return "\xef\x87\x89"; // file-code
+    if(textureAsset(path))return "\xef\x80\xbe"; // image
+    if(ext==".obj" || ext==".fbx" || ext==".gltf" || ext==".glb")return "\xef\x86\xb2"; // cube
+    if(ext==".wav" || ext==".mp3" || ext==".ogg")return "\xef\x80\x81"; // music
+    if(ext==".txt" || ext==".json" || ext==".md")return "\xef\x85\x9c"; // file-lines
+    return "\xef\x85\x9b"; // file
 }
-inline void fileIcon(const std::string& path) {
-    auto pos=ImGui::GetCursorScreenPos();ImGui::Dummy(ImVec2(44,28));fileBadge(path,pos);ImGui::SameLine();
+inline void fileBadge(const std::string& path,ImVec2 pos,bool folder=false,unsigned thumbnail=0){
+    auto* draw=ImGui::GetWindowDrawList();
+    if(thumbnail){draw->AddImage(static_cast<ImTextureID>(thumbnail),ImVec2(pos.x+6,pos.y),ImVec2(pos.x+34,pos.y+28));return;}
+    draw->AddRectFilled(pos,ImVec2(pos.x+40,pos.y+28),IM_COL32(35,45,60,255),4);
+    const char* icon=assetIcon(path,folder);const float width=ImGui::CalcTextSize(icon).x;
+    draw->AddText(ImVec2(pos.x+(40-width)*.5f,pos.y+5),IM_COL32(160,185,215,255),icon);
+}
+inline void fileIcon(const std::string& path,bool folder=false,unsigned thumbnail=0){
+    auto pos=ImGui::GetCursorScreenPos();ImGui::Dummy(ImVec2(44,28));fileBadge(path,pos,folder,thumbnail);ImGui::SameLine();
 }
 class AssetBrowser {
     UntitledProjectAssets staging_;
@@ -38,13 +43,14 @@ public:
     std::filesystem::path projectFolder;
     ProjectDialog dialog;
     AudioPreview preview;
+    TexturePreviewCache thumbnails;
     void importFile(const std::string& path) {
         try{selected=assets.import(path);assets.error.clear();}catch(const std::exception& e){assets.error=e.what();}
     }
-    void setRoot(const std::filesystem::path& root) {preview.stop();assets.root=root;currentFolder.clear();selected.clear();openedScript.clear();}
+    void setRoot(const std::filesystem::path& root) {preview.stop();thumbnails.clear();assets.root=root;currentFolder.clear();selected.clear();openedScript.clear();}
     void draw(SDL_Window* window,World& world,Entity selectedObject,ScriptEditor& scripts,bool editable,EditorHistory* history=nullptr) {
         if(auto result=dialog.poll()) {if(!result->error.empty())assets.error=result->error;else if(!result->path.empty())importFile(result->path);}
-        preview.update();
+        preview.update();thumbnails.beginFrame(assets);
         if(dockedEditor && !panelOpen[5])return;
         if(beginEditorPanel("Assets")) {
             const bool shortcutFocus=ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
@@ -78,14 +84,17 @@ public:
                     const bool folderItem=std::filesystem::is_directory(assets.resolve(file));
                     const std::string display=std::filesystem::path(file).filename().string()+(folderItem?"/":"");
                     ImGui::TableNextColumn();ImGui::PushID(file.c_str());
-                    if(!grid_)fileIcon(file);
+                    const auto iconPosition=ImGui::GetCursorScreenPos();
+                    if(!grid_){ImGui::Dummy(ImVec2(44,28));ImGui::SameLine();}
                     const bool clicked=ImGui::Selectable(grid_?"##tile":display.c_str(),selected==file,ImGuiSelectableFlags_AllowDoubleClick|ImGuiSelectableFlags_AllowOverlap,ImVec2(0,grid_?84.0f:28.0f));
                     const auto itemMin=ImGui::GetItemRectMin(),itemMax=ImGui::GetItemRectMax();
+                    const unsigned thumbnail=folderItem || !ImGui::IsItemVisible()?0:thumbnails.texture(assets,file);
+                    if(!grid_)fileBadge(file,iconPosition,folderItem,thumbnail);
                     const bool itemHovered=ImGui::IsMouseHoveringRect(itemMin,itemMax);
                     if(grid_) {
                         const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
                         auto* draw=ImGui::GetWindowDrawList();draw->PushClipRect(a,b,true);
-                        fileBadge(file,ImVec2((a.x+b.x)*.5f-20,a.y+4));
+                        fileBadge(file,ImVec2((a.x+b.x)*.5f-20,a.y+4),folderItem,thumbnail);
                         draw->AddText(nullptr,0,ImVec2(a.x+4,a.y+34),ImGui::GetColorU32(ImGuiCol_Text),display.c_str(),nullptr,std::max(1.0f,b.x-a.x-8));
                         draw->PopClipRect();
                     }

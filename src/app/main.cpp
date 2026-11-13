@@ -285,7 +285,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     ProjectDialog projectDialog;
     std::string currentProject,projectError,savedProjectState,lastWindowTitle;
     bool projectDirty=true;
-    InputState input;InputSettings inputSettings;
+    InputState input;input.window=window;InputSettings inputSettings;
     bool gameHovered=false,gameFocused=false;
     Uint64 lastTicks = SDL_GetTicksNS();
     bool   running   = true;
@@ -308,13 +308,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         EditorLayout layout=EditorLayout::calculate(static_cast<float>(windowWidth),static_cast<float>(windowHeight),std::max(20.0f,ImGui::GetFrameHeight()));
         layout.scene=sceneRect;
         inputSettings.load(browser.assets,input);
-        input.enabled=(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS) && playMode.playing() && (gameFocused || sceneHovered) && !ImGui::GetIO().WantTextInput && !inputSettings.visible;
-        input.mouseEnabled=gameHovered || sceneHovered;input.beginFrame();
+        input.enabled=(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS) && playMode.playing() && (gameFocused || sceneHovered || input.mouseLocked) && !ImGui::GetIO().WantTextInput && !inputSettings.visible;
+        input.mouseEnabled=gameHovered || sceneHovered || input.mouseLocked;input.beginFrame();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if(inputSettings.capture(event,browser.assets,input))continue;
             if(event.type==SDL_EVENT_WINDOW_FOCUS_LOST ||
-                (event.type==SDL_EVENT_MOUSE_BUTTON_UP && event.button.button==SDL_BUTTON_RIGHT)) {
+                (cameraLooking && event.type==SDL_EVENT_MOUSE_BUTTON_UP && event.button.button==SDL_BUTTON_RIGHT)) {
                 cameraLooking=false;SDL_SetWindowRelativeMouseMode(window,false);
             }
             ImGui_ImplSDL3_ProcessEvent(&event);
@@ -342,7 +342,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             case SDL_EVENT_KEY_DOWN:
                 break; // Escape is reserved for UI cancellation, never application exit.
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                if(event.button.button==SDL_BUTTON_RIGHT && freeCamera && sceneHovered &&
+                if(event.button.button==SDL_BUTTON_RIGHT && !playMode.active() && freeCamera && sceneHovered &&
                     layout.scene.contains(event.button.x,event.button.y) && !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
                     cameraLooking=SDL_SetWindowRelativeMouseMode(window,true);clicking=false;
                 }
@@ -624,14 +624,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         ImGui::EndDisabled(); ImGui::SameLine();
         ImGui::BeginDisabled(!playMode.active());
         if (playbackButton("##Pause",playMode.state()==PlayMode::State::Paused?"Resume (F6)":"Pause (F6)",PlaybackIcon::Pause,playMode.state()==PlayMode::State::Paused) || (pauseKey && playMode.active())) {
-            editor.finish(world); clicking=false; playMode.pause();
+            editor.finish(world); clicking=false; playMode.pause();if(!playMode.playing())input.releaseMouse();
         }
         ImGui::SameLine();
         if (playbackButton("##Stop","Stop (F7)",PlaybackIcon::Stop) || (stopKey && playMode.active())) {
             editor.finish(world); clicking=false;
             // Run stop callbacks before restoring, so their edits are discarded too.
             audio.clear();componentScripts.stop();scripts.shutdown();
-            playMode.stop(world);
+            playMode.stop(world);input.releaseMouse();
             physics.reset(); scripts.resetRuntime();
             selectedEntity=world.alive(editSelection)?editSelection:Entity{};
         }
@@ -755,6 +755,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         updateHierarchy(world);
         updateCameras(world,playMode.playing()?std::min(seconds,.25f):0);
         updateHierarchy(world);
+        if(!(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS))input.releaseMouse();
         audio.update(world,browser.assets,playMode.playing());
         physics.update(world,0); // collider poses follow parent motion before picking next frame
 
@@ -814,7 +815,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         }
     }
     editor.finish(world);
-    audio.clear();componentScripts.stop();scripts.shutdown();
+    audio.clear();componentScripts.stop();scripts.shutdown();input.releaseMouse();
     return (!smokeTest || renderedFrames >= smokeFrames) && (!screenshotPath || screenshotSaved);
 }
 

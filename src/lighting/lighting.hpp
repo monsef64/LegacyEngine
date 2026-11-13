@@ -38,7 +38,7 @@ inline std::vector<Light> gather(World& world,const Mat4& vp,Vec3 eye){
     if(lights.size()>maxLights){std::partial_sort(lights.begin(),lights.begin()+maxLights,lights.end(),priority);lights.resize(maxLights);}
     else std::sort(lights.begin(),lights.end(),priority);
     int layers=0;
-    for(auto& l:lights){const int count=l.type==1?6:1;if(l.settings.shadows && layers+count<=maxShadowLayers){l.shadowLayer=layers;layers+=count;}}
+    for(auto& l:lights){const int count=l.type==1?6:1;if(l.settings.shadows && l.settings.shadowQuality>0 && layers+count<=maxShadowLayers){l.shadowLayer=layers;layers+=count;}}
     return lights;
 }
 inline Mat4 shadowMatrix(const Light& light,Vec3 eye,int face=0){
@@ -53,7 +53,7 @@ inline Mat4 shadowMatrix(const Light& light,Vec3 eye,int face=0){
         const float extent=l.shadowDistance;
         // Snap the view anchor in light space to shadow texels to reduce shimmer.
         const Vec3 right=normalize(cross(direction,up)),vertical=cross(right,direction);
-        const float texel=2*extent/shadowResolution;
+        const float texel=2*extent/lightShadowResolution(l);
         eye=eye+right*(std::floor(dot(eye,right)/texel)*texel-dot(eye,right))+
             vertical*(std::floor(dot(eye,vertical)/texel)*texel-dot(eye,vertical));
         Mat4 projection{};projection.m[0]=projection.m[5]=1/extent;projection.m[10]=-1/(2*extent);projection.m[14]=-1;projection.m[15]=1;
