@@ -165,18 +165,28 @@ a second rendering framework. Its cost controls are:
   shadows. Disable shadows on fill lights to reserve budget for key lights.
 - Shadow-caster sphere/frustum culling, cached mesh bounds/uniform locations, and
   model matrices prepared once per view. Wire geometry does not cast shadows.
-- Per-light quality: Off skips shadow passes, Low uses 256²/one sample, Medium
-  512²/four PCF taps, and High 1024²/nine PCF taps. Lower qualities use a smaller
-  region of their fixed atlas layer: they reduce raster/filtering work but do not
+- Per-light quality: Off skips shadow passes. Low uses 256² with one bilinear
+  comparison lookup, Medium uses 512² with a weighted 3×3 tent (four bilinear
+  lookups), and High uses 1024² with a weighted 5×5 tent (nine bilinear lookups).
+  Each hardware lookup interpolates four depth-comparison results, so edges
+  transition continuously instead of jumping between nearest-depth texels.
+  Lower qualities use a smaller region of their fixed atlas layer: they reduce raster/filtering work but do not
   shrink the shared texture allocation.
-- Adjustable slope-aware bias; directional coverage is
-  texel-snapped to reduce shimmering.
+- Receiver-plane depth correction adjusts comparison depth across the filter
+  footprint on sloped surfaces; degenerate gradients fall back safely. Adjustable
+  slope-aware bias remains available. World-space derivatives are evaluated before
+  divergent light branches, then projected analytically for each light.
+- Directional coverage is texel-snapped to reduce shimmering.
 
 Shadow maps are refreshed for each rendered view, so moving lights **and** moving
 casters update immediately. This is not clustered rendering, cascaded directional
 shadows, baked lighting, global illumination or unlimited lights. Two visible
 Scene/Game views incur separate shadow passes. Point shadows are more expensive;
 profile your target scenes/hardware and tune range, coverage and shadow toggles.
+Tent PCF smooths jagged edges; it does not recover geometry smaller than a shadow
+texel or simulate contact-hardening area-light shadows. Large directional coverage
+can still lose detail, and point-shadow face boundaries are clamped rather than
+filtered across faces. Use tighter coverage or High quality where detail matters.
 CI checks all three light types with real OpenGL pixel comparisons for shadow
 toggles, moving casters and moving lights; no hardware FPS claim is implied.
 

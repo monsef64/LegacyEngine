@@ -10,6 +10,8 @@
 #include <cassert>
 #include <cstdio>
 #include <vector>
+#include <set>
+#include <type_traits>
 
 int main(){
     assert(SDL_Init(SDL_INIT_VIDEO));
@@ -36,7 +38,19 @@ int main(){
     auto check=[&](auto tag){
         using T=decltype(tag);T light;light.intensity=4;light.range=25;light.shadowDistance=20;world.add(lamp,light);
         const auto shadowed=read();world.get<T>(lamp).shadows=false;const auto unshadowed=read();
-        for(int quality=1;quality<=3;++quality){world.get<T>(lamp).shadowQuality=quality;world.get<T>(lamp).shadows=true;assert(difference(read(),unshadowed)>100);}
+        for(int quality=1;quality<=3;++quality){
+            world.get<T>(lamp).shadowQuality=quality;world.get<T>(lamp).shadows=true;const auto filtered=read();assert(difference(filtered,unshadowed)>100);
+            // A flat, uniformly lit gray floor had binary edges with nearest
+            // Low sampling. Require multiple fractional coverage levels now.
+            if constexpr(std::is_same_v<T,DirectionalLight>){
+                std::set<int> coverage;
+                for(std::size_t pixel=0;pixel<filtered.size();pixel+=3){
+                    int value=filtered[pixel];
+                    if(value==filtered[pixel+1] && value==filtered[pixel+2] && value>30 && value+5<unshadowed[pixel])coverage.insert(value);
+                }
+                std::printf("quality %d fractional shadow levels: %zu\n",quality,coverage.size());assert(coverage.size()>=6);
+            }
+        }
         world.get<T>(lamp).shadowQuality=0;assert(difference(read(),unshadowed)==0);world.get<T>(lamp).shadowQuality=3;world.get<T>(lamp).shadows=false;
         const int shadowDiff=difference(shadowed,unshadowed);std::printf("shadow difference: %d\n",shadowDiff);assert(shadowDiff>100);
         world.get<T>(lamp).shadows=true;world.get<Transform>(box).position.x=2;const auto moved=read();assert(difference(shadowed,moved)>100);
