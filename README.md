@@ -413,3 +413,9 @@ checks changed files once per second. Material assets refresh within 250 ms;
 missing/invalid assets report errors and fall back safely. Large first-use
 texture loads are synchronous. No transparency, custom GLSL, height maps, or
 standalone texture-loading scripting API is included.
+
+Asset Browser folders can be renamed with **F2** after selecting them, or with
+**right-click → Rename…**, in either List or Grid view. Renaming a folder keeps
+nested script, audio, exported asset and material references up to date, including
+texture paths stored in `.mat` files. Existing destination names are rejected;
+folder deletion remains unavailable.

@@ -49,6 +49,32 @@ public:
     void importFile(const std::string& path) {
         try{selected=assets.import(path);assets.error.clear();}catch(const std::exception& e){assets.error=e.what();}
     }
+    // Rename a file or directory and keep descendant project references intact.
+    void renameSelected(World& world,const std::string& name){
+        const std::filesystem::path leaf(name);
+        if(selected.empty() || leaf.empty() || leaf.has_parent_path() || leaf==".." || leaf=="." || name.find('\0')!=std::string::npos || name.find('\\')!=std::string::npos)
+            throw std::runtime_error("Use a name without directories");
+        const auto relative=(std::filesystem::path(selected).parent_path()/leaf).generic_string();
+        if(relative==selected)return;
+        if(std::filesystem::exists(assets.resolve(relative)))throw std::runtime_error("An asset with that name exists");
+        const bool directory=std::filesystem::is_directory(assets.resolve(selected));
+        auto remap=[&](std::string& path){
+            if(path==selected){path=relative;return true;}
+            if(directory && path.size()>selected.size() && path.compare(0,selected.size(),selected)==0 && path[selected.size()]=='/'){
+                path=relative+path.substr(selected.size());return true;
+            }
+            return false;
+        };
+        std::filesystem::rename(assets.resolve(selected),assets.resolve(relative));
+        world.each<LuaScript>([&](Entity,LuaScript& s){remap(s.path);for(auto& entry:s.additional)remap(entry.path);});
+        world.each<LuaScript>([&](Entity,LuaScript& scripts){auto rename=[&](std::vector<ScriptField>& fields){for(auto& field:fields)if(exportAssetType(field.type))remap(field.text);};rename(scripts.fields);for(auto& extra:scripts.additional)rename(extra.fields);});
+        world.each<MeshRenderer>([&](Entity,MeshRenderer& r){remap(r.material);remap(r.materialValues.texture);remap(r.materialValues.normalMap);});
+        for(const auto& file:assets.files())if(materialAsset(file))try{auto p=loadMaterial(assets,file);bool changed=false;changed|=remap(p.texture);changed|=remap(p.normalMap);if(changed)saveMaterial(assets,file,p);}catch(...){}
+        world.each<AudioSource>([&](Entity,AudioSource& a){remap(a.clip);});
+        remap(openedScript);remap(currentFolder);
+        preview.stop();thumbnails.clear();
+        selected=relative;
+    }
     void setRoot(const std::filesystem::path& root) {preview.stop();thumbnails.clear();assets.root=root;currentFolder.clear();selected.clear();openedScript.clear();}
     void draw(SDL_Window* window,World& world,Entity selectedObject,ScriptEditor& scripts,bool editable,EditorHistory* history=nullptr) {
         if(auto result=dialog.poll()) {if(!result->error.empty())assets.error=result->error;else if(!result->path.empty())importFile(result->path);}
@@ -112,11 +138,11 @@ public:
                         ImGui::SetDragDropPayload("ASSET_PATH",file.c_str(),file.size()+1);
                         fileIcon(file);ImGui::TextUnformatted(file.c_str());ImGui::EndDragDropSource();
                     }
-                    if(!folderItem && ImGui::BeginPopupContextItem("Asset actions")) {
+                    if(ImGui::BeginPopupContextItem("Asset actions")) {
                         selected=file;
-                        if(ImGui::MenuItem("Attach LegacyScript to selected object",nullptr,false,world.alive(selectedObject) && AssetManager::script(file)))attachScriptAsset(world,selectedObject,file);
+                        if(!folderItem && ImGui::MenuItem("Attach LegacyScript to selected object",nullptr,false,world.alive(selectedObject) && AssetManager::script(file)))attachScriptAsset(world,selectedObject,file);
                         if(ImGui::MenuItem("Rename...","F2")) {selected=file;renameRequested_=true;}
-                        if(ImGui::MenuItem("Move to Trash","Del")){selected=file;deleteRequested_=true;}
+                        if(!folderItem && ImGui::MenuItem("Move to Trash","Del")){selected=file;deleteRequested_=true;}
                         ImGui::EndPopup();
                     }
                     if(audioAsset(file) && (itemHovered || preview.playing(file))){
@@ -148,9 +174,9 @@ public:
                     }
                     ImGui::EndPopup();
                 }
-                if(shortcutFocus && !selected.empty() && !std::filesystem::is_directory(assets.resolve(selected))) {
+                if(shortcutFocus && !selected.empty()) {
                     if(ImGui::IsKeyPressed(ImGuiKey_F2,false))renameRequested_=true;
-                    if(ImGui::IsKeyPressed(ImGuiKey_Delete,false))deleteRequested_=true;
+                    if(!std::filesystem::is_directory(assets.resolve(selected)) && ImGui::IsKeyPressed(ImGuiKey_Delete,false))deleteRequested_=true;
                 }
                 if(renameRequested_){
                     std::snprintf(rename_,sizeof(rename_),"%s",std::filesystem::path(selected).filename().string().c_str());
@@ -172,24 +198,8 @@ public:
                     const bool renameEnter=ImGui::InputText("Name",rename_,sizeof(rename_),ImGuiInputTextFlags_EnterReturnsTrue|ImGuiInputTextFlags_AutoSelectAll);
                     if(ImGui::Button("Rename") || renameEnter) {
                         try {
-                        std::filesystem::path leaf(rename_);
-                        if(leaf.empty() || leaf.has_parent_path() || leaf==".." || leaf==".")assets.error="Use a filename without directories";
-                        else {
-                            auto relative=(std::filesystem::path(selected).parent_path()/leaf).generic_string();
-                            if(relative==selected){ImGui::CloseCurrentPopup();}
-                            else if(std::filesystem::exists(assets.resolve(relative)))assets.error="An asset with that name exists";
-                            else {
-                                std::filesystem::rename(assets.resolve(selected),assets.resolve(relative));
-                                world.each<LuaScript>([&](Entity,LuaScript& s){if(s.path==selected)s.path=relative;for(auto& entry:s.additional)if(entry.path==selected)entry.path=relative;});
-                                world.each<LuaScript>([&](Entity,LuaScript& scripts){auto rename=[&](std::vector<ScriptField>& fields){for(auto& field:fields)if(exportAssetType(field.type) && field.text==selected)field.text=relative;};rename(scripts.fields);for(auto& extra:scripts.additional)rename(extra.fields);});
-                                world.each<MeshRenderer>([&](Entity,MeshRenderer& r){if(r.material==selected)r.material=relative;if(r.materialValues.texture==selected)r.materialValues.texture=relative;if(r.materialValues.normalMap==selected)r.materialValues.normalMap=relative;});
-                                for(const auto& file:assets.files())if(materialAsset(file))try{auto p=loadMaterial(assets,file);bool changed=false;if(p.texture==selected){p.texture=relative;changed=true;}if(p.normalMap==selected){p.normalMap=relative;changed=true;}if(changed)saveMaterial(assets,file,p);}catch(...){}
-                                world.each<AudioSource>([&](Entity,AudioSource& a){if(a.clip==selected)a.clip=relative;});
-                                if(openedScript==selected)openedScript=relative;
-                                selected=relative;
-                                ImGui::CloseCurrentPopup();
-                            }
-                        }
+                        renameSelected(world,rename_);
+                        ImGui::CloseCurrentPopup();
                         }catch(const std::exception& e){assets.error=e.what();}
                     }
                     ImGui::SameLine();if(ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();ImGui::EndPopup();
