@@ -144,10 +144,10 @@ void LuaConsole::beginBudget() {
 void LuaConsole::endBudget() { lua_sethook(state_,nullptr,0,0); }
 void LuaConsole::installScene() {
     if(world_ && state_) scene_=std::make_unique<LuaScene>(state_,*world_,meshes_[0],meshes_[1],meshes_[2],meshes_[3],
-        [this](std::string_view message){append(Kind::Error,message);});
+        [this](std::string_view message){append(Kind::Error,message);},meshes_[4]);
 }
-void LuaConsole::bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone) {
-    shutdown();world_=&world;meshes_[0]=cube;meshes_[1]=sphere;meshes_[2]=capsule;meshes_[3]=cone;installScene();
+void LuaConsole::bindWorld(World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone,MeshHandle plane) {
+    shutdown();world_=&world;meshes_[0]=cube;meshes_[1]=sphere;meshes_[2]=capsule;meshes_[3]=cone;meshes_[4]=plane;installScene();
 }
 void LuaConsole::update(float dt) { if(scene_){beginBudget();scene_->update(dt);endBudget();} }
 void LuaConsole::fixedUpdate(float dt) { if(scene_){beginBudget();scene_->fixedUpdate(dt);endBudget();} }

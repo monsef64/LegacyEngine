@@ -18,12 +18,17 @@ inline MeshData audioSourceGlyph(){
 // Distance is a world-space hearing range, not scaled by the owner's Transform.
 inline MeshData audioSourceRange(const AudioSource& source){
     MeshData mesh;mesh.topology=MeshData::Topology::Lines;
-    if(!std::isfinite(source.distance) || source.distance<=0 || !std::isfinite(source.blend) || source.blend<=0)return mesh;
+    if(!std::isfinite(source.distance) || source.distance<=0)return mesh;
     const float radius=std::min(source.distance,10000.0f);
-    constexpr int segments=64;
-    for(int axis=0;axis<3;++axis)for(int i=0;i<segments;++i){
-        auto point=[&](int n){const float a=2*kPi*n/segments,x=radius*std::cos(a),y=radius*std::sin(a);return axis==0?Vec3{0,x,y}:axis==1?Vec3{x,0,y}:Vec3{x,y,0};};
-        mesh.vertices.push_back({point(i),{}});mesh.vertices.push_back({point(i+1),{}});
+    constexpr int segments=64,meridians=12,latitudes=7;
+    auto line=[&](Vec3 a,Vec3 b){mesh.vertices.push_back({a,{}});mesh.vertices.push_back({b,{}});};
+    for(int meridian=0;meridian<meridians;++meridian){float longitude=2*kPi*meridian/meridians;
+        auto point=[&](int i){float latitude=-kPi*.5f+kPi*i/segments;return Vec3{radius*std::cos(latitude)*std::cos(longitude),radius*std::sin(latitude),radius*std::cos(latitude)*std::sin(longitude)};};
+        for(int i=0;i<segments;++i)line(point(i),point(i+1));
+    }
+    for(int ring=1;ring<=latitudes;++ring){float latitude=-kPi*.5f+kPi*ring/(latitudes+1);float height=radius*std::sin(latitude),r=radius*std::cos(latitude);
+        auto point=[&](int i){float longitude=2*kPi*i/segments;return Vec3{r*std::cos(longitude),height,r*std::sin(longitude)};};
+        for(int i=0;i<segments;++i)line(point(i),point(i+1));
     }
     return mesh;
 }

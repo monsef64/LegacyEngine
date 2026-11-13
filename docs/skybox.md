@@ -1,5 +1,6 @@
 # Skybox component
-Select a GameObject and choose **Add Component → Skybox**. Its **Skybox type** is:
+Choose **Create → Skybox** (also in the Hierarchy context menu), or select a
+GameObject and choose **Add Component → Skybox**. Its **Skybox type** is:
 
 - **Multi Texture Skybox**: assign six PNG/JPEG/BMP/TGA faces using dropdowns or
   Asset Browser drag/drop: **Right (+X), Left (-X), Top (+Y), Bottom (-Y),

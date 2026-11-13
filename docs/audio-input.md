@@ -11,8 +11,10 @@ end
 ```
 
 AudioSources show a wireframe speaker glyph only in the Scene editor. Selecting a
-spatial source also shows its maximum hearing range as three wire circles in
-world units (independent of Transform scale). These gizmos never appear in Game.
+source shows a light-blue latitude/longitude wire sphere whose radius follows
+Max Distance immediately, in world units independent of Transform scale. The
+range gizmo is shown for both 2D and 3D sources, although only spatial audio uses
+the distance for attenuation. These gizmos never appear in Game.
 
 Use `self:getComponent(AudioListener):pause()` to disable reception and
 `:start()` to enable it again. Sources continue their playback timelines while

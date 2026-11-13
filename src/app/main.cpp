@@ -15,6 +15,7 @@
 #include "physics/collider_debug.hpp"
 #include "rendering/renderer.hpp"
 #include "platform/engine_log.hpp"
+#include "editor/profiler_window.hpp"
 #include "editor/transform_editor.hpp"
 #include "editor/script_editor.hpp"
 #include "editor/level_objects.hpp"
@@ -270,7 +271,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     float cameraBoost=3.0f;
     Entity selectedEntity;
     ScriptEditor scripts;
-    scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh);
+    scripts.bindWorld(world,cubeMesh,sphereMesh,capsuleMesh,coneMesh,planeMesh);
     EditorHistory history(world);
     PlayMode playMode;
     ObjectClipboard clipboard;
@@ -290,7 +291,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     InputState input;input.window=window;InputSettings inputSettings;
     EngineLog::Errors terminalErrors;
     bool gameHovered=false,gameFocused=false;
-    bool showFPS=false,showGameColliders=false;
+    bool showFPS=false,showGameColliders=false,showProfiler=false;
+    FrameProfiler profiler;activeProfiler=&profiler;
     Uint64 lastTicks = SDL_GetTicksNS();
     bool   running   = true;
 
@@ -307,6 +309,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     unsigned renderedFrames = 0;
     constexpr unsigned smokeFrames = 120;
     while (running) {
+        profiler.begin(showProfiler);
         int windowWidth=1,windowHeight=1;
         SDL_GetWindowSize(window,&windowWidth,&windowHeight);
         EditorLayout layout=EditorLayout::calculate(static_cast<float>(windowWidth),static_cast<float>(windowHeight),std::max(20.0f,ImGui::GetFrameHeight()));
@@ -426,6 +429,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         ImGuizmo::BeginFrame();
         bool openProject=false,saveProject=false,saveAsProject=false;
         const bool projectEnabled=!playMode.active() && !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
+        profiler.checkpoint(ProfilePart::Events);
         if(ImGui::BeginMainMenuBar()) {
             if(ImGui::BeginMenu("File")) {
                 openProject=ImGui::MenuItem("Open Project...","Ctrl+O",false,projectEnabled);
@@ -504,18 +508,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         const int created=drawCreateMenu();
         auto createObject=[&](int created) {
             editor.finish(world);spawnMode=false;clicking=false;
-            const char* labels[]{"Empty GameObject","Capsule","Cone","Cube","Sphere","Camera","Audio Source","Directional Light","Point Light","Spot Light"};
-            const MeshHandle meshes[]{MeshHandle{},capsuleMesh,coneMesh,cubeMesh,sphereMesh,MeshHandle{},MeshHandle{}};
-            const ColliderShape shapes[]{ColliderShape::Box,ColliderShape::Capsule,ColliderShape::Cone,ColliderShape::Box,ColliderShape::Sphere,ColliderShape::Box,ColliderShape::Box};
+            if(created<0 || created>11)return;
+            const ColliderShape shapes[]{ColliderShape::Box,ColliderShape::Capsule,ColliderShape::Cone,ColliderShape::Box,ColliderShape::Sphere};
             Vec3 position=camera.target;
             position.y=std::max(position.y,created==1?1.0f:created==0?0.0f:0.5f);
             if(created>0 && created<5)position=findRoom(physics,position,shapes[created]);
-            selectedEntity=createLevelObject(world,labels[created],position,created<7?meshes[created]:MeshHandle{},created<7?shapes[created]:ColliderShape::Box,created==0 || created>=5);
-            if(created==7)world.add(selectedEntity,DirectionalLight{});
-            if(created==8)world.add(selectedEntity,PointLight{});
-            if(created==9)world.add(selectedEntity,SpotLight{});
-            if(created==6)world.add(selectedEntity,AudioSource{});
-            if(created==5){Camera c;c.active=activeCamera(world)==Entity{};world.add(selectedEntity,c);}
+            selectedEntity=createEditorObject(world,created,position,cubeMesh,sphereMesh,capsuleMesh,coneMesh,planeMesh);
         };
         if(created>=0)createObject(created);
         bool undoRequested=false,redoRequested=false;
@@ -549,6 +547,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             if(ImGui::BeginMenu("Settings")){if(ImGui::MenuItem("Editor Settings"))browser.settings.visible=true;ImGui::EndMenu();}
             if(ImGui::BeginMenu("Debug")) {
                 ImGui::MenuItem("Show FPS",nullptr,&showFPS);
+                ImGui::MenuItem("Profiler",nullptr,&showProfiler);
                 ImGui::MenuItem("Show Colliders in Game",nullptr,&showGameColliders);
                 ImGui::EndMenu();
             }
@@ -565,6 +564,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             if(ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape))ImGui::CloseCurrentPopup();
             ImGui::EndPopup();
         }
+        drawProfiler(profiler,showProfiler);
         // Let text widgets own editing shortcuts while typing. Global routing
         // otherwise makes shortcuts independent of which editor panel has focus.
         if(editAllowed && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive()) {
@@ -630,7 +630,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             history.commit(world,selectedEntity);
             if (playMode.play(world)) { physics.reset(); audio.start(world);scripts.setAssetContext(browser.openedScript,selectedEntity);scripts.startPlay();
                 const MeshHandle runtimeMeshes[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
-                componentScripts.start(world,browser.assets,runtimeMeshes); }
+                componentScripts.start(world,browser.assets,runtimeMeshes,planeMesh); }
         }
         ImGui::EndDisabled(); ImGui::SameLine();
         ImGui::BeginDisabled(!playMode.active());
@@ -666,8 +666,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         const std::string hierarchyLevelName=currentProject.empty()?"Untitled":std::filesystem::path(currentProject).stem().string();
         if (drawLevelObjects(world,selectedEntity,!spawnMode,&layout.hierarchy,&hierarchyFocused,&hierarchyCreate,hierarchyLevelName.c_str())) {editor.finish(world);clicking=false;}
         if(hierarchyCreate>=0)createObject(hierarchyCreate);
-        const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh};
-        drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging(),&browser.assets);
+        const MeshHandle meshOptions[]{cubeMesh,sphereMesh,capsuleMesh,coneMesh,planeMesh};
+        drawInspector(world,selectedEntity,layout.inspector,meshOptions,editor.dragging(),&browser.assets,5);
         scripts.componentOutput=componentScripts.messages();
         scripts.setAssetContext(browser.openedScript,selectedEntity);
         scripts.draw(&layout,playMode.playing());
@@ -781,6 +781,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         }
         ImGui::EndDisabled();
         ImGui::Render();
+        profiler.checkpoint(ProfilePart::Editor);
 
         // The time that has passed since the previous frame.
         const Uint64 ticks   = SDL_GetTicksNS();
@@ -800,16 +801,23 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                         static_cast<float>(keys[SDL_SCANCODE_E]) - keys[SDL_SCANCODE_Q],
                         speed * std::min(seconds, 0.1f));
         }
+        profiler.checkpoint(ProfilePart::Other);
         if (playMode.playing()) {scripts.update(std::min(seconds,0.25f));componentScripts.update(std::min(seconds,0.25f));}
+        profiler.checkpoint(ProfilePart::Scripts);
         updateHierarchy(world);
+        profiler.checkpoint(ProfilePart::Hierarchy);
         physics.update(world, playMode.playing()?seconds:0.0f, [&](float dt){ scripts.fixedUpdate(dt);componentScripts.fixedUpdate(dt);updateHierarchy(world); });
+        profiler.checkpoint(ProfilePart::Physics);
         updateHierarchy(world);
+        profiler.checkpoint(ProfilePart::Hierarchy);
         updateCameras(world,playMode.playing()?std::min(seconds,.25f):0);
         updateHierarchy(world);
         if(!(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS))input.releaseMouse();
+        profiler.checkpoint(ProfilePart::Cameras);
         audio.update(world,browser.assets,playMode.playing());
         physics.update(world,0); // collider poses follow parent motion before picking next frame
 
+        profiler.checkpoint(ProfilePart::Audio);
         int width = 0;
         int height = 0;
         SDL_GetWindowSizeInPixels(window, &width, &height);
@@ -826,10 +834,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 if (transform && collider) renderer.drawCollider(*transform, *collider, viewProjection);
                 const auto* audioSource=world.tryGet<AudioSource>(selectedEntity);
                 if(transform && audioSource)renderer.drawAudioSource(*transform,*audioSource,viewProjection);
+                if(transform)if(const auto* selectedCamera=world.tryGet<Camera>(selectedEntity))renderer.drawCamera(*transform,*selectedCamera,viewProjection);
             } else {
                 selectedEntity = {};
             }
             }
+            profiler.checkpoint(ProfilePart::Scene);
             if(gameVisible && activeCamera(world)!=Entity{}) {
                 const auto e=activeCamera(world);const auto& c=world.get<Camera>(e);const auto& t=world.get<Transform>(e);
                 glBindFramebuffer(GL_FRAMEBUFFER,gameSurface.framebuffer);
@@ -841,9 +851,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                     terminalErrors.report("Game rendering","");
                 }catch(const std::exception& error){terminalErrors.report("Game rendering",error.what());glClearColor(.1f,.1f,.1f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);}
             }
+            profiler.checkpoint(ProfilePart::Game);
             glBindFramebuffer(GL_FRAMEBUFFER,0);glViewport(0,0,width,height);
             glDisable(GL_SCISSOR_TEST);glClearColor(.07f,.08f,.10f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            profiler.checkpoint(ProfilePart::UI);
         }
 
         // Compare persisted content, not history depth: Undo back to the saved
@@ -863,12 +875,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
             screenshotSaved=image && SDL_SaveBMP(image,screenshotPath);if(image)SDL_DestroySurface(image);
             if(!screenshotSaved)SDL_Log("Screenshot failed: %s",SDL_GetError());
         }
+        profiler.checkpoint(ProfilePart::Other);
         SDL_GL_SwapWindow(window);
+        profiler.checkpoint(ProfilePart::Present);
+        profiler.end();
         if (width > 0 && height > 0) {
             ++renderedFrames;
             if ((smokeTest || screenshotPath) && renderedFrames >= smokeFrames){SDL_Log("Shutdown requested: completed %u automated frames",renderedFrames);running = false;}
         }
     }
+    activeProfiler=nullptr;
     editor.finish(world);
     audio.clear();componentScripts.stop();scripts.shutdown();input.releaseMouse();
     return (!smokeTest || renderedFrames >= smokeFrames) && (!screenshotPath || screenshotSaved);

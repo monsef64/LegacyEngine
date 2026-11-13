@@ -9,3 +9,20 @@ These options do not change the scene or saved project. Without an active camera
 the Game view continues to show only its centered no-camera message.
 
 See [Terminal logs and crash reporting](diagnostics.md) for capturing engine errors and fatal diagnostics.
+
+## Profiler
+
+Open **Debug → Profiler** to record CPU frame timings. It shows a rolling graph
+and the last, average, peak and average-frame percentage over up to **120 frames**.
+Use **Pause sampling** to inspect results without replacing them.
+
+The measured sections are events/input, editor panels/assets, script updates,
+hierarchy, physics (including fixed-update scripts), camera updates, audio/pose
+sync, Scene rendering, Game rendering, ImGui submission, presentation/vsync wait,
+and other frame work. Renderer rows break out light/shadow setup, skyboxes and
+surfaces/gizmos; these are **nested** inside Scene/Game timings, not additional
+frame costs. The timings include synchronous driver work but **do not measure GPU
+execution time**, the audio device callback, or individual functions/scripts.
+Vsync can dominate the Present row. Asset decoding performed during a frame is
+included in the calling section. Sampling is disabled while the profiler is
+closed; histories are bounded, session-only, and do not dirty the project.

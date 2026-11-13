@@ -79,7 +79,7 @@ inline void drawScriptExports(World& world,std::vector<ScriptField>& fields){
         ImGui::PopID();
     }
 }
-inline void drawInspector(World& world,Entity selected,const EditorRect& rect,const MeshHandle* meshes,bool editingGizmo,const AssetManager* assets=nullptr) {
+inline void drawInspector(World& world,Entity selected,const EditorRect& rect,const MeshHandle* meshes,bool editingGizmo,const AssetManager* assets=nullptr,int meshCount=4) {
     if(dockedEditor && !panelOpen[1])return;
     placeEditorPanel(rect);
     if(beginEditorPanel("Inspector",fixedPanelFlags)) {
@@ -113,16 +113,16 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                 } else editVector("Scale",t->scale,0.02f,0.05f,100);
             }
             if(auto* r=world.tryGet<MeshRenderer>(selected);r && componentHeader<MeshRenderer>(world,selected,"MeshRenderer")) {
-                const char* names[]{"Cube","Sphere","Capsule","Cone"};int current=-1;
-                for(int i=0;i<4;++i)if(r->mesh.id==meshes[i].id)current=i;
+                const char* names[]{"Cube","Sphere","Capsule","Cone","Plane"};int current=-1;
+                for(int i=0;i<std::min(meshCount,5);++i)if(r->mesh.id==meshes[i].id)current=i;
                 if(ImGui::BeginCombo("Mesh",current<0?"Custom":names[current])) {
-                    for(int i=0;i<4;++i)if(ImGui::Selectable(names[i],current==i)) {
+                    for(int i=0;i<std::min(meshCount,5);++i)if(ImGui::Selectable(names[i],current==i)) {
                         r->mesh=meshes[i];
                         if(i!=0)if(auto* t=world.tryGet<Transform>(selected)) {
                             const float scale=std::clamp(std::max({std::abs(t->scale.x),std::abs(t->scale.y),std::abs(t->scale.z)}),0.05f,100.0f);
                             t->scale={scale,scale,scale};
                         }
-                        if(auto* c=world.tryGet<Collider>(selected)){c->shape=static_cast<ColliderShape>(i);c->size={1,1,1};c->radius=0.5f;c->height=1;}
+                        if(auto* c=world.tryGet<Collider>(selected)){c->shape=i==4?ColliderShape::Box:static_cast<ColliderShape>(i);c->size=i==4?Vec3{16,.1f,16}:Vec3{1,1,1};c->center=i==4?Vec3{0,-.05f,0}:Vec3{};c->radius=0.5f;c->height=1;}
                     }
                     ImGui::EndCombo();
                 }
@@ -148,7 +148,7 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                         if(!r->material.empty()){
                             auto edited=loadMaterial(*assets,r->material);
                             if(ImGui::TreeNodeEx("Material properties",ImGuiTreeNodeFlags_DefaultOpen)){bool changed=false;
-                            changed|=ImGui::Combo("Shader",&edited.shader,"Diffuse\0Bumped Diffuse\0");
+                            changed|=ImGui::Combo("Shader",&edited.shader,"Diffuse\0Bumped Diffuse\0Diffuse Transparent\0");
                             changed|=ImGui::ColorEdit3("Material color",&edited.color.x);
                             auto textureField=[&](const char* label,std::string& path){
                                 ImGui::PushID(label);bool editedTexture=false;

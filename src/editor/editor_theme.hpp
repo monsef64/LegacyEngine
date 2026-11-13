@@ -14,11 +14,11 @@ inline void applyEditorTheme() {
     font.OversampleV = 2;
     font.PixelSnapH = false;
     io.FontDefault = io.Fonts->AddFontFromMemoryTTF(
-        const_cast<unsigned char*>(editorFontData), sizeof(editorFontData), 16.0f, &font);
+        const_cast<unsigned char*>(editorFontData), sizeof(editorFontData), 18.0f, &font);
 
     static const ImWchar iconRanges[]{0xf000,0xf8ff,0};
-    ImFontConfig icons;icons.MergeMode=true;icons.FontDataOwnedByAtlas=false;icons.PixelSnapH=true;icons.GlyphMinAdvanceX=18;
-    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(editorIconData),sizeof(editorIconData),16,&icons,iconRanges);
+    ImFontConfig icons;icons.MergeMode=true;icons.FontDataOwnedByAtlas=false;icons.PixelSnapH=true;icons.GlyphMinAdvanceX=20;
+    io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(editorIconData),sizeof(editorIconData),18,&icons,iconRanges);
     ImGui::StyleColorsDark();
     ImGuiStyle& s = ImGui::GetStyle();
     s.AntiAliasedLines = true;

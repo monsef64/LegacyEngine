@@ -10,9 +10,9 @@
 int main(){
     assert(audioSourceGlyph().topology==MeshData::Topology::Lines);
     AudioSource gizmoSource;gizmoSource.blend=1;gizmoSource.distance=12;
-    auto range=audioSourceRange(gizmoSource);assert(range.vertices.size()==384);
+    auto range=audioSourceRange(gizmoSource);assert(range.vertices.size()==2432);
     for(const auto& v:range.vertices)assert(std::abs(dot(v.position,v.position)-144)<.001f);
-    gizmoSource.blend=0;assert(audioSourceRange(gizmoSource).vertices.empty());
+    gizmoSource.blend=0;assert(!audioSourceRange(gizmoSource).vertices.empty());
     gizmoSource.blend=1;gizmoSource.distance=0;assert(audioSourceRange(gizmoSource).vertices.empty());
 
     RotationEditorState rotation;rotation.apply({900,-900,10000});assert(rotation.angles.x==360 && rotation.angles.y==-360 && rotation.angles.z==360);

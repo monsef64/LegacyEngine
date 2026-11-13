@@ -28,7 +28,7 @@ public:
     LuaConsole& operator=(const LuaConsole&) = delete;
     bool execute(std::string_view source);
     void reset();
-    void bindWorld(World& world, MeshHandle cube={}, MeshHandle sphere={}, MeshHandle capsule={}, MeshHandle cone={});
+    void bindWorld(World& world, MeshHandle cube={}, MeshHandle sphere={}, MeshHandle capsule={}, MeshHandle cone={}, MeshHandle plane={});
     bool bindObject(Entity entity);
     bool bindExports(const std::vector<ScriptField>& fields);
     void update(float deltaTime);
@@ -41,7 +41,7 @@ public:
 private:
     lua_State* state_ = nullptr;
     World* world_ = nullptr;
-    MeshHandle meshes_[4];
+    MeshHandle meshes_[5];
     std::unique_ptr<LuaScene> scene_;
     void installScene();
     void installInput();

@@ -30,15 +30,22 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
         if(ownerError_)ImGui::TextWrapped("Select a GameObject with this script attached before executing it.");
         ImGui::TextDisabled("Lua 5.4 | Tab: complete API names | output below");
         const auto sourceID=ImGui::GetID("##source");
+        // Render native selection/caret/scrollbars, but not a second copy of glyphs.
+        ImGui::PushStyleColor(ImGuiCol_Text,ImVec4(0,0,0,0));
         ImGui::InputTextMultiline("##source",source_.data(),source_.size(),ImVec2(-1,-1),
                                  ImGuiInputTextFlags_CallbackCompletion | ImGuiInputTextFlags_CallbackAlways,
                                  completion,this);
-        // Color tokens over the native input rendering; keep its caret, selection and undo.
+        ImGui::PopStyleColor();
+        // One colored glyph layer; ImGui retains editing, caret, selection and undo.
         auto* parent=ImGui::GetCurrentWindow();
         for(auto* child:parent->DC.ChildWindows)if(child->ChildId==sourceID){
             auto* state=ImGui::GetInputTextState(sourceID);
-            auto origin=child->DC.CursorStartPos;
-            if(state)origin.x-=state->Scroll.x;
+            // Use current scroll, including InputText's same-frame caret-follow
+            // adjustment (CursorStartPos still contains the pre-adjustment value).
+            const auto padding=ImGui::GetStyle().FramePadding;
+            ImVec2 origin(child->Pos.x+child->WindowPadding.x+child->DecoOuterSizeX1+child->DC.ColumnsOffset.x-child->Scroll.x+padding.x,
+                          child->Pos.y+child->WindowPadding.y+child->DecoOuterSizeY1-child->Scroll.y+padding.y);
+            if(state && ImGui::GetActiveID()==sourceID)origin.x-=state->Scroll.x;
             auto* draw=child->DrawList;draw->PushClipRect(child->InnerClipRect.Min,child->InnerClipRect.Max,true);
             std::string_view text(source_.data());
             ImU32 colors[]{ImGui::GetColorU32(ImGuiCol_Text),IM_COL32(195,140,245,255),IM_COL32(210,180,125,255),IM_COL32(105,165,110,255),IM_COL32(120,200,190,255),IM_COL32(110,175,240,255)};
@@ -46,9 +53,9 @@ void ScriptEditor::draw(const EditorLayout* layout, bool executionEnabled)
             for(auto token:luaTokens(text)){
                 auto pos=token.begin;
                 while(pos<token.end){auto end=text.find('\n',pos);if(end==text.npos || end>token.end)end=token.end;
-                    if(token.kind!=LuaToken::Plain && y+ImGui::GetFontSize()>=child->InnerClipRect.Min.y && y<=child->InnerClipRect.Max.y)
+                    if(y+ImGui::GetFontSize()>=child->InnerClipRect.Min.y && y<=child->InnerClipRect.Max.y)
                         draw->AddText(ImVec2(x,y),colors[token.kind],text.data()+pos,text.data()+end);
-                    x+=ImGui::CalcTextSize(text.data()+pos,text.data()+end).x;
+                    x+=ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(),FLT_MAX,0,text.data()+pos,text.data()+end).x;
                     pos=end;if(pos<token.end && text[pos]=='\n'){++pos;x=origin.x;y+=ImGui::GetFontSize();}
                 }
             }

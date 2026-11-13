@@ -1,5 +1,6 @@
 #include "editor/script_editor.hpp"
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <cstdio>
 #include <cstdlib>
 
@@ -23,6 +24,15 @@ int main()
     editor.setSource("print(\"Hello from Lua!\")");
     auto frame=[&] { ImGui::NewFrame(); editor.draw(); ImGui::Render(); };
     frame(); frame();
+    editor.setSource("function sample() return 42 end");frame();
+    auto* editorWindow=ImGui::FindWindowByName("Lua Editor");require(editorWindow!=nullptr,"editor window exists");
+    int glyphVertices=0;const auto white=ImGui::GetDrawListSharedData()->TexUvWhitePixel;
+    for(auto* child:editorWindow->DC.ChildWindows)if(child->ChildId==editorWindow->GetID("##source")){
+        for(const auto& vertex:child->DrawList->VtxBuffer)if(vertex.uv.x!=white.x || vertex.uv.y!=white.y)++glyphVertices;
+    }
+    int characters=0;for(char c:editor.source())if(c!=' ' && c!='\n' && c!='\r')++characters;
+    require(glyphVertices==characters*4,"syntax highlighting renders one glyph layer, not native plus colored duplicates");
+    editor.setSource("print(\"Hello from Lua!\")");frame();
     auto click=[&](float x,float y) {
         io.AddMousePosEvent(x,y); frame();
         io.AddMouseButtonEvent(0,true); frame();

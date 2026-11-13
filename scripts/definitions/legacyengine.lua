@@ -43,12 +43,12 @@
 ---@field setMaterialColor fun(self:MeshRenderer,r:number,g:number,b:number)
 ---@field setMaterialTexture fun(self:MeshRenderer,texture:Texture|nil)
 ---@field setMaterialNormalMap fun(self:MeshRenderer,texture:Texture|nil)
----@field setMaterialShader fun(self:MeshRenderer,shader:string) Diffuse or Bumped Diffuse
+---@field setMaterialShader fun(self:MeshRenderer,shader:string) Diffuse, Bumped Diffuse or Diffuse Transparent
 ---@field setMaterialNormalStrength fun(self:MeshRenderer,value:number)
 ---@field setMaterialTiling fun(self:MeshRenderer,x:number,y:number)
 ---@field setMaterialSpecular fun(self:MeshRenderer,value:number)
 ---@field resetMaterialOverrides fun(self:MeshRenderer)
----@field mesh 'Cube'|'Sphere'|'Capsule'|'Cone'
+---@field mesh 'Cube'|'Sphere'|'Capsule'|'Cone'|'Plane'
 ---@field color Vec3
 ---@field checkerboard boolean
 ---@field specular number

@@ -10,7 +10,7 @@ struct lua_State;
 class LuaScene {
 public:
     LuaScene(lua_State* state, World& world, MeshHandle cube, MeshHandle sphere, MeshHandle capsule, MeshHandle cone,
-             std::function<void(std::string_view)> error);
+             std::function<void(std::string_view)> error,MeshHandle plane={});
     void setSelf(Entity entity);
     void setExports(const std::vector<ScriptField>& fields);
     void start();
@@ -21,7 +21,7 @@ private:
     struct Entry { Entity entity; int reference; bool owned=false, started=false, destroying=false; };
     lua_State* state_;
     World& world_;
-    MeshHandle meshes_[4];
+    MeshHandle meshes_[5];
     std::function<void(std::string_view)> error_;
     std::vector<Entry> entries_;
     std::vector<Entity> query_;

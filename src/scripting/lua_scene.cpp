@@ -118,8 +118,8 @@ int trace(lua_State* L) {
 }
 }
 LuaScene::LuaScene(lua_State* L,World& world,MeshHandle cube,MeshHandle sphere,MeshHandle capsule,MeshHandle cone,
-                   std::function<void(std::string_view)> error)
-    :state_(L),world_(world),meshes_{cube,sphere,capsule,cone},error_(std::move(error)) {
+                   std::function<void(std::string_view)> error,MeshHandle plane)
+    :state_(L),world_(world),meshes_{cube,sphere,capsule,cone,plane},error_(std::move(error)) {
     // Keep lifecycle keys interned even when a script exhausts its allocation budget.
     for(const char* key:{"onStart","onUpdate","onFixedUpdate","onDestroy"}) {
         lua_pushboolean(L,1);lua_setfield(L,LUA_REGISTRYINDEX,key);
@@ -338,7 +338,7 @@ int LuaScene::componentIndex(lua_State* L) {
     case Kind::Boolean:lua_pushboolean(L,*static_cast<bool*>(f.value));break;
     case Kind::String:lua_pushstring(L,static_cast<std::string*>(f.value)->c_str());break;
     case Kind::Shape:lua_pushstring(L,(*static_cast<ColliderShape*>(f.value)==ColliderShape::Box)?"Box":(*static_cast<ColliderShape*>(f.value)==ColliderShape::Sphere)?"Sphere":(*static_cast<ColliderShape*>(f.value)==ColliderShape::Capsule)?"Capsule":"Cone");break;
-    case Kind::Mesh:{const auto m=*static_cast<MeshHandle*>(f.value);const auto& meshes=c.object.scene->meshes_;lua_pushstring(L,m.id==meshes[1].id?"Sphere":m.id==meshes[2].id?"Capsule":m.id==meshes[3].id?"Cone":"Cube");break;}
+    case Kind::Mesh:{const auto m=*static_cast<MeshHandle*>(f.value);const auto& meshes=c.object.scene->meshes_;lua_pushstring(L,m.id==meshes[1].id?"Sphere":m.id==meshes[2].id?"Capsule":m.id==meshes[3].id?"Cone":m.id==meshes[4].id?"Plane":"Cube");break;}
     default:{auto* v=static_cast<Vector*>(lua_newuserdatauv(L,sizeof(Vector),0));v->component=c;std::strncpy(v->field,key,31);v->field[31]=0;luaL_setmetatable(L,"Vector");break;}
     }return 1;
 }
@@ -369,7 +369,7 @@ int LuaScene::componentNewIndex(lua_State* L) {
         else *static_cast<std::string*>(f.value)=objectName(L,3);break;}
 
     case Kind::Shape:{const char* s=luaL_checkstring(L,3);int i=!std::strcmp(s,"Box")?0:!std::strcmp(s,"Sphere")?1:!std::strcmp(s,"Capsule")?2:!std::strcmp(s,"Cone")?3:-1;if(i<0)return luaL_error(L,"Expected Box, Sphere, Capsule or Cone");*static_cast<ColliderShape*>(f.value)=static_cast<ColliderShape>(i);break;}
-    case Kind::Mesh:{const char* s=luaL_checkstring(L,3);int i=!std::strcmp(s,"Cube")?0:!std::strcmp(s,"Sphere")?1:!std::strcmp(s,"Capsule")?2:!std::strcmp(s,"Cone")?3:-1;if(i<0)return luaL_error(L,"Expected Cube, Sphere, Capsule or Cone");*static_cast<MeshHandle*>(f.value)=c.object.scene->meshes_[i];break;}
+    case Kind::Mesh:{const char* s=luaL_checkstring(L,3);int i=!std::strcmp(s,"Cube")?0:!std::strcmp(s,"Sphere")?1:!std::strcmp(s,"Capsule")?2:!std::strcmp(s,"Cone")?3:!std::strcmp(s,"Plane")?4:-1;if(i<0)return luaL_error(L,"Expected Cube, Sphere, Capsule, Cone or Plane");if(i==4 && c.object.scene->meshes_[4].id==UINT32_MAX)return luaL_error(L,"Plane mesh is not configured");*static_cast<MeshHandle*>(f.value)=c.object.scene->meshes_[i];break;}
     default:{
         float values[4]{};const char* keys[]{"x","y","z","w"};const int count=f.kind==Kind::Quat?4:3;
         for(int i=0;i<count;++i){lua_getfield(L,3,keys[i]);values[i]=number(L,-1);lua_pop(L,1);}
@@ -486,7 +486,7 @@ int LuaScene::materialMethod(lua_State* L){
     if(op==1){edited.color={number(L,1),number(L,2),number(L,3)};mask|=MaterialColor;}
     if(op==2){edited.texture=lua_isnil(L,1)?"":luaL_checkstring(L,1);mask|=MaterialTexture;}
     if(op==3){edited.normalMap=lua_isnil(L,1)?"":luaL_checkstring(L,1);mask|=MaterialNormal;}
-    if(op==4){const char* shader=luaL_checkstring(L,1);if(std::strcmp(shader,"Diffuse") && std::strcmp(shader,"Bumped Diffuse"))return luaL_error(L,"Expected Diffuse or Bumped Diffuse");edited.shader=!std::strcmp(shader,"Bumped Diffuse");mask|=MaterialShader;}
+    if(op==4){const char* shader=luaL_checkstring(L,1);if(std::strcmp(shader,"Diffuse") && std::strcmp(shader,"Bumped Diffuse") && std::strcmp(shader,"Diffuse Transparent"))return luaL_error(L,"Expected Diffuse, Bumped Diffuse or Diffuse Transparent");edited.shader=!std::strcmp(shader,"Diffuse Transparent")?2:!std::strcmp(shader,"Bumped Diffuse");mask|=MaterialShader;}
     if(op==5){edited.normalStrength=number(L,1);mask|=MaterialStrength;}
     if(op==6){edited.tilingX=number(L,1);edited.tilingY=number(L,2);mask|=MaterialTiling;}
     if(op==7){edited.specular=number(L,1);mask|=MaterialSpecular;}

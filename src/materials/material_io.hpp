@@ -6,12 +6,12 @@
 inline bool materialAsset(const std::string& path){return materialPathValid(path) && AssetManager::extension(path)==".mat";}
 inline Json materialJson(const MaterialProperties& p){
     if(!validMaterial(p))throw std::runtime_error("Invalid material properties");
-    return {{"format","LegacyEngineMaterial"},{"version",1},{"shader",p.shader==1?"Bumped Diffuse":"Diffuse"},{"color",{p.color.x,p.color.y,p.color.z}},
+    return {{"format","LegacyEngineMaterial"},{"version",1},{"shader",p.shader==2?"Diffuse Transparent":p.shader==1?"Bumped Diffuse":"Diffuse"},{"color",{p.color.x,p.color.y,p.color.z}},
         {"texture",p.texture},{"normalMap",p.normalMap},{"normalStrength",p.normalStrength},{"tiling",{p.tilingX,p.tilingY}},{"specular",p.specular}};
 }
 inline MaterialProperties parseMaterial(const Json& json){
     if(json.at("format")!="LegacyEngineMaterial" || json.at("version")!=1)throw std::runtime_error("Invalid material file");
-    MaterialProperties p;const auto shader=json.at("shader").get<std::string>();if(shader!="Diffuse" && shader!="Bumped Diffuse")throw std::runtime_error("Unknown material shader");p.shader=shader=="Bumped Diffuse";
+    MaterialProperties p;const auto shader=json.at("shader").get<std::string>();if(shader!="Diffuse" && shader!="Bumped Diffuse" && shader!="Diffuse Transparent")throw std::runtime_error("Unknown material shader");p.shader=shader=="Diffuse Transparent"?2:shader=="Bumped Diffuse";
     const auto& color=json.at("color");const auto& tiling=json.at("tiling");if(!color.is_array() || color.size()!=3 || !tiling.is_array() || tiling.size()!=2)throw std::runtime_error("Invalid material vectors");
     p.color={color[0].get<float>(),color[1].get<float>(),color[2].get<float>()};p.tilingX=tiling[0].get<float>();p.tilingY=tiling[1].get<float>();
     p.texture=json.at("texture").get<std::string>();p.normalMap=json.at("normalMap").get<std::string>();p.normalStrength=json.at("normalStrength").get<float>();p.specular=json.at("specular").get<float>();
