@@ -1,0 +1,66 @@
+[
+  {
+    "file": "index.md",
+    "title": "Overview"
+  },
+  {
+    "file": "features.md",
+    "title": "Current features"
+  },
+  {
+    "file": "building.md",
+    "title": "Build and test"
+  },
+  {
+    "file": "architecture.md",
+    "title": "Source organization"
+  },
+  {
+    "file": "editor.md",
+    "title": "Editor workflow"
+  },
+  {
+    "file": "lighting.md",
+    "title": "Dynamic lighting and shadows"
+  },
+  {
+    "file": "projects.md",
+    "title": "Projects"
+  },
+  {
+    "file": "scripting.md",
+    "title": "LegacyScript"
+  },
+  {
+    "file": "audio-input.md",
+    "title": "Audio and input"
+  },
+  {
+    "file": "vscode.md",
+    "title": "VS Code extension"
+  },
+  {
+    "file": "json.md",
+    "title": "JSON parsing"
+  },
+  {
+    "file": "automation.md",
+    "title": "Automation and limitations"
+  },
+  {
+    "file": "materials.md",
+    "title": "Materials"
+  },
+  {
+    "file": "skybox.md",
+    "title": "Skybox component"
+  },
+  {
+    "file": "debug.md",
+    "title": "Debug menu"
+  },
+  {
+    "file": "license.md",
+    "title": "License"
+  }
+]
