@@ -1,7 +1,7 @@
 #pragma once
 #include "assets/assets.hpp"
 #include "audio/audio_clip.hpp"
-#include <SDL3/SDL.h>
+#include "audio/audio_output.hpp"
 #include <map>
 #include <memory>
 
@@ -29,12 +29,12 @@ inline AudioGains spatialAudioGains(const AudioSource& source,const Transform* e
             (1-blend)*right2+blend*attenuation*std::min(1.0f,1+spatialPan)};
 }
 
-// Main-thread PCM mixer. No ECS pointers escape into SDL's audio thread.
+// Main-thread PCM mixer. No ECS pointers escape into miniaudio's device callback.
 class AudioSystem {
     struct Voice {Entity entity;std::string clip;double cursor=0;unsigned restart=0;bool shot=false;};
     std::vector<Voice> voices;
     std::map<std::string,std::vector<float>> cache;
-    SDL_AudioStream* stream=nullptr;
+    AudioOutput output;
     std::filesystem::path root;
     std::size_t cachedBytes=0;
     const std::vector<float>& load(const AssetManager& assets,const std::string& path) {
@@ -46,8 +46,8 @@ class AudioSystem {
     }
 public:
     std::string error;
-    ~AudioSystem(){if(stream)SDL_DestroyAudioStream(stream);}
-    void clear(){voices.clear();cache.clear();cachedBytes=0;if(stream)SDL_ClearAudioStream(stream);}
+    explicit AudioSystem(bool nullDevice=false):output(nullDevice){}
+    void clear(){voices.clear();cache.clear();cachedBytes=0;output.clear();}
     void start(World& world){clear();world.each<AudioSource>([](Entity,AudioSource& a){a.stop();if(a.playOnStart)a.play();});}
     // Deterministic rendering entry point, also used by dummy-device regression tests.
     std::vector<float> render(World& world,const AssetManager& assets,int frames){
@@ -118,17 +118,14 @@ public:
         return mix;
     }
     void update(World& world,const AssetManager& assets,bool playing) {
-        if(!playing){if(stream)SDL_ClearAudioStream(stream);return;}
+        if(!playing){output.clear();return;}
         if(root!=assets.root){clear();root=assets.root;}
-        if(!stream){
-            if(!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO)){error=SDL_GetError();return;}
-            SDL_AudioSpec spec{SDL_AUDIO_F32,2,48000};
-            stream=SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,&spec,nullptr,nullptr);
-            if(!stream){error=SDL_GetError();return;}SDL_ResumeAudioStreamDevice(stream);
-        }
-        const int queued=SDL_GetAudioStreamQueued(stream);
-        const int frames=std::clamp(2400-std::max(0,queued)/8,0,2400);if(!frames)return;
-        auto mix=render(world,assets,frames);
-        if(!SDL_PutAudioStreamData(stream,mix.data(),static_cast<int>(mix.size()*sizeof(float))))error=SDL_GetError();
+        try {
+            output.open();
+            const auto queued=output.queuedFrames();
+            const int frames=queued<2400?static_cast<int>(2400-queued):0;
+            if(!frames)return;
+            output.submit(render(world,assets,frames));
+        }catch(const std::exception& e){error=e.what();}
     }
 };

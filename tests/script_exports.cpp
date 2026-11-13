@@ -67,7 +67,6 @@ local escaped="first\
     auto runtimeOwner=world.create();world.add(runtimeOwner,Transform{});world.add(runtimeOwner,LuaScript{"Runtime.ls",true,{}});
     MeshHandle runtimeMeshes[4]{};ScriptComponents runtime;runtime.start(world,assets,runtimeMeshes);assert(world.get<Transform>(runtimeOwner).position.x==9);runtime.stop();
     ScriptEditor editor;editor.bindWorld(world,{},{},{});editor.setAssetContext("Runtime.ls",runtimeOwner);editor.setSource(assets.readScript("Runtime.ls"));world.get<Transform>(runtimeOwner).position.x=0;assert(editor.executeSource());assert(world.get<Transform>(runtimeOwner).position.x==9);
-    SDL_SetHint(SDL_HINT_AUDIO_DRIVER,"dummy");
-    {AudioPreview preview;preview.toggle(assets,"../escape.wav");assert(!preview.error.empty() && preview.path.empty());}
-    SDL_Quit();std::filesystem::remove_all(temp);
+    {AudioPreview preview(true);preview.toggle(assets,"../escape.wav");assert(!preview.error.empty() && preview.path.empty());}
+    std::filesystem::remove_all(temp);
 }

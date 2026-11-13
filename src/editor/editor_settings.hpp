@@ -16,8 +16,8 @@ struct EditorSettings {
     }
     EditorSettings(){auto path=file();if(!path.empty()){std::ifstream in(path);in>>external;if(!(in>>theme))theme=0;theme=std::clamp(theme,0,1);}if(ImGui::GetCurrentContext())applyEditorPalette(theme);}
     void save(){auto path=file();if(!path.empty()){std::ofstream out(path);out<<external<<' '<<theme;}}
-    bool openExternal(const std::filesystem::path& folder) {
-        std::error_code ec;std::filesystem::create_directories(folder,ec);
+    bool openExternal(const std::filesystem::path& folder,bool isFile=false) {
+        std::error_code ec;std::filesystem::create_directories(isFile?folder.parent_path():folder,ec);
         if(ec){error=ec.message();return false;}
         // URI launch avoids shell interpolation and works with the VS Code URL handler.
         auto raw=std::filesystem::absolute(folder).generic_string();std::string encoded;
@@ -35,7 +35,7 @@ struct EditorSettings {
         ImGui::SeparatorText("Editor");int choice=external?1:0;
         ImGui::SetNextItemWidth(-120);
         if(ImGui::Combo("Code editor",&choice,"Internal\0External (VS Code)\0")){external=choice==1;save();if(external)openExternal(folder);}
-        ImGui::TextWrapped("External mode opens the project folder in VS Code when a script is double-clicked. VS Code must register its vscode:// URL handler.");
+        ImGui::TextWrapped("External mode opens the selected script in VS Code when double-clicked. VS Code must register its vscode:// URL handler.");
         if(external && ImGui::Button("Open project in VS Code"))openExternal(folder);
         if(!error.empty())ImGui::TextWrapped("%s",error.c_str());
     }ImGui::End();}

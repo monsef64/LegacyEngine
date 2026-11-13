@@ -47,7 +47,7 @@ int main(){
     assert(assets.createFolder(folder)=="New Folder/New Folder");
     bool badFolder=false;try{assets.createFolder("../escape");}catch(...){badFolder=true;}assert(badFolder);
     AssetManager fixtures;fixtures.root=TEST_FIXTURES;auto samples=decodeAudioClip(fixtures,"tone.mp3");assert(samples.size()>4800);bool audible=false;for(float s:samples){assert(std::isfinite(s));audible|=std::abs(s)>.001f;}assert(audible);
-    SDL_SetHint(SDL_HINT_AUDIO_DRIVER,"dummy");{AudioPreview preview;preview.toggle(fixtures,"tone.mp3");assert(preview.error.empty());preview.stop();}
+    {AudioPreview preview(true);preview.toggle(fixtures,"tone.mp3");assert(preview.error.empty());preview.stop();}
     std::filesystem::create_directories(assets.root);std::ofstream bad(assets.root/"bad.mp3");bad<<"not mp3";bad.close();bool rejected=false;try{decodeAudioClip(assets,"bad.mp3");}catch(...){rejected=true;}assert(rejected);
     ImGui::CreateContext();ImGui::StyleColorsDark();auto original=ImGui::GetStyle().Colors[ImGuiCol_Button];applyEditorPalette(1);auto grey=ImGui::GetStyle().Colors[ImGuiCol_Button];assert(grey.x==grey.y && grey.y==grey.z);applyEditorPalette(0);assert(ImGui::GetStyle().Colors[ImGuiCol_Button].x==original.x);ImGui::DestroyContext();
     SDL_Quit();std::filesystem::remove_all(temp);
