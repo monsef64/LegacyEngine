@@ -1,6 +1,6 @@
 # Automation and limitations
 - [Engine workflow](../.github/workflows/release.yml): build, regression tests, Xvfb
-  graphical light/shadow/cursor tests, screenshot capture, Linux packaging and a
+  graphical light/shadow/cursor tests, Linux packaging and a
   separate VSIX job/artifact. Tags publish engine and VSIX release assets;
   branch/PR/manual runs provide downloadable artifacts.
 - [VSIX workflow](../.github/workflows/legacyscript.yml): regenerate engine API catalogs,

@@ -57,7 +57,7 @@
     "setMaterialColor": "fun(self:MeshRenderer,r:number,g:number,b:number)",
     "setMaterialTexture": "fun(self:MeshRenderer,texture:Texture|nil)",
     "setMaterialNormalMap": "fun(self:MeshRenderer,texture:Texture|nil)",
-    "setMaterialShader": "fun(self:MeshRenderer,shader:string) Diffuse, Bumped Diffuse or Diffuse Transparent",
+    "setMaterialShader": "fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped or Diffuse Transparent",
     "setMaterialNormalStrength": "fun(self:MeshRenderer,value:number)",
     "setMaterialTiling": "fun(self:MeshRenderer,x:number,y:number)",
     "setMaterialSpecular": "fun(self:MeshRenderer,value:number)",

@@ -7,14 +7,14 @@ folder, use numeric duplicate suffixes, and persist as readable JSON.
 
 Expand **Material properties** in MeshRenderer to edit the shared asset:
 - **Diffuse** (default): color, albedo texture, UV tiling and specular.
-- **Bumped Diffuse**: the same controls plus a tangent-space **Normal map** and
+- **Diffuse Bumped**: the same controls plus a tangent-space **Normal map** and
   normal strength. Use OpenGL-style (+Y/green-up) normal maps; this is normal
   mapping, not grayscale height/displacement mapping.
 - **Diffuse Transparent**: Diffuse lighting with the albedo texture's alpha channel.
   Choose this for PNG/TGA images with transparent or semi-transparent pixels.
 - Texture dropdowns accept PNG, JPEG, BMP and TGA; you can also drag textures
   from the Asset Browser. `None` removes a texture. All built-in solids and the
-  plane have UVs. Diffuse and Bumped Diffuse remain opaque; only Diffuse Transparent uses texture alpha.
+  plane have UVs. Diffuse and Diffuse Bumped remain opaque; only Diffuse Transparent uses texture alpha.
 
 Inspector edits are saved immediately to the **shared material asset**, affecting
 all users; asset-file edits are not part of scene undo. Script changes are
@@ -31,7 +31,7 @@ function onStart()
     mesh:setMaterial("Stone.mat")
     mesh:setMaterialColor(0.8, 0.9, 1)
     mesh:setMaterialTexture(albedo)
-    mesh:setMaterialShader("Bumped Diffuse")
+    mesh:setMaterialShader("Diffuse Bumped")
     mesh:setMaterialNormalMap(normals)
     mesh:setMaterialNormalStrength(1)
     mesh:setMaterialTiling(2, 2)

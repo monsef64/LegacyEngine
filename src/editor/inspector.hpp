@@ -148,7 +148,7 @@ inline void drawInspector(World& world,Entity selected,const EditorRect& rect,co
                         if(!r->material.empty()){
                             auto edited=loadMaterial(*assets,r->material);
                             if(ImGui::TreeNodeEx("Material properties",ImGuiTreeNodeFlags_DefaultOpen)){bool changed=false;
-                            changed|=ImGui::Combo("Shader",&edited.shader,"Diffuse\0Bumped Diffuse\0Diffuse Transparent\0");
+                            changed|=ImGui::Combo("Shader",&edited.shader,"Diffuse\0Diffuse Bumped\0Diffuse Transparent\0");
                             changed|=ImGui::ColorEdit3("Material color",&edited.color.x);
                             auto textureField=[&](const char* label,std::string& path){
                                 ImGui::PushID(label);bool editedTexture=false;

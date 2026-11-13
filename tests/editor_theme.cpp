@@ -34,5 +34,18 @@ int main() {
         assert(std::isfinite(color.x) && color.x >= 0 && color.x <= 1);
         assert(std::isfinite(color.w) && color.w >= 0 && color.w <= 1);
     }
+    const auto originalButton=style.Colors[ImGuiCol_Button];const float originalBorder=style.FrameBorderSize;
+    applyEditorPalette(2);
+    assert(activeEditorTheme==2 && style.FrameBorderSize==1 && style.Colors[ImGuiCol_WindowBg].x>.7f);
+    ImGui::NewFrame();ImGui::SetNextWindowPos({10,10});ImGui::SetNextWindowSize({300,200});ImGui::Begin("Classic theme");
+    auto* draw=ImGui::GetWindowDrawList();const int start=draw->VtxBuffer.Size;
+    draw->AddRectFilled({30,50},{130,80},ImGui::GetColorU32(ImGuiCol_Button));
+    ImGui::End();ImGui::Render();finishEditorTheme(ImGui::GetDrawData());
+    assert(draw->VtxBuffer[start].col!=draw->VtxBuffer[start+2].col);
+    applyEditorPalette(0);
+    assert(style.FrameBorderSize==originalBorder && style.Colors[ImGuiCol_Button].x==originalButton.x);
+    applyEditorPalette(3);assert(activeEditorTheme==3 && style.Colors[ImGuiCol_WindowBg].x<.2f && style.Colors[ImGuiCol_Header].z>style.Colors[ImGuiCol_Header].x);
+    applyEditorPalette(1);assert(style.Colors[ImGuiCol_Button].x==style.Colors[ImGuiCol_Button].y);
+    applyEditorPalette(0);
     ImGui::DestroyContext();
 }

@@ -19,6 +19,19 @@ int main() {
     sceneCamera.focus({0,0,0},10000,1);assert(sceneCamera.distance==150);
     sceneCamera.focus({0,0,0},0,1);assert(sceneCamera.distance>=2);
 
+    const Vec3 pivot{2,3,4};const auto before=sceneCamera.position();
+    sceneCamera.orbit(pivot,0,0);assert(dot(sceneCamera.position()-before,sceneCamera.position()-before)<.0001f);
+    const auto orbitDistance=sceneCamera.distance;sceneCamera.orbit(pivot,35,-20);
+    assert(sceneCamera.target==pivot && close(sceneCamera.distance,orbitDistance));
+    sceneCamera.zoom(2);assert(sceneCamera.distance<orbitDistance);const auto zoomDistance=sceneCamera.distance;
+    sceneCamera.pan(1);assert(!(sceneCamera.target==pivot) && sceneCamera.distance==zoomDistance);
+    for(int axis=0;axis<3;++axis)for(int sign:{-1,1}){
+        sceneCamera.snapAxis(axis,sign);const auto direction=normalize(sceneCamera.position()-sceneCamera.target);
+        const float component=axis==0?direction.x:axis==1?direction.y:direction.z;
+        assert(close(component,float(sign),.00001f));
+        const auto vp=sceneCamera.viewProjection(1.5f);for(float value:vp.m)assert(std::isfinite(value));
+        const auto ray=sceneCamera.rayThrough(.5f,.5f,1.5f);assert(dot(ray.direction,direction)<-.999f);
+    }
     Camera gizmo;gizmo.nearClip=.2f;gizmo.farClip=20;gizmo.aspect=2;
     auto wire=cameraFrustumWire(gizmo);assert(wire.topology==MeshData::Topology::Lines && wire.vertices.size()==24);
     float maxX=0,maxY=0;for(const auto& vertex:wire.vertices){maxX=std::max(maxX,std::abs(vertex.position.x));maxY=std::max(maxY,std::abs(vertex.position.y));assert(vertex.position.z<=0);}
@@ -45,7 +58,6 @@ int main() {
     world.get<Camera>(entity).shakeIntensity=.2f;world.get<Camera>(entity).shakeRemaining=1;
     auto stable=world.get<Transform>(entity).position;updateCameras(world,.25f);
     assert(world.get<Transform>(entity).position==stable);assert(world.get<Camera>(entity).shakeRemaining==.75f);
-    auto model=makeCameraModel();assert(!model.vertices.empty());
     const ProjectIO::Meshes meshes{MeshHandle{1},MeshHandle{2},MeshHandle{3},MeshHandle{4},MeshHandle{5},MeshHandle{6}};
     ProjectIO::Loaded loaded;ProjectIO::decode(ProjectIO::encode(world,"",OrbitCamera{},meshes),loaded,meshes);
     assert(activeCamera(loaded.world)!=Entity{});assert(loaded.world.get<Camera>(entity).targetEntity==target);

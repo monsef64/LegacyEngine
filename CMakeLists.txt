@@ -125,7 +125,7 @@ add_library(legacy_audio STATIC src/audio/audio_clip.cpp src/audio/audio_output.
 target_include_directories(legacy_audio PUBLIC src)
 target_link_libraries(legacy_audio PUBLIC legacy_miniaudio)
 
-add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_scene.cpp src/scripting/lua_input.cpp)
+add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_scene.cpp src/scripting/lua_input.cpp src/scripting/lua_levels.cpp)
 target_include_directories(lua_console PUBLIC src)
 target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3)
 
@@ -140,7 +140,7 @@ target_include_directories(legacy_simdjson SYSTEM PUBLIC third_party/simdjson)
 add_library(legacy_json STATIC src/project/json_io.cpp)
 target_include_directories(legacy_json PUBLIC src)
 target_link_libraries(legacy_json PRIVATE legacy_simdjson)
-target_link_libraries(lua_console PUBLIC legacy_json)
+target_link_libraries(lua_console PUBLIC legacy_json Threads::Threads)
 target_link_libraries(legacy_imgui PUBLIC legacy_json)
 
 add_library(legacy_material_textures STATIC src/rendering/material_textures.cpp src/rendering/skybox_renderer.cpp)
@@ -465,3 +465,32 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME profiler COMMAND profiler_tests)
 endif()
+
+# Engine-owned GLSL lives in data/, beside release binaries and test executables.
+add_custom_target(engine_data ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${CMAKE_CURRENT_BINARY_DIR}/data")
+add_dependencies(LegacyEngine engine_data)
+if(BUILD_TESTING)
+  add_dependencies(lighting_render_tests engine_data)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(level_tests tests/levels.cpp)
+  target_link_libraries(level_tests PRIVATE lua_console legacy_json)
+  target_include_directories(level_tests PRIVATE src)
+  if(MSVC)
+    target_compile_options(level_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(level_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME levels COMMAND level_tests)
+  add_dependencies(level_tests engine_data)
+endif()
+
+# Multi-config generators place executables in a configuration subdirectory.
+foreach(runtime_target LegacyEngine lighting_render_tests level_tests)
+  if(TARGET ${runtime_target})
+    add_custom_command(TARGET ${runtime_target} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "$<TARGET_FILE_DIR:${runtime_target}>/data")
+  endif()
+endforeach()

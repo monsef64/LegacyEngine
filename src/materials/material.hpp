@@ -5,7 +5,7 @@
 #include <cmath>
 #include <cctype>
 struct MaterialProperties {
-    int shader=0; // 0 Diffuse, 1 Bumped Diffuse, 2 Diffuse Transparent (texture alpha)
+    int shader=0; // 0 Diffuse, 1 Diffuse Bumped, 2 Diffuse Transparent (texture alpha)
     Vec3 color{1,1,1};
     std::string texture,normalMap;
     float normalStrength=1,tilingX=1,tilingY=1,specular=0;

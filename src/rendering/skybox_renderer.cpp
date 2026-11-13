@@ -1,4 +1,5 @@
 #include "rendering/skybox_renderer.hpp"
+#include "rendering/shader_data.hpp"
 #include <glad/gl.h>
 #include <stb_image.h>
 #include <memory>
@@ -20,23 +21,10 @@ std::vector<unsigned char> readImage(const AssetManager& assets,const std::strin
 }
 }
 bool SkyboxRenderer::init(){
-    const char* vs=R"(#version 330 core
-out vec2 uv;
-void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p*2.0-1.0;gl_Position=vec4(uv,1,1);})";
-    const char* fs=R"(#version 330 core
-in vec2 uv;out vec4 fragColor;
-uniform mat4 inverseVP;uniform vec3 tint;uniform bool hasTexture,isHDR;
-uniform samplerCube faces;uniform sampler2D panorama;
-void main(){
-    vec4 nearP=inverseVP*vec4(uv,-1,1),farP=inverseVP*vec4(uv,1,1);
-    vec3 d=normalize(farP.xyz/farP.w-nearP.xyz/nearP.w);
-    vec3 c=vec3(1);
-    if(hasTexture){if(isHDR){vec2 p=vec2(atan(d.z,d.x)/6.28318530718+0.5,0.5-asin(clamp(d.y,-1.0,1.0))/3.14159265359);c=texture(panorama,p).rgb;}
-        else c=texture(faces,d).rgb;}
-    c=max(c*tint,vec3(0));if(isHDR && hasTexture)c=pow(c/(c+vec3(1)),vec3(1.0/2.2));
-    fragColor=vec4(c,1);
-})";
-    auto v=shader(GL_VERTEX_SHADER,vs),f=shader(GL_FRAGMENT_SHADER,fs);if(!v || !f){if(v)glDeleteShader(v);if(f)glDeleteShader(f);return false;}
+
+
+    std::string vs,fs;try{vs=loadShaderData("skybox.vert");fs=loadShaderData("skybox.frag");}catch(const std::exception& e){error=e.what();SDL_LogError(SDL_LOG_CATEGORY_RENDER,"%s",e.what());return false;}
+    auto v=shader(GL_VERTEX_SHADER,vs.c_str()),f=shader(GL_FRAGMENT_SHADER,fs.c_str());if(!v || !f){if(v)glDeleteShader(v);if(f)glDeleteShader(f);return false;}
     program_=glCreateProgram();glAttachShader(program_,v);glAttachShader(program_,f);glLinkProgram(program_);glDeleteShader(v);glDeleteShader(f);
     int ok=0;glGetProgramiv(program_,GL_LINK_STATUS,&ok);if(!ok){shutdown();return false;}glGenVertexArrays(1,&vao_);return true;
 }

@@ -67,3 +67,9 @@ test('Skybox component scripting and HDR Texture export',()=>{
  assert.match(f.hover(...input('sky:setTextures')).contents.value,/right:Texture/);
  assert(f.completion(...input('@export panorama Texture\n')).some(x=>x.label==='panorama'));
 });
+test('level transition globals have completion and hover',()=>{
+ const result=f.completion(...input(''));
+ for(const name of ['loadLevel','loadLevelAsync','unloadLevel','restartLevel','getCurrentLevel','setCurrentLevel','nextLevel','previousLevel']){
+  assert(result.some(x=>x.label===name));assert(f.hover(...input(name)));
+ }
+});

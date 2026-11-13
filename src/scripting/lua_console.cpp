@@ -64,7 +64,7 @@ void LuaConsole::reset()
     }
     lua_pushlightuserdata(state_,this);
     lua_pushcclosure(state_,print,1); lua_setglobal(state_,"print");
-    installScene();installInput();
+    installScene();installInput();installLevels();
     lua_newtable(state_);
     const char* names[]{"log","error","warning"};
     const Kind kinds[]{Kind::Output,Kind::Error,Kind::Warning};

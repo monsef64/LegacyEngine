@@ -51,7 +51,11 @@ public:
     }
     // Rename a file or directory and keep descendant project references intact.
     void renameSelected(World& world,const std::string& name){
-        const std::filesystem::path leaf(name);
+        std::filesystem::path leaf(name);
+        if(!selected.empty() && !std::filesystem::is_directory(assets.resolve(selected))){
+            const auto extension=std::filesystem::path(selected).extension();
+            if(leaf.extension()!=extension)leaf+=extension.string();
+        }
         if(selected.empty() || leaf.empty() || leaf.has_parent_path() || leaf==".." || leaf=="." || name.find('\0')!=std::string::npos || name.find('\\')!=std::string::npos)
             throw std::runtime_error("Use a name without directories");
         const auto relative=(std::filesystem::path(selected).parent_path()/leaf).generic_string();
@@ -180,7 +184,7 @@ public:
                     if(!std::filesystem::is_directory(assets.resolve(selected)) && ImGui::IsKeyPressed(ImGuiKey_Delete,false))deleteRequested_=true;
                 }
                 if(renameRequested_){
-                    std::snprintf(rename_,sizeof(rename_),"%s",std::filesystem::path(selected).filename().string().c_str());
+                    std::snprintf(rename_,sizeof(rename_),"%s",(std::filesystem::is_directory(assets.resolve(selected))?std::filesystem::path(selected).filename():std::filesystem::path(selected).stem()).string().c_str());
                     ImGui::SetNextWindowPos(ImGui::GetMousePos(),ImGuiCond_Appearing);
                     ImGui::OpenPopup("Rename asset");renameRequested_=false;renameFocus_=true;
                 }

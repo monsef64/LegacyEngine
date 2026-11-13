@@ -142,7 +142,7 @@ inline void hierarchyIcon(World& world,Entity e,ImVec2 p) {
 }
 
 // Returns true when selection changes. The caller can end any active gizmo gesture.
-inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr,bool* focused=nullptr,int* createRequest=nullptr,const char* levelName="Untitled")
+inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabled,const EditorRect* panel=nullptr,bool* focused=nullptr,int* createRequest=nullptr,const char* levelName="Untitled",bool* renameLevel=nullptr)
 {
     if(focused)*focused=false;
     if(dockedEditor && !panelOpen[0])return false;
@@ -230,10 +230,14 @@ inline bool drawLevelObjects(World& world, Entity& selected, bool selectionEnabl
             if(depth<128)for(const auto& child:objects)
                 if(getParent(world,child.entity)==object.entity)self(self,child,depth+1);
         };
-        // This presentation-only root is not selectable, editable, or a drag/drop target.
+        // Level root can be renamed, but is not an entity or a drag/drop target.
         ImGui::SetNextItemOpen(true,search.InputBuf[0]?ImGuiCond_Always:ImGuiCond_Once);
         const auto rootPosition=ImGui::GetCursorScreenPos();
         const bool rootOpen=ImGui::TreeNodeEx("##LevelRoot",ImGuiTreeNodeFlags_SpanAvailWidth,"    %s",levelName);
+        if(ImGui::BeginPopupContextItem("Level root")){
+            if(ImGui::MenuItem("Rename Level...",nullptr,false,renameLevel!=nullptr) && renameLevel)*renameLevel=true;
+            ImGui::EndPopup();
+        }
         auto* rootDraw=ImGui::GetWindowDrawList();
         rootDraw->AddQuad(ImVec2(rootPosition.x+22,rootPosition.y+3),ImVec2(rootPosition.x+28,rootPosition.y),ImVec2(rootPosition.x+34,rootPosition.y+3),ImVec2(rootPosition.x+28,rootPosition.y+7),ImGui::GetColorU32(ImGuiCol_Text));
         rootDraw->AddLine(ImVec2(rootPosition.x+22,rootPosition.y+7),ImVec2(rootPosition.x+28,rootPosition.y+11),ImGui::GetColorU32(ImGuiCol_Text));

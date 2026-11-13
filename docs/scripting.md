@@ -28,7 +28,7 @@ Declarations must lead a line; `---@export` comments remain compatible. Bare
 Exports currently become globals in the attachment's state: do not shadow them
 with local declarations. Missing references bind as `nil` at script startup.
 
-The Lua Editor's Execute action resolves the open asset's selected owner, or its
+The Script Editor's Execute action resolves the open asset's selected owner, or its
 unique owner automatically. Shared assets require selecting an owner. Open assets
 are not additionally run as global snippets on Play. Save asset edits before Play.
 

@@ -14,6 +14,8 @@ int main(){
     Entity createdSky=createEditorObject(world,11,{},{1},{2},{3},{4},{5});
     require(world.has<Skybox>(createdSky) && world.has<Transform>(createdSky) && !world.has<MeshRenderer>(createdSky),"Skybox menu creates component GameObject");
     world.destroy(createdPlane);world.destroy(createdSky);
+    Entity createdCamera=createEditorObject(world,5,{},{1},{2},{3},{4},{5});
+    require(world.has<Camera>(createdCamera) && world.has<AudioListener>(createdCamera),"Camera menu creation includes AudioListener");world.destroy(createdCamera);
     Entity parent=createLevelObject(world,"Parent",{}, {},ColliderShape::Box,true);
     Entity child=createLevelObject(world,"Child",{1,0,0},{1},ColliderShape::Box,false);
     require(world.has<Transform>(parent) && !world.has<MeshRenderer>(parent),"empty object has transform without rendering");

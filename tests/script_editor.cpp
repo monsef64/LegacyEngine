@@ -25,7 +25,7 @@ int main()
     auto frame=[&] { ImGui::NewFrame(); editor.draw(); ImGui::Render(); };
     frame(); frame();
     editor.setSource("function sample() return 42 end");frame();
-    auto* editorWindow=ImGui::FindWindowByName("Lua Editor");require(editorWindow!=nullptr,"editor window exists");
+    auto* editorWindow=ImGui::FindWindowByName("Script Editor");require(editorWindow!=nullptr,"editor window exists");
     int glyphVertices=0;const auto white=ImGui::GetDrawListSharedData()->TexUvWhitePixel;
     for(auto* child:editorWindow->DC.ChildWindows)if(child->ChildId==editorWindow->GetID("##source")){
         for(const auto& vertex:child->DrawList->VtxBuffer)if(vertex.uv.x!=white.x || vertex.uv.y!=white.y)++glyphVertices;
@@ -38,14 +38,14 @@ int main()
         io.AddMouseButtonEvent(0,true); frame();
         io.AddMouseButtonEvent(0,false); frame();
     };
-    click(845,54); // Execute in the default top-right Lua Editor.
+    click(845,54); // Execute in the default top-right Script Editor.
     bool hello=false;
     for (const auto& line:editor.console().lines())
         if (line.kind==LuaConsole::Kind::Output && line.text=="lua > Hello from Lua!") hello=true;
     require(hello,"Execute button sends script output to console");
     for(float x=970;x<1130 && clipboard.empty();x+=8)click(x,492);
     require(clipboard.find("Hello from Lua!")!=std::string::npos,"Copy all copies console output");
-    click(840,492); // Clear in the default bottom-right Lua Console.
+    click(840,492); // Clear in the default bottom-right Console.
     require(editor.console().lines().empty(),"console Clear button empties transcript");
     io.AddMousePosEvent(900,140); frame();
     io.AddMouseButtonEvent(0,true); frame();
