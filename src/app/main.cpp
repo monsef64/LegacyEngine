@@ -287,6 +287,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
     bool projectDirty=true;
     InputState input;input.window=window;InputSettings inputSettings;
     bool gameHovered=false,gameFocused=false;
+    bool showFPS=false,showGameColliders=false;
     Uint64 lastTicks = SDL_GetTicksNS();
     bool   running   = true;
 
@@ -541,6 +542,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
         if(ImGui::BeginMainMenuBar()) {
             if(ImGui::BeginMenu("Project")){if(ImGui::MenuItem("Input Settings"))inputSettings.visible=true;ImGui::EndMenu();}
             if(ImGui::BeginMenu("Settings")){if(ImGui::MenuItem("Editor Settings"))browser.settings.visible=true;ImGui::EndMenu();}
+            if(ImGui::BeginMenu("Debug")) {
+                ImGui::MenuItem("Show FPS",nullptr,&showFPS);
+                ImGui::MenuItem("Show Colliders in Game",nullptr,&showGameColliders);
+                ImGui::EndMenu();
+            }
             if(ImGui::BeginMenu("Help")) {
                 if(ImGui::MenuItem("GitHub"))SDL_OpenURL("https://github.com/monsef64/LegacyEngine");
                 showAbout=ImGui::MenuItem("About");ImGui::EndMenu();
@@ -721,6 +727,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                     gameSurface.resize(static_cast<int>(size.x*dw/std::max(windowWidth,1)),static_cast<int>(size.y*dh/std::max(windowHeight,1)));
                     world.each<Camera>([&](Entity,Camera& c){c.aspect=static_cast<float>(gameSurface.width)/gameSurface.height;});
                     ImGui::Image(static_cast<ImTextureID>(gameSurface.texture),size,ImVec2(0,1),ImVec2(1,0));gameVisible=true;
+                    if(showFPS){
+                        const auto a=ImGui::GetItemRectMin(),b=ImGui::GetItemRectMax();
+                        char label[64];std::snprintf(label,sizeof(label),"FPS: %.0f",ImGui::GetIO().Framerate);
+                        const auto text=ImGui::CalcTextSize(label);const ImVec2 position(a.x+8,a.y+8);
+                        auto* draw=ImGui::GetWindowDrawList();draw->PushClipRect(a,b,true);
+                        draw->AddRectFilled(ImVec2(position.x-4,position.y-3),ImVec2(position.x+text.x+4,position.y+text.y+3),IM_COL32(0,0,0,180),3);
+                        draw->AddText(position,IM_COL32(255,255,255,255),label);draw->PopClipRect();
+                    }
                 }
             }
             ImGui::End();ImGui::PopStyleVar();
@@ -794,7 +808,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest,const cha
                 glBindFramebuffer(GL_FRAMEBUFFER,gameSurface.framebuffer);
                 try {
                     const int x=static_cast<int>(c.viewportX*gameSurface.width),y=static_cast<int>((1-c.viewportY-c.viewportHeight)*gameSurface.height);
-                    renderer.draw(world,cameraMatrix(t,c),std::max(1,static_cast<int>(c.viewportWidth*gameSurface.width)),std::max(1,static_cast<int>(c.viewportHeight*gameSurface.height)),cameraEye(t,c),x,y,false);
+                    const auto gameVP=cameraMatrix(t,c);
+                    renderer.draw(world,gameVP,std::max(1,static_cast<int>(c.viewportWidth*gameSurface.width)),std::max(1,static_cast<int>(c.viewportHeight*gameSurface.height)),cameraEye(t,c),x,y,false);
+                    if(showGameColliders)world.each<Transform,Collider>([&](Entity,const Transform& transform,const Collider& collider){renderer.drawCollider(transform,collider,gameVP);});
                 }catch(const std::exception&){glClearColor(.1f,.1f,.1f,1);glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);}
             }
             glBindFramebuffer(GL_FRAMEBUFFER,0);glViewport(0,0,width,height);

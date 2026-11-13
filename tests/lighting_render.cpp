@@ -35,6 +35,12 @@ int main(){
         std::vector<unsigned char> pixels(192*192*3);glReadPixels(0,0,192,192,GL_RGB,GL_UNSIGNED_BYTE,pixels.data());return pixels;
     };
     auto difference=[](const auto& a,const auto& b){int sum=0;for(std::size_t i=0;i<a.size();++i)sum+=std::abs(int(a[i])-int(b[i]));return sum;};
+    // Game debug collider overlays use the Game camera and work without mesh
+    // geometry on the collider entity. Drawing is opt-in, after the normal pass.
+    const auto withoutOverlay=read();auto colliderOnly=world.create();world.add(colliderOnly,Transform{{0,2,0}});world.add(colliderOnly,Collider{});
+    world.each<Transform,Collider>([&](Entity,const Transform& transform,const Collider& collider){renderer.drawCollider(transform,collider,vp);});glFinish();
+    std::vector<unsigned char> withOverlay(192*192*3);glReadPixels(0,0,192,192,GL_RGB,GL_UNSIGNED_BYTE,withOverlay.data());
+    assert(glGetError()==GL_NO_ERROR && difference(withoutOverlay,withOverlay)>100);world.destroy(colliderOnly);
     auto check=[&](auto tag){
         using T=decltype(tag);T light;light.intensity=4;light.range=25;light.shadowDistance=20;world.add(lamp,light);
         const auto shadowed=read();world.get<T>(lamp).shadows=false;const auto unshadowed=read();
