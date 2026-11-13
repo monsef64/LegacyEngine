@@ -19,8 +19,8 @@ struct InputState {
     static bool validBinding(int code){return code==0 || (code>0 && code<SDL_SCANCODE_COUNT) || (code>mouseCode && code<mouseCode+9) || (code>=gamepadCode && code<gamepadCode+SDL_GAMEPAD_BUTTON_COUNT);}
     int binding(const std::string& name,int slot) const {if(slot<0 || slot>2)return 0;if(slot==0){auto it=buttons.find(name);return it==buttons.end()?0:it->second;}auto it=alternatives.find(name);return it==alternatives.end()?0:it->second[slot-1];}
     void bind(const std::string& name,int slot,int code){if(slot<0 || slot>2 || !validBinding(code))throw std::runtime_error("Invalid binding slot or code");if(slot==0)buttons[name]=code;else {buttons.try_emplace(name,0);alternatives[name][slot-1]=code;}}
-    bool lockMouse(bool locked){if(!window)return false;if(!SDL_SetWindowRelativeMouseMode(window,locked))return false;mouseLocked=locked;return true;}
-    bool showMouse(bool visible){if(!window)return false;if(!(visible?SDL_ShowCursor():SDL_HideCursor()))return false;mouseVisible=visible;return true;}
+    bool lockCursor(bool locked){if(!window)return false;if(!SDL_SetWindowRelativeMouseMode(window,locked))return false;mouseLocked=locked;return true;}
+    bool showCursor(bool visible){if(!window)return false;if(!(visible?SDL_ShowCursor():SDL_HideCursor()))return false;mouseVisible=visible;return true;}
     void releaseMouse(){if(window){SDL_SetWindowRelativeMouseMode(window,false);SDL_ShowCursor();}mouseLocked=false;mouseVisible=true;}
 
     float x=0,y=0,dx=0,dy=0,wheelX=0,wheelY=0;

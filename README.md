@@ -282,12 +282,12 @@ buttons, not analog axes; raw stick/axis APIs remain available.
 
 Mouse control functions return a success boolean:
 ```lua
-lockMouse()       -- relative motion; cursor hidden while locked
-unlockMouse()     -- leave relative mode
-hideMouse()       -- hide without locking
-showMouse()       -- request visible cursor (relative mode still hides it)
-local visible = isMouseVisible()
-local locked = isMouseLocked()
+lockCursor()       -- relative motion; cursor hidden while locked
+unlockCursor()     -- leave relative mode
+hideCursor()       -- hide without locking
+showCursor()       -- request visible cursor (relative mode still hides it)
+local visible = isCursorVisible()
+local locked = isCursorLocked()
 ```
 Queries report native SDL cursor/window state. Pause, Stop, focus loss and normal
 shutdown release the script cursor so the editor does not trap it. Resume does

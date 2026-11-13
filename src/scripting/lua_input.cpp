@@ -20,7 +20,7 @@ int inputCall(lua_State* L){
     if(op>=18){
         if(op==22){lua_pushboolean(L,input && input->window && !SDL_GetWindowRelativeMouseMode(input->window) && SDL_CursorVisible());return 1;}
         if(op==23){lua_pushboolean(L,input && input->window && SDL_GetWindowRelativeMouseMode(input->window));return 1;}
-        bool ok=false;if(input){if(op==18 || op==19)ok=input->lockMouse(op==18);else ok=input->showMouse(op==21);}
+        bool ok=false;if(input){if(op==18 || op==19)ok=input->lockCursor(op==18);else ok=input->showCursor(op==21);}
         lua_pushboolean(L,ok);return 1;
     }
     if(op<=2){int key=lua_type(L,1)==LUA_TNUMBER?static_cast<int>(luaL_checkinteger(L,1)):SDL_GetScancodeFromName(luaL_checkstring(L,1));bool value=false;if(input && input->enabled && key>0 && key<SDL_SCANCODE_COUNT)value=op==0?input->pressed[key]:op==1?input->keys[key]:input->released[key];lua_pushboolean(L,value);return 1;}
@@ -34,6 +34,6 @@ int inputCall(lua_State* L){
 }
 }
 void LuaConsole::installInput(){
-    const char* names[]{"isKeyPressed","isKeyDown","isKeyReleased","isMouseButtonPressed","isMouseButtonDown","isMouseButtonReleased","getMousePosition","getMouseDelta","getMouseWheelDelta","getInputAxis","getInputVector","isGamepadButtonPressed","isGamepadButtonDown","getGamepadAxis","getGamepadStick","isButtonPressed","isButtonDown","isButtonReleased","lockMouse","unlockMouse","hideMouse","showMouse","isMouseVisible","isMouseLocked"};
+    const char* names[]{"isKeyPressed","isKeyDown","isKeyReleased","isMouseButtonPressed","isMouseButtonDown","isMouseButtonReleased","getMousePosition","getMouseDelta","getMouseWheelDelta","getInputAxis","getInputVector","isGamepadButtonPressed","isGamepadButtonDown","getGamepadAxis","getGamepadStick","isButtonPressed","isButtonDown","isButtonReleased","lockCursor","unlockCursor","hideCursor","showCursor","isCursorVisible","isCursorLocked"};
     for(int i=0;i<24;++i){lua_pushinteger(state_,i);lua_pushcclosure(state_,inputCall,1);lua_setglobal(state_,names[i]);}
 }

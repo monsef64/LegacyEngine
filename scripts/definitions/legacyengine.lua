@@ -379,14 +379,14 @@ SpotLight = nil
 -- Mouse commands return true on success; queries report native window/cursor state.
 -- Locking uses relative motion and hides the cursor until unlocked.
 ---@return boolean
-function lockMouse() end
+function lockCursor() end
 ---@return boolean
-function unlockMouse() end
+function unlockCursor() end
 ---@return boolean
-function hideMouse() end
+function hideCursor() end
 ---@return boolean
-function showMouse() end
+function showCursor() end
 ---@return boolean
-function isMouseVisible() end
+function isCursorVisible() end
 ---@return boolean
-function isMouseLocked() end
+function isCursorLocked() end

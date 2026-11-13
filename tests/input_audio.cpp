@@ -48,7 +48,7 @@ int main(){
     assert(input.button("Jump",0) && input.button("Jump",1));input.mouse.fill(false);input.mousePressed.fill(false);
     input.pad[SDL_GAMEPAD_BUTTON_SOUTH]=input.padPressed[SDL_GAMEPAD_BUTTON_SOUTH]=true;assert(input.button("Jump",0) && input.button("Jump",1));
     input.pad.fill(false);input.padPressed.fill(false);input.padReleased[SDL_GAMEPAD_BUTTON_SOUTH]=true;assert(input.button("Jump",2));input.clear();
-    assert(console.execute("assert(not isMouseLocked()); assert(not lockMouse()); assert(not hideMouse())"));
+    assert(console.execute("assert(not isCursorLocked()); assert(not lockCursor()); assert(not hideCursor())"));
     AssetManager savedAs;savedAs.root=temp/"saved-as"/"Assets";assets.copyTo(savedAs.root);settings.save(savedAs,input);InputSettings copied;copied.load(savedAs,input);assert(input.buttons["Jump"]==SDL_SCANCODE_J);
     AssetManager other;other.root=temp/"other";restored.load(other,input);assert(input.buttons.empty());
     std::filesystem::create_directories(other.root);{std::ofstream invalid(other.root/".legacy-input");invalid<<"\"Broken\"";}InputSettings invalid;invalid.load(other,input);assert(!invalid.error.empty() && input.buttons.empty());

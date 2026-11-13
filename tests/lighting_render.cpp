@@ -19,7 +19,7 @@ int main(){
     auto context=SDL_GL_CreateContext(window);assert(context);
     Renderer renderer;assert(renderer.init());
     InputState input;input.window=window;LuaConsole console;
-    assert(console.execute("assert(showMouse()); assert(isMouseVisible()); assert(hideMouse()); assert(not isMouseVisible()); assert(showMouse()); assert(lockMouse()); assert(isMouseLocked()); assert(not isMouseVisible()); assert(unlockMouse()); assert(not isMouseLocked())"));
+    assert(console.execute("assert(showCursor()); assert(isCursorVisible()); assert(hideCursor()); assert(not isCursorVisible()); assert(showCursor()); assert(lockCursor()); assert(isCursorLocked()); assert(not isCursorVisible()); assert(unlockCursor()); assert(not isCursorLocked())"));
     SDL_Event lost{};lost.type=SDL_EVENT_WINDOW_FOCUS_LOST;input.event(lost);assert(!input.mouseLocked && input.mouseVisible);
 
     const auto cube=renderer.createMesh(makeBox({2,2,2})),plane=renderer.createMesh(makePlane(20,20));
