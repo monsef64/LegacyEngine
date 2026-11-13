@@ -168,3 +168,18 @@ Deleting a parent GameObject removes **all children and grandchildren**, includi
 inactive objects. Undo restores the complete subtree and its components; redo
 removes it again. To retain a child, unparent it before deleting the parent.
 Scripting `destroyGameObject`, `destroy` and `object:destroy()` use the same rule.
+
+### Copy and paste component values
+
+Right-click a component header (expanded or collapsed) and choose **Copy values**.
+Right-click the matching component on another GameObject and choose **Paste values**
+to replace all its values. Paste is disabled for different component types or an
+empty clipboard. The target must already have that component; other components,
+object identity, activity and parenting are unchanged. Paste supports Undo/Redo.
+
+The clipboard holds a value snapshot, so later edits to or deletion of the source
+do not change it. Copying another component replaces the clipboard. Transform
+copies the displayed parent-local pose for children (world pose for roots), so
+pasting makes the destination Inspector values match without reparenting it.
+Use within the same project: asset handles and script object references are copied
+as-is, not cloned or remapped. AudioSource copies its full state as well as settings.

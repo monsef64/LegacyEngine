@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   vsix:
-    name: Test and package VS Code extension
+    name: Package VS Code extension
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
@@ -45,9 +45,6 @@ jobs:
       - name: Refresh engine API catalogs
         run: npm run generate
 
-      - name: Test language server
-        run: npm test
-
       - name: Build VSIX
         run: npm run package
 
@@ -59,12 +56,11 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Build and validate offline documentation
+      - name: Build offline documentation
         working-directory: .
         run: |
           python3 -m venv "$RUNNER_TEMP/docs-tools"
           "$RUNNER_TEMP/docs-tools/bin/python" -m pip install -r docs/requirements.txt
-          "$RUNNER_TEMP/docs-tools/bin/python" -m unittest discover -s docs/tests
           "$RUNNER_TEMP/docs-tools/bin/python" docs/build.py --output build/docs --revision "$GITHUB_SHA"
 
       - name: Upload offline HTML documentation

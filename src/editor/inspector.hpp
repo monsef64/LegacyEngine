@@ -2,6 +2,7 @@
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
+#include "editor/component_clipboard.hpp"
 #include "editor/editor_layout.hpp"
 #include "editor/level_objects.hpp"
 #include "editor/rotation_editor.hpp"
@@ -63,6 +64,13 @@ template <class T> inline bool componentHeader(World& world, Entity entity, cons
     ImGui::PopStyleVar(2);
     bool remove = false;
     if (ImGui::BeginPopupContextItem(name)) {
+        if (ImGui::MenuItem("Copy values")) {
+            componentClipboard.copy<T>(world, entity);
+        }
+        if (ImGui::MenuItem("Paste values", nullptr, false, componentClipboard.matches<T>())) {
+            componentClipboard.paste<T>(world, entity);
+        }
+        ImGui::Separator();
         bool allowed = true;
         if constexpr (std::is_same_v<T, Transform>) {
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&

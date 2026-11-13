@@ -18,6 +18,8 @@ Use `-DLEGACY_VENDORED_SDL=ON` to force a static vendored SDL build.
 A graphical session and an OpenGL 3.3-capable driver are required at runtime.
 Native file dialogs require a working desktop portal or another SDL dialog backend.
 Linux CI builds on Ubuntu 24.04; check its run log for the resulting glibc requirement.
+GitHub Actions builds/packages only, with `BUILD_TESTING=OFF`; tests are manual.
+Use `-DBUILD_TESTING=ON` locally to build the optional test executables.
 
 For headless graphical checks on Linux:
 

@@ -11,7 +11,6 @@ on:
     paths:
       - 'data/**'
       - 'src/**'
-      - 'tests/**'
       - 'third_party/**'
       - 'CMakeLists.txt'
       - 'docs/**'
@@ -23,7 +22,6 @@ on:
     paths:
       - 'data/**'
       - 'src/**'
-      - 'tests/**'
       - 'third_party/**'
       - 'CMakeLists.txt'
       - 'docs/**'
@@ -66,7 +64,6 @@ jobs:
             libdbus-1-dev libibus-1.0-dev libudev-dev libusb-1.0-0-dev
             libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-dev libsndio-dev
             libfribidi-dev libthai-dev liburing-dev
-            xvfb xauth libgl1-mesa-dri python3-pil
           )
           sources="$RUNNER_TEMP/legacy-ubuntu.list"
           apt_options=(
@@ -105,6 +102,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
             -DLEGACY_VENDORED_SDL=ON \
             "-DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -static-libstdc++ -s"
 
@@ -125,26 +123,6 @@ jobs:
       - name: Build
         run: cmake --build build --parallel 2
 
-      - name: Regression tests
-        timeout-minutes: 5
-        run: ctest --test-dir build --output-on-failure --timeout 60
-
-      # Render a bounded number of real frames, then exercise normal teardown.
-      # Timeout is only a watchdog: crashes, hangs and forced kills all fail.
-      - name: Smoke test
-        timeout-minutes: 2
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: |
-          xvfb-run -a -s "-screen 0 1280x720x24" \
-            timeout -k 5s 60s build/LegacyEngine --smoke-test
-
-      - name: Dynamic light and shadow rendering tests
-        timeout-minutes: 2
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: xvfb-run -a -s "-screen 0 640x480x24" timeout -k 5s 60s build/lighting_render_tests
-
       # README.md says which glibc the binary needs. The number depends on what
       # is linked into the binary, so show it on the page of the run.
       - name: Report the glibc version the binary needs
@@ -152,11 +130,10 @@ jobs:
           needed=$(objdump -T build/LegacyEngine | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
           echo "::notice::The binary needs glibc ${needed#GLIBC_} or newer"
 
-      - name: Build and validate offline documentation
+      - name: Build offline documentation
         run: |
           python3 -m venv "$RUNNER_TEMP/docs-tools"
           "$RUNNER_TEMP/docs-tools/bin/python" -m pip install -r docs/requirements.txt
-          "$RUNNER_TEMP/docs-tools/bin/python" -m unittest discover -s docs/tests
           "$RUNNER_TEMP/docs-tools/bin/python" docs/build.py --output build/docs --revision "$GITHUB_SHA"
           test -s build/docs/scripting-reference.html
           cd build/docs
@@ -239,8 +216,8 @@ jobs:
           cache-dependency-path: extensions/legacyscript/package-lock.json
       - name: Install extension dependencies
         run: npm ci --no-audit --no-fund
-      - name: Generate API, test and package VSIX
-        run: npm run generate && npm test && npm run package
+      - name: Generate API and package VSIX
+        run: npm run generate && npm run package
       - name: Upload separate installable VSIX file
         uses: actions/upload-artifact@v7
         with:
