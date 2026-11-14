@@ -200,6 +200,19 @@ inline void poseModelMesh(
     if (node < 0 || std::size_t(node) >= global.size()) {
         throw std::runtime_error("Invalid mesh node");
     }
+    // Imported vertices are already in mesh-local bind space. A scene's
+    // default joint transforms are not necessarily its skin bind transforms
+    // (notably FBX files with a separate bind/rest pose). Skinning here while
+    // animation == -1 incorrectly poses the mesh during import, thumbnail
+    // generation, bounds/collider loading and Model Preview's Reset state.
+    // Place the original geometry using its mesh node, without bone weights.
+    if (animation < 0) {
+        for (auto& vertex : mesh.vertices) {
+            vertex.position = modelPoint(global[node], vertex.position);
+            vertex.normal = normalize(modelNormal(global[node], vertex.normal));
+        }
+        return;
+    }
     const auto& bones = part.at("bones");
     const auto& weights = part.at("weights");
     if (!bones.is_array() || bones.size() > 4096 || !weights.is_array() ||

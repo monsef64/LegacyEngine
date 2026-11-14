@@ -385,7 +385,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         const bool externalFocus =
             gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS);
         input.window = externalFocus ? gameWindow : window;
-        input.mouseLocked = input.window && SDL_GetWindowRelativeMouseMode(input.window);
+        input.mouseLocked =
+            playMode.active() && input.window && SDL_GetWindowRelativeMouseMode(input.window);
         input.enabled = ((SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) || externalFocus) &&
                         playMode.playing() && (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || input.mouseLocked) &&
@@ -467,7 +468,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (mouseEvent &&
                 (projectDialog.pending() || browser.dialog.pending() ||
                  (ImGui::GetIO().WantCaptureMouse && !sceneHovered && !cameraLooking) ||
-                 (editor.capturesMouse() && !(SDL_GetModState() & SDL_KMOD_ALT)))) {
+                 (editor.capturesMouse() && !cameraLooking &&
+                  !(SDL_GetModState() & SDL_KMOD_ALT)))) {
                 clicking = false;
                 continue;
             }
@@ -498,6 +500,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (event.button.button == SDL_BUTTON_RIGHT && !playMode.active() && sceneHovered &&
                     layout.scene.contains(event.button.x, event.button.y) &&
                     !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
+                    SDL_SetWindowMouseRect(window, nullptr);
+                    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_CENTER, "0");
                     SDL_SetWindowMouseGrab(window, true);
                     cameraLooking = SDL_SetWindowRelativeMouseMode(window, true);
                     clicking = false;
@@ -848,6 +852,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         bool showAbout = false;
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("Project", !prefabLevel)) {
+                if (ImGui::MenuItem("Open in VS Code", nullptr, false, projectEnabled)) {
+                    const auto folder =
+                        currentProject.empty()
+                            ? browser.assets.root
+                            : std::filesystem::absolute(currentProject).parent_path();
+                    if (!browser.settings.openExternal(folder)) {
+                        projectError = browser.settings.error;
+                    }
+                }
                 if (ImGui::MenuItem(
                         "Backup", nullptr, false, projectEnabled && !currentProject.empty())) {
                     try {
@@ -2381,8 +2394,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     } else {
                         float x = 0, y = 0;
                         SDL_GetMouseState(&x, &y);
-                        if (x < rect.x || x >= rect.x + rect.w || y < rect.y ||
-                            y >= rect.y + rect.h) {
+                        // Relative mode owns its virtual cursor. Repeated warps
+                        // inject synthetic motion and make Scene freelook jump.
+                        if (!SDL_GetWindowRelativeMouseMode(window) &&
+                            (x < rect.x || x >= rect.x + rect.w || y < rect.y ||
+                             y >= rect.y + rect.h)) {
                             SDL_WarpMouseInWindow(
                                 window, rect.x + rect.w * .5f, rect.y + rect.h * .5f);
                         }

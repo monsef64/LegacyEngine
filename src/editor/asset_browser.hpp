@@ -15,6 +15,7 @@
 #include "project/project_assets.hpp"
 #include <future>
 #include <imgui_internal.h>
+#include <set>
 
 // Font Awesome Free Solid glyphs, merged into the embedded editor font.
 inline const char* assetIcon(const std::string& path, bool folder = false) {
@@ -48,22 +49,29 @@ inline const char* assetIcon(const std::string& path, bool folder = false) {
     }
     return "\xef\x85\x9b"; // file
 }
-inline void
-fileBadge(const std::string& path, ImVec2 pos, bool folder = false, unsigned thumbnail = 0) {
+inline void fileBadge(const std::string& path,
+                      ImVec2 pos,
+                      bool folder = false,
+                      unsigned thumbnail = 0,
+                      float size = 32) {
     auto* draw = ImGui::GetWindowDrawList();
     if (thumbnail) {
         draw->AddImage(static_cast<ImTextureID>(thumbnail),
                        ImVec2(pos.x, pos.y),
-                       ImVec2(pos.x + 32, pos.y + 32),
+                       ImVec2(pos.x + size, pos.y + size),
                        modelAsset(path) ? ImVec2(0, 1) : ImVec2(0, 0),
                        modelAsset(path) ? ImVec2(1, 0) : ImVec2(1, 1));
         return;
     }
-    draw->AddRectFilled(pos, ImVec2(pos.x + 32, pos.y + 32), IM_COL32(35, 45, 60, 255), 4);
+    draw->AddRectFilled(pos, ImVec2(pos.x + size, pos.y + size), IM_COL32(35, 45, 60, 255), 4);
     const char* icon = assetIcon(path, folder);
-    const float width = ImGui::CalcTextSize(icon).x;
-    draw->AddText(
-        ImVec2(pos.x + (32 - width) * .5f, pos.y + 6), IM_COL32(160, 185, 215, 255), icon);
+    const float fontSize = ImGui::GetFontSize() * size / 32;
+    const float width = ImGui::CalcTextSize(icon).x * size / 32;
+    draw->AddText(ImGui::GetFont(),
+                  fontSize,
+                  ImVec2(pos.x + (size - width) * .5f, pos.y + (size - fontSize) * .5f),
+                  IM_COL32(160, 185, 215, 255),
+                  icon);
 }
 inline void fileIcon(const std::string& path, bool folder = false, unsigned thumbnail = 0) {
     auto pos = ImGui::GetCursorScreenPos();
@@ -73,6 +81,18 @@ inline void fileIcon(const std::string& path, bool folder = false, unsigned thum
 }
 class AssetBrowser {
     UntitledProjectAssets staging_;
+    struct ModelGroup {
+        std::filesystem::file_time_type stamp{};
+        unsigned revision = ~0u;
+        std::vector<std::string> children;
+        std::map<std::string, std::string> names;
+    };
+    std::map<std::string, ModelGroup> modelGroups_;
+    std::set<std::string> expandedModels_;
+
+    std::string transientError_;
+    double errorUntil_ = 0;
+    unsigned thumbnailRevision_ = ~0u;
 
   public:
     AssetBrowser() {
@@ -114,6 +134,7 @@ class AssetBrowser {
             ++modelAssetRevision;
             if (result.root == assets.root) {
                 selected = result.selected;
+                expandedModels_.insert(selected);
                 assets.error = result.error;
                 thumbnails.clear();
             }
@@ -269,7 +290,7 @@ class AssetBrowser {
                             }
                         } else if (value.is_string()) {
                             const std::string keys =
-                                "|mesh|settings|material|texture|normalMap|model|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                                "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|model|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                             if (keys.find("|" + key + "|") == std::string::npos) {
                                 return;
                             }
@@ -292,6 +313,30 @@ class AssetBrowser {
                 try {
                     auto document = modelDocument(assets, file);
                     bool changed = false;
+                    if (document.contains("subAssetNames") &&
+                        document["subAssetNames"].is_object()) {
+                        Json names = Json::object();
+                        for (auto it = document["subAssetNames"].begin();
+                             it != document["subAssetNames"].end();
+                             ++it) {
+                            auto path = it.key();
+                            changed |= remap(path);
+                            names[path] = it.value();
+                        }
+                        document["subAssetNames"] = std::move(names);
+                    }
+                    if (document.contains("subAssets")) {
+                        for (auto& entry : document["subAssets"]) {
+                            auto value = entry.get<std::string>();
+                            changed |= remap(value);
+                            entry = value;
+                        }
+                    }
+                    if (document.contains("dataFolder")) {
+                        auto value = document.at("dataFolder").get<std::string>();
+                        changed |= remap(value);
+                        document["dataFolder"] = value;
+                    }
                     if (document.contains("settings")) {
                         auto value = document.at("settings").get<std::string>();
                         changed |= remap(value);
@@ -387,7 +432,17 @@ class AssetBrowser {
             // hierarchy and all existing scene instances keep their own assets.
             const auto destination = assets.resolve(copied);
             auto remap = [&](auto&& self, Json& value, const std::string& key) -> void {
-                if (value.is_object()) {
+                if (key == "subAssetNames" && value.is_object()) {
+                    Json names = Json::object();
+                    for (auto it = value.begin(); it != value.end(); ++it) {
+                        auto path = it.key();
+                        if (path == old || (directory && path.rfind(old + "/", 0) == 0)) {
+                            path = copied + path.substr(old.size());
+                        }
+                        names[path] = it.value();
+                    }
+                    value = std::move(names);
+                } else if (value.is_object()) {
                     for (auto it = value.begin(); it != value.end(); ++it) {
                         self(self, it.value(), it.key());
                     }
@@ -397,7 +452,7 @@ class AssetBrowser {
                     }
                 } else if (value.is_string()) {
                     const std::string keys =
-                        "|mesh|settings|material|texture|normalMap|model|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                        "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|model|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                     if (keys.find("|" + key + "|") == std::string::npos) {
                         return;
                     }
@@ -444,6 +499,10 @@ class AssetBrowser {
         preview.stop();
         thumbnails.clear();
         clipboardPath_.clear();
+        modelGroups_.clear();
+        expandedModels_.clear();
+        transientError_.clear();
+        errorUntil_ = 0;
         assets.root = root;
         currentFolder.clear();
         selected.clear();
@@ -464,6 +523,13 @@ class AssetBrowser {
             }
         }
         preview.update();
+        if (thumbnailRevision_ != modelAssetRevision) {
+            thumbnails.clear();
+            thumbnailRevision_ = modelAssetRevision;
+        }
+        if (!selected.empty() && !std::filesystem::exists(assets.resolve(selected))) {
+            selected.clear();
+        }
         thumbnails.beginFrame(assets);
         if (dockedEditor && !panelOpen[5]) {
             return;
@@ -479,7 +545,7 @@ class AssetBrowser {
 
             const bool shortcutFocus =
                 ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
-                !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+                !ImGui::GetIO().WantTextInput &&
                 !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) && editable &&
                 !dialog.pending();
             ImGui::TextDisabled(
@@ -490,12 +556,16 @@ class AssetBrowser {
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s", (assets.root / currentFolder).string().c_str());
             }
+            ImGui::SameLine();
             if (!currentFolder.empty() && ImGui::ArrowButton("##UpFolder", ImGuiDir_Up)) {
                 currentFolder = std::filesystem::path(currentFolder).parent_path().generic_string();
                 selected.clear();
             }
             if (!currentFolder.empty() && ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Up one folder");
+            }
+            if (!currentFolder.empty()) {
+                ImGui::SameLine();
             }
             ImGui::BeginDisabled(!editable || dialog.pending());
             ImGui::SetCursorPosX(
@@ -539,23 +609,24 @@ class AssetBrowser {
                     }
                 }
             }
-            ImGui::TextWrapped(
-                "Drop files here to import. Drag LegacyScript assets onto a GameObject or Inspector to attach.");
-            if (!assets.error.empty()) {
-                ImGui::TextWrapped("%s", assets.error.c_str());
-            }
-            if (!preview.error.empty()) {
-                ImGui::TextWrapped("%s", preview.error.c_str());
+            if (!assets.error.empty() || !preview.error.empty()) {
+                transientError_ = assets.error.empty() ? preview.error : assets.error;
+                assets.error.clear();
+                preview.error.clear();
+                errorUntil_ = ImGui::GetTime() + 5;
             }
             search.Draw("Search assets", -1);
+            if (!currentFolder.empty() &&
+                !std::filesystem::is_directory(assets.resolve(currentFolder))) {
+                currentFolder.clear();
+            }
             ImGui::BeginChild("Asset files", ImVec2(0, -32));
             try {
                 std::vector<std::string> files;
                 const auto folder = assets.resolve(currentFolder);
                 if (search.IsActive()) {
                     for (const auto& path : assets.files()) {
-                        if ((currentFolder.empty() || path.rfind(currentFolder + "/", 0) == 0) &&
-                            search.PassFilter(path.c_str())) {
+                        if (currentFolder.empty() || path.rfind(currentFolder + "/", 0) == 0) {
                             files.push_back(path);
                         }
                     }
@@ -578,21 +649,84 @@ class AssetBrowser {
                     const bool db = std::filesystem::is_directory(assets.resolve(b));
                     return da != db ? da > db : a < b;
                 });
+                std::map<std::string, std::string> childOwners, childNames;
+                // Root model names sort before their namespaced child files.
+                // Cache only the small manifest, not the decoded geometry.
+                for (const auto& file : files) {
+                    if (!modelAsset(file) || childOwners.count(file)) {
+                        continue;
+                    }
+                    auto& group = modelGroups_[file];
+                    try {
+                        const auto stamp = std::filesystem::last_write_time(assets.resolve(file));
+                        if (group.revision != modelAssetRevision || group.stamp != stamp) {
+                            group = {};
+                            group.stamp = stamp;
+                            group.revision = modelAssetRevision;
+                            const auto doc = modelDocument(assets, file);
+                            if (doc.contains("subAssets") && doc["subAssets"].is_array() &&
+                                doc["subAssets"].size() <= 10000) {
+                                const auto names = doc.value("subAssetNames", Json::object());
+                                for (const auto& entry : doc["subAssets"]) {
+                                    const auto child = entry.get<std::string>();
+                                    if (child != file &&
+                                        std::filesystem::path(child).parent_path() ==
+                                            std::filesystem::path(file).parent_path()) {
+                                        assets.resolve(child);
+                                        group.children.push_back(child);
+                                        group.names[child] = names.value(
+                                            child, std::filesystem::path(child).stem().string());
+                                    }
+                                }
+                            }
+                        }
+                        for (const auto& child : group.children) {
+                            childOwners[child] = file;
+                            childNames[child] = group.names[child];
+                        }
+                    } catch (
+                        const std::exception&) { /* Invalid files remain selectable/deletable. */
+                    }
+                }
+                std::vector<std::string> grouped;
+                for (const auto& file : files) {
+                    if (childOwners.count(file)) {
+                        continue;
+                    }
+                    grouped.push_back(file);
+                    const auto group = modelGroups_.find(file);
+                    if (group != modelGroups_.end() &&
+                        (expandedModels_.count(file) || search.IsActive())) {
+                        for (const auto& child : group->second.children) {
+                            if (childOwners[child] == file &&
+                                std::filesystem::is_regular_file(assets.resolve(child))) {
+                                grouped.push_back(child);
+                            }
+                        }
+                    }
+                }
+                files = std::move(grouped);
                 const int columns =
-                    grid_ ? std::clamp(static_cast<int>(ImGui::GetContentRegionAvail().x /
-                                                        (120 + gridSpacing_)),
-                                       1,
-                                       64)
+                    grid_ ? std::clamp(
+                                static_cast<int>(ImGui::GetContentRegionAvail().x /
+                                                 (std::max(100.f, iconSize_ + 40) + gridSpacing_)),
+                                1,
+                                64)
                           : 1;
                 if (ImGui::BeginTable("Asset items", columns, ImGuiTableFlags_SizingStretchSame)) {
                     for (const auto& file : files) {
-                        if (!search.PassFilter(file.c_str())) {
-                            continue;
-                        }
                         const bool folderItem = std::filesystem::is_directory(assets.resolve(file));
                         const auto assetPath = std::filesystem::path(file);
-                        const std::string fullName =
-                            folderItem ? assetPath.filename().string() : assetPath.stem().string();
+                        const std::string fullName = childNames.count(file) ? childNames.at(file)
+                                                     : folderItem ? assetPath.filename().string()
+                                                                  : assetPath.stem().string();
+                        if (!search.PassFilter(file.c_str()) &&
+                            !search.PassFilter(fullName.c_str())) {
+                            continue;
+                        }
+                        const bool expandable =
+                            modelGroups_.count(file) && !modelGroups_.at(file).children.empty();
+                        const bool childItem = childOwners.count(file) != 0;
                         std::size_t end = 0;
                         int characters = 0;
                         for (; end < fullName.size() && characters < 12; ++end) {
@@ -610,17 +744,22 @@ class AssetBrowser {
                                 : fullName.substr(0, end) + (end < fullName.size() ? "..." : "");
                         ImGui::TableNextColumn();
                         ImGui::PushID(file.c_str());
+                        if (!grid_ && childItem) {
+                            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 18);
+                        }
                         const auto iconPosition = ImGui::GetCursorScreenPos();
                         if (!grid_) {
-                            ImGui::Dummy(ImVec2(36, 32));
+                            ImGui::Dummy(ImVec2(iconSize_ + 4, iconSize_));
                             ImGui::SameLine();
                         }
-                        const bool clicked =
-                            ImGui::Selectable("##tile",
-                                              selected == file,
-                                              ImGuiSelectableFlags_AllowDoubleClick |
-                                                  ImGuiSelectableFlags_AllowOverlap,
-                                              ImVec2(0, grid_ ? 84.0f + gridSpacing_ : 28.0f));
+                        const bool clicked = ImGui::Selectable(
+                            "##tile",
+                            selected == file,
+                            ImGuiSelectableFlags_AllowDoubleClick |
+                                ImGuiSelectableFlags_AllowOverlap,
+                            ImVec2(0,
+                                   grid_ ? iconSize_ + ImGui::GetFontSize() + 24 + gridSpacing_
+                                         : iconSize_ + 4));
                         const auto itemMin = ImGui::GetItemRectMin(),
                                    itemMax = ImGui::GetItemRectMax();
                         unsigned thumbnail = folderItem || !ImGui::IsItemVisible()
@@ -631,7 +770,7 @@ class AssetBrowser {
                             thumbnail = assetPreview(assets, file, 2).texture;
                         }
                         if (!grid_) {
-                            fileBadge(file, iconPosition, folderItem, thumbnail);
+                            fileBadge(file, iconPosition, folderItem, thumbnail, iconSize_);
                         }
                         const bool itemHovered = ImGui::IsMouseHoveringRect(itemMin, itemMax);
                         if (itemHovered && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) &&
@@ -661,27 +800,56 @@ class AssetBrowser {
                             const auto a = itemMin, b = itemMax;
                             auto* draw = ImGui::GetWindowDrawList();
                             draw->PushClipRect(a, b, true);
+                            if (childItem) {
+                                draw->AddRect(a, b, IM_COL32(95, 125, 150, 120), 4);
+                            }
                             if (grid_) {
                                 fileBadge(file,
-                                          ImVec2((a.x + b.x) * .5f - 16, a.y + 4),
+                                          ImVec2((a.x + b.x - iconSize_) * .5f, a.y + 4),
                                           folderItem,
-                                          thumbnail);
+                                          thumbnail,
+                                          iconSize_);
                             }
                             const auto text = ImGui::CalcTextSize(display.c_str());
-                            draw->AddText(ImVec2(grid_ ? (a.x + b.x - text.x) * .5f
-                                                       : a.x + ImGui::GetStyle().FramePadding.x,
-                                                 grid_ ? a.y + 42 : (a.y + b.y - text.y) * .5f),
-                                          ImGui::GetColorU32(ImGuiCol_Text),
-                                          display.c_str());
+                            draw->AddText(
+                                ImVec2(grid_ ? (a.x + b.x - text.x) * .5f
+                                             : a.x + ImGui::GetStyle().FramePadding.x,
+                                       grid_ ? a.y + iconSize_ + 10 : (a.y + b.y - text.y) * .5f),
+                                ImGui::GetColorU32(ImGuiCol_Text),
+                                display.c_str());
                             draw->PopClipRect();
                         }
-                        if (clicked) {
+                        bool toggleGroup = false;
+                        if (expandable) {
+                            const ImVec2 center{itemMax.x - 10, itemMin.y + 12};
+                            auto* draw = ImGui::GetWindowDrawList();
+                            if (expandedModels_.count(file)) {
+                                draw->AddTriangleFilled({center.x - 5, center.y - 3},
+                                                        {center.x + 5, center.y - 3},
+                                                        {center.x, center.y + 4},
+                                                        IM_COL32_WHITE);
+                            } else {
+                                draw->AddTriangleFilled({center.x - 3, center.y - 5},
+                                                        {center.x - 3, center.y + 5},
+                                                        {center.x + 4, center.y},
+                                                        IM_COL32_WHITE);
+                            }
+                            const auto mouse = ImGui::GetIO().MousePos;
+                            toggleGroup =
+                                clicked && mouse.x >= itemMax.x - 24 && mouse.y < itemMin.y + 26;
+                            if (toggleGroup) {
+                                if (!expandedModels_.erase(file)) {
+                                    expandedModels_.insert(file);
+                                }
+                            }
+                        }
+                        if (clicked && !toggleGroup) {
                             selected = file;
                             if (!folderItem && AssetManager::extension(file) == ".leanim" &&
                                 ImGui::IsMouseDoubleClicked(0)) {
                                 editAnimationRequest = file;
                             }
-                            if (!folderItem && modelAsset(file)) {
+                            if (!folderItem && modelAsset(file) && ImGui::IsMouseDoubleClicked(0)) {
                                 previewModelRequest = file;
                             }
                             if (!folderItem && cubemapAsset(file) &&
@@ -700,7 +868,8 @@ class AssetBrowser {
                                 ImGui::IsMouseDoubleClicked(0)) {
                                 try {
                                     if (settings.external) {
-                                        if (!settings.openExternal(assets.resolve(file), true)) {
+                                        if (!settings.openScript(projectFolder,
+                                                                 assets.resolve(file))) {
                                             assets.error = settings.error;
                                         }
                                     } else {
@@ -917,12 +1086,98 @@ class AssetBrowser {
                 if (deleteRequested_) {
                     deleteRequested_ = false;
                     if (history && !selected.empty()) {
-                        auto receipt = std::make_shared<TrashFile>(assets.resolve(selected));
-                        if (history->perform(world, selectedObject, [receipt](bool redo) {
+                        auto receipts = std::make_shared<std::vector<TrashFile>>();
+                        receipts->emplace_back(assets.resolve(selected));
+                        if (modelAsset(selected)) {
+                            try {
+                                const auto doc = modelDocument(assets, selected);
+                                if (doc.contains("subAssets") && doc["subAssets"].is_array() &&
+                                    doc["subAssets"].size() <= 10000) {
+                                    std::set<std::string> included;
+                                    for (const auto& value : doc["subAssets"]) {
+                                        const auto child = value.get<std::string>();
+                                        if (child != selected && included.insert(child).second &&
+                                            std::filesystem::path(child).parent_path() ==
+                                                std::filesystem::path(selected).parent_path() &&
+                                            std::filesystem::path(child).filename().string().find(
+                                                "__") != std::string::npos &&
+                                            std::filesystem::is_regular_file(
+                                                assets.resolve(child))) {
+                                            receipts->emplace_back(assets.resolve(child));
+                                        }
+                                    }
+                                }
+                                std::string owned = doc.value("dataFolder", std::string{});
+                                if (owned.empty() && doc.value("version", 0) == 2 &&
+                                    doc.contains("parts") && !doc["parts"].empty()) {
+                                    const auto part = std::filesystem::path(
+                                        doc["parts"][0].at("mesh").get<std::string>());
+                                    const auto candidate = part.parent_path();
+                                    const auto parent =
+                                        std::filesystem::path(selected).parent_path();
+                                    if (candidate.parent_path() == parent &&
+                                        candidate.filename().string().rfind(
+                                            std::filesystem::path(selected).stem().string() +
+                                                "_data",
+                                            0) == 0) {
+                                        owned = candidate.generic_string();
+                                    }
+                                }
+                                if (!owned.empty() &&
+                                    std::filesystem::is_directory(assets.resolve(owned)) &&
+                                    std::filesystem::path(owned).parent_path() ==
+                                        std::filesystem::path(selected).parent_path() &&
+                                    !std::filesystem::path(owned).filename().empty() &&
+                                    owned != selected) {
+                                    // All generated part meshes must belong to this directory;
+                                    // never remove an arbitrary directory named in a damaged file.
+                                    bool ownsParts = doc.contains("parts") &&
+                                                     doc["parts"].is_array() &&
+                                                     !doc["parts"].empty();
+                                    if (ownsParts) {
+                                        for (const auto& part : doc["parts"]) {
+                                            const auto mesh = part.at("mesh").get<std::string>();
+                                            ownsParts &= mesh.rfind(owned + "/", 0) == 0;
+                                        }
+                                    }
+                                    if (ownsParts) {
+                                        receipts->emplace_back(assets.resolve(owned));
+                                    }
+                                }
+                            } catch (const std::exception&) { /* A damaged model itself can still be
+                                                                 deleted. */
+                            }
+                        }
+                        if (history->performAsset(world, selectedObject, [receipts](bool redo) {
                                 if (redo) {
-                                    receipt->remove();
+                                    std::size_t done = 0;
+                                    try {
+                                        for (auto& receipt : *receipts) {
+                                            receipt.remove();
+                                            ++done;
+                                        }
+                                    } catch (...) {
+                                        while (done) {
+                                            (*receipts)[--done].restore();
+                                        }
+                                        throw;
+                                    }
                                 } else {
-                                    receipt->restore();
+                                    std::size_t done = 0;
+                                    try {
+                                        for (auto it = receipts->rbegin(); it != receipts->rend();
+                                             ++it) {
+                                            it->restore();
+                                            ++done;
+                                        }
+                                    } catch (...) {
+                                        for (std::size_t i = receipts->size() - done;
+                                             i < receipts->size();
+                                             ++i) {
+                                            (*receipts)[i].remove();
+                                        }
+                                        throw;
+                                    }
                                 }
                                 ++modelAssetRevision;
                             })) {
@@ -935,6 +1190,8 @@ class AssetBrowser {
                                 scripts.setAssetContext("", {});
                             }
                             selected.clear();
+                            preview.stop();
+                            thumbnails.clear();
                         } else {
                             assets.error = history->error;
                         }
@@ -972,7 +1229,13 @@ class AssetBrowser {
             ImGui::EndChild();
             ImGui::EndDisabled();
             ImGui::SetCursorPosX(
-                std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 220));
+                std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 360));
+            ImGui::SetNextItemWidth(std::max(45.f, (ImGui::GetContentRegionAvail().x - 80) * .5f));
+            ImGui::SliderFloat("##IconSize", &iconSize_, 20, 96, "Icons %.0f");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Asset icon size (grid and list)");
+            }
+            ImGui::SameLine();
             ImGui::BeginDisabled(!grid_);
             ImGui::SetNextItemWidth(
                 std::min(140.f, std::max(40.f, ImGui::GetContentRegionAvail().x - 80)));
@@ -1017,6 +1280,14 @@ class AssetBrowser {
                 }
                 ImGui::PopID();
             }
+            if (ImGui::GetTime() < errorUntil_ &&
+                ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 32);
+                ImGui::TextColored(ImVec4(1, .25f, .25f, 1), "%s", transientError_.c_str());
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
         }
         ImGui::End();
     }
@@ -1054,6 +1325,6 @@ class AssetBrowser {
         }
     }
     char rename_[256]{};
-    float gridSpacing_ = 0;
+    float gridSpacing_ = 0, iconSize_ = 32;
     bool renameRequested_ = false, deleteRequested_ = false, grid_ = false, renameFocus_ = false;
 };

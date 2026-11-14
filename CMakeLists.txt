@@ -102,6 +102,15 @@ set(ASSIMP_BUILD_BLEND_IMPORTER OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(assimp
   URL https://github.com/assimp/assimp/archive/refs/tags/v5.4.3.tar.gz)
 FetchContent_MakeAvailable(assimp)
+set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(ZSTD_BUILD_STATIC ON CACHE BOOL "" FORCE)
+FetchContent_Declare(zstd
+  URL https://github.com/facebook/zstd/archive/refs/tags/v1.5.7.tar.gz
+  SOURCE_SUBDIR build/cmake)
+FetchContent_MakeAvailable(zstd)
+
 add_library(legacy_models STATIC src/models/model_import.cpp)
 target_include_directories(legacy_models PUBLIC src)
 target_link_libraries(legacy_models PUBLIC assimp::assimp legacy_json)
@@ -173,7 +182,7 @@ add_library(legacy_simdjson STATIC third_party/simdjson/simdjson.cpp)
 target_include_directories(legacy_simdjson SYSTEM PUBLIC third_party/simdjson)
 add_library(legacy_json STATIC src/project/json_io.cpp)
 target_include_directories(legacy_json PUBLIC src PRIVATE ${assimp_SOURCE_DIR}/contrib/zlib ${assimp_BINARY_DIR}/contrib/zlib)
-target_link_libraries(legacy_json PRIVATE legacy_simdjson zlibstatic)
+target_link_libraries(legacy_json PRIVATE legacy_simdjson zlibstatic libzstd_static)
 # Level storage/transitions have no dependency on Lua or the editor.
 add_library(legacy_levels STATIC src/levels/level_system.cpp)
 target_include_directories(legacy_levels PUBLIC src)

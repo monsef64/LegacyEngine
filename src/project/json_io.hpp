@@ -6,7 +6,7 @@
 using Json = nlohmann::json;
 // SIMD-accelerated parsing; serialization and the editable DOM retain Json.
 Json parseJson(const std::string& text, std::size_t limit = 16 * 1024 * 1024);
-Json readCompressedMesh(std::istream& stream, std::size_t limit);
+Json readCompressedMesh(std::istream& stream, std::size_t limit, bool zstandard = false);
 void writeCompressedMesh(std::ostream& stream, const Json& document);
 inline Json readJsonFile(const std::filesystem::path& path, std::size_t limit) {
     if (std::filesystem::file_size(path) > limit) {
@@ -18,8 +18,9 @@ inline Json readJsonFile(const std::filesystem::path& path, std::size_t limit) {
     }
     char magic[8]{};
     in.read(magic, 8);
-    if (in.gcount() == 8 && std::string(magic, 8) == "LEMZ0001") {
-        return readCompressedMesh(in, limit);
+    if (in.gcount() == 8 &&
+        (std::string(magic, 8) == "LEMZ0001" || std::string(magic, 8) == "LEMZ0002")) {
+        return readCompressedMesh(in, limit, magic[7] == '2');
     }
     in.clear();
     in.seekg(0);

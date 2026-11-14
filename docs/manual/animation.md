@@ -59,3 +59,44 @@ These are manual checks, not automated tests. Build success alone does not verif
 - Verify unsaved clip edits participate in the project's unsaved-change/exit prompt.
 - Add Transform.position: verify X, Y and Z subchannels show their sampled values. Select a key and edit each labeled axis, save/reopen and scrub to verify all three values.
 - Position axes share vector-key times: dragging a diamond on any axis must keep the vector key ordered and update its time on all three lanes. Curves should display the selected axis.
+
+## Imported bind geometry versus default bone pose
+- Import a rigged arms/weapon FBX whose default joint transforms differ from its
+  authored skin bind pose. Without starting playback, compare the mesh against
+  the source application's bind geometry: the importer must not deform it using
+  default bone transforms.
+- Check Assets thumbnails, Model Preview before Play and after Reset, normal scene
+  placement, import-scale changes, static collider geometry and calculated bounds.
+  These paths must all use original mesh-local vertices plus the mesh-node transform.
+- Play/scrub an actual clip and verify bone weights still deform it. Reset should
+  restore the undeformed bind mesh, not frame zero or the default skeleton pose.
+- Check both compressed and legacy JSON .lemesh assets. Current skeletal imports
+  retain raw vertices, so this loader fix does not require reimporting those assets;
+  restart/reopen the editor to clear already-built geometry/preview caches.
+- Verify transformed mesh nodes (including nonuniform scale), multiple mesh parts,
+  unweighted vertices and ordinary non-skinned models remain correctly placed.
+- Visual confirmation on the user's affected source FBX/glTF is still required.
+
+## Copy/paste property keyframes
+
+- Click an editable dope-sheet key and press **Ctrl+C** (or **Copy key**).
+  This copies the complete property's value, including all X/Y/Z lanes.
+- Select the destination property track, then click an empty point on its timeline
+  or set Frame to choose the playhead time. Press **Ctrl+V** or **Paste at playhead**.
+- **Copy track keys** copies every key on the selected track. The earliest copied
+  key lands at the destination playhead; the others retain their relative timing.
+- Paste supports another time, another target with the same property, or another
+  clip. Save/discard pending edits before opening another clip as usual. Clipboard
+  data owns its values and survives switching clips and deleting the source track.
+- Existing keys at matching times are replaced; unrelated keys remain. The clip
+  extends when necessary, up to 86400 seconds. Paste is atomic and respects 4096
+  keys per track and 16384 keys per clip. Successful paste marks the clip unsaved
+  and refreshes its isolated preview; Ctrl+S saves it normally.
+- Different property types/paths are deliberately not converted: paste is enabled
+  only for the same property (for example Transform.position to Transform.position).
+  Imported skeletal channels remain read-only. This is an editor-local key clipboard,
+  not the OS text clipboard, arbitrary multi-selection, or a clip-edit Undo feature.
+- Manually verify single keys, full tracks, replacing existing keys, pasting at
+  time zero/end, duration extension, cross-target/cross-clip copies, deleted source
+  tracks, quaternion/boolean values, key limits and disabled Play-mode pasting.
+  Confirm Ctrl+C/V in text fields still copies/pastes text instead of keyframes.

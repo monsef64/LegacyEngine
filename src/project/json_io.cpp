@@ -51,10 +51,11 @@ Json parseJson(const std::string& text, std::size_t limit) {
     }
 }
 
-// Mesh envelope: magic, little-endian CBOR byte count, then a zlib stream.
-// Limits are applied before allocation and checked again after inflation.
+// Mesh envelope: magic, little-endian CBOR byte count, then a compressed stream (v1 zlib, v2
+// Zstandard). Limits are applied before allocation and checked again after inflation.
 #include <zlib.h>
-Json readCompressedMesh(std::istream& stream, std::size_t limit) {
+#include <zstd.h>
+Json readCompressedMesh(std::istream& stream, std::size_t limit, bool zstandard) {
     unsigned char size[8]{};
     stream.read(reinterpret_cast<char*>(size), 8);
     if (!stream) {
@@ -73,6 +74,14 @@ Json readCompressedMesh(std::istream& stream, std::size_t limit) {
         throw std::runtime_error("Invalid compressed mesh size");
     }
     std::vector<unsigned char> plain(std::size_t(count), 0);
+    if (zstandard) {
+        const auto length =
+            ZSTD_decompress(plain.data(), plain.size(), packed.data(), packed.size());
+        if (ZSTD_isError(length) || length != count) {
+            throw std::runtime_error("Corrupt Zstandard mesh");
+        }
+        return Json::from_cbor(plain, true, true);
+    }
     uLongf length = uLongf(count);
     if (uncompress(plain.data(), &length, packed.data(), uLong(packed.size())) != Z_OK ||
         length != count) {
@@ -85,12 +94,12 @@ void writeCompressedMesh(std::ostream& stream, const Json& document) {
     if (plain.size() > 256ull * 1024 * 1024) {
         throw std::runtime_error("Expanded mesh exceeds 256 MiB");
     }
-    uLongf count = compressBound(uLong(plain.size()));
-    std::vector<unsigned char> packed(count);
-    if (compress2(packed.data(), &count, plain.data(), uLong(plain.size()), Z_BEST_SPEED) != Z_OK) {
-        throw std::runtime_error("Mesh compression failed");
+    std::vector<unsigned char> packed(ZSTD_compressBound(plain.size()));
+    const auto count = ZSTD_compress(packed.data(), packed.size(), plain.data(), plain.size(), 3);
+    if (ZSTD_isError(count)) {
+        throw std::runtime_error("Zstandard mesh compression failed");
     }
-    stream.write("LEMZ0001", 8);
+    stream.write("LEMZ0002", 8);
     unsigned char size[8]{};
     for (int i = 0; i < 8; ++i) {
         size[i] = static_cast<unsigned char>(std::uint64_t(plain.size()) >> (8 * i));

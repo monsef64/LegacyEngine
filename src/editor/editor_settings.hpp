@@ -104,6 +104,43 @@ struct EditorSettings {
         error.clear();
         return true;
     }
+    bool openScript(const std::filesystem::path& project, const std::filesystem::path& script) {
+        const auto folder = std::filesystem::absolute(project).string();
+        const auto file = std::filesystem::absolute(script).string();
+        // Pass arguments directly: no shell quoting/interpolation, one VS Code
+        // request opens the project workspace and selects the script within it.
+        std::string executable = "code";
+#ifdef _WIN32
+        // Windows' code.cmd cannot be launched with CreateProcess directly.
+        // Use the real GUI executable, not cmd.exe or interpolated shell text.
+        if (const char* local = SDL_getenv("LOCALAPPDATA")) {
+            const auto candidate =
+                std::filesystem::path(local) / "Programs/Microsoft VS Code/Code.exe";
+            if (std::filesystem::is_regular_file(candidate)) {
+                executable = candidate.string();
+            }
+        }
+        if (executable == "code") {
+            if (const char* programs = SDL_getenv("ProgramFiles")) {
+                const auto candidate =
+                    std::filesystem::path(programs) / "Microsoft VS Code/Code.exe";
+                if (std::filesystem::is_regular_file(candidate)) {
+                    executable = candidate.string();
+                }
+            }
+        }
+#endif
+        const char* args[]{
+            executable.c_str(), "--reuse-window", folder.c_str(), "--goto", file.c_str(), nullptr};
+        if (auto* process = SDL_CreateProcess(args, false)) {
+            SDL_DestroyProcess(process);
+            error.clear();
+            return true;
+        }
+        error = "Cannot launch VS Code. Install the 'code' command in PATH. " +
+                std::string(SDL_GetError());
+        return false;
+    }
     void draw(const std::filesystem::path& folder) {
         if (!visible) {
             return;
@@ -152,7 +189,7 @@ struct EditorSettings {
                 }
             }
             ImGui::TextWrapped(
-                "External mode opens the selected script in VS Code when double-clicked. VS Code must register its vscode:// URL handler.");
+                "External mode opens the selected script in VS Code when double-clicked. VS Code's code command must be in PATH (standard Windows installations are also detected).");
             if (external && ImGui::Button("Open project in VS Code")) {
                 openExternal(folder);
             }
