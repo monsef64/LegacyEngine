@@ -13,6 +13,7 @@
 #include "platform/project_dialog.hpp"
 #include "platform/system_trash.hpp"
 #include "project/project_assets.hpp"
+#include <future>
 #include <imgui_internal.h>
 
 // Font Awesome Free Solid glyphs, merged into the embedded editor font.
@@ -88,13 +89,52 @@ class AssetBrowser {
     std::string editPrefabRequest, spawnPrefabRequest, editCubemapRequest, spawnModelRequest,
         editAnimationRequest, previewModelRequest;
     std::string selected, openedScript, currentFolder;
+    std::pair<std::string, std::string> movedAsset;
     EditorSettings settings;
     std::filesystem::path projectFolder;
     ProjectDialog dialog;
     ImGuiTextFilter search;
     AudioPreview preview;
     TexturePreviewCache thumbnails;
+    struct ImportResult {
+        std::filesystem::path root;
+        std::string selected, error;
+    };
+    std::future<ImportResult> importJob_;
+    bool importing() const {
+        return importJob_.valid();
+    }
+    void pollImport() {
+        if (!importJob_.valid() ||
+            importJob_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            return;
+        }
+        try {
+            auto result = importJob_.get();
+            ++modelAssetRevision;
+            if (result.root == assets.root) {
+                selected = result.selected;
+                assets.error = result.error;
+                thumbnails.clear();
+            }
+        } catch (const std::exception& e) {
+            assets.error = std::string("Import failed: ") + e.what();
+        }
+    }
     void importFile(const std::string& path) {
+        if (importing()) {
+            assets.error = "An import is already running; wait for it to finish.";
+            return;
+        }
+        const auto manager = assets;
+        const auto folder = currentFolder;
+        importJob_ = std::async(std::launch::async, [manager, folder, path]() mutable {
+            return runImport(std::move(manager), folder, path);
+        });
+    }
+    static ImportResult
+    runImport(AssetManager assets, std::string currentFolder, const std::string& path) {
+        std::string selected;
         try {
             if (std::filesystem::is_directory(path)) {
                 selected = assets.import(path, currentFolder);
@@ -113,7 +153,7 @@ class AssetBrowser {
                                 .parent_path()
                                 .lexically_relative(std::filesystem::weakly_canonical(assets.root))
                                 .generic_string();
-                        importModel(assets, source, folder);
+                        importModel(assets, source, folder, false);
                     } catch (const std::exception& error) {
                         failures += std::filesystem::path(source).filename().string() + ": " +
                                     error.what() + "\n";
@@ -122,33 +162,36 @@ class AssetBrowser {
                 if (!failures.empty()) {
                     assets.error =
                         "Directory copied; some models could not be converted:\n" + failures;
-                    return;
+                    return {assets.root, selected, assets.error};
                 }
             } else {
-                selected = importableModel(path) ? importModel(assets, path, currentFolder)
+                selected = importableModel(path) ? importModel(assets, path, currentFolder, false)
                                                  : assets.import(path, currentFolder);
             }
             assets.error.clear();
         } catch (const std::exception& e) {
             assets.error = e.what();
         }
+        return {assets.root, selected, assets.error};
     }
     // Rename a file or directory and keep descendant project references intact.
-    void renameSelected(World& world, const std::string& name) {
+    void renameSelected(World& world, const std::string& name, bool fullPath = false) {
         std::filesystem::path leaf(name);
-        if (!selected.empty() && !std::filesystem::is_directory(assets.resolve(selected))) {
+        if (!fullPath && !selected.empty() &&
+            !std::filesystem::is_directory(assets.resolve(selected))) {
             const auto extension = std::filesystem::path(selected).extension();
             if (leaf.extension() != extension) {
                 leaf += extension.string();
             }
         }
-        if (selected.empty() || leaf.empty() || leaf.has_parent_path() || leaf == ".." ||
-            leaf == "." || name.find('\0') != std::string::npos ||
+        if (selected.empty() || leaf.empty() || (!fullPath && leaf.has_parent_path()) ||
+            leaf == ".." || leaf == "." || name.find('\0') != std::string::npos ||
             name.find('\\') != std::string::npos) {
             throw std::runtime_error("Use a name without directories");
         }
         const auto relative =
-            (std::filesystem::path(selected).parent_path() / leaf).generic_string();
+            fullPath ? std::filesystem::path(name).lexically_normal().generic_string()
+                     : (std::filesystem::path(selected).parent_path() / leaf).generic_string();
         if (relative == selected) {
             return;
         }
@@ -156,6 +199,14 @@ class AssetBrowser {
             throw std::runtime_error("An asset with that name exists");
         }
         const bool directory = std::filesystem::is_directory(assets.resolve(selected));
+        const auto sourcePath = assets.resolve(selected),
+                   destinationPath = assets.resolve(relative);
+        if (directory) {
+            auto inside = destinationPath.lexically_relative(sourcePath);
+            if (inside.empty() || *inside.begin() != "..") {
+                throw std::runtime_error("Cannot move a folder into itself");
+            }
+        }
         auto remap = [&](std::string& path) {
             if (path == selected) {
                 path = relative;
@@ -171,6 +222,10 @@ class AssetBrowser {
         std::filesystem::rename(assets.resolve(selected), assets.resolve(relative));
         world.each<MeshRenderer>([&](Entity, MeshRenderer& mesh) { remap(mesh.model); });
         world.each<Collider>([&](Entity, Collider& collider) { remap(collider.model); });
+        world.each<Animation>([&](Entity, Animation& a) {
+            remap(a.clip);
+            remap(a.model);
+        });
         world.each<LuaScript>([&](Entity, LuaScript& s) {
             remap(s.path);
             for (auto& entry : s.additional) {
@@ -197,6 +252,42 @@ class AssetBrowser {
             remap(r.materialValues.normalMap);
         });
         for (const auto& file : assets.files()) {
+            const auto extension = AssetManager::extension(file);
+            if (extension == ".leanim" || extension == ".prefab" || extension == ".level" ||
+                extension == ".cubemap") {
+                try {
+                    auto doc = readJsonFile(assets.resolve(file), 256 * 1024 * 1024);
+                    bool changed = false;
+                    auto update = [&](auto&& self, Json& value, const std::string& key) -> void {
+                        if (value.is_object()) {
+                            for (auto it = value.begin(); it != value.end(); ++it) {
+                                self(self, it.value(), it.key());
+                            }
+                        } else if (value.is_array()) {
+                            for (auto& child : value) {
+                                self(self, child, key);
+                            }
+                        } else if (value.is_string()) {
+                            const std::string keys =
+                                "|mesh|settings|material|texture|normalMap|model|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                            if (keys.find("|" + key + "|") == std::string::npos) {
+                                return;
+                            }
+                            auto path = value.get<std::string>();
+                            if (remap(path)) {
+                                value = path;
+                                changed = true;
+                            }
+                        }
+                    };
+                    update(update, doc, "");
+                    if (changed) {
+                        writeJsonFile(assets.resolve(file), doc);
+                    }
+                } catch (const std::exception& e) {
+                    assets.error = e.what();
+                }
+            }
             if (modelAsset(file)) {
                 try {
                     auto document = modelDocument(assets, file);
@@ -252,12 +343,107 @@ class AssetBrowser {
         remap(currentFolder);
         preview.stop();
         thumbnails.clear();
+        movedAsset = {selected, relative};
         selected = relative;
         ++modelAssetRevision;
+    }
+    std::string clipboardPath_, pasteFolder_;
+    std::filesystem::path clipboardRoot_;
+    bool clipboardCut_ = false, pasteRequested_ = false;
+    void copySelected(bool cut) {
+        if (selected.empty()) {
+            return;
+        }
+        clipboardPath_ = selected;
+        clipboardRoot_ = assets.root;
+        clipboardCut_ = cut;
+    }
+    void pasteAssets(World& world, const std::string& folder) {
+        if (clipboardPath_.empty() || clipboardRoot_ != assets.root) {
+            throw std::runtime_error("Copy an asset from this project first");
+        }
+        const auto source = assets.resolve(clipboardPath_);
+        const bool directory = std::filesystem::is_directory(source);
+        auto leaf = source.filename();
+        std::string target = (std::filesystem::path(folder) / leaf).generic_string();
+        auto inside = assets.resolve(folder).lexically_relative(source);
+        if (directory && (inside.empty() || *inside.begin() != "..")) {
+            throw std::runtime_error("Cannot paste a folder inside itself");
+        }
+        for (unsigned n = 2; std::filesystem::exists(assets.resolve(target)); ++n) {
+            target = (std::filesystem::path(folder) /
+                      ((directory ? leaf.string() : leaf.stem().string()) + " (" +
+                       std::to_string(n) + ")" + (directory ? "" : leaf.extension().string())))
+                         .generic_string();
+        }
+        const auto old = clipboardPath_;
+        if (clipboardCut_) {
+            selected = old;
+            renameSelected(world, target, true);
+            clipboardPath_.clear();
+        } else {
+            const auto copied = assets.import(source, folder, true);
+            // Only references inside the copied tree are changed. The original
+            // hierarchy and all existing scene instances keep their own assets.
+            const auto destination = assets.resolve(copied);
+            auto remap = [&](auto&& self, Json& value, const std::string& key) -> void {
+                if (value.is_object()) {
+                    for (auto it = value.begin(); it != value.end(); ++it) {
+                        self(self, it.value(), it.key());
+                    }
+                } else if (value.is_array()) {
+                    for (auto& child : value) {
+                        self(self, child, key);
+                    }
+                } else if (value.is_string()) {
+                    const std::string keys =
+                        "|mesh|settings|material|texture|normalMap|model|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                    if (keys.find("|" + key + "|") == std::string::npos) {
+                        return;
+                    }
+                    auto p = value.get<std::string>();
+                    if (p == old || (directory && p.size() > old.size() &&
+                                     p.compare(0, old.size(), old) == 0 && p[old.size()] == '/')) {
+                        value = copied + p.substr(old.size());
+                    }
+                }
+            };
+            auto fix = [&](const std::filesystem::path& file) {
+                const auto ext = AssetManager::extension(file);
+                if (ext != ".lemesh" && ext != ".leanim" && ext != ".mat" && ext != ".prefab" &&
+                    ext != ".level" && ext != ".cubemap") {
+                    return;
+                }
+                auto doc = readJsonFile(file, 256 * 1024 * 1024);
+                remap(remap, doc, "");
+                writeJsonFile(file, doc);
+            };
+            try {
+                if (directory) {
+                    for (const auto& entry :
+                         std::filesystem::recursive_directory_iterator(destination)) {
+                        if (entry.is_regular_file()) {
+                            fix(entry.path());
+                        }
+                    }
+                } else {
+                    fix(destination);
+                }
+            } catch (...) {
+                std::error_code ec;
+                std::filesystem::remove_all(destination, ec);
+                throw;
+            }
+            selected = copied;
+            ++modelAssetRevision;
+        }
+        thumbnails.clear();
+        assets.error.clear();
     }
     void setRoot(const std::filesystem::path& root) {
         preview.stop();
         thumbnails.clear();
+        clipboardPath_.clear();
         assets.root = root;
         currentFolder.clear();
         selected.clear();
@@ -269,6 +455,7 @@ class AssetBrowser {
               ScriptEditor& scripts,
               bool editable,
               EditorHistory* history = nullptr) {
+        pollImport();
         if (auto result = dialog.poll()) {
             if (!result->error.empty()) {
                 assets.error = result->error;
@@ -282,6 +469,14 @@ class AssetBrowser {
             return;
         }
         if (beginEditorPanel("Assets")) {
+            if (importing()) {
+                ImGui::TextUnformatted("Importing assets in background...");
+                ImGui::TextDisabled(
+                    "One worker is converting and compressing meshes. Asset edits are paused.");
+                ImGui::End();
+                return;
+            }
+
             const bool shortcutFocus =
                 ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
                 !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
@@ -557,6 +752,19 @@ class AssetBrowser {
                                                     AssetManager::script(file))) {
                                 attachScriptAsset(world, selectedObject, file);
                             }
+                            if (ImGui::MenuItem("Copy", "Ctrl+C")) {
+                                copySelected(false);
+                            }
+                            if (ImGui::MenuItem("Move (Cut)", "Ctrl+X")) {
+                                copySelected(true);
+                            }
+                            if (folderItem && ImGui::MenuItem("Paste into folder",
+                                                              "Ctrl+V",
+                                                              false,
+                                                              !clipboardPath_.empty())) {
+                                pasteFolder_ = file;
+                                pasteRequested_ = true;
+                            }
                             if (ImGui::MenuItem("Rename...", "F2")) {
                                 selected = file;
                                 if (!folderItem && AssetManager::extension(file) == ".leanim" &&
@@ -565,7 +773,7 @@ class AssetBrowser {
                                 }
                                 renameRequested_ = true;
                             }
-                            if (!folderItem && ImGui::MenuItem("Move to Trash", "Del")) {
+                            if (ImGui::MenuItem("Move to Trash", "Del")) {
                                 selected = file;
                                 if (!folderItem && AssetManager::extension(file) == ".leanim" &&
                                     ImGui::IsMouseDoubleClicked(0)) {
@@ -622,6 +830,10 @@ class AssetBrowser {
                 if (ImGui::BeginPopupContextWindow("Assets empty actions",
                                                    ImGuiPopupFlags_MouseButtonRight |
                                                        ImGuiPopupFlags_NoOpenOverItems)) {
+                    if (ImGui::MenuItem("Paste", "Ctrl+V", false, !clipboardPath_.empty())) {
+                        pasteFolder_ = currentFolder;
+                        pasteRequested_ = true;
+                    }
                     if (ImGui::MenuItem("New Folder")) {
                         createFolder();
                     }
@@ -665,9 +877,27 @@ class AssetBrowser {
                     if (ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
                         renameRequested_ = true;
                     }
-                    if (!std::filesystem::is_directory(assets.resolve(selected)) &&
-                        ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+                    if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+                        copySelected(false);
+                    }
+                    if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X, false)) {
+                        copySelected(true);
+                    }
+                    if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
                         deleteRequested_ = true;
+                    }
+                }
+                if (shortcutFocus && ImGui::GetIO().KeyCtrl &&
+                    ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+                    pasteFolder_ = currentFolder;
+                    pasteRequested_ = true;
+                }
+                if (pasteRequested_) {
+                    pasteRequested_ = false;
+                    try {
+                        pasteAssets(world, pasteFolder_);
+                    } catch (const std::exception& e) {
+                        assets.error = e.what();
                     }
                 }
                 if (renameRequested_) {
@@ -694,8 +924,12 @@ class AssetBrowser {
                                 } else {
                                     receipt->restore();
                                 }
+                                ++modelAssetRevision;
                             })) {
-                            if (openedScript == selected) {
+                            if (openedScript == selected ||
+                                (openedScript.size() > selected.size() &&
+                                 openedScript.compare(0, selected.size(), selected) == 0 &&
+                                 openedScript[selected.size()] == '/')) {
                                 openedScript.clear();
                                 scripts.setSource("");
                                 scripts.setAssetContext("", {});

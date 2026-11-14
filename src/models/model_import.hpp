@@ -5,4 +5,5 @@ std::string modelImportExtensions();
 bool importableModel(const std::filesystem::path& path);
 std::string importModel(AssetManager& assets,
                         const std::filesystem::path& source,
-                        const std::string& folder = {});
+                        const std::string& folder = {},
+                        bool publishRevision = true);

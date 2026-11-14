@@ -29,8 +29,10 @@ bool importableModel(const std::filesystem::path& path) {
     Assimp::Importer importer;
     return importer.IsExtensionSupported(AssetManager::extension(path));
 }
-std::string
-importModel(AssetManager& assets, const std::filesystem::path& source, const std::string& folder) {
+std::string importModel(AssetManager& assets,
+                        const std::filesystem::path& source,
+                        const std::string& folder,
+                        bool publishRevision) {
     if (AssetManager::extension(source) == ".blend") {
         throw std::runtime_error(
             "Blender files are not supported; export to glTF, FBX, or OBJ first");
@@ -311,14 +313,6 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
         if (parts.empty()) {
             throw std::runtime_error("Model contains no triangle geometry");
         }
-        writeJsonFile(assets.resolve(path),
-                      {{"format", "LegacyEngineMesh"},
-                       {"version", 2},
-                       {"importScale", 1},
-                       {"parts", std::move(parts)},
-                       {"warnings", warnings},
-                       {"nodes", nodes},
-                       {"animations", animations}});
         for (unsigned i = 0; i < animations.size(); ++i) {
             writeJsonFile(
                 assets.resolve(dataFolder + "/Animation_" + std::to_string(i) + ".leanim"),
@@ -329,7 +323,17 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
                  {"model", path},
                  {"modelAnimation", i}});
         }
-        ++modelAssetRevision;
+        writeJsonFile(assets.resolve(path),
+                      {{"format", "LegacyEngineMesh"},
+                       {"version", 2},
+                       {"importScale", 1},
+                       {"parts", std::move(parts)},
+                       {"warnings", warnings},
+                       {"nodes", nodes},
+                       {"animations", animations}});
+        if (publishRevision) {
+            ++modelAssetRevision;
+        }
         return path;
     } catch (...) {
         std::error_code error;

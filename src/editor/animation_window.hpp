@@ -171,13 +171,14 @@ class AnimationWindow {
     struct SheetRow {
         std::string label, group;
         int indent = 0;
-        int track = -1;
+        int track = -1, lane = -1;
         std::vector<float> times;
     };
     std::vector<SheetRow> importedRows_;
     std::string sheetModel_;
     int sheetAnimation_ = -2;
     std::map<std::string, bool> collapsed_;
+    int selectedLane_ = -1;
     int samples_ = 30;
     float zoom_ = 1;
     bool curves_ = false, draggingKey_ = false;
@@ -233,6 +234,9 @@ class AnimationWindow {
                        IM_COL32(100, 155, 245, 255),
                        IM_COL32(215, 170, 240, 255)};
         for (int lane = 0; lane < property->lanes(); ++lane) {
+            if (selectedLane_ >= 0 && lane != selectedLane_) {
+                continue;
+            }
             for (std::size_t k = 1; k < track.keys.size(); ++k) {
                 const auto& a = track.keys[k - 1];
                 const auto& b = track.keys[k];
@@ -261,6 +265,53 @@ class AnimationWindow {
 
   public:
     bool visible = false;
+    void remapAssetPaths(const std::string& from, const std::string& to) {
+        auto remap = [&](std::string& p) {
+            if (p == from || (p.size() > from.size() && p.compare(0, from.size(), from) == 0 &&
+                              p[from.size()] == '/')) {
+                p = to + p.substr(from.size());
+            }
+        };
+        remap(path_);
+        remap(clip_.model);
+        std::string draft = newPath_;
+        remap(draft);
+        std::snprintf(newPath_, sizeof(newPath_), "%s", draft.c_str());
+        sheetModel_.clear();
+        previewDirty_ = true;
+    }
+    bool hasUnsavedChanges() const {
+        return dirty_;
+    }
+    const std::string& error() const {
+        return error_;
+    }
+    bool saveClip(const AssetManager& assets) {
+        try {
+            if (root_ != assets.root) {
+                throw std::runtime_error("Animation belongs to another project");
+            }
+            const auto path = path_.empty() ? std::string(newPath_) : path_;
+            if (!animationAsset(path)) {
+                throw std::runtime_error("Use a project-relative .leanim asset path");
+            }
+            if (path_.empty() && std::filesystem::exists(assets.resolve(path))) {
+                throw std::runtime_error("Asset already exists; open it instead");
+            }
+            std::filesystem::create_directories(assets.resolve(path).parent_path());
+            saveAnimationClip(assets, path, clip_);
+            path_ = path;
+            dirty_ = false;
+            error_.clear();
+            return true;
+        } catch (const std::exception& e) {
+            error_ = e.what();
+            return false;
+        }
+    }
+    bool saveIfDirty(const AssetManager& assets) {
+        return !dirty_ || saveClip(assets);
+    }
     void open(const AssetManager& assets, const std::string& path) {
         sheetModel_.clear();
         if (root_ == assets.root && path_ == path) {
@@ -314,6 +365,18 @@ class AnimationWindow {
         if (ImGui::Begin(dirty_ ? "Animation*###AnimationEditor" : "Animation###AnimationEditor",
                          &openWindow)) {
             try {
+                if (editMode &&
+                    ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteFocused)) {
+                    saveClip(assets);
+                }
+                {
+                    DisabledScope disabled(!editMode);
+                    if (ImGui::Button("Save animation")) {
+                        saveClip(assets);
+                    }
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("Ctrl+S | all tracks and X/Y/Z values");
                 // Compact transport bar, with the sheet always in front rather than
                 // buried below a long stack of property controls.
                 if (ImGui::Button("|<")) {
@@ -419,14 +482,7 @@ class AnimationWindow {
                         }
                         ImGui::InputText("Asset path", newPath_, sizeof(newPath_));
                         if (ImGui::Button("Save clip")) {
-                            const auto path = path_.empty() ? std::string(newPath_) : path_;
-                            if (path_.empty() && std::filesystem::exists(assets.resolve(path))) {
-                                throw std::runtime_error("Asset already exists; open it instead");
-                            }
-                            std::filesystem::create_directories(assets.resolve(path).parent_path());
-                            saveAnimationClip(assets, path, clip_);
-                            path_ = path;
-                            dirty_ = false;
+                            saveClip(assets);
                         }
                         ImGui::SameLine();
                         if (ImGui::Button("Discard edits")) {
@@ -543,7 +599,7 @@ class AnimationWindow {
                     }
                 }
                 std::vector<SheetRow> propertyRows;
-                propertyRows.reserve(clip_.tracks.size() * 2);
+                propertyRows.reserve(clip_.tracks.size() * 5);
                 std::map<std::string, std::vector<int>> groups;
                 for (int i = 0; i < int(clip_.tracks.size()); ++i) {
                     groups[clip_.tracks[i].target].push_back(i);
@@ -569,6 +625,22 @@ class AnimationWindow {
                             row.times.push_back(k.time);
                         }
                         propertyRows.push_back(std::move(row));
+                        if (t.property == "Transform.position") {
+                            static const char* axes[]{"X", "Y", "Z"};
+                            for (int lane = 0; lane < 3; ++lane) {
+                                SheetRow axis;
+                                axis.label = axes[lane];
+                                axis.track = index;
+                                axis.lane = lane;
+                                axis.indent =
+                                    int(std::count(group.first.begin(), group.first.end(), '/')) +
+                                    2;
+                                for (const auto& key : t.keys) {
+                                    axis.times.push_back(key.time);
+                                }
+                                propertyRows.push_back(std::move(axis));
+                            }
+                        }
                     }
                 }
                 std::vector<const SheetRow*> rows;
@@ -641,18 +713,32 @@ class AnimationWindow {
                                 ImGui::TableNextRow(0, 25);
                                 ImGui::TableNextColumn();
                                 ImGui::Indent(std::min(row.indent, 12) * 12.f);
-                                const auto label =
-                                    row.track == -2
-                                        ? (collapsed_[row.group] ? "> " : "v ") + row.label
-                                        : row.label;
+                                auto label = row.track == -2
+                                                 ? (collapsed_[row.group] ? "> " : "v ") + row.label
+                                                 : row.label;
+                                if (row.lane >= 0) {
+                                    const auto& t = clip_.tracks[row.track];
+                                    char value[48];
+                                    if (t.keys.empty()) {
+                                        std::snprintf(value, sizeof(value), "   --");
+                                    } else {
+                                        std::snprintf(value,
+                                                      sizeof(value),
+                                                      "   %.3f",
+                                                      sampleAnimationTrack(t, time_)[row.lane]);
+                                    }
+                                    label += value;
+                                }
                                 if (ImGui::Selectable(label.c_str(),
-                                                      row.track >= 0 && track_ == row.track,
+                                                      row.track >= 0 && track_ == row.track &&
+                                                          selectedLane_ == row.lane,
                                                       0,
                                                       ImVec2(0, 21))) {
                                     if (row.track == -2) {
                                         collapsed_[row.group] = !collapsed_[row.group];
                                     } else {
                                         track_ = row.track;
+                                        selectedLane_ = row.lane;
                                         key_ = -1;
                                     }
                                 }
@@ -683,6 +769,7 @@ class AnimationWindow {
                                         if (distance < nearest) {
                                             nearest = distance;
                                             track_ = row.track;
+                                            selectedLane_ = row.lane;
                                             key_ = k;
                                             time_ = row.times[k];
                                             draggingKey_ = row.track >= 0 && editMode;
@@ -695,6 +782,7 @@ class AnimationWindow {
                                                            1.f) *
                                                 clip_.duration;
                                         track_ = row.track;
+                                        selectedLane_ = row.lane;
                                         key_ = -1;
                                     }
                                     playing_ = false;
@@ -819,6 +907,28 @@ class AnimationWindow {
                                 key.value[0] = v ? 1.f : 0.f;
                                 dirty_ = true;
                                 previewDirty_ = true;
+                            }
+                        } else if (property->kind == AnimationValueKind::Vector) {
+                            const char* axes[]{"X", "Y", "Z"};
+                            for (int lane = 0; lane < 3; ++lane) {
+                                if (lane) {
+                                    ImGui::SameLine();
+                                }
+                                ImGui::PushID(lane);
+                                ImGui::SetNextItemWidth(std::max(
+                                    65.f, (ImGui::GetContentRegionAvail().x - 90.f) / (3 - lane)));
+                                if (ImGui::DragFloat(axes[lane],
+                                                     &key.value[lane],
+                                                     .01f,
+                                                     property->minimum,
+                                                     property->maximum,
+                                                     "%.3f",
+                                                     ImGuiSliderFlags_AlwaysClamp)) {
+                                    dirty_ = true;
+                                    previewDirty_ = true;
+                                    selectedLane_ = lane;
+                                }
+                                ImGui::PopID();
                             }
                         } else if (ImGui::DragScalarN("Value",
                                                       ImGuiDataType_Float,
