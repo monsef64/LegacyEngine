@@ -10,7 +10,7 @@ out vec3 skinnedPosition;
 out vec3 skinnedNormal;
 out vec2 skinnedUV;
 mat4 bone(int i) {
-    int j = i * 4;
+    int j = i * 8;
     return mat4(texelFetch(uPalette, j),
                 texelFetch(uPalette, j + 1),
                 texelFetch(uPalette, j + 2),
@@ -24,8 +24,10 @@ void main() {
         mat4 m = bone(int(influence.x));
         float w = influence.y;
         p += (m * vec4(aPosition, 1)).xyz * w;
-        mat3 linear = mat3(m);
-        mat3 normalMatrix = abs(determinant(linear)) > 1e-12 ? transpose(inverse(linear)) : linear;
+        int j = int(influence.x) * 8 + 4;
+        mat3 normalMatrix = mat3(texelFetch(uPalette, j).xyz,
+                                 texelFetch(uPalette, j + 1).xyz,
+                                 texelFetch(uPalette, j + 2).xyz);
         n += normalMatrix * aNormal * w;
         total += w;
     }

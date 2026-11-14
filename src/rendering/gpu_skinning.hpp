@@ -1,6 +1,8 @@
 #pragma once
 #include "models/model_asset.hpp"
+#include "models/skeleton_pose.hpp"
 #include "rendering/shader_data.hpp"
+#include <cstring>
 #include <glad/gl.h>
 #include <map>
 
@@ -15,6 +17,21 @@ class GpuSkinning {
         Vec3 low{}, high{};
     };
     std::map<std::string, Source> sources_;
+    std::map<const Json*, SkeletonPose> skeletons_;
+    struct Binding {
+        int node;
+        std::vector<std::pair<int, Mat4>> bones;
+    };
+    std::map<const Json*, Binding> bindings_;
+    std::map<std::pair<const Json*, const Animation*>, std::vector<Mat4>> poses_;
+    struct Output {
+        std::vector<Mat4> palette;
+        float scale = 0;
+        Vec3 low{}, high{};
+        float radius = 0;
+    };
+    std::map<std::pair<GLuint, GLintptr>, Output> outputs_;
+    GLint weightsLocation_ = -1, paletteLocation_ = -1, scaleLocation_ = -1;
     GLuint program_ = 0, palette_ = 0, paletteTexture_ = 0;
     void init() {
         if (program_) {
@@ -47,11 +64,17 @@ class GpuSkinning {
             throw std::runtime_error(std::string("GPU skinning link: ") + log);
         }
         program_ = program;
+        weightsLocation_ = glGetUniformLocation(program_, "uWeights");
+        paletteLocation_ = glGetUniformLocation(program_, "uPalette");
+        scaleLocation_ = glGetUniformLocation(program_, "uScale");
         glGenBuffers(1, &palette_);
         glGenTextures(1, &paletteTexture_);
     }
 
   public:
+    void beginDraw() {
+        poses_.clear();
+    }
     void clear() {
         for (auto& entry : sources_) {
             auto& s = entry.second;
@@ -61,6 +84,10 @@ class GpuSkinning {
             glDeleteTextures(1, &s.weightTexture);
         }
         sources_.clear();
+        skeletons_.clear();
+        bindings_.clear();
+        poses_.clear();
+        outputs_.clear();
     }
     void shutdown() {
         clear();
@@ -79,28 +106,41 @@ class GpuSkinning {
               float& radius,
               GLintptr outputOffset = 0) {
         init();
-        auto global = modelGlobalPose(root,
-                                      animation.modelAnimation,
-                                      animation.time,
-                                      animation.blendSourceAnimation,
-                                      animation.blendSourceTime,
-                                      animation.blendWeight,
-                                      &animation.blendFrozenPose);
+        auto poseKey = std::make_pair(&root, &animation);
+        auto pose = poses_.find(poseKey);
+        if (pose == poses_.end()) {
+            auto skeleton = skeletons_.find(&root);
+            if (skeleton == skeletons_.end()) {
+                skeleton = skeletons_.emplace(&root, SkeletonPose(root)).first;
+            }
+            pose = poses_.emplace(poseKey, skeleton->second.evaluate(animation)).first;
+        }
+        const auto& global = pose->second;
         const auto& bones = part.at("bones");
         int node = part.at("node");
         if (node < 0 || std::size_t(node) >= global.size() || !bones.is_array() ||
             bones.size() > 4096) {
             throw std::runtime_error("Invalid GPU skeleton");
         }
-        std::vector<Mat4> palette;
-        for (const auto& b : bones) {
-            int i = b.at("node");
-            if (i < 0 || std::size_t(i) >= global.size()) {
-                throw std::runtime_error("Invalid bone node");
+        auto binding = bindings_.find(&part);
+        if (binding == bindings_.end()) {
+            Binding decoded{node, {}};
+            decoded.bones.reserve(bones.size());
+            for (const auto& b : bones) {
+                int i = b.at("node");
+                if (i < 0 || std::size_t(i) >= global.size()) {
+                    throw std::runtime_error("Invalid bone node");
+                }
+                decoded.bones.push_back({i, modelMatrix(b.at("offset"))});
             }
-            palette.push_back(multiply(global[i], modelMatrix(b.at("offset"))));
+            binding = bindings_.emplace(&part, std::move(decoded)).first;
         }
-        palette.push_back(global[node]);
+        std::vector<Mat4> palette;
+        palette.reserve(binding->second.bones.size() + 1);
+        for (const auto& bone : binding->second.bones) {
+            palette.push_back(multiply(global[bone.first], bone.second));
+        }
+        palette.push_back(global[binding->second.node]);
         auto found = sources_.find(key);
         if (found == sources_.end()) {
             const auto& vertices = part.at("vertices");
@@ -153,7 +193,7 @@ class GpuSkinning {
             GLint limit = 0;
             glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE, &limit);
             if (influences.size() / 2 > std::size_t(limit) ||
-                palette.size() * 4 > std::size_t(limit)) {
+                palette.size() * 8 > std::size_t(limit)) {
                 throw std::runtime_error("GPU skin texture-buffer limit exceeded");
             }
             Source s;
@@ -207,10 +247,43 @@ class GpuSkinning {
         }
         const auto& source = found->second;
         float scale = modelImportScale(root) * modelImportScale(part);
+        auto& previous = outputs_[{output, outputOffset}];
+        if (previous.scale == scale && previous.palette.size() == palette.size() &&
+            !std::memcmp(previous.palette.data(), palette.data(), palette.size() * sizeof(Mat4))) {
+            low = previous.low;
+            high = previous.high;
+            radius = previous.radius;
+            return;
+        }
+        std::vector<Mat4> upload;
+        upload.reserve(palette.size() * 2);
+        for (const auto& m : palette) {
+            upload.push_back(m);
+            Mat4 normal{};
+            normal.m[15] = 1;
+            for (int i = 0; i < 3; ++i) {
+                Vec3 axis{};
+                if (i == 0) {
+                    axis.x = 1;
+                }
+                if (i == 1) {
+                    axis.y = 1;
+                }
+                if (i == 2) {
+                    axis.z = 1;
+                }
+                auto n = modelNormal(m, axis);
+                normal.m[i * 4] = n.x;
+                normal.m[i * 4 + 1] = n.y;
+                normal.m[i * 4 + 2] = n.z;
+            }
+            upload.push_back(normal);
+        }
+
         glBindBuffer(GL_TEXTURE_BUFFER, palette_);
         glBufferData(GL_TEXTURE_BUFFER,
-                     GLsizeiptr(palette.size() * sizeof(Mat4)),
-                     palette.data(),
+                     GLsizeiptr(upload.size() * sizeof(Mat4)),
+                     upload.data(),
                      GL_STREAM_DRAW);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_BUFFER, source.weightTexture);
@@ -218,9 +291,9 @@ class GpuSkinning {
         glBindTexture(GL_TEXTURE_BUFFER, paletteTexture_);
         glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, palette_);
         glUseProgram(program_);
-        glUniform1i(glGetUniformLocation(program_, "uWeights"), 0);
-        glUniform1i(glGetUniformLocation(program_, "uPalette"), 1);
-        glUniform1f(glGetUniformLocation(program_, "uScale"), scale);
+        glUniform1i(weightsLocation_, 0);
+        glUniform1i(paletteLocation_, 1);
+        glUniform1f(scaleLocation_, scale);
         glBindVertexArray(source.vao);
         glBindBufferRange(GL_TRANSFORM_FEEDBACK_BUFFER,
                           0,
@@ -254,5 +327,6 @@ class GpuSkinning {
                 radius = std::max(radius, std::sqrt(dot(p, p)));
             }
         }
+        previous = {std::move(palette), scale, low, high, radius};
     }
 };

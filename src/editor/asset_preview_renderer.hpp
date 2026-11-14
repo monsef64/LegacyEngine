@@ -165,9 +165,11 @@ class AssetPreviewRenderer {
                     high = {std::max(high.x, p.x), std::max(high.y, p.y), std::max(high.z, p.z)};
                 };
                 if (!mesh.model.empty()) {
-                    const auto data = loadModelAsset(assets, mesh.model);
-                    for (const auto& vertex : data.vertices) {
-                        include(vertex.position);
+                    Vec3 a{}, b{};
+                    if (renderer_.modelBounds(assets, mesh.model, a, b)) {
+                        for (int i = 0; i < 8; ++i) {
+                            include({i & 1 ? b.x : a.x, i & 2 ? b.y : a.y, i & 4 ? b.z : a.z});
+                        }
                     }
                 } else {
                     for (int i = 0; i < 8; ++i) {

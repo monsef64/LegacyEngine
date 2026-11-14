@@ -3,6 +3,7 @@
 #include "rendering/renderer.hpp"
 #include "rendering/scene_surface.hpp"
 #include "scene/camera.hpp"
+#include <array>
 
 class ModelPreviewWindow {
     std::unique_ptr<World> world_;
@@ -15,16 +16,29 @@ class ModelPreviewWindow {
     int clip_ = 0;
     float time_ = 0, fadeSeconds_ = .25f, fadeElapsed_ = 0, fadeDuration_ = 0, sourceDuration_ = 1;
     bool blendClips_ = true;
+    std::array<float, 12> lastView_{};
+    bool rendered_ = false;
+    unsigned openedRevision_ = ~0u;
     bool playing_ = false, loop_ = true, bind_ = true;
+
+    static const Json& emptyModelClips() {
+        static const Json empty = Json::array();
+        return empty;
+    }
 
   public:
     bool visible = false;
-    void open(const AssetManager& assets, const std::string& path) {
+    void open(const AssetManager& assets, const std::string& path, Renderer& renderer) {
         visible = true;
+        if (world_ && root_ == assets.root && path_ == path &&
+            openedRevision_ == modelAssetRevision) {
+            return;
+        }
         error_.clear();
         try {
             auto doc = modelDocument(assets, path);
-            const auto clips = doc.value("animations", Json::array());
+            const auto& clips =
+                doc.contains("animations") ? doc.at("animations") : emptyModelClips();
             if (!clips.is_array() || clips.size() > 256) {
                 throw std::runtime_error("Invalid model animation list");
             }
@@ -63,20 +77,24 @@ class ModelPreviewWindow {
             world->add(sun, Transform{});
             DirectionalLight light;
             light.shadows = false;
+            light.intensity = 1.6f;
             world->add(sun, light);
-            auto data = loadModelAsset(assets, path);
-            Vec3 low = data.vertices.front().position, high = low;
-            for (const auto& v : data.vertices) {
-                low = {std::min(low.x, v.position.x),
-                       std::min(low.y, v.position.y),
-                       std::min(low.z, v.position.z)};
-                high = {std::max(high.x, v.position.x),
-                        std::max(high.y, v.position.y),
-                        std::max(high.z, v.position.z)};
+            auto fill = world->create();
+            Transform fillPose;
+            fillPose.rotation = axisAngle({0, 1, 0}, radians(160));
+            world->add(fill, fillPose);
+            DirectionalLight fillLight;
+            fillLight.intensity = .55f;
+            fillLight.shadows = false;
+            world->add(fill, fillLight);
+            Vec3 low{}, high{};
+            if (!renderer.modelBounds(assets, path, low, high)) {
+                throw std::runtime_error("Model has no geometry");
             }
             camera_ = {};
             camera_.target = (low + high) * .5f;
             camera_.distance = std::max(.1f, std::sqrt(dot(high - low, high - low)) * 1.5f);
+            openedRevision_ = modelAssetRevision;
             root_ = assets.root;
             path_ = path;
             document_ = std::move(doc);
@@ -87,6 +105,7 @@ class ModelPreviewWindow {
             playing_ = false;
             bind_ = true;
             fadeDuration_ = 0;
+            rendered_ = false;
         } catch (const std::exception& e) {
             error_ = e.what();
             world_.reset();
@@ -100,6 +119,9 @@ class ModelPreviewWindow {
             world_.reset();
             visible = false;
             return;
+        }
+        if (world_ && openedRevision_ != modelAssetRevision) {
+            open(assets, path_, renderer);
         }
         ImGui::SetNextWindowSize(ImVec2(760, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Model Preview", &visible)) {
@@ -140,28 +162,44 @@ class ModelPreviewWindow {
                 a.modelAnimation = clip_;
                 a.poseActive = hasClips && !bind_;
                 a.time = time_;
-                GLint draw = 0, read = 0, viewport[4];
-                glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
-                glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
-                glGetIntegerv(GL_VIEWPORT, viewport);
-                try {
-                    surface_.resize(720, 405);
-                    glBindFramebuffer(GL_FRAMEBUFFER, surface_.framebuffer);
-                    renderer.setAssetRoot(assets.root);
-                    renderer.draw(*world_,
-                                  camera_.viewProjection(720.f / 405),
-                                  720,
-                                  405,
-                                  camera_.position(),
-                                  0,
-                                  0,
-                                  false);
-                } catch (const std::exception& e) {
-                    error_ = e.what();
+                const std::array<float, 12> view{time_,
+                                                 float(clip_),
+                                                 a.blendWeight,
+                                                 camera_.yaw,
+                                                 camera_.pitch,
+                                                 camera_.distance,
+                                                 camera_.target.x,
+                                                 camera_.target.y,
+                                                 camera_.target.z,
+                                                 bind_ ? 1.f : 0.f,
+                                                 float(modelAssetRevision),
+                                                 float(fadeDuration_)};
+                if (!rendered_ || view != lastView_) {
+                    GLint draw = 0, read = 0, viewport[4];
+                    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
+                    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
+                    glGetIntegerv(GL_VIEWPORT, viewport);
+                    try {
+                        surface_.resize(720, 405);
+                        glBindFramebuffer(GL_FRAMEBUFFER, surface_.framebuffer);
+                        renderer.setAssetRoot(assets.root);
+                        renderer.draw(*world_,
+                                      camera_.viewProjection(720.f / 405),
+                                      720,
+                                      405,
+                                      camera_.position(),
+                                      0,
+                                      0,
+                                      false);
+                    } catch (const std::exception& e) {
+                        error_ = e.what();
+                    }
+                    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+                    glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
+                    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+                    rendered_ = true;
+                    lastView_ = view;
                 }
-                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
-                glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
-                glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
                 float width = std::max(1.f, ImGui::GetContentRegionAvail().x);
                 ImGui::Image(static_cast<ImTextureID>(surface_.texture),
                              ImVec2(width, width * 405 / 720),

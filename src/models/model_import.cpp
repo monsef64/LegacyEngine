@@ -41,10 +41,10 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
     }
     Assimp::Importer importer;
     importer.SetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, true);
-    const auto* scene =
-        importer.ReadFile(source.string(),
-                          aiProcess_Triangulate | aiProcess_GenSmoothNormals |
-                              aiProcess_ValidateDataStructure | aiProcess_SortByPType);
+    const auto* scene = importer.ReadFile(
+        source.string(),
+        aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_ValidateDataStructure |
+            aiProcess_SortByPType | aiProcess_PopulateArmatureData);
     if (!scene || !scene->HasMeshes()) {
         throw std::runtime_error(std::string("Assimp import failed: ") + importer.GetErrorString());
     }
@@ -62,17 +62,20 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
     };
     Json nodes = Json::array();
     std::map<std::string, int> nodeIds;
+    std::map<const aiNode*, int> nodePointers;
     std::vector<std::pair<unsigned, int>> meshNodes;
     std::function<void(const aiNode*, int)> visit = [&](const aiNode* node, int parent) {
         if (nodes.size() >= 4096) {
             throw std::runtime_error("Model exceeds 4096 skeleton nodes");
         }
         int id = int(nodes.size());
-        nodeIds[node->mName.C_Str()] = id;
+        nodeIds.emplace(node->mName.C_Str(), id);
+        nodePointers[node] = id;
         aiVector3D scale, pos;
         aiQuaternion rot;
         node->mTransformation.Decompose(scale, rot, pos);
-        nodes.push_back({{"parent", parent},
+        nodes.push_back({{"name", node->mName.C_Str()},
+                         {"parent", parent},
                          {"matrix", matrix(node->mTransformation)},
                          {"position", {pos.x, pos.y, pos.z}},
                          {"rotation", {rot.x, rot.y, rot.z, rot.w}},
@@ -225,7 +228,10 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
                 if (found == nodeIds.end()) {
                     throw std::runtime_error("Missing bone node");
                 }
-                bones.push_back({{"node", found->second}, {"offset", matrix(bone->mOffsetMatrix)}});
+                const int boneNode = bone->mNode && nodePointers.count(bone->mNode)
+                                         ? nodePointers.at(bone->mNode)
+                                         : found->second;
+                bones.push_back({{"node", boneNode}, {"offset", matrix(bone->mOffsetMatrix)}});
                 for (unsigned w = 0; w < bone->mNumWeights; ++w) {
                     const auto value = bone->mWeights[w];
                     if (value.mVertexId >= mesh->mNumVertices || !std::isfinite(value.mWeight) ||

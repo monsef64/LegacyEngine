@@ -40,6 +40,54 @@ class Renderer {
             materialError.clear();
         }
     }
+    // Shared static GPU geometry/bounds are reused by thumbnails and editors.
+    // Opening a second viewer must not parse and skin every vertex again.
+    bool modelBounds(const AssetManager& assets,
+                     const std::string& path,
+                     Vec3& low,
+                     Vec3& high,
+                     unsigned depth = 0) {
+        if (depth > 2) {
+            throw std::runtime_error("Cyclic model reference");
+        }
+        setAssetRoot(assets.root);
+        if (modelRevision_ != modelAssetRevision) {
+            clearModelCache();
+            modelRevision_ = modelAssetRevision;
+        }
+        const auto& doc = cachedModelDocument(materialAssets_, path, &modelDocuments_);
+        if (doc.at("version") == 2) {
+            bool any = false;
+            const auto& parts = doc.at("parts");
+            if (!parts.is_array() || parts.empty() || parts.size() > 1024) {
+                throw std::runtime_error("Invalid model parts");
+            }
+            for (const auto& part : parts) {
+                Vec3 a{}, b{};
+                if (!modelBounds(assets, part.at("mesh").get<std::string>(), a, b, depth + 1)) {
+                    continue;
+                }
+                if (!any) {
+                    low = a;
+                    high = b;
+                    any = true;
+                } else {
+                    low = {std::min(low.x, a.x), std::min(low.y, a.y), std::min(low.z, a.z)};
+                    high = {std::max(high.x, b.x), std::max(high.y, b.y), std::max(high.z, b.z)};
+                }
+            }
+            return any;
+        }
+        auto found = modelMeshes_.find(path);
+        if (found == modelMeshes_.end()) {
+            found = modelMeshes_
+                        .emplace(path,
+                                 createMesh(loadModelAsset(
+                                     materialAssets_, path, 0, -1, 0, &modelDocuments_)))
+                        .first;
+        }
+        return meshBounds(found->second, low, high);
+    }
     // Call once, after the window's OpenGL context has been created. Returns
     // false, with the reason logged, if OpenGL cannot be set up.
     bool init();
