@@ -164,6 +164,7 @@ bool Renderer::init() {
 }
 
 void Renderer::clearModelCache() {
+    gpuSkinning_.clear();
     for (const auto& entry : modelMeshes_) {
         if (entry.second.id < meshes_.size()) {
             auto& mesh = meshes_[entry.second.id];
@@ -173,10 +174,12 @@ void Renderer::clearModelCache() {
         }
     }
     modelMeshes_.clear();
+    modelDocuments_.clear();
     colliderTriangles_.clear();
     modelError.clear();
 }
 void Renderer::shutdown() {
+    gpuSkinning_.shutdown();
     editorGrid_ = {};
     gridCells_ = 0;
     gridSpacing_ = 0;
@@ -193,6 +196,7 @@ void Renderer::shutdown() {
     }
     meshes_.clear();
     modelMeshes_.clear();
+    modelDocuments_.clear();
     glDeleteTextures(1, &shadowTexture_);
     glDeleteFramebuffers(1, &shadowFramebuffer_);
     shadowTexture_ = shadowFramebuffer_ = 0;
@@ -277,21 +281,106 @@ void Renderer::draw(World& world,
         modelRevision_ = modelAssetRevision;
     }
     // Resolve persistent asset references before shadow and visible-mesh gathering.
-    world.each<MeshRenderer>([&](Entity, MeshRenderer& mesh) {
+    world.each<MeshRenderer>([&](Entity entity, MeshRenderer& mesh) {
         if (mesh.model.empty()) {
             return;
         }
-        auto found = modelMeshes_.find(mesh.model);
-        if (found == modelMeshes_.end()) {
-            MeshHandle handle;
-            try {
-                handle = createMesh(loadModelAsset(materialAssets_, mesh.model));
-            } catch (const std::exception& e) {
-                modelError = mesh.model + ": " + e.what();
+        const Animation* animation = nullptr;
+        Entity current = entity;
+        for (std::size_t depth = 0; depth < 4096 && world.alive(current); ++depth) {
+            if (const auto* candidate = world.tryGet<Animation>(current);
+                candidate && candidate->poseActive) {
+                animation = candidate;
+                break;
             }
-            found = modelMeshes_.emplace(mesh.model, handle).first;
+            const auto* parent = world.tryGet<Parent>(current);
+            if (!parent) {
+                break;
+            }
+            current = parent->entity;
         }
-        mesh.mesh = found->second;
+        bool animated = false;
+        try {
+            if (animation) {
+                const auto& doc =
+                    cachedModelDocument(materialAssets_, mesh.model, &modelDocuments_);
+                animated = mesh.model == animation->model ||
+                           doc.value("settings", std::string{}) == animation->model;
+            }
+            const auto key = animated ? mesh.model + "@" + std::to_string(entity.index) + ":" +
+                                            std::to_string(entity.generation)
+                                      : mesh.model;
+            auto found = modelMeshes_.find(key);
+            if (animated) {
+                const auto& part =
+                    cachedModelDocument(materialAssets_, mesh.model, &modelDocuments_);
+                if (found == modelMeshes_.end()) {
+                    found =
+                        modelMeshes_
+                            .emplace(key,
+                                     createMesh(loadModelAsset(
+                                         materialAssets_, mesh.model, 0, -1, 0, &modelDocuments_)))
+                            .first;
+                }
+                auto& gpu = meshes_[found->second.id];
+                if (part.at("version") == 2) {
+                    std::size_t offset = 0;
+                    bool first = true;
+                    gpu.radius = 0;
+                    for (const auto& entry : part.at("parts")) {
+                        const auto path = entry.at("mesh").get<std::string>();
+                        const auto& child =
+                            cachedModelDocument(materialAssets_, path, &modelDocuments_);
+                        Vec3 low{}, high{};
+                        float radius = 0;
+                        gpuSkinning_.skin(path,
+                                          child,
+                                          part,
+                                          *animation,
+                                          gpu.vertexBuffer,
+                                          low,
+                                          high,
+                                          radius,
+                                          GLintptr(offset));
+                        offset += child.at("vertices").size() * sizeof(Vertex);
+                        if (first) {
+                            gpu.low = low;
+                            gpu.high = high;
+                            first = false;
+                        } else {
+                            gpu.low = {std::min(gpu.low.x, low.x),
+                                       std::min(gpu.low.y, low.y),
+                                       std::min(gpu.low.z, low.z)};
+                            gpu.high = {std::max(gpu.high.x, high.x),
+                                        std::max(gpu.high.y, high.y),
+                                        std::max(gpu.high.z, high.z)};
+                        }
+                        gpu.radius = std::max(gpu.radius, radius);
+                    }
+                } else {
+                    const auto& root = cachedModelDocument(
+                        materialAssets_, part.at("settings").get<std::string>(), &modelDocuments_);
+                    gpuSkinning_.skin(mesh.model,
+                                      part,
+                                      root,
+                                      *animation,
+                                      gpu.vertexBuffer,
+                                      gpu.low,
+                                      gpu.high,
+                                      gpu.radius);
+                }
+            } else if (found == modelMeshes_.end()) {
+                found = modelMeshes_
+                            .emplace(key,
+                                     createMesh(loadModelAsset(
+                                         materialAssets_, mesh.model, 0, -1, 0, &modelDocuments_)))
+                            .first;
+            }
+            mesh.mesh = found->second;
+        } catch (const std::exception& e) {
+            modelError = mesh.model + ": " + e.what();
+            mesh.mesh = {};
+        }
     });
     materialTextures_.beginFrame();
     glDisable(GL_SCISSOR_TEST);

@@ -79,6 +79,14 @@ inline Entity clone(World& source, Entity root, World& destination, Entity exist
         if (auto* c = destination.tryGet<Camera>(target)) {
             c->targetEntity = remap(c->targetEntity);
         }
+        if (auto* a = destination.tryGet<Animation>(target)) {
+            const auto clip = a->clip;
+            const bool loop = a->loop, autoplay = a->playOnStart;
+            *a = Animation{};
+            a->clip = clip;
+            a->loop = loop;
+            a->playOnStart = autoplay;
+        }
         if (auto* a = destination.tryGet<AudioSource>(target)) {
             a->stop();
             a->pendingEvents.clear();

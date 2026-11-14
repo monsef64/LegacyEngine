@@ -1,4 +1,5 @@
 #include "scripting/lua_scene.hpp"
+#include "animation/animation_clip.hpp"
 #include "assets/cubemap.hpp"
 #include "core/hierarchy.hpp"
 #include "physics/queries.hpp"
@@ -14,6 +15,8 @@ extern "C" {
 }
 #include <cmath>
 #include <cstring>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace {
 struct AudioWaitToken {
@@ -49,7 +52,8 @@ const char* types[]{"Transform",
                     "Skybox",
                     "CharacterController",
                     "FPSCamera",
-                    "Raycast"};
+                    "Raycast",
+                    "Animation"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -58,7 +62,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < 17; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -104,6 +108,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<CharacterController>(h.entity);
     case 14:
         return h.world->has<FPSCamera>(h.entity);
+    case 16:
+        return h.world->has<Animation>(h.entity);
     case 15:
         return h.world->has<Raycast>(h.entity);
     default:
@@ -433,7 +439,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 16; ++i) {
+    for (int i = 0; i < 17; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -512,8 +518,12 @@ LuaScene::LuaScene(lua_State* L,
                         "findGameObjectByName",
                         "findGameObjectsByComponent",
                         "setParent",
-                        "getParent"};
-    for (int i = 0; i < 9; ++i) {
+                        "getParent",
+                        "getComponentInParent",
+                        "getComponentInChildren",
+                        "findComponentInParent",
+                        "findComponentInChildren"};
+    for (int i = 0; i < 13; ++i) {
         lua_pushlightuserdata(L, this);
         lua_pushinteger(L, i);
         lua_pushcclosure(L, api, 2);
@@ -543,7 +553,7 @@ void LuaScene::pushObject(Entity e, bool owned) {
 int LuaScene::api(lua_State* L) {
     auto& self = *static_cast<LuaScene*>(lua_touserdata(L, lua_upvalueindex(1)));
     const int op = static_cast<int>(lua_tointeger(L, lua_upvalueindex(2)));
-    if (op >= 2 && op <= 4 && lua_gettop(L) == 1) {
+    if (((op >= 2 && op <= 4) || (op >= 9 && op <= 12)) && lua_gettop(L) == 1) {
         if (!self.world_.alive(self.selfEntity_)) {
             return luaL_error(L, "Implicit component access requires attached self");
         }
@@ -637,6 +647,9 @@ int LuaScene::api(lua_State* L) {
             self.world_.each<CharacterController>(
                 [&](Entity e, CharacterController&) { collect(e); });
             break;
+        case 16:
+            self.world_.each<Animation>([&](Entity e, Animation&) { collect(e); });
+            break;
         case 15:
             self.world_.each<Raycast>([&](Entity e, Raycast&) { collect(e); });
             break;
@@ -673,6 +686,61 @@ int LuaScene::api(lua_State* L) {
         return 0;
     }
     const int type = componentType(L, 2);
+    if (op >= 9 && op <= 12) {
+        if (has(h, type)) {
+            component(L, h, type);
+            return 1;
+        }
+        Entity match;
+        // Finish all C++ traversal allocations before calling back into Lua.
+        // Include self; parent walks are nearest-first, children use breadth-first order.
+        {
+            std::unordered_set<std::uint32_t> visited;
+            self.query_.clear();
+            self.query_.push_back(h.entity);
+            visited.insert(h.entity.index);
+            const bool parents = op == 9 || op == 11;
+            std::unordered_map<std::uint32_t, std::vector<Entity>> children;
+            if (!parents) {
+                self.world_.each<Parent>([&](Entity child, const Parent& parent) {
+                    if (self.world_.alive(parent.entity)) {
+                        children[parent.entity.index].push_back(child);
+                    }
+                });
+            }
+            for (std::size_t index = 0; index < self.query_.size(); ++index) {
+                const auto entity = self.query_[index];
+                if (!self.world_.alive(entity)) {
+                    continue;
+                }
+                if (has(Handle{h.scene, h.world, entity}, type)) {
+                    match = entity;
+                    break;
+                }
+                if (parents) {
+                    const auto parent = getParent(self.world_, entity);
+                    if (parent != Entity{} && visited.insert(parent.index).second) {
+                        self.query_.push_back(parent);
+                    }
+                } else {
+                    const auto found = children.find(entity.index);
+                    if (found != children.end()) {
+                        for (auto child : found->second) {
+                            if (self.world_.alive(child) && visited.insert(child.index).second) {
+                                self.query_.push_back(child);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (match == Entity{}) {
+            lua_pushnil(L);
+        } else {
+            component(L, Handle{h.scene, h.world, match}, type);
+        }
+        return 1;
+    }
     if (op == 2) {
         if (has(h, type)) {
             component(L, h, type);
@@ -727,6 +795,9 @@ int LuaScene::api(lua_State* L) {
         case 13:
             self.world_.remove<CharacterController>(h.entity);
             break;
+        case 16:
+            self.world_.remove<Animation>(h.entity);
+            break;
         case 15:
             self.world_.remove<Raycast>(h.entity);
             break;
@@ -779,6 +850,9 @@ int LuaScene::api(lua_State* L) {
             break;
         case 13:
             addCharacterController(self.world_, h.entity);
+            break;
+        case 16:
+            self.world_.add(h.entity, Animation{});
             break;
         case 15:
             if (!self.world_.has<Transform>(h.entity)) {
@@ -848,13 +922,31 @@ int LuaScene::objectIndex(lua_State* L) {
         const char* name;
         int operation;
     };
-    const Method objectMethods[]{{"setActive", 210},   {"isActive", 211},    {"setPosition", 200},
-                                 {"getPosition", 201}, {"setRotation", 202}, {"getRotation", 203},
-                                 {"setScale", 204},    {"getScale", 205},    {"translate", 206},
-                                 {"lookAt", 207},      {"setParent", 7},     {"getParent", 8},
-                                 {"destroy", 1},       {"setName", 208},     {"getName", 209},
-                                 {"getForward", 220},  {"getBackward", 221}, {"getRight", 222},
-                                 {"getLeft", 223},     {"getUp", 224},       {"getDown", 225}};
+    const Method objectMethods[]{{"setActive", 210},
+                                 {"isActive", 211},
+                                 {"setPosition", 200},
+                                 {"getPosition", 201},
+                                 {"setRotation", 202},
+                                 {"getRotation", 203},
+                                 {"setScale", 204},
+                                 {"getScale", 205},
+                                 {"translate", 206},
+                                 {"lookAt", 207},
+                                 {"setParent", 7},
+                                 {"getParent", 8},
+                                 {"destroy", 1},
+                                 {"setName", 208},
+                                 {"getName", 209},
+                                 {"getForward", 220},
+                                 {"getBackward", 221},
+                                 {"getRight", 222},
+                                 {"getLeft", 223},
+                                 {"getUp", 224},
+                                 {"getDown", 225},
+                                 {"getComponentInParent", 9},
+                                 {"getComponentInChildren", 10},
+                                 {"findComponentInParent", 11},
+                                 {"findComponentInChildren", 12}};
     for (const auto& method : objectMethods) {
         if (!std::strcmp(key, method.name)) {
             lua_pushlightuserdata(L, h.scene);
@@ -979,6 +1071,36 @@ int LuaScene::componentIndex(lua_State* L) {
             component(L, c.object, 0);
         } else {
             lua_pushnil(L);
+        }
+        return 1;
+    }
+    if (c.type == 16) {
+        const auto& a = c.object.world->get<Animation>(c.object.entity);
+        const char* methods[]{"play", "stop", "pause", "resume", "reset", "crossFade"};
+        for (int i = 0; i < 6; ++i) {
+            if (!std::strcmp(key, methods[i])) {
+                lua_pushvalue(L, 1);
+                lua_pushinteger(L, i);
+                lua_pushcclosure(L, animationMethod, 2);
+                return 1;
+            }
+        }
+        if (!std::strcmp(key, "clip")) {
+            lua_pushstring(L, a.clip.c_str());
+        } else if (!std::strcmp(key, "loop")) {
+            lua_pushboolean(L, a.loop);
+        } else if (!std::strcmp(key, "playOnStart")) {
+            lua_pushboolean(L, a.playOnStart);
+        } else if (!std::strcmp(key, "isPlaying")) {
+            lua_pushboolean(L, a.isPlaying);
+        } else if (!std::strcmp(key, "paused")) {
+            lua_pushboolean(L, a.paused);
+        } else if (!std::strcmp(key, "time")) {
+            lua_pushnumber(L, a.time);
+        } else if (!std::strcmp(key, "error")) {
+            lua_pushstring(L, a.error.c_str());
+        } else {
+            return luaL_error(L, "Unknown Animation property: %s", key);
         }
         return 1;
     }
@@ -1232,6 +1354,29 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 16) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 16)) {
+            return luaL_error(L, "Animation no longer exists");
+        }
+        auto& a = c.object.world->get<Animation>(c.object.entity);
+        const char* key = luaL_checkstring(L, 2);
+        if (!std::strcmp(key, "clip")) {
+            const char* path = luaL_checkstring(L, 3);
+            if (*path && !animationAsset(path)) {
+                return luaL_error(L, "Expected project-relative .leanim clip");
+            }
+            a.clip = path;
+        } else if (!std::strcmp(key, "loop")) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            a.loop = lua_toboolean(L, 3);
+        } else if (!std::strcmp(key, "playOnStart")) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            a.playOnStart = lua_toboolean(L, 3);
+        } else {
+            return luaL_error(L, "Animation property is read-only or unknown: %s", key);
+        }
+        return 0;
+    }
     if (c.type == 1 && !std::strcmp(luaL_checkstring(L, 2), "velocity")) {
         lua_pushliteral(L, "linearVelocity");
         lua_replace(L, 2);
@@ -2303,7 +2448,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 16; ++type) {
+                for (; type < 17; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }
@@ -2415,4 +2560,34 @@ int LuaScene::spawnAPI(lua_State* L) {
     }
     self.pushObject(result, true);
     return 1;
+}
+
+int LuaScene::animationMethod(lua_State* L) {
+    const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
+    if (!c.object.world->alive(c.object.entity) || !has(c.object, 16)) {
+        return luaL_error(L, "Animation no longer exists");
+    }
+    auto& animation = c.object.world->get<Animation>(c.object.entity);
+    const int method = int(lua_tointeger(L, lua_upvalueindex(2)));
+    if (method == 5) {
+        int arg = luaL_testudata(L, 1, "Component") ? 2 : 1;
+        const char* clip = luaL_checkstring(L, arg);
+        float duration = float(luaL_optnumber(L, arg + 1, .25));
+        if (!std::isfinite(duration) || duration < 0 || duration > 3600) {
+            return luaL_error(L, "Cross-fade duration must be 0..3600 seconds");
+        }
+        if (!animation.request(AnimationAction::CrossFade, clip, duration)) {
+            return luaL_error(L, "Animation command queue is full");
+        }
+        return 0;
+    }
+    const AnimationAction actions[]{AnimationAction::Play,
+                                    AnimationAction::Stop,
+                                    AnimationAction::Pause,
+                                    AnimationAction::Resume,
+                                    AnimationAction::Reset};
+    if (!animation.request(actions[method])) {
+        return luaL_error(L, "Animation command queue is full");
+    }
+    return 0;
 }

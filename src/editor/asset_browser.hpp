@@ -85,7 +85,8 @@ class AssetBrowser {
     }
     AssetManager assets;
     Entity prefabCreation;
-    std::string editPrefabRequest, spawnPrefabRequest, editCubemapRequest, spawnModelRequest;
+    std::string editPrefabRequest, spawnPrefabRequest, editCubemapRequest, spawnModelRequest,
+        editAnimationRequest, previewModelRequest;
     std::string selected, openedScript, currentFolder;
     EditorSettings settings;
     std::filesystem::path projectFolder;
@@ -481,8 +482,12 @@ class AssetBrowser {
                         }
                         if (clicked) {
                             selected = file;
-                            if (!folderItem && modelAsset(file) && ImGui::IsMouseDoubleClicked(0)) {
-                                spawnModelRequest = file;
+                            if (!folderItem && AssetManager::extension(file) == ".leanim" &&
+                                ImGui::IsMouseDoubleClicked(0)) {
+                                editAnimationRequest = file;
+                            }
+                            if (!folderItem && modelAsset(file)) {
+                                previewModelRequest = file;
                             }
                             if (!folderItem && cubemapAsset(file) &&
                                 ImGui::IsMouseDoubleClicked(0)) {
@@ -540,6 +545,10 @@ class AssetBrowser {
                         }
                         if (ImGui::BeginPopupContextItem("Asset actions")) {
                             selected = file;
+                            if (!folderItem && AssetManager::extension(file) == ".leanim" &&
+                                ImGui::IsMouseDoubleClicked(0)) {
+                                editAnimationRequest = file;
+                            }
                             if (!folderItem &&
                                 ImGui::MenuItem("Attach LegacyScript to selected object",
                                                 nullptr,
@@ -550,10 +559,18 @@ class AssetBrowser {
                             }
                             if (ImGui::MenuItem("Rename...", "F2")) {
                                 selected = file;
+                                if (!folderItem && AssetManager::extension(file) == ".leanim" &&
+                                    ImGui::IsMouseDoubleClicked(0)) {
+                                    editAnimationRequest = file;
+                                }
                                 renameRequested_ = true;
                             }
                             if (!folderItem && ImGui::MenuItem("Move to Trash", "Del")) {
                                 selected = file;
+                                if (!folderItem && AssetManager::extension(file) == ".leanim" &&
+                                    ImGui::IsMouseDoubleClicked(0)) {
+                                    editAnimationRequest = file;
+                                }
                                 deleteRequested_ = true;
                             }
                             ImGui::EndPopup();

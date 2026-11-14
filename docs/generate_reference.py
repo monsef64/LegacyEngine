@@ -22,6 +22,10 @@ GLOBALS = {
 'onDestroy': 'function onDestroy()\n    debug.log("Script stopping")\nend',
 'createGameObject': 'local object = createGameObject("Player")\nobject:setPosition(0, 1, 0)',
 'destroyGameObject': 'local object = createGameObject("Temporary")\ndestroyGameObject(object)',
+'getComponentInParent': 'local body = self:getComponentInParent(RigidBody)\nif body then debug.log(body.mass) end',
+'getComponentInChildren': 'local camera = self:getComponentInChildren(Camera)\nif camera then debug.log(camera.gameObject:getName()) end',
+'findComponentInParent': 'local body = findComponentInParent(self, RigidBody)\nif body then debug.log(body.mass) end',
+'findComponentInChildren': 'local camera = findComponentInChildren(Camera)\nif camera then debug.log(camera.gameObject:getName()) end',
 'getComponent': 'local transform = getComponent(self, Transform)\nif transform then debug.log(transform.position.x) end',
 'addComponent': 'local collider = addComponent(self, Collider)\ncollider.radius = 0.5',
 'removeComponent': 'addComponent(self, Collider)\nremoveComponent(self, Collider)',
@@ -42,9 +46,10 @@ GLOBALS = {
 'fadeSkybox': 'local skybox1 = GameObject.new("Skybox1")\nlocal skybox2 = GameObject.new("Skybox2")\nskybox1:addComponent(Skybox):setColor(0.8, 0.9, 1)\nlocal evening = skybox2:addComponent(Skybox)\nevening:setColor(0.3, 0.1, 0.05)\nevening:setEnabled(false)\nfadeSkybox(skybox1, skybox2, 0.5)',
 'getCurrentLevel': 'local name = getCurrentLevel()\nif name then debug.log("Current level", name) end',
 }
-for name in ('onMouseDown','onMouseUp','onMouseEnter','onMouseExit','onMouseOver','onAudioStarted','onAudioFinished','onAudioPaused','onAudioResumed','onAudioStopped'):
+for name in ('onAnimationFinish','onAnimationStart','onAnimationStopped','onAnimationPause','onAnimationResume','onMouseDown','onMouseUp','onMouseEnter','onMouseExit','onMouseOver','onAudioStarted','onAudioFinished','onAudioPaused','onAudioResumed','onAudioStopped'):
     GLOBALS[name] = f'function {name}()\n    debug.log("{name}", self:getName())\nend'
 GLOBALS['waitForSeconds'] = 'function onStart()\n    debug.log("Before wait")\n    waitForSeconds(5)\n    debug.log("Five playing seconds later")\nend'
+GLOBALS['Animation'] = 'local animation = self:addComponent(Animation)\nanimation.clip = "Animations/example.leanim"\nanimation.loop = true\nanimation:play()'
 GLOBALS['wait'] = 'function onStart()\n    local audio = createAudioSource(self, AudioClip("Audio/example.wav"))\n    audio:play()\n    wait(audio.onAudioFinished)\n    debug.log("Audio finished")\nend'
 GLOBALS['spawn'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=90, z=0})\ndebug.log(copy:getName())'
 GLOBALS['destroy'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=0, z=0})\ndestroy(copy, 5)'
@@ -88,6 +93,8 @@ for name in ('lockCursor', 'unlockCursor', 'hideCursor', 'showCursor', 'isCursor
     GLOBALS[name] = f'local result = {name}()\ndebug.log(result)'
 
 METHOD_ARGS = {
+'getComponentInParent':'RigidBody', 'getComponentInChildren':'Camera',
+'findComponentInParent':'RigidBody', 'findComponentInChildren':'Camera',
 'addForce':'0, 10, 0', 'addImpulse':'0, 3, 0', 'setVelocity':'1, 0, 0', 'addVelocity':'0, 1, 0', 'movePosition':'0, 2, 0', 'moveRotation':'0, 90, 0', 'setLayers':"{'Default'}",
 
 'move':'0, -1', 'sprint':'true', 'setIsFreecam':'false',
@@ -110,7 +117,7 @@ METHOD_ARGS = {
 'setCubemap':'"Sky/Evening.cubemap"', 'setHDR':'"Sky/studio.hdr"', 'setFace':'"front", "Sky/front.png"',
 'setTextures':', '.join(f'"Sky/{face}.png"' for face in ('right','left','top','bottom','front','back')),
 }
-NO_ARGS = set('cast castAll getVelocity getForward getBackward getRight getLeft getUp getDown jump getIsFreecam isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
+NO_ARGS = set('reset cast castAll getVelocity getForward getBackward getRight getLeft getUp getDown jump getIsFreecam isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
 
 
 def inventory():
@@ -168,6 +175,8 @@ def example(entry):
             prefix += '\ncomponent.clip = AudioClip("Audio/example.wav")'
     if owner=='GameObject' and name in ('onTriggerEnter','onTriggerStay','onTriggerExit','onCollisionEnter','onCollisionStay','onCollisionExit'):
         return f'self.{name} = function(collider)\n    if collider then debug.log(collider.gameObject:getName()) end\nend'
+    if owner == 'Animation' and name == 'crossFade':
+        return 'local animation = self:getComponent(Animation)\nanimation:crossFade("Character_data/Animation_1.leanim", 0.3)'
     if name == 'linkToCharacter':
         return 'local character = self:getComponent(CharacterController) or self:addComponent(CharacterController)\nlocal camera = Camera.new("Player FPS Camera")\nlocal fps = camera:addComponent(FPSCamera)\nfps:linkToCharacter(character, 0, 0.7, 0)'
     if name == 'fadeTo':

@@ -8,6 +8,7 @@
 #include "lighting/lighting.hpp"
 #include "lighting/shadow_settings.hpp"
 #include "materials/material_io.hpp"
+#include "rendering/gpu_skinning.hpp"
 #include "rendering/material_textures.hpp"
 #include "rendering/mesh.hpp"
 #include "rendering/skybox_renderer.hpp"
@@ -145,6 +146,8 @@ class Renderer {
     void clearModelCache();
     unsigned modelRevision_ = 0;
     std::map<std::string, MeshHandle> modelMeshes_;
+    std::map<std::string, Json> modelDocuments_;
+    GpuSkinning gpuSkinning_;
     std::vector<GpuMesh> meshes_; // MeshHandle::id is an index into this
 
     // Flat colour, for lines.

@@ -7,13 +7,22 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript
+---@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation
 ---@field removeComponent fun(componentType:ComponentType)
+---@field onAnimationFinish fun()|nil
+---@field onAnimationStart fun()|nil
+---@field onAnimationStopped fun()|nil
+---@field onAnimationPause fun()|nil
+---@field onAnimationResume fun()|nil
 ---@field onStart fun()|nil
 ---@field onUpdate fun(deltaTime:number)|nil
 ---@field onFixedUpdate fun(deltaTime:number)|nil
@@ -85,7 +94,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -654,3 +663,46 @@ function onCollisionExit(collider) end
 
 ---@class MeshRenderer
 ---@field model string Static .lemesh asset path; setting mesh to a primitive clears this
+
+---Include self, then search nearest parents. Returns the component, or nil.
+---@param gameObject GameObject
+---@param componentType ComponentType
+---@return any|nil
+---@overload fun(componentType:ComponentType):any|nil
+function getComponentInParent(gameObject,componentType) end
+---Include self, then breadth-first descendants. Returns the component, or nil.
+---@param gameObject GameObject
+---@param componentType ComponentType
+---@return any|nil
+---@overload fun(componentType:ComponentType):any|nil
+function getComponentInChildren(gameObject,componentType) end
+---Alias of getComponentInParent; also accepts implicit attached self.
+---@param gameObject GameObject
+---@param componentType ComponentType
+---@return any|nil
+---@overload fun(componentType:ComponentType):any|nil
+function findComponentInParent(gameObject,componentType) end
+---Alias of getComponentInChildren; also accepts implicit attached self.
+---@param gameObject GameObject
+---@param componentType ComponentType
+---@return any|nil
+---@overload fun(componentType:ComponentType):any|nil
+function findComponentInChildren(gameObject,componentType) end
+
+---@class Animation
+---@field gameObject GameObject
+---@field clip string
+---@field loop boolean
+---@field playOnStart boolean
+---@field isPlaying boolean Read-only
+---@field paused boolean Read-only
+---@field time number Read-only seconds
+---@field error string Read-only loading error
+---@field play fun(self:Animation)
+---@field stop fun(self:Animation) Stops and rewinds to frame zero
+---@field pause fun(self:Animation)
+---@field resume fun(self:Animation)
+---@field crossFade fun(self:Animation,clip:string,seconds?:number) Timed transition; default 0.25 seconds
+---@field reset fun(self:Animation) Stops and restores the pre-play values
+---@type ComponentToken
+Animation = {}

@@ -11,7 +11,7 @@ inline bool exportReferenceType(const std::string& type) {
            type == "LuaScript" || type == "Camera" || type == "AudioSource" ||
            type == "AudioListener" || type == "DirectionalLight" || type == "PointLight" ||
            type == "SpotLight" || type == "Skybox" || type == "CharacterController" ||
-           type == "FPSCamera" || type == "Raycast";
+           type == "FPSCamera" || type == "Raycast" || type == "Animation";
 }
 inline bool exportAssetType(const std::string& type) {
     return type == "Asset" || type == "AudioClip" || type == "Texture";
