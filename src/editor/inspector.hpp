@@ -293,19 +293,71 @@ inline void drawScriptExports(World& world,
         ImGui::PopID();
     }
 }
+inline void drawMaterialAssetInspector(const AssetManager& assets, const std::string& path) {
+    ImGui::TextWrapped("Material: %s", path.c_str());
+    ImGui::Separator();
+    try {
+        auto edited = loadMaterial(assets, path);
+        bool changed = false;
+        changed |= ImGui::Combo(
+            "Shader", &edited.shader, "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0");
+        changed |= ImGui::ColorEdit3("Color", &edited.color.x);
+        auto texture = [&](const char* label, std::string& value) {
+            bool result = assetPicker(label, value, &assets, [](const std::string& file) {
+                return materialTexturePath(file);
+            });
+            if (ImGui::BeginDragDropTarget()) {
+                if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                    std::string file = static_cast<const char*>(drop->Data);
+                    if (materialTexturePath(file)) {
+                        value = file;
+                        result = true;
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+            return result;
+        };
+        changed |= texture("Texture", edited.texture);
+        if (edited.shader == 1) {
+            changed |= texture("Normal map", edited.normalMap);
+            changed |= ImGui::SliderFloat("Normal strength", &edited.normalStrength, 0, 4);
+        }
+        float tiling[]{edited.tilingX, edited.tilingY};
+        if (ImGui::DragFloat2("UV tiling", tiling, .05f, -1000, 1000)) {
+            edited.tilingX = tiling[0];
+            edited.tilingY = tiling[1];
+            changed = true;
+        }
+        changed |= ImGui::SliderFloat("Specular", &edited.specular, 0, 1);
+        ImGui::TextWrapped(
+            "Shared asset: edits are saved immediately and affect all objects using this material.");
+        if (changed && validMaterial(edited)) {
+            saveMaterial(assets, path, edited);
+        }
+    } catch (const std::exception& error) {
+        ImGui::TextWrapped("%s", error.what());
+    }
+}
+
 inline void drawInspector(World& world,
                           Entity selected,
                           const EditorRect& rect,
                           const MeshHandle* meshes,
                           bool editingGizmo,
                           const AssetManager* assets = nullptr,
-                          int meshCount = 4) {
+                          int meshCount = 4,
+                          const std::string& selectedAsset = {}) {
     if (dockedEditor && !panelOpen[1]) {
         return;
     }
     placeEditorPanel(rect);
     if (beginEditorPanel("Inspector", fixedPanelFlags)) {
-        if (!world.alive(selected)) {
+        if (assets && materialAsset(selectedAsset)) {
+            ImGui::BeginDisabled(editingGizmo);
+            drawMaterialAssetInspector(*assets, selectedAsset);
+            ImGui::EndDisabled();
+        } else if (!world.alive(selected)) {
             ImGui::TextDisabled("Select a GameObject in Hierarchy or Scene.");
         } else {
             ImGui::PushID(static_cast<int>(selected.index));

@@ -215,3 +215,21 @@ Character ability toggles are horizontal without the old debug-state text.
 Audio range visualization uses three simple wire circles, without changing its
 actual hearing range. See [physics queries](physics-queries.md) for trigger and
 Raycast Inspector settings and Project layer management.
+
+### Camera previews and material assets
+
+Selecting a GameObject with a Camera displays a small live preview in the
+bottom-right of Scene. It uses that camera without activating it or changing
+its saved settings; it renders only while Scene and the selected camera are
+available. New primitives start white (existing object colors are unchanged).
+
+Select a `.mat` asset in Assets to edit its shader, color, textures, normal-map
+settings, UV tiling and specular in Inspector. Changes save directly to the
+shared asset, affecting every object that uses it. Select another object to
+return to its component Inspector.
+
+Asset labels hide extensions, center their text, and truncate names longer
+than eight characters with `...`. Hover an item for three seconds to see its
+full name and type (and thumbnail where available). Paths on disk are unchanged.
+The default dock layout places Prefab Window below Hierarchy. When the separate
+Game window is open, the embedded Game viewport is not displayed or rendered.

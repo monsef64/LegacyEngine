@@ -69,3 +69,10 @@ serialized; new runtimes start when the level is played again.
 
 Scene format 11 adds CharacterController and FPSCamera settings; format 9 projects
 and legacy text scenes through version 15 remain readable. Re-saving upgrades the format.
+
+### Windows x64 build artifact
+
+The **Windows x64 build** GitHub Actions workflow runs on pull requests, pushes
+to main, and manual dispatch. It builds Release with vendored SDL and uploads
+`LegacyEngine-Windows-x64` containing the executable, runtime data and license.
+It does not run automated tests.
