@@ -17,6 +17,7 @@
 #include "scripting/script_exports.hpp"
 #include <ImGuizmo.h>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -352,18 +353,32 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
 inline void
 drawModelImportInspector(World& world, const AssetManager& assets, const std::string& path) {
     try {
-        auto document = modelDocument(assets, path);
-        const auto settings = document.value("settings", path);
-        if (settings != path) {
-            document = modelDocument(assets, settings);
-        }
-        static std::string current;
+        static std::string current, settings, error, warnings;
+        static int partCount = 0;
         static float scale = 1;
-        static std::string error;
-        const auto key = assets.root.generic_string() + "/" + settings;
-        if (current != key) {
-            current = key;
+        static unsigned revision = ~0u;
+        static std::filesystem::file_time_type modified{};
+        static auto checked = std::chrono::steady_clock::time_point{};
+        const auto key = assets.root.generic_string() + "/" + path;
+        auto now = std::chrono::steady_clock::now();
+        bool refresh = current != key || revision != modelAssetRevision;
+        if (refresh || now - checked > std::chrono::milliseconds(500)) {
+            checked = now;
+            const auto stamp = std::filesystem::last_write_time(assets.resolve(path));
+            refresh |= stamp != modified;
+            modified = stamp;
+        }
+        if (refresh) {
+            auto document = modelDocument(assets, path);
+            settings = document.value("settings", path);
+            if (settings != path) {
+                document = modelDocument(assets, settings);
+            }
             scale = modelImportScale(document);
+            partCount = document.contains("parts") ? int(document.at("parts").size()) : 0;
+            warnings = document.value("warnings", std::string{});
+            current = key;
+            revision = modelAssetRevision;
             error.clear();
         }
         ImGui::TextWrapped("Model import settings: %s", settings.c_str());
@@ -405,14 +420,14 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
                 error = e.what();
             }
         }
-        if (document.contains("parts")) {
-            ImGui::Text("Mesh parts: %d", int(document.at("parts").size()));
+        if (partCount) {
+            ImGui::Text("Mesh parts: %d", partCount);
         }
-        if (document.contains("warnings")) {
-            ImGui::TextWrapped("%s", document.at("warnings").get<std::string>().c_str());
+        if (!warnings.empty()) {
+            ImGui::TextWrapped("%s", warnings.c_str());
         }
         ImGui::TextWrapped(
-            "Static models only. Materials can be edited from the generated model data folder.");
+            "Skeletal clips can be previewed by clicking the model in Assets. Materials live in its data folder.");
         if (!error.empty()) {
             ImGui::TextWrapped("%s", error.c_str());
         }

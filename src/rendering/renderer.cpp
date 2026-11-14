@@ -280,6 +280,7 @@ void Renderer::draw(World& world,
         clearModelCache();
         modelRevision_ = modelAssetRevision;
     }
+    gpuSkinning_.beginDraw();
     // Resolve persistent asset references before shadow and visible-mesh gathering.
     world.each<MeshRenderer>([&](Entity entity, MeshRenderer& mesh) {
         if (mesh.model.empty()) {

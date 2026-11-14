@@ -39,3 +39,15 @@ These are manual checks, not automated tests. Build success alone does not verif
 - Cross-fade property clips (including bool and quaternion tracks), then reset; original values must restore.
 - Try invalid/missing clips, negative/NaN durations and clips for different models; prior playback must survive.
 - Switch projects, reimport models and close the engine; verify skinning resource cleanup.
+
+## Viewer performance and dope-sheet regression checks
+- With a large animated model selected in Assets, compare FPS with the selection cleared. The import Inspector should not reparse JSON every frame.
+- Open, pause, minimize, close and reopen Model Preview. A paused view should reuse its rendered texture, while scrubbing/camera motion/clip changes should redraw.
+- Check nonuniform-scale/reflected/sheared bind transforms and files with repeated node names after reimport. Verify bone attachment and deformation against the source application.
+- Check existing imported clips (without stored node names) still open using fallback bone labels.
+- Open Windows > Animation: check the top transport bar, frame/sample controls, shared ruler, frozen property column, scrolling/zoom, collapsible target groups and diamond keys.
+- Scrub the ruler and lanes; select and drag a property key. Neighbouring keys must remain ordered; read-only imported keys must not change.
+- Double-click a property lane / Capture key, edit its value, switch to Curves, save/reopen and verify keys persist.
+- Expand the optional isolated preview and pause: confirm it does not keep cloning/rendering the world while idle, and updates after editing keys.
+- Verify animated shadows, normal maps and per-instance poses after switching between Scene, Game and both previews.
+- Verify preview lighting is brighter without changing lights in the edited scene.

@@ -1381,7 +1381,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                     : std::filesystem::absolute(currentProject).parent_path();
         browser.draw(window, world, selectedEntity, scripts, editAllowed, &history);
         if (!browser.previewModelRequest.empty()) {
-            modelPreviewWindow.open(browser.assets, std::exchange(browser.previewModelRequest, {}));
+            modelPreviewWindow.open(
+                browser.assets, std::exchange(browser.previewModelRequest, {}), renderer);
         }
         modelPreviewWindow.draw(browser.assets, renderer, ImGui::GetIO().DeltaTime);
         if (!browser.editAnimationRequest.empty()) {
