@@ -207,7 +207,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     const Entity cube = world.create();
     world.add(cube, ObjectName{"Cube"});
     world.add(cube, Transform{kCubeStart});
-    world.add(cube, MeshRenderer{cubeMesh, {0.90f, 0.47f, 0.13f}});
+    world.add(cube, MeshRenderer{cubeMesh, {1, 1, 1}});
     world.add(cube, BoxCollider{{kCubeSize, kCubeSize, kCubeSize}});
     world.add(cube, RigidBody{});
 
@@ -237,7 +237,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     AssetBrowser browser;
     ScriptComponents componentScripts;
     AudioSystem audio;
-    SceneSurface sceneSurface, gameSurface;
+    SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
     EditorRect sceneRect{};
     bool sceneHovered = false, resetWorkspace = false;
     Entity editSelection;
@@ -1265,6 +1265,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (hierarchyCreate >= 0) {
             createObject(hierarchyCreate);
         }
+        static Entity lastInspectedEntity;
+        if (selectedEntity != lastInspectedEntity ||
+            (hierarchyFocused && ImGui::IsMouseClicked(0))) {
+            browser.selected.clear();
+            lastInspectedEntity = selectedEntity;
+        }
         const MeshHandle meshOptions[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh};
         drawInspector(world,
                       selectedEntity,
@@ -1272,7 +1278,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                       meshOptions,
                       editor.dragging(),
                       &browser.assets,
-                      5);
+                      5,
+                      browser.selected);
         scripts.componentOutput = componentScripts.messages();
         scripts.setAssetContext(browser.openedScript, selectedEntity);
         scripts.draw(&layout, playMode.playing(), &browser.assets, &browser.openedScript);
@@ -1512,8 +1519,34 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                              ImVec2(sceneRect.width, sceneRect.height),
                              ImVec2(0, 1),
                              ImVec2(1, 0));
+                if (world.has<Camera>(selectedEntity) && world.has<Transform>(selectedEntity)) {
+                    const auto& selectedCamera = world.get<Camera>(selectedEntity);
+                    const float aspect = std::clamp(selectedCamera.aspect, .25f, 4.f);
+                    float width = std::min(240.f, sceneRect.width * .35f);
+                    float height = width / aspect;
+                    if (height > sceneRect.height * .4f) {
+                        height = sceneRect.height * .4f;
+                        width = height * aspect;
+                    }
+                    cameraPreviewSurface.resize(std::max(1, int(width)), std::max(1, int(height)));
+                    const ImVec2 a(sceneRect.x + sceneRect.width - width - 10,
+                                   sceneRect.y + sceneRect.height - height - 10),
+                        b(a.x + width, a.y + height);
+                    sceneDrawList->AddRectFilled(ImVec2(a.x - 2, a.y - 20),
+                                                 ImVec2(b.x + 2, b.y + 2),
+                                                 IM_COL32(24, 24, 24, 245));
+                    sceneDrawList->AddText(ImVec2(a.x, a.y - 18), IM_COL32_WHITE, "Camera preview");
+                    sceneDrawList->AddImage(static_cast<ImTextureID>(cameraPreviewSurface.texture),
+                                            a,
+                                            b,
+                                            ImVec2(0, 1),
+                                            ImVec2(1, 0));
+                }
                 sceneHovered =
                     ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && ImGui::IsItemHovered();
+                if (sceneHovered && ImGui::IsMouseClicked(0)) {
+                    browser.selected.clear();
+                }
                 if (ImGui::BeginDragDropTarget()) {
                     if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                         const std::string path = static_cast<const char*>(asset->Data);
@@ -1559,7 +1592,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         bool gameVisible = false;
         gameHovered = false;
         gameFocused = false;
-        if (panelOpen[6]) {
+        if (panelOpen[6] && !gameWindow) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
             if (focusGame || (smokeTest && renderedFrames == 0)) {
                 focusGame = false;
@@ -1866,6 +1899,26 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
             }
             profiler.checkpoint(ProfilePart::Scene);
+            if (sceneVisible && world.has<Camera>(selectedEntity) &&
+                world.has<Transform>(selectedEntity)) {
+                auto previewCamera = world.get<Camera>(selectedEntity);
+                const auto& pose = world.get<Transform>(selectedEntity);
+                previewCamera.aspect =
+                    float(cameraPreviewSurface.width) / std::max(1, cameraPreviewSurface.height);
+                glBindFramebuffer(GL_FRAMEBUFFER, cameraPreviewSurface.framebuffer);
+                try {
+                    renderer.draw(world,
+                                  cameraMatrix(pose, previewCamera),
+                                  cameraPreviewSurface.width,
+                                  cameraPreviewSurface.height,
+                                  cameraEye(pose, previewCamera),
+                                  0,
+                                  0,
+                                  false);
+                } catch (const std::exception& error) {
+                    terminalErrors.report("Camera preview", error.what());
+                }
+            }
             if (gameVisible && activeCamera(world) != Entity{}) {
                 const auto e = activeCamera(world);
                 const auto& c = world.get<Camera>(e);

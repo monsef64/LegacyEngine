@@ -86,7 +86,7 @@ inline Entity createLevelObject(World& world,
     world.add(e, ObjectName{name});
     world.add(e, Transform{position});
     if (!empty) {
-        world.add(e, MeshRenderer{mesh, {0.3f, 0.6f, 0.9f}});
+        world.add(e, MeshRenderer{mesh, {1, 1, 1}});
         Collider collider;
         collider.shape = shape;
         world.add(e, collider);
@@ -164,7 +164,7 @@ inline Entity createEditorObject(World& world,
         world.add(entity, SpotLight{});
     }
     if (item == 10) {
-        world.add(entity, MeshRenderer{plane, {.7f, .7f, .7f}});
+        world.add(entity, MeshRenderer{plane, {1, 1, 1}});
         Collider collider;
         collider.size = {16, .1f, 16};
         collider.center = {0, -.05f, 0};

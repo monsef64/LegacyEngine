@@ -15,7 +15,7 @@ inline void drawWorkspace(const EditorRect& toolbar, bool& reset) {
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus |
                      ImGuiWindowFlags_NoNavFocus);
-    const ImGuiID id = ImGui::GetID("EditorDockspaceReferenceV3");
+    const ImGuiID id = ImGui::GetID("EditorDockspaceReferenceV4");
     if (reset || !ImGui::DockBuilderGetNode(id)) {
         reset = false;
         for (bool& open : panelOpen) {
@@ -28,7 +28,9 @@ inline void drawWorkspace(const EditorRect& toolbar, bool& reset) {
         ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, .28f, nullptr, &center);
         ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, .34f, nullptr, &center);
         ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, .29f, nullptr, &center);
+        ImGuiID prefab = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, .3f, nullptr, &left);
         ImGui::DockBuilderDockWindow("Hierarchy", left);
+        ImGui::DockBuilderDockWindow("Prefab Window", prefab);
         ImGui::DockBuilderDockWindow("Inspector", right);
         ImGui::DockBuilderDockWindow("Scene", center);
         ImGui::DockBuilderDockWindow("Game", center);

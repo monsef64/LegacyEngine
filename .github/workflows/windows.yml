@@ -1,0 +1,36 @@
+name: Windows x64 build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows x64 Release
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure x64
+        run: cmake -S . -B build -A x64 -DLEGACY_VENDORED_SDL=ON -DBUILD_TESTING=OFF
+      - name: Build
+        run: cmake --build build --config Release --target LegacyEngine --parallel 4
+      - name: Package executable and data
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force package/LegacyEngine
+          Copy-Item build/Release/LegacyEngine.exe package/LegacyEngine/
+          Copy-Item data package/LegacyEngine/data -Recurse
+          Copy-Item LICENSE package/LegacyEngine/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LegacyEngine-Windows-x64
+          path: package/LegacyEngine/
+          if-no-files-found: error

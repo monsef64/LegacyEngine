@@ -308,7 +308,22 @@ class AssetBrowser {
                 if (ImGui::BeginTable("Asset items", columns, ImGuiTableFlags_SizingStretchSame)) {
                     for (const auto& file : files) {
                         const bool folderItem = std::filesystem::is_directory(assets.resolve(file));
-                        const std::string display = std::filesystem::path(file).filename().string();
+                        const auto assetPath = std::filesystem::path(file);
+                        const std::string fullName =
+                            folderItem ? assetPath.filename().string() : assetPath.stem().string();
+                        std::size_t end = 0;
+                        int characters = 0;
+                        for (; end < fullName.size() && characters < 8; ++end) {
+                            if ((static_cast<unsigned char>(fullName[end]) & 0xc0) != 0x80) {
+                                ++characters;
+                            }
+                        }
+                        while (end < fullName.size() &&
+                               (static_cast<unsigned char>(fullName[end]) & 0xc0) == 0x80) {
+                            ++end;
+                        }
+                        const std::string display =
+                            fullName.substr(0, end) + (end < fullName.size() ? "..." : "");
                         ImGui::TableNextColumn();
                         ImGui::PushID(file.c_str());
                         const auto iconPosition = ImGui::GetCursorScreenPos();
@@ -317,7 +332,7 @@ class AssetBrowser {
                             ImGui::SameLine();
                         }
                         const bool clicked =
-                            ImGui::Selectable(grid_ ? "##tile" : display.c_str(),
+                            ImGui::Selectable("##tile",
                                               selected == file,
                                               ImGuiSelectableFlags_AllowDoubleClick |
                                                   ImGuiSelectableFlags_AllowOverlap,
@@ -331,29 +346,39 @@ class AssetBrowser {
                             fileBadge(file, iconPosition, folderItem, thumbnail);
                         }
                         const bool itemHovered = ImGui::IsMouseHoveringRect(itemMin, itemMax);
-                        if (itemHovered &&
-                            (materialAsset(file) || textureAsset(file) ||
-                             AssetManager::extension(file) == ".hdr") &&
-                            thumbnail && ImGui::BeginTooltip()) {
-                            ImGui::TextUnformatted(display.c_str());
-                            ImGui::Image(static_cast<ImTextureID>(thumbnail), ImVec2(240, 240));
+                        if (itemHovered && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) &&
+                            GImGui->HoveredIdTimer >= 3.0f && ImGui::BeginTooltip()) {
+                            ImGui::TextUnformatted(fullName.c_str());
+                            const std::string type = folderItem                   ? "Folder"
+                                                     : materialAsset(file)        ? "Material"
+                                                     : textureAsset(file)         ? "Texture"
+                                                     : AssetManager::script(file) ? "LegacyScript"
+                                                     : cubemapAsset(file)         ? "Cubemap"
+                                                     : audioAsset(file)           ? "Audio"
+                                                     : AssetManager::extension(file) == ".prefab"
+                                                         ? "Prefab"
+                                                         : AssetManager::extension(file);
+                            ImGui::Text("Type: %s", type.c_str());
+                            if (thumbnail) {
+                                ImGui::Image(static_cast<ImTextureID>(thumbnail), ImVec2(240, 240));
+                            }
                             ImGui::EndTooltip();
                         }
-                        if (grid_) {
-                            const auto a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+                        {
+                            const auto a = itemMin, b = itemMax;
                             auto* draw = ImGui::GetWindowDrawList();
                             draw->PushClipRect(a, b, true);
-                            fileBadge(file,
-                                      ImVec2((a.x + b.x) * .5f - 16, a.y + 4),
-                                      folderItem,
-                                      thumbnail);
-                            draw->AddText(nullptr,
-                                          0,
-                                          ImVec2(a.x + 4, a.y + 34),
+                            if (grid_) {
+                                fileBadge(file,
+                                          ImVec2((a.x + b.x) * .5f - 16, a.y + 4),
+                                          folderItem,
+                                          thumbnail);
+                            }
+                            const auto text = ImGui::CalcTextSize(display.c_str());
+                            draw->AddText(ImVec2((a.x + b.x - text.x) * .5f,
+                                                 grid_ ? a.y + 42 : (a.y + b.y - text.y) * .5f),
                                           ImGui::GetColorU32(ImGuiCol_Text),
-                                          display.c_str(),
-                                          nullptr,
-                                          std::max(1.0f, b.x - a.x - 8));
+                                          display.c_str());
                             draw->PopClipRect();
                         }
                         if (clicked) {
