@@ -30,6 +30,7 @@
 #include "gameplay/first_person.hpp"
 #include "gameplay/raycast.hpp"
 #include "levels/level_system.hpp"
+#include "models/collider_source.hpp"
 #include "physics/collider_debug.hpp"
 #include "physics/physics.hpp"
 #include "platform/engine_log.hpp"
@@ -1723,8 +1724,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     camera, sceneRect, editAllowed && !cameraLooking && !editor.dragging());
                 editor.draw(world,
                             selectedEntity,
-                            editAllowed && !orientationInteracting && !cameraLooking &&
-                                !(SDL_GetModState() & SDL_KMOD_ALT),
+                            !playMode.active() && !projectDialog.pending() &&
+                                !browser.dialog.pending() && !orientationInteracting &&
+                                !cameraLooking && !(SDL_GetModState() & SDL_KMOD_ALT),
                             camera,
                             static_cast<float>(sceneSurface.width) / sceneSurface.height,
                             &sceneRect,
@@ -1814,10 +1816,24 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     std::max({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z), 1.0f});
                 Vec3 centre = transform->position;
                 if (const auto* collider = world.tryGet<Collider>(selectedEntity)) {
-                    const auto bounds = colliderWireframe(*collider, scale);
+                    const auto resolved = effectiveCollider(world, selectedEntity, *collider);
                     radius = .25f;
-                    for (const auto& vertex : bounds.vertices) {
-                        radius = std::max(radius, std::sqrt(dot(vertex.position, vertex.position)));
+                    if (resolved.shape == ColliderShape::Mesh && !resolved.model.empty()) {
+                        try {
+                            for (const auto& vertex :
+                                 loadModelAsset(browser.assets, resolved.model).vertices) {
+                                const auto p = (vertex.position + resolved.center) * scale;
+                                radius = std::max(radius, std::sqrt(dot(p, p)));
+                            }
+                        } catch (const std::exception& e) {
+                            browser.assets.error = e.what();
+                        }
+                    } else {
+                        const auto bounds = colliderWireframe(resolved, scale);
+                        for (const auto& vertex : bounds.vertices) {
+                            radius =
+                                std::max(radius, std::sqrt(dot(vertex.position, vertex.position)));
+                        }
                     }
                 }
                 camera.focus(centre, radius, sceneRect.width / sceneRect.height);
@@ -2026,7 +2042,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     world.each<Transform, Collider>(
                         [&](Entity e, const Transform& t, const Collider& c) {
                             if (e != selectedEntity) {
-                                renderer.drawCollider(t, c, viewProjection, .25f);
+                                renderer.drawCollider(
+                                    t, effectiveCollider(world, e, c), viewProjection, .25f);
                             }
                         });
                 }
@@ -2034,7 +2051,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     const auto* transform = world.tryGet<Transform>(selectedEntity);
                     const auto* collider = world.tryGet<Collider>(selectedEntity);
                     if (transform && collider) {
-                        renderer.drawCollider(*transform, *collider, viewProjection);
+                        renderer.drawCollider(*transform,
+                                              effectiveCollider(world, selectedEntity, *collider),
+                                              viewProjection);
                     }
                     if (transform) {
                         if (const auto* query = world.tryGet<Raycast>(selectedEntity)) {
@@ -2095,10 +2114,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         y,
                         false);
                     if (showGameColliders) {
-                        world.each<Transform, Collider>(
-                            [&](Entity, const Transform& transform, const Collider& collider) {
-                                renderer.drawCollider(transform, collider, gameVP);
-                            });
+                        world.each<Transform, Collider>([&](Entity entity,
+                                                            const Transform& transform,
+                                                            const Collider& collider) {
+                            renderer.drawCollider(
+                                transform, effectiveCollider(world, entity, collider), gameVP);
+                        });
                     }
                     terminalErrors.report("Game rendering", "");
                 } catch (const std::exception& error) {

@@ -336,3 +336,15 @@ pointing directly toward the camera and cannot be dragged reliably.
 
 Sphere/Capsule/Cone dimensions remain editable in Inspector. Mesh colliders use
 their source triangles, so box-face resizing does not apply to them.
+
+Collider drag fixes: Scene transformation and collider-face gestures remain enabled
+while dragging; Undo and unrelated editing commands stay disabled until release.
+Mesh colliders automatically follow the same object's rendered `.lemesh` model
+when no explicit source is chosen. Their overlay shows the actual simplified
+triangles (not a cube). Without either model source, the collider is disabled
+with a diagnostic rather than silently substituting box geometry. Mesh scale
+handles allow independent X/Y/Z scaling; uniform scale remains for round shapes.
+
+**Friction** and **Bounciness** are contact-surface properties on Collider, so
+static floors and walls can have different materials without a RigidBody.
+RigidBody owns mass, gravity, and linear/angular damping, not surface material.

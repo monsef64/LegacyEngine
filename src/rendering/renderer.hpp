@@ -13,6 +13,7 @@
 #include "rendering/skybox_renderer.hpp"
 #include "scene/editor_grid.hpp"
 
+#include <map>
 #include <vector>
 
 class Renderer {
@@ -82,6 +83,7 @@ class Renderer {
     int gridCells_ = 0;
     float gridSpacing_ = 0;
     AssetManager materialAssets_;
+    std::map<std::pair<std::string, int>, std::vector<Vec3>> colliderTriangles_;
     MaterialAssetCache materialCache_;
     MaterialTextureCache materialTextures_;
     int litTransparent_ = -1;

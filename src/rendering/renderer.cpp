@@ -3,6 +3,7 @@
 #include "core/profiler.hpp"
 #include "lighting/cascades.hpp"
 #include "lighting/lighting.hpp"
+#include "models/mesh_simplify.hpp"
 #include "models/model_asset.hpp"
 #include "physics/collider_debug.hpp"
 #include "rendering/shader_data.hpp"
@@ -172,6 +173,7 @@ void Renderer::clearModelCache() {
         }
     }
     modelMeshes_.clear();
+    colliderTriangles_.clear();
     modelError.clear();
 }
 void Renderer::shutdown() {
@@ -461,7 +463,29 @@ void Renderer::drawCollider(const Transform& transform,
                             const Collider& collider,
                             const Mat4& viewProjection,
                             float opacity) {
-    drawWire(colliderWireframe(collider, transform.scale),
+    const std::vector<Vec3>* triangles = nullptr;
+    if (collider.shape == ColliderShape::Mesh) {
+        if (collider.model.empty()) {
+            return;
+        }
+        const auto key = std::make_pair(collider.model, std::clamp(collider.meshDetail, 2, 15));
+        auto found = colliderTriangles_.find(key);
+        if (found == colliderTriangles_.end()) {
+            if (colliderTriangles_.size() >= 4) {
+                colliderTriangles_.clear();
+            }
+            auto& entry = colliderTriangles_[key];
+            try {
+                entry = simplifyMeshTriangles(loadModelAsset(materialAssets_, collider.model),
+                                              key.second);
+            } catch (const std::exception& e) {
+                modelError = "Mesh collider: " + std::string(e.what());
+            }
+            found = colliderTriangles_.find(key);
+        }
+        triangles = &found->second;
+    }
+    drawWire(colliderWireframe(collider, transform.scale, triangles),
              transform,
              viewProjection,
              {0, 1, 0},

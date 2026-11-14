@@ -225,9 +225,14 @@ winding controls which surface side collides; mirrored scales reverse winding.
 triangles are retained. Lower settings cluster vertices and remove collapsed
 triangles; this can remove small features or close small openings. This is not
 an exact triangle-count slider. The render model is unchanged. Invalid or empty
-triangle sources are disabled and logged. Empty `model` uses `size` as a triangle
-box. Source/detail/scale changes rebuild the collider. The Scene wireframe is
-still a bounding guide, not every collision triangle.
+triangle sources are disabled and logged. Empty `model` follows the `.lemesh`
+source on this same object's MeshRenderer; an explicit `model` overrides it.
+Objects without a baked rendered model need an explicit `.lemesh` collision
+source. There is no box fallback. Put the collider on a model's mesh child or
+assign the complete bundle explicitly when editing its empty parent root.
+Source/detail/scale changes rebuild the collider. The Scene/Game collider overlay
+shows the simplified collision triangles rather than a placeholder box. Selecting
+Mesh in Inspector starts at detail 15 to match the source geometry.
 
 Old saved collider shape 4 (Convex) migrates to static Mesh, retaining its source
 and detail setting. Old JSON `convexDetail` is accepted when `meshDetail` is absent.
