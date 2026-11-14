@@ -325,7 +325,9 @@ class AssetBrowser {
                             ++end;
                         }
                         const std::string display =
-                            fullName.substr(0, end) + (end < fullName.size() ? "..." : "");
+                            folderItem
+                                ? fullName
+                                : fullName.substr(0, end) + (end < fullName.size() ? "..." : "");
                         ImGui::TableNextColumn();
                         ImGui::PushID(file.c_str());
                         const auto iconPosition = ImGui::GetCursorScreenPos();

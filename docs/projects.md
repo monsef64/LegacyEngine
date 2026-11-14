@@ -73,6 +73,7 @@ and legacy text scenes through version 15 remain readable. Re-saving upgrades th
 ### Windows x64 build artifact
 
 The **Windows x64 build** GitHub Actions workflow runs on pull requests, pushes
-to main, and manual dispatch. It builds Release with vendored SDL and uploads
-`LegacyEngine-Windows-x64` containing the executable, runtime data and license.
-It does not run automated tests.
+to main, and manual dispatch. It builds Release using MinGW-w64 GCC in MSYS2's
+64-bit UCRT64 environment, Ninja, and vendored SDL (not MSVC). It uploads
+`LegacyEngine-Windows-x64` containing the executable, required MinGW runtime
+DLLs, runtime data and license. It does not run automated tests.

@@ -11,24 +11,50 @@ permissions:
 
 jobs:
   windows:
-    name: Windows x64 Release
+    name: Windows x64 Release (MinGW-w64)
     runs-on: windows-latest
     timeout-minutes: 40
+    defaults:
+      run:
+        shell: msys2 {0}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Configure x64
-        run: cmake -S . -B build -A x64 -DLEGACY_VENDORED_SDL=ON -DBUILD_TESTING=OFF
+      - name: Install MinGW-w64 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Configure x64 Release
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=gcc
+          -DCMAKE_CXX_COMPILER=g++
+          -DLEGACY_VENDORED_SDL=ON
+          -DBUILD_TESTING=OFF
       - name: Build
-        run: cmake --build build --config Release --target LegacyEngine --parallel 4
-      - name: Package executable and data
-        shell: pwsh
+        run: cmake --build build --target LegacyEngine --parallel 4
+      - name: Package executable, runtime DLLs and data
         run: |
-          New-Item -ItemType Directory -Force package/LegacyEngine
-          Copy-Item build/Release/LegacyEngine.exe package/LegacyEngine/
-          Copy-Item data package/LegacyEngine/data -Recurse
-          Copy-Item LICENSE package/LegacyEngine/
+          set -euo pipefail
+          mkdir -p package/LegacyEngine
+          cp build/LegacyEngine.exe package/LegacyEngine/
+          cp -R data package/LegacyEngine/data
+          cp LICENSE package/LegacyEngine/
+          # ldd lists transitive dependencies too. Bundle MinGW runtime DLLs,
+          # but leave Windows system DLLs to the operating system.
+          ldd build/LegacyEngine.exe > build/runtime-dependencies.txt
+          awk '/=> \/ucrt64\/bin\// {print $3}' build/runtime-dependencies.txt |
+            while IFS= read -r dll; do
+              cp "$dll" package/LegacyEngine/
+            done
       - uses: actions/upload-artifact@v4
         with:
           name: LegacyEngine-Windows-x64

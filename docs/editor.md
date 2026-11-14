@@ -228,8 +228,9 @@ settings, UV tiling and specular in Inspector. Changes save directly to the
 shared asset, affecting every object that uses it. Select another object to
 return to its component Inspector.
 
-Asset labels hide extensions, center their text in grid view (left-aligned in list view), and truncate names longer
-than twelve characters with `...`. Hover an item for three seconds to see its
+File labels hide extensions and truncate names longer than twelve characters
+with `...`; folder names are never shortened. Labels are centered in grid view
+and left-aligned in list view. Hover an item for three seconds to see its
 full name and type (and thumbnail where available). Paths on disk are unchanged.
 The default dock layout places Prefab Window below Hierarchy. When the separate
 Game window is open, the embedded Game viewport is not displayed or rendered.
