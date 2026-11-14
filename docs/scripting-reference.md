@@ -1171,6 +1171,48 @@ local result = onTriggerExit(camera, function onTriggerExit(collider)
 end)
 ```
 
+### onCollisionEnter
+
+`onCollisionEnter(collider) - solid Rigidbody contact begins; collider exposes gameObject and transform`
+
+- `param collider Collider|nil Other solid collider; exposes gameObject and transform`
+
+```lua
+local camera = Camera.new("Reference Camera")
+camera:setPosition(0, 2, 6)
+local result = onCollisionEnter(camera, function onCollisionEnter(collider)
+    if collider then debug.log("Hit", collider.gameObject:getName()) end
+end)
+```
+
+### onCollisionStay
+
+`onCollisionStay(collider) - solid contact persists during a physics step`
+
+- `param collider Collider|nil`
+
+```lua
+local camera = Camera.new("Reference Camera")
+camera:setPosition(0, 2, 6)
+local result = onCollisionStay(camera, function onCollisionStay(collider)
+    if collider then debug.log("Touching", collider.gameObject:getName()) end
+end)
+```
+
+### onCollisionExit
+
+`onCollisionExit(collider) - solid contact ends; other collider may be nil if removed`
+
+- `param collider Collider|nil`
+
+```lua
+local camera = Camera.new("Reference Camera")
+camera:setPosition(0, 2, 6)
+local result = onCollisionExit(camera, function onCollisionExit(collider)
+    debug.log(collider and collider.gameObject:getName() or "Removed collider", "separated")
+end)
+```
+
 ### print
 
 `print(...) - log tab-separated values`
@@ -1649,6 +1691,42 @@ end
 
 ```lua
 self.onTriggerExit = function(collider)
+    if collider then debug.log(collider.gameObject:getName()) end
+end
+```
+
+### GameObject.onCollisionEnter
+
+`onCollisionEnter(collider:Collider|nil)|nil`
+
+- `onCollisionEnter(collider) - solid Rigidbody contact begins; collider exposes gameObject and transform`
+
+```lua
+self.onCollisionEnter = function(collider)
+    if collider then debug.log(collider.gameObject:getName()) end
+end
+```
+
+### GameObject.onCollisionStay
+
+`onCollisionStay(collider:Collider|nil)|nil`
+
+- `onCollisionStay(collider) - solid contact persists during a physics step`
+
+```lua
+self.onCollisionStay = function(collider)
+    if collider then debug.log(collider.gameObject:getName()) end
+end
+```
+
+### GameObject.onCollisionExit
+
+`onCollisionExit(collider:Collider|nil)|nil`
+
+- `onCollisionExit(collider) - solid contact ends; other collider may be nil if removed`
+
+```lua
+self.onCollisionExit = function(collider)
     if collider then debug.log(collider.gameObject:getName()) end
 end
 ```

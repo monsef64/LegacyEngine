@@ -37,6 +37,7 @@ class Physics {
         int phase;
     }; // 0 enter, 1 stay, 2 exit
     std::vector<TriggerEvent> triggerEvents;
+    std::vector<TriggerEvent> collisionEvents; // solid contacts, same phase numbering
     std::vector<RayHit> raycastAll(const Ray& ray,
                                    float distance,
                                    const std::function<bool(Entity)>& filter = {}) const;

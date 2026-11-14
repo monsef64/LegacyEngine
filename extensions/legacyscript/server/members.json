@@ -51,7 +51,10 @@
     "layer": "string Layer name, defaults to Default; assign an existing name or slot number",
     "onTriggerEnter": "fun(collider:Collider|nil)|nil",
     "onTriggerStay": "fun(collider:Collider|nil)|nil",
-    "onTriggerExit": "fun(collider:Collider|nil)|nil"
+    "onTriggerExit": "fun(collider:Collider|nil)|nil",
+    "onCollisionEnter": "fun(collider:Collider|nil)|nil",
+    "onCollisionStay": "fun(collider:Collider|nil)|nil",
+    "onCollisionExit": "fun(collider:Collider|nil)|nil"
   },
   "Transform": {
     "position": "Vec3",

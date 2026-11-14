@@ -270,6 +270,26 @@ struct Physics::Impl {
         bool failed = false;   // the last step gave it unusable values (see update())
     };
 
+    struct ContactListener final : rp3d::EventListener {
+        std::vector<Physics::TriggerEvent> events;
+        void onContact(const rp3d::CollisionCallback::CallbackData& data) override {
+            for (rp3d::uint32 i = 0; i < data.getNbContactPairs(); ++i) {
+                const auto pair = data.getContactPair(i);
+                const auto* a = static_cast<const Body*>(pair.getBody1()->getUserData());
+                const auto* b = static_cast<const Body*>(pair.getBody2()->getUserData());
+                if (!a || !b) {
+                    continue;
+                }
+                const auto type = pair.getEventType();
+                const int phase =
+                    type == rp3d::CollisionCallback::ContactPair::EventType::ContactStart  ? 0
+                    : type == rp3d::CollisionCallback::ContactPair::EventType::ContactStay ? 1
+                                                                                           : 2;
+                events.push_back({a->entity, b->entity, phase});
+                events.push_back({b->entity, a->entity, phase});
+            }
+        }
+    } contacts;
     rp3d::PhysicsCommon common;
     rp3d::PhysicsWorld* world = nullptr;
     rp3d::ConvexMesh* coneMesh = nullptr;
@@ -288,6 +308,7 @@ struct Physics::Impl {
         rp3d::PhysicsWorld::WorldSettings settings;
         settings.gravity = rp3d::Vector3(0, rp3d::decimal(-9.81), 0); // metres per second squared
         world = common.createPhysicsWorld(settings);
+        world->setEventListener(&contacts);
         const auto vertices = coneHullVertices();
         const rp3d::VertexArray array(vertices.data(),
                                       sizeof(Vec3),
@@ -511,6 +532,8 @@ Physics::~Physics() = default;
 
 void Physics::update(World& world, float seconds, const std::function<void(float)>& beforeStep) {
     Impl& impl = *impl_;
+    collisionEvents.clear();
+    impl.contacts.events.clear();
 
     const auto synchronize = [&]() {
         // 1. Pick up what game code did since the last update: new, changed and
@@ -672,6 +695,7 @@ void Physics::update(World& world, float seconds, const std::function<void(float
         rigidBody.linearVelocity = body.rigidBody.linearVelocity;
         rigidBody.angularVelocity = body.rigidBody.angularVelocity;
     }
+    collisionEvents.swap(impl.contacts.events);
     triggerEvents.clear();
     if (seconds > 0) {
         decltype(impl.triggerPairs) pairs;
@@ -860,4 +884,5 @@ bool Physics::checkBox(Vec3 center, Vec3 size) const {
 void Physics::reset() {
     impl_ = std::make_unique<Impl>();
     triggerEvents.clear();
+    collisionEvents.clear();
 }

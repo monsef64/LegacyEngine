@@ -9,6 +9,10 @@ OUTPUT = ROOT / 'docs/scripting-reference.md'
 
 # Executable fragments, not pseudo-code. Asset names are project-relative examples.
 GLOBALS = {
+'onCollisionEnter': 'function onCollisionEnter(collider)\n    if collider then debug.log("Hit", collider.gameObject:getName()) end\nend',
+'onCollisionStay': 'function onCollisionStay(collider)\n    if collider then debug.log("Touching", collider.gameObject:getName()) end\nend',
+'onCollisionExit': 'function onCollisionExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Removed collider", "separated")\nend',
+
 'onTriggerEnter': 'function onTriggerEnter(collider)\n    if collider then debug.log("Entered", collider.gameObject:getName()) end\nend',
 'onTriggerStay': 'function onTriggerStay(collider)\n    if collider then debug.log("Overlapping", collider.gameObject.layer) end\nend',
 'onTriggerExit': 'function onTriggerExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Destroyed collider", "left")\nend',
@@ -45,6 +49,10 @@ GLOBALS['wait'] = 'function onStart()\n    local audio = createAudioSource(self,
 GLOBALS['spawn'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=90, z=0})\ndebug.log(copy:getName())'
 GLOBALS['destroy'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=0, z=0})\ndestroy(copy, 5)'
 CAMERA_GLOBALS = {
+'onCollisionEnter': 'function onCollisionEnter(collider)\n    if collider then debug.log("Hit", collider.gameObject:getName()) end\nend',
+'onCollisionStay': 'function onCollisionStay(collider)\n    if collider then debug.log("Touching", collider.gameObject:getName()) end\nend',
+'onCollisionExit': 'function onCollisionExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Removed collider", "separated")\nend',
+
 'onTriggerEnter': 'function onTriggerEnter(collider)\n    if collider then debug.log("Entered", collider.gameObject:getName()) end\nend',
 'onTriggerStay': 'function onTriggerStay(collider)\n    if collider then debug.log("Overlapping", collider.gameObject.layer) end\nend',
 'onTriggerExit': 'function onTriggerExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Destroyed collider", "left")\nend',
@@ -140,7 +148,7 @@ def example(entry):
     owner, name = entry['owner'], entry['name']
     if not owner:
         return GLOBALS[name] if name != 'print' else 'print("Player position", self:getPosition().x)'
-    if name.startswith('on') and owner == 'GameObject' and not name.startswith('onTrigger'):
+    if name.startswith('on') and owner == 'GameObject' and not name.startswith(('onTrigger','onCollision')):
         args = 'deltaTime' if name in ('onUpdate', 'onFixedUpdate') else ''
         return f'self.{name} = function({args})\n    debug.log("Object callback: {name}")\nend'
     if owner == 'GameObjectConstructor':
@@ -158,7 +166,7 @@ def example(entry):
         prefix = f'local component = self:getComponent({owner}) or self:addComponent({owner})'
         if owner == 'AudioSource':
             prefix += '\ncomponent.clip = AudioClip("Audio/example.wav")'
-    if owner=='GameObject' and name in ('onTriggerEnter','onTriggerStay','onTriggerExit'):
+    if owner=='GameObject' and name in ('onTriggerEnter','onTriggerStay','onTriggerExit','onCollisionEnter','onCollisionStay','onCollisionExit'):
         return f'self.{name} = function(collider)\n    if collider then debug.log(collider.gameObject:getName()) end\nend'
     if name == 'linkToCharacter':
         return 'local character = self:getComponent(CharacterController) or self:addComponent(CharacterController)\nlocal camera = Camera.new("Player FPS Camera")\nlocal fps = camera:addComponent(FPSCamera)\nfps:linkToCharacter(character, 0, 0.7, 0)'

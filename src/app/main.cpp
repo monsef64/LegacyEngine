@@ -225,7 +225,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         c.active = true;
         world.add(testCamera, c);
     }
-    bool freeCamera = true;
     float cameraBoost = 3.0f;
     float cameraSpeed = 5.0f;
     Entity selectedEntity;
@@ -449,8 +448,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             case SDL_EVENT_KEY_DOWN:
                 break; // Escape is reserved for UI cancellation, never application exit.
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                if (event.button.button == SDL_BUTTON_RIGHT && !playMode.active() && freeCamera &&
-                    sceneHovered && layout.scene.contains(event.button.x, event.button.y) &&
+                if (event.button.button == SDL_BUTTON_RIGHT && !playMode.active() && sceneHovered &&
+                    layout.scene.contains(event.button.x, event.button.y) &&
                     !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
                     cameraLooking = SDL_SetWindowRelativeMouseMode(window, true);
                     clicking = false;
@@ -520,7 +519,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
-                if (!playMode.active() && freeCamera && (sceneHovered || cameraLooking) &&
+                if (!playMode.active() && (sceneHovered || cameraLooking) &&
                     !cameraModifiersHeld(SDL_GetModState()) && !ImGui::GetIO().WantTextInput) {
                     if (cameraLooking) {
                         if (SDL_GetModState() & SDL_KMOD_SHIFT) {
@@ -778,14 +777,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (ImGui::MenuItem("Input Settings")) {
                     inputSettings.visible = true;
                 }
-                if (ImGui::BeginMenu("Project Settings")) {
-                    if (ImGui::MenuItem("Layers")) {
-                        layerSettings.visible = true;
-                    }
-                    if (ImGui::MenuItem("Rendering")) {
-                        renderingSettings.visible = true;
-                    }
-                    ImGui::EndMenu();
+                if (ImGui::MenuItem("Layers")) {
+                    layerSettings.visible = true;
+                }
+                if (ImGui::MenuItem("Rendering")) {
+                    renderingSettings.visible = true;
                 }
                 if (ImGui::BeginMenu("Levels",
                                      !playMode.active() && !levels.busy() &&
@@ -927,7 +923,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             ImGui::SetNextWindowSize(ImVec2(540, 320), ImGuiCond_FirstUseEver);
             ImGui::SetNextWindowSizeConstraints(ImVec2(360, 220),
                                                 ImGui::GetMainViewport()->WorkSize);
-            if (ImGui::Begin("Project Settings", &renderingSettings.visible)) {
+            if (ImGui::Begin("Rendering", &renderingSettings.visible)) {
                 ImGui::SeparatorText("Rendering");
                 if (ImGui::Checkbox("Enable VSync", &renderingSettings.vsync)) {
                     const bool after = renderingSettings.vsync;
@@ -986,6 +982,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             ImGui::End();
         }
         if (layerSettings.visible) {
+            const auto area = ImGui::GetMainViewport()->WorkSize;
+            ImGui::SetNextWindowSize(ImVec2(std::min(460.f, area.x), std::min(420.f, area.y)),
+                                     ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSizeConstraints(
+                ImVec2(std::min(320.f, area.x), std::min(240.f, area.y)), area);
             if (ImGui::Begin("Layers", &layerSettings.visible)) {
                 ImGui::TextUnformatted("Default (built-in)");
                 for (int i = 1; i < 32; ++i) {
@@ -1008,7 +1009,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     }
                 }
                 static char newLayer[65]{};
-                ImGui::InputText("Layer name", newLayer, sizeof(newLayer));
+                ImGui::SetNextItemWidth(std::max(60.f, ImGui::GetContentRegionAvail().x - 50));
+                ImGui::InputText("##LayerName", newLayer, sizeof(newLayer));
                 ImGui::SameLine();
                 if (ImGui::Button("Add") && newLayer[0]) {
                     if (LayerSettings::find(newLayer) >= 0) {
@@ -1228,21 +1230,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui::BeginDisabled(playMode.active());
         ImGui::Checkbox("Separate Game window", &separateGame);
         ImGui::EndDisabled();
-        ImGui::SameLine();
-        const bool compactToolbar = layout.toolbar.width < 1000;
-        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),
-                                      layout.toolbar.width - (compactToolbar ? 125.0f : 370.0f)));
-        if (compactToolbar && ImGui::Button("Scene options")) {
-            ImGui::OpenPopup("Scene options popup");
-        }
-        if (!compactToolbar || ImGui::BeginPopup("Scene options popup")) {
-            if (ImGui::Checkbox("Freecam", &freeCamera)) {
-                clicking = false;
-            }
-            if (compactToolbar) {
-                ImGui::EndPopup();
-            }
-        }
         ImGui::End();
         bool hierarchyFocused = false;
         int hierarchyCreate = -1;
@@ -1709,7 +1696,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         lastTicks = ticks;
 
         if (cameraLooking &&
-            (!freeCamera || !sceneVisible || browser.dialog.pending() || projectDialog.pending() ||
+            (!sceneVisible || browser.dialog.pending() || projectDialog.pending() ||
              !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS))) {
             cameraLooking = false;
             SDL_SetWindowRelativeMouseMode(window, false);
@@ -1757,13 +1744,20 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             updateHierarchy(world);
         });
         if (playMode.playing()) {
-            const auto events = physics.triggerEvents;
-            const char* names[]{"onTriggerEnter", "onTriggerStay", "onTriggerExit"};
-            for (const auto& event : events) {
-                scripts.console().objectEvent(
-                    event.receiver, names[event.phase], event.other, true);
-                componentScripts.objectEvent(event.receiver, names[event.phase], event.other, true);
-            }
+            const auto triggerEvents = physics.triggerEvents;
+            const auto collisionEvents = physics.collisionEvents;
+            auto dispatch = [&](const auto& events, const char* const* names) {
+                for (const auto& event : events) {
+                    scripts.console().objectEvent(
+                        event.receiver, names[event.phase], event.other, true);
+                    componentScripts.objectEvent(
+                        event.receiver, names[event.phase], event.other, true);
+                }
+            };
+            const char* triggerNames[]{"onTriggerEnter", "onTriggerStay", "onTriggerExit"};
+            const char* collisionNames[]{"onCollisionEnter", "onCollisionStay", "onCollisionExit"};
+            dispatch(triggerEvents, triggerNames);
+            dispatch(collisionEvents, collisionNames);
         }
         profiler.checkpoint(ProfilePart::Physics);
         updateHierarchy(world);

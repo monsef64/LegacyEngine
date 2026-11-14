@@ -97,10 +97,10 @@ struct EditorSettings {
             return;
         }
         const auto area = ImGui::GetMainViewport()->WorkSize;
-        ImGui::SetNextWindowSize(ImVec2(std::min(540.0f, area.x), std::min(300.0f, area.y)),
+        ImGui::SetNextWindowSize(ImVec2(std::min(540.0f, area.x), std::min(560.0f, area.y)),
                                  ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSizeConstraints(
-            ImVec2(std::min(360.0f, area.x), std::min(220.0f, area.y)), area);
+            ImVec2(std::min(360.0f, area.x), std::min(380.0f, area.y)), area);
         if (ImGui::Begin("Editor Settings", &visible, ImGuiWindowFlags_NoDocking)) {
             ImGui::SetNextItemWidth(-120);
             if (ImGui::Combo(

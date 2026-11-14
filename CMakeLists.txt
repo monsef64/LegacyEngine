@@ -61,6 +61,23 @@ FetchContent_Declare(
 set(BUILD_SHARED_LIBS OFF) # ReactPhysics3D follows this variable
 FetchContent_MakeAvailable(ReactPhysics3D)
 
+# ReactPhysics3D 0.10.2 uses std::chrono::system_clock::to_time_t in
+# DefaultLogger.h/.cpp without including <chrono>. Some standard libraries
+# provide it transitively, but MSVC does not. Repair the downloaded header so
+# both the dependency and its consumers receive the required declaration.
+# Keep this idempotent for existing build directories and newer upstream tags.
+set(rp3d_logger_header "${reactphysics3d_SOURCE_DIR}/include/reactphysics3d/utils/DefaultLogger.h")
+file(READ "${rp3d_logger_header}" rp3d_logger_source)
+if(NOT rp3d_logger_source MATCHES "#include[ \t]*[<\"]chrono[>\"]")
+  string(REPLACE "#include <ctime>"
+    "#include <ctime>\n#include <chrono> // LegacyEngine compatibility fix: explicit clock declarations"
+    rp3d_logger_fixed "${rp3d_logger_source}")
+  if(rp3d_logger_fixed STREQUAL rp3d_logger_source)
+    message(FATAL_ERROR "ReactPhysics3D logger changed: review the missing <chrono> compatibility fix")
+  endif()
+  file(WRITE "${rp3d_logger_header}" "${rp3d_logger_fixed}")
+endif()
+
 # The warnings of its code are not ours to fix: none while it is compiled, and
 # none from its headers when our code includes them.
 if(MSVC)

@@ -638,3 +638,14 @@ function onTriggerEnter(collider) end
 function onTriggerStay(collider) end
 ---@param collider Collider|nil
 function onTriggerExit(collider) end
+
+---@class GameObject
+---@field onCollisionEnter fun(collider:Collider|nil)|nil
+---@field onCollisionStay fun(collider:Collider|nil)|nil
+---@field onCollisionExit fun(collider:Collider|nil)|nil
+---@param collider Collider|nil Other solid collider; exposes gameObject and transform
+function onCollisionEnter(collider) end
+---@param collider Collider|nil
+function onCollisionStay(collider) end
+---@param collider Collider|nil
+function onCollisionExit(collider) end
