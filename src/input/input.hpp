@@ -47,6 +47,9 @@ struct InputState {
         if (!window) {
             return false;
         }
+        // Windows otherwise clips relative mode to the editor WINDOW centre,
+        // overriding SDL_SetWindowMouseRect and escaping a docked Game image.
+        SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_CENTER, "0");
         if (!SDL_SetWindowRelativeMouseMode(window, locked)) {
             return false;
         }

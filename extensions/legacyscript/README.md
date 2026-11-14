@@ -24,6 +24,7 @@ Open a `.ls` file and check that its language is **LegacyScript**. Remove user
 - LSP completion (Ctrl+Space), including `self:`, `Camera.` and `GameObject.`
 - Hover API help and call signature hints (Ctrl+Shift+Space)
 - Document-local name suggestions and function outline
+- Live syntax errors and export-declaration diagnostics in Problems and editor squiggles
 - Lua syntax highlighting, comments and bracket matching
 - Lifecycle snippets: `onStart`, `onUpdate`, `onFixedUpdate`, `onDestroy`
 - `cameraFov` snippet sets FOV on the owning Camera
@@ -36,8 +37,7 @@ component. Select an owner in LegacyEngine when executing a shared asset.
 This is a lightweight engine API LSP, not a full Lua type checker. Object receivers
 suggest both GameObject and Camera methods without type inference. Symbol and
 signature discovery is lexical and may be limited by comments, strings or complex
-expressions. No syntax diagnostics, go-to-definition, rename, workspace indexing
-or debugger yet. Standard library support is limited to basic global suggestions.
+expressions. No go-to-definition, rename, workspace indexing or debugger yet. Standard library support is limited to basic global suggestions.
 Not published on the Marketplace.
 
 ## Development
@@ -65,3 +65,25 @@ of a line to expose an Inspector field. The engine preprocesses this LegacyScrip
 syntax before executing Lua; external plain-Lua runtimes cannot execute it as-is.
 Legacy `---@export` comments remain supported. The `export` snippet inserts the
 preferred bare form, and both forms supply completion and hover information.
+
+
+## Error diagnostics
+
+Version 0.1.1 validates open `.ls` documents on open/save and shortly after edits.
+Errors appear inline and in **View → Problems** with source **LegacyScript**;
+fixed errors disappear automatically, and closed files clear their diagnostics.
+Syntax checking never executes scripts. It understands engine `@export` lines and
+reports malformed/duplicate declarations and unknown export types. Lua 5.4 local
+`<const>` / `<close>` annotations are accepted on top of the bundled Lua 5.3 syntax
+grammar, but attribute semantics are not checked. Validation pauses for documents
+over 2 MiB and shows a warning rather than freezing the extension host.
+
+Runtime-only failures (missing scene objects/components, dynamic values and engine
+callbacks) still appear in LegacyEngine's script console; this extension is not a
+full Lua type checker or debugger. It reports the first Lua syntax error per pass,
+plus export-declaration errors. Correcting that error may reveal the next one.
+
+Internal language-service failures now produce a visible notification (rate-limited)
+and details in **Output → LegacyScript** instead of only silently logging. If no
+errors appear, verify the file language is **LegacyScript**, install the updated
+VSIX and reload VS Code. Existing Lua extensions/file associations can override `.ls`.

@@ -51,3 +51,11 @@ These are manual checks, not automated tests. Build success alone does not verif
 - Expand the optional isolated preview and pause: confirm it does not keep cloning/rendering the world while idle, and updates after editing keys.
 - Verify animated shadows, normal maps and per-instance poses after switching between Scene, Game and both previews.
 - Verify preview lighting is brighter without changing lights in the edited scene.
+
+## Saving and position channels
+- Edit several tracks, focus the Animation window and press Ctrl+S: all clip keys and values must persist after reopening, without opening the project Save As dialog.
+- Verify Ctrl+S while a numeric key field or clip-settings popup is focused, as well as the Save animation toolbar button.
+- Save Project / Save Level / autosave with a dirty clip: verify the clip is written too. A clip-save failure must remain visible and must not report a successful project/level save.
+- Verify unsaved clip edits participate in the project's unsaved-change/exit prompt.
+- Add Transform.position: verify X, Y and Z subchannels show their sampled values. Select a key and edit each labeled axis, save/reopen and scrub to verify all three values.
+- Position axes share vector-key times: dragging a diamond on any axis must keep the vector key ordered and update its time on all three lanes. Curves should display the selected axis.

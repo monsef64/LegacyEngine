@@ -476,7 +476,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
             switch (event.type) {
             case SDL_EVENT_DROP_FILE:
-                if (!playMode.active() && event.drop.data) {
+                if (!playMode.active() && !projectDialog.pending() && !levels.busy() &&
+                    event.drop.data) {
                     browser.importFile(event.drop.data);
                 }
                 break;
@@ -594,9 +595,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
         bool openProject = false, saveProject = false, saveAsProject = false;
-        const bool projectEnabled = !prefabLevel && !levels.busy() && !playMode.active() &&
-                                    !editor.dragging() && !projectDialog.pending() &&
-                                    !browser.dialog.pending();
+        const bool projectEnabled = !browser.importing() && !prefabLevel && !levels.busy() &&
+                                    !playMode.active() && !editor.dragging() &&
+                                    !projectDialog.pending() && !browser.dialog.pending();
         profiler.checkpoint(ProfilePart::Events);
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("File")) {
@@ -610,6 +611,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 if (ImGui::MenuItem("Save Level", nullptr, false, projectEnabled)) {
                     try {
+                        if (!animationWindow.saveIfDirty(browser.assets)) {
+                            throw std::runtime_error(animationWindow.error());
+                        }
                         scripts.saveFile(browser.assets);
                         levels.saveCurrent(world, embeddedLegacySource, camera);
                     } catch (const std::exception& e) {
@@ -635,6 +639,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             bool saved = false;
             auto assetRoot = projectAssetsPath(path);
             try {
+                if (browser.importing()) {
+                    throw std::runtime_error("Wait for the asset import to finish before saving");
+                }
+                if (!animationWindow.saveIfDirty(browser.assets)) {
+                    throw std::runtime_error(animationWindow.error());
+                }
                 scripts.saveFile(browser.assets);
                 levels.saveCurrent(world, embeddedLegacySource, camera);
                 browser.assets.copyTo(assetRoot);
@@ -1380,6 +1390,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                     ? browser.assets.root
                                     : std::filesystem::absolute(currentProject).parent_path();
         browser.draw(window, world, selectedEntity, scripts, editAllowed, &history);
+        if (!browser.movedAsset.first.empty()) {
+            const auto moved = std::exchange(browser.movedAsset, {});
+            animationWindow.remapAssetPaths(moved.first, moved.second);
+            modelPreviewWindow.visible = false;
+        }
+
         if (!browser.previewModelRequest.empty()) {
             modelPreviewWindow.open(
                 browser.assets, std::exchange(browser.previewModelRequest, {}), renderer);
@@ -2241,6 +2257,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (!prefabLevel && !playMode.active() && !editor.dragging()) {
             projectDirty =
                 currentProject.empty() || scripts.hasUnsavedChanges() ||
+                animationWindow.hasUnsavedChanges() ||
                 projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
         }
         if (projectEnabled && !currentProject.empty() && projectDirty &&
@@ -2289,11 +2306,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 selectedEntity = world.alive(editSelection) ? editSelection : Entity{};
                 projectDirty =
                     currentProject.empty() || scripts.hasUnsavedChanges() ||
+                    animationWindow.hasUnsavedChanges() ||
                     projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
             }
-            if (prefabLevel || levels.busy() || projectDialog.pending()) {
+            if (browser.importing() || prefabLevel || levels.busy() || projectDialog.pending()) {
                 projectError =
-                    "Stop Play mode, finish prefab editing, and close pending dialogs before exiting.";
+                    "Wait for imports, stop Play mode, finish prefab editing, and close pending dialogs before exiting.";
             } else if (!projectDirty) {
                 running = false;
             } else {
@@ -2325,26 +2343,63 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
         if (cameraLooking || input.mouseLocked) {
-            if (input.window == gameWindow && gameWindow) {
-                SDL_SetWindowMouseGrab(gameWindow, true);
+            SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_CENTER, "0");
+            if (input.mouseLocked && input.window == gameWindow && gameWindow) {
+                SDL_SetWindowMouseRect(window, nullptr);
+                SDL_SetWindowMouseGrab(window, false);
+                int w = 0, h = 0;
+                SDL_GetWindowSize(gameWindow, &w, &h);
+                const SDL_Rect rect{0, 0, w, h};
+                if (w > 0 && h > 0) {
+                    SDL_SetWindowMouseRect(gameWindow, &rect);
+                    SDL_SetWindowMouseGrab(gameWindow, true);
+                } else {
+                    input.releaseMouse();
+                }
             } else {
                 const auto origin = ImGui::GetMainViewport()->Pos;
-                const SDL_Rect rect = cameraLooking ? SDL_Rect{int(sceneRect.x - origin.x),
-                                                               int(sceneRect.y - origin.y),
-                                                               int(sceneRect.width),
-                                                               int(sceneRect.height)}
-                                                    : SDL_Rect{int(gameImageOrigin.x - origin.x),
-                                                               int(gameImageOrigin.y - origin.y),
-                                                               int(gameImageSize.x),
-                                                               int(gameImageSize.y)};
+                SDL_Rect rect = !input.mouseLocked ? SDL_Rect{int(sceneRect.x - origin.x),
+                                                              int(sceneRect.y - origin.y),
+                                                              int(sceneRect.width),
+                                                              int(sceneRect.height)}
+                                                   : SDL_Rect{int(gameImageOrigin.x - origin.x),
+                                                              int(gameImageOrigin.y - origin.y),
+                                                              int(gameImageSize.x),
+                                                              int(gameImageSize.y)};
+                int w = 0, h = 0;
+                SDL_GetWindowSize(window, &w, &h);
+                int right = std::min(w, rect.x + rect.w), bottom = std::min(h, rect.y + rect.h);
+                rect.x = std::max(0, rect.x);
+                rect.y = std::max(0, rect.y);
+                rect.w = right - rect.x;
+                rect.h = bottom - rect.y;
                 if (rect.w > 0 && rect.h > 0) {
-                    SDL_SetWindowMouseRect(window, &rect);
+                    if (!SDL_SetWindowMouseRect(window, &rect) ||
+                        !SDL_SetWindowMouseGrab(window, true)) {
+                        input.releaseMouse();
+                        cameraLooking = false;
+                    } else {
+                        float x = 0, y = 0;
+                        SDL_GetMouseState(&x, &y);
+                        if (x < rect.x || x >= rect.x + rect.w || y < rect.y ||
+                            y >= rect.y + rect.h) {
+                            SDL_WarpMouseInWindow(
+                                window, rect.x + rect.w * .5f, rect.y + rect.h * .5f);
+                        }
+                    }
+                } else {
+                    input.releaseMouse();
+                    cameraLooking = false;
+                    SDL_SetWindowRelativeMouseMode(window, false);
                 }
-                SDL_SetWindowMouseGrab(window, true);
             }
         } else {
             SDL_SetWindowMouseRect(window, nullptr);
             SDL_SetWindowMouseGrab(window, false);
+            if (gameWindow) {
+                SDL_SetWindowMouseRect(gameWindow, nullptr);
+                SDL_SetWindowMouseGrab(gameWindow, false);
+            }
         }
         const std::string title =
             projectWindowTitle(currentProject, projectDirty, levels.current());

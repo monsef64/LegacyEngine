@@ -76,7 +76,9 @@ class AssetManager {
         std::sort(result.begin(), result.end());
         return result;
     }
-    std::string import(const std::filesystem::path& source, const std::string& parent = {}) {
+    std::string import(const std::filesystem::path& source,
+                       const std::string& parent = {},
+                       bool forceCopy = false) {
         if (extension(source) == ".blend") {
             throw std::runtime_error(
                 "Blender files cannot be imported; export to glTF, FBX, or OBJ first");
@@ -103,7 +105,7 @@ class AssetManager {
             throw std::runtime_error("Cannot import a filesystem root");
         }
         auto relative = (std::filesystem::path(parent) / leaf).generic_string();
-        if (std::filesystem::exists(resolve(relative)) &&
+        if (!forceCopy && std::filesystem::exists(resolve(relative)) &&
             std::filesystem::equivalent(source, resolve(relative))) {
             return relative;
         }

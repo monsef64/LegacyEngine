@@ -64,6 +64,18 @@ class TrashFile {
             std::filesystem::remove(info, ec);
             throw;
         }
+#elif defined(_WIN32)
+        // Application trash retains an exact restore receipt for editor Undo.
+        const char* local = std::getenv("LOCALAPPDATA");
+        if (!local) {
+            throw std::runtime_error("Cannot locate user Trash storage");
+        }
+        auto root = std::filesystem::path(local) / "LegacyEngine" / "Trash";
+        std::filesystem::create_directories(root);
+        trashed =
+            root / (original.filename().string() + "-" +
+                    std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+        move(original, trashed);
 #elif defined(__APPLE__)
         const char* home = std::getenv("HOME");
         if (!home) {
@@ -124,13 +136,18 @@ class TrashFile {
         if (ec != std::errc::cross_device_link) {
             throw std::filesystem::filesystem_error("Cannot move asset", from, to, ec);
         }
-        std::filesystem::copy_file(from, to); // No overwrite; keep original if copy fails.
         try {
-            std::filesystem::remove(from);
+            std::filesystem::copy(from,
+                                  to,
+                                  std::filesystem::copy_options::recursive |
+                                      std::filesystem::copy_options::copy_symlinks);
         } catch (...) {
             std::error_code ignored;
-            std::filesystem::remove(to, ignored);
+            std::filesystem::remove_all(to, ignored);
             throw;
         }
+        // Keep the complete destination if removal fails partway through a
+        // directory tree: deleting that copy could destroy the only remaining data.
+        std::filesystem::remove_all(from);
     }
 };
