@@ -1811,10 +1811,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 const auto& t = world.get<Transform>(cameraEntity);
                 if (u >= c.viewportX && u <= c.viewportX + c.viewportWidth && v >= c.viewportY &&
                     v <= c.viewportY + c.viewportHeight) {
-                    Vec3 near = cameraScreenToWorld(t, c, {u, v, 0}),
-                         far = cameraScreenToWorld(t, c, {u, v, 1});
+                    const Vec3 nearPoint = cameraScreenToWorld(t, c, {u, v, 0}),
+                               farPoint = cameraScreenToWorld(t, c, {u, v, 1});
                     RayHit hit;
-                    if (physics.raycast({near, normalize(far - near)}, c.farClip, hit) &&
+                    if (physics.raycast(
+                            {nearPoint, normalize(farPoint - nearPoint)}, c.farClip, hit) &&
                         isActive(world, hit.entity)) {
                         hovered = hit.entity;
                     }
