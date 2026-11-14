@@ -152,26 +152,17 @@ jobs:
           timestamp=$(date -u +%Y%m%d-%H%M%S)
           package=LegacyEngine-$timestamp-linux-x86_64
 
-          mkdir -p "$package/licenses"
+          mkdir -p "$package"
           cp build/LegacyEngine "$package/"
           cp LICENSE "$package/"
           cp -r build/docs "$package/docs"
           test -s "$package/docs/scripting-reference.html"
           cp -r scripts "$package/"
+          python3 tools/collect_licenses.py build
           cp -r data "$package/"
           cp .luarc.json "$package/"
-          cp build/_deps/sdl3-src/LICENSE.txt "$package/licenses/SDL3.txt"
-          cp build/_deps/reactphysics3d-src/LICENSE "$package/licenses/ReactPhysics3D.txt"
-          cp build/_deps/imgui-src/LICENSE.txt "$package/licenses/DearImGui.txt"
-          cp build/_deps/imguizmo-src/LICENSE "$package/licenses/ImGuizmo.txt"
-          cp build/_deps/lua-src/lua.h "$package/licenses/Lua.txt"
-          cp third_party/roboto/LICENSE "$package/licenses/Roboto.txt"
-          cp third_party/glad/LICENSE "$package/licenses/glad.txt"
-          cp third_party/miniaudio/LICENSE "$package/licenses/miniaudio.txt"
-          cp third_party/simdjson/LICENSE "$package/licenses/simdjson.txt"
-          cp third_party/fontawesome/LICENSE.txt "$package/licenses/FontAwesome.txt"
-          cp third_party/stb/LICENSE "$package/licenses/stb.txt"
-          cp third_party/json/LICENSE.MIT "$package/licenses/nlohmann-json.txt"
+          test -s "$package/data/license/SDL3.txt"
+          test -s "$package/data/license/assimp.txt"
           tar -czf "$package.tar.gz" "$package"
 
           echo "PACKAGE=$package" >> "$GITHUB_ENV"

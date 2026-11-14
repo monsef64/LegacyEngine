@@ -1,5 +1,6 @@
 #include "editor/transform_editor.hpp"
 #include "core/hierarchy.hpp"
+#include "models/model_asset.hpp"
 #include <limits>
 
 namespace {
@@ -49,7 +50,8 @@ void TransformEditor::draw(World& world,
                            const OrbitCamera& camera,
                            float aspect,
                            const EditorRect* scene,
-                           ImDrawList* drawList) {
+                           ImDrawList* drawList,
+                           const AssetManager* assets) {
     if (!enabled || !world.alive(entity) || !world.has<Transform>(entity)) {
         finish(world);
         return;
@@ -67,7 +69,23 @@ void TransformEditor::draw(World& world,
         return;
     }
     Transform& transform = world.get<Transform>(entity);
-    Mat4 model = transformMatrix(transform.position, transform.rotation, transform.scale);
+    if (!dragging_) {
+        pivotLocal_ = {};
+        if (centerPivot_) {
+            const auto center = selectionCenter(world, entity, assets);
+            auto local = rotateVector(Quat{-transform.rotation.x,
+                                           -transform.rotation.y,
+                                           -transform.rotation.z,
+                                           transform.rotation.w},
+                                      center - transform.position);
+            pivotLocal_ = {std::abs(transform.scale.x) > 1e-8f ? local.x / transform.scale.x : 0,
+                           std::abs(transform.scale.y) > 1e-8f ? local.y / transform.scale.y : 0,
+                           std::abs(transform.scale.z) > 1e-8f ? local.z / transform.scale.z : 0};
+        }
+    }
+    const auto pivot =
+        transform.position + rotateVector(transform.rotation, pivotLocal_ * transform.scale);
+    Mat4 model = transformMatrix(pivot, transform.rotation, transform.scale);
     const Mat4 view = lookAt(camera.position(), camera.target, {0, 1, 0});
     const Mat4 projection = perspective(camera.fieldOfView, aspect, 0.1f, 200);
     const ImGuizmo::OPERATION operations[]{ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE};
@@ -80,11 +98,14 @@ void TransformEditor::draw(World& world,
                       scene ? scene->width : viewport->Size.x,
                       scene ? scene->height : viewport->Size.y);
     const bool wasDragging = dragging_;
+    const float snapValues[3]{snap_, snap_, snap_};
     const bool changed = ImGuizmo::Manipulate(view.m,
                                               projection.m,
                                               operations[static_cast<int>(tool_)],
                                               localSpace_ ? ImGuizmo::LOCAL : ImGuizmo::WORLD,
-                                              model.m);
+                                              model.m,
+                                              nullptr,
+                                              ImGui::GetIO().KeyCtrl ? snapValues : nullptr);
     hovered_ = ImGuizmo::IsOver(operations[static_cast<int>(tool_)]);
     dragging_ = ImGuizmo::IsUsing();
     if (dragging_ && !wasDragging) {
@@ -102,16 +123,15 @@ void TransformEditor::draw(World& world,
         const bool round = collider && (collider->shape == ColliderShape::Sphere ||
                                         collider->shape == ColliderShape::Capsule ||
                                         collider->shape == ColliderShape::Cone);
+        Transform candidate = transform;
+        candidate.position = pivot;
         if (round && tool_ == TransformTool::Scale) {
-            // ImGuizmo returns absolute scale relative to the start of its drag.
-            // Compare against that baseline, not last frame's uniform result.
-            Transform candidate = transform;
             candidate.scale = scaleAtStart_;
-            if (applyGizmoMatrix(candidate, model, tool_, true)) {
-                transform.scale = candidate.scale;
-            }
-        } else {
-            applyGizmoMatrix(transform, model, tool_, false);
+        }
+        if (applyGizmoMatrix(candidate, model, tool_, round && tool_ == TransformTool::Scale)) {
+            candidate.position = candidate.position -
+                                 rotateVector(candidate.rotation, pivotLocal_ * candidate.scale);
+            transform = candidate;
         }
     }
     if (!dragging_ && heldBody_) {
@@ -123,6 +143,7 @@ void TransformEditor::draw(World& world,
 }
 
 void TransformEditor::drawToolbar() {
+    const bool compact = ImGui::GetContentRegionAvail().x < 620;
     const char* ids[]{"##move", "##rotate", "##scale"};
     const char* tips[]{
         "Move: drag an axis arrow", "Rotate: drag an axis ring", "Scale: drag an axis handle"};
@@ -148,6 +169,36 @@ void TransformEditor::drawToolbar() {
     ImGui::SameLine();
     if (ImGui::RadioButton("Local", localSpace_)) {
         localSpace_ = true;
+    }
+    if (compact) {
+        ImGui::NewLine();
+    } else {
+        ImGui::SameLine();
+    }
+    ImGui::SetNextItemWidth(85);
+    int pivot = centerPivot_ ? 1 : 0;
+    if (ImGui::Combo("##Pivot", &pivot, "Origin\0Center\0")) {
+        centerPivot_ = pivot == 1;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Origin: object position. Center: combined mesh bounds of this object and its children.");
+    }
+    ImGui::SameLine();
+    const float width = ImGui::GetContentRegionAvail().x;
+    if (width > 180) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - 180);
+    }
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Snap");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(130);
+    if (ImGui::InputFloat("##Snap", &snap_, .25f, .25f, "%.2f")) {
+        snap_ = std::isfinite(snap_) ? std::clamp(std::round(snap_ * 4) / 4, .25f, 10000.f) : .5f;
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "Hold Ctrl while dragging: move in world units, rotate in degrees, scale in increments. Step 0.25; minimum 0.25.");
     }
     ImGui::EndDisabled();
 }
@@ -279,4 +330,76 @@ bool TransformEditor::drawColliderFaces(World& world,
         return true;
     }
     return face_ >= 0;
+}
+
+Vec3 TransformEditor::selectionCenter(World& world, Entity selected, const AssetManager* assets) {
+    if (assets && (boundsRoot_ != assets->root || boundsRevision_ != modelAssetRevision)) {
+        modelBounds_.clear();
+        boundsRoot_ = assets->root;
+        boundsRevision_ = modelAssetRevision;
+    }
+    bool haveMeshes = false, havePoints = false;
+    Vec3 low{}, high{}, pointLow{}, pointHigh{};
+    auto include = [](Vec3 p, Vec3& a, Vec3& b, bool& any) {
+        if (!any) {
+            a = b = p;
+            any = true;
+        }
+        a = {std::min(a.x, p.x), std::min(a.y, p.y), std::min(a.z, p.z)};
+        b = {std::max(b.x, p.x), std::max(b.y, p.y), std::max(b.z, p.z)};
+    };
+    for (auto entity : world.entities()) {
+        auto ancestor = entity;
+        unsigned depth = 0;
+        while (ancestor != selected && ancestor != Entity{} && depth++ < 128) {
+            ancestor = getParent(world, ancestor);
+        }
+        if (ancestor != selected || !world.has<Transform>(entity)) {
+            continue;
+        }
+        const auto& pose = world.get<Transform>(entity);
+        if (entity != selected) {
+            include(pose.position, pointLow, pointHigh, havePoints);
+        }
+        const auto* mesh = world.tryGet<MeshRenderer>(entity);
+        if (!mesh) {
+            continue;
+        }
+        Bounds bounds;
+        bool valid = false;
+        if (!mesh->model.empty() && assets) {
+            auto it = modelBounds_.find(mesh->model);
+            if (it == modelBounds_.end()) {
+                try {
+                    const auto data = loadModelAsset(*assets, mesh->model);
+                    for (const auto& vertex : data.vertices) {
+                        include(vertex.position, bounds.low, bounds.high, bounds.valid);
+                    }
+                } catch (const std::exception&) {
+                } // Invalid models still allow origin/child editing.
+                if (modelBounds_.size() >= 4096) {
+                    modelBounds_.clear();
+                }
+                it = modelBounds_.emplace(mesh->model, bounds).first;
+            }
+            bounds = it->second;
+            valid = bounds.valid;
+        } else if (meshBounds) {
+            valid = meshBounds(mesh->mesh, bounds.low, bounds.high);
+        }
+        if (valid) {
+            for (int i = 0; i < 8; ++i) {
+                const Vec3 p{i & 1 ? bounds.high.x : bounds.low.x,
+                             i & 2 ? bounds.high.y : bounds.low.y,
+                             i & 4 ? bounds.high.z : bounds.low.z};
+                include(pose.position + rotateVector(pose.rotation, p * pose.scale),
+                        low,
+                        high,
+                        haveMeshes);
+            }
+        }
+    }
+    return haveMeshes   ? (low + high) * .5f
+           : havePoints ? (pointLow + pointHigh) * .5f
+                        : world.get<Transform>(selected).position;
 }

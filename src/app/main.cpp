@@ -247,6 +247,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     bool sceneHovered = false, resetWorkspace = false;
     Entity editSelection;
     TransformEditor editor;
+    editor.meshBounds = [&renderer](MeshHandle mesh, Vec3& low, Vec3& high) {
+        return renderer.meshBounds(mesh, low, high);
+    };
     OrbitCamera camera;
     const ProjectIO::Meshes projectMeshes{
         gridMesh, planeMesh, cubeMesh, sphereMesh, capsuleMesh, coneMesh};
@@ -1644,7 +1647,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                      ImGuiWindowFlags_NoScrollWithMouse)) {
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 3));
                 ImGui::BeginChild("Scene toolbar",
-                                  ImVec2(0, 30),
+                                  ImVec2(0,
+                                         (ImGui::GetContentRegionAvail().x < 620 ? 2.f : 1.f) *
+                                                 ImGui::GetFrameHeightWithSpacing() +
+                                             6),
                                   ImGuiChildFlags_AlwaysUseWindowPadding,
                                   ImGuiWindowFlags_NoScrollbar |
                                       ImGuiWindowFlags_NoScrollWithMouse);
@@ -1730,7 +1736,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                             camera,
                             static_cast<float>(sceneSurface.width) / sceneSurface.height,
                             &sceneRect,
-                            sceneDrawList);
+                            sceneDrawList,
+                            &browser.assets);
                 if (editor.capturesMouse() || orientationInteracting) {
                     clicking = false;
                 }

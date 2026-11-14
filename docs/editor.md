@@ -348,3 +348,23 @@ handles allow independent X/Y/Z scaling; uniform scale remains for round shapes.
 **Friction** and **Bounciness** are contact-surface properties on Collider, so
 static floors and walls can have different materials without a RigidBody.
 RigidBody owns mass, gravity, and linear/angular damping, not surface material.
+
+## Transform snapping and pivot placement
+
+The Scene toolbar has a right-aligned **Snap** increment, initially **0.50**.
+Its minus/plus controls change by **0.25**, with a minimum of **0.25**. Hold
+**Ctrl** while dragging a transform gizmo to snap; release Ctrl for free dragging.
+Move uses scene units, Rotate uses degrees, and Scale uses scale increments.
+Collider face handles are independent of transform snapping. Narrow Scene panels
+use a second toolbar row so the pivot and snap controls remain accessible.
+
+Choose **Origin** or **Center** next to World/Local. Origin uses the selected
+object's Transform position. Center uses the combined world-space mesh bounds
+of that object and all descendants, including imported model parts; groups with
+no meshes use their children's positions. Rotation and scaling operate about
+that center, and translation moves the group without changing the model's baked
+origin. The center is held fixed relative to the object throughout a gesture to
+avoid drift. This is a gizmo-pivot setting, not a permanent mesh-origin edit.
+
+Third-party licenses ship under **data/license/**; see its README for the source
+versions, nested dependency notices, and the refresh command.

@@ -43,7 +43,8 @@ and the [VS Code extension guide](docs/vscode.md).
 ## License
 
 **GNU General Public License, version 2 only** (`GPL-2.0-only`). See [LICENSE](LICENSE).
-Third-party dependencies and assets retain their respective licenses and notices.
+Third-party dependencies and assets retain their respective licenses and notices,
+collected under [`data/license/`](data/license/README.md) and included in releases.
 
 ### Levels and rendering settings
 
