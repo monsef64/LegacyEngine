@@ -35,6 +35,7 @@ struct MeshRenderer {
     std::string material;            // project-relative .mat; empty uses legacy Diffuse values
     MaterialProperties materialValues;
     unsigned materialOverrides = 0; // per-instance script overrides; never edits shared asset
+    std::string model; // project-relative baked .lemesh; empty selects a built-in primitive
 };
 
 enum class ColliderShape { Box, Sphere, Capsule, Cone };

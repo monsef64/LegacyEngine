@@ -1,4 +1,5 @@
 #pragma once
+#include "models/model_import.hpp"
 #include <SDL3/SDL.h>
 #include <memory>
 #include <mutex>
@@ -52,8 +53,27 @@ class ProjectDialog {
             }
             state_->busy = true;
         }
-        SDL_ShowOpenFileDialog(
-            callback, new Request{state_, false}, window, nullptr, 0, nullptr, false);
+        static const std::string extensions = modelImportExtensions();
+        static const SDL_DialogFileFilter filters[]{
+            {"3D Models (all Assimp formats)", extensions.c_str()},
+            {"glTF / GLB", "gltf;glb"},
+            {"FBX", "fbx"},
+            {"Wavefront OBJ", "obj"},
+            {"Collada", "dae"},
+            {"Blender", "blend"},
+            {"STL / PLY", "stl;ply"},
+            {"LegacyEngine Mesh", "lemesh"},
+            {"Scripts", "ls;lua"},
+            {"Images", "png;jpg;jpeg;bmp;tga;hdr"},
+            {"Audio", "wav;mp3;ogg;flac"},
+            {"All files", "*"}};
+        SDL_ShowOpenFileDialog(callback,
+                               new Request{state_, false},
+                               window,
+                               filters,
+                               static_cast<int>(sizeof(filters) / sizeof(filters[0])),
+                               nullptr,
+                               false);
     }
     std::optional<Result> poll() {
         std::lock_guard<std::mutex> lock(state_->mutex);

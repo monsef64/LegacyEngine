@@ -82,5 +82,9 @@
   {
     "file": "license.md",
     "title": "License"
+  },
+  {
+    "file": "models.md",
+    "title": "Static 3D model import"
   }
 ]

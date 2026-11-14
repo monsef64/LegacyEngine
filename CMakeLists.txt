@@ -89,6 +89,22 @@ get_target_property(reactphysics3d_includes reactphysics3d INTERFACE_INCLUDE_DIR
 set_target_properties(reactphysics3d PROPERTIES
   INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${reactphysics3d_includes}")
 
+# --- Assimp: static model import, all supported source formats ----------------
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT ON CACHE BOOL "" FORCE)
+FetchContent_Declare(assimp
+  URL https://github.com/assimp/assimp/archive/refs/tags/v5.4.3.tar.gz)
+FetchContent_MakeAvailable(assimp)
+add_library(legacy_models STATIC src/models/model_import.cpp)
+target_include_directories(legacy_models PUBLIC src)
+target_link_libraries(legacy_models PUBLIC assimp::assimp legacy_json)
+
 # --- GLAD (OpenGL function loader) ------------------------------------------
 #
 # Generated code, see third_party/glad/README.md.
@@ -190,7 +206,7 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf"
 string(REGEX REPLACE "(..)" "0x\\1," LEGACY_ICON_BYTES "${LEGACY_ICON_HEX}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma once\ninline const unsigned char editorIconData[] = {${LEGACY_ICON_BYTES}};\n")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui imguizmo lua_console legacy_material_textures)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
