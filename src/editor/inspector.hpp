@@ -3,6 +3,7 @@
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
 #include "editor/asset_picker.hpp"
+#include "editor/asset_preview_ui.hpp"
 #include "editor/component_clipboard.hpp"
 #include "editor/editor_layout.hpp"
 #include "editor/level_objects.hpp"
@@ -360,6 +361,7 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
             error.clear();
         }
         ImGui::TextWrapped("Model import settings: %s", settings.c_str());
+        drawAssetPreview(assets, path, std::min(384.f, ImGui::GetContentRegionAvail().x), 1);
         ImGui::InputFloat("Import scale", &scale, .001f, .1f, "%.6f");
         ImGui::TextWrapped(
             "Applied before Transform scale (0.000001 to 1000000). Shared instances and their Box collider bounds are updated.");

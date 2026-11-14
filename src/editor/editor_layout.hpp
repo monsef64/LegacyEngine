@@ -61,9 +61,10 @@ inline bool* panelVisibility(const char* name) {
     }
     return nullptr;
 }
-inline bool beginEditorPanel(const char* name, ImGuiWindowFlags fallback = 0) {
+inline bool
+beginEditorPanel(const char* name, ImGuiWindowFlags fallback = 0, ImGuiWindowFlags flags = 0) {
     bool* open = panelVisibility(name);
-    return ImGui::Begin(name, open, dockedEditor ? 0 : fallback);
+    return ImGui::Begin(name, open, (dockedEditor ? 0 : fallback) | flags);
 }
 inline constexpr ImGuiWindowFlags fixedPanelFlags =
     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |

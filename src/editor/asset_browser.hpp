@@ -3,6 +3,7 @@
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_preview.hpp"
+#include "editor/asset_preview_ui.hpp"
 #include "editor/editor_history.hpp"
 #include "editor/editor_layout.hpp"
 #include "editor/editor_settings.hpp"
@@ -432,8 +433,12 @@ class AssetBrowser {
                                                          ? "Prefab"
                                                          : AssetManager::extension(file);
                             ImGui::Text("Type: %s", type.c_str());
-                            if (thumbnail) {
-                                ImGui::Image(static_cast<ImTextureID>(thumbnail), ImVec2(240, 240));
+                            if (!folderItem) {
+                                drawAssetPreview(
+                                    assets,
+                                    file,
+                                    std::min(384.f, ImGui::GetMainViewport()->WorkSize.x * .65f),
+                                    0);
                             }
                             ImGui::EndTooltip();
                         }

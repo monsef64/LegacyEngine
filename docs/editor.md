@@ -144,8 +144,8 @@ The title reads `LevelName* - ProjectName - Linux` (or `Windows`); the asterisk
 marks unsaved scene changes. Asset browsing lists folders first, then files, with
 folder names only; import, script creation and folder creation use right-aligned
 icons. Materials display a lit sphere thumbnail (color, albedo, specular) and a
-larger 240px preview on hover. These are lightweight approximate previews, not a
-full renderer/normal-map preview.
+larger rendered sphere preview on hover. Grid icons are lightweight approximate
+previews, not a full renderer/normal-map preview.
 
 GameObject **Active** in Inspector controls local activity. Disabled parents
 also disable their children; reactivating a parent preserves each child's local
@@ -231,7 +231,15 @@ return to its component Inspector.
 File labels hide extensions and truncate names longer than twelve characters
 with `...`; folder names are never shortened. Labels are centered in grid view
 and left-aligned in list view. Hover an item for three seconds to see its
-full name and type (and thumbnail where available). Paths on disk are unchanged.
+full name and type with a large preview: textures, rendered model/mesh geometry,
+material spheres, cubemaps, and static prefab geometry; scripts show an excerpt
+and audio shows a waveform and duration (hovering does not start playback).
+Models retain their part materials. Model import settings in Inspector also show
+the rendered model. Preview scenes are isolated from the edited level and never
+run scripts or physics. Rendered previews are cached until the selection, asset
+file, project, or model import settings change; invalid assets show an error
+instead. File content previews are bounded. Paths on disk are unchanged.
+The Scene viewport has no scrollbars; mouse-wheel viewport navigation is unchanged.
 The default dock layout places Prefab Window below Hierarchy. When the separate
 Game window is open, the embedded Game viewport is not displayed or rendered.
 

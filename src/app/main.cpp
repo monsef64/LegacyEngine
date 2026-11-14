@@ -10,6 +10,7 @@
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include "editor/asset_browser.hpp"
+#include "editor/asset_preview_renderer.hpp"
 #include "editor/create_menu.hpp"
 #include "editor/dock_workspace.hpp"
 #include "editor/editor_history.hpp"
@@ -237,6 +238,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     ScriptComponents componentScripts;
     AudioSystem audio;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
+    AssetPreviewRenderer assetPreviews(
+        renderer, {gridMesh, planeMesh, cubeMesh, sphereMesh, capsuleMesh, coneMesh});
     EditorRect sceneRect{};
     bool sceneHovered = false, resetWorkspace = false;
     Entity editSelection;
@@ -1595,7 +1598,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         orientationInteracting = false;
         if (panelOpen[2]) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-            if (beginEditorPanel("Scene")) {
+            if (beginEditorPanel("Scene",
+                                 0,
+                                 ImGuiWindowFlags_NoScrollbar |
+                                     ImGuiWindowFlags_NoScrollWithMouse)) {
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 3));
                 ImGui::BeginChild("Scene toolbar",
                                   ImVec2(0, 30),
