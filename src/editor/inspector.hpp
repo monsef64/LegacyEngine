@@ -784,18 +784,17 @@ inline void drawInspector(World& world,
                     int shape = static_cast<int>(c->shape);
                     if (ImGui::Combo("Collider shape", &shape, names, 5)) {
                         c->shape = static_cast<ColliderShape>(shape);
-                        if (c->shape == ColliderShape::Mesh && c->model.empty()) {
-                            if (const auto* mesh = world.tryGet<MeshRenderer>(selected)) {
-                                c->model = mesh->model;
-                                c->center = {};
-                            }
+                        if (c->shape == ColliderShape::Mesh) {
+                            c->center = {};
+                            c->meshDetail = 15;
                         }
                     }
                     editVector("Center", c->center);
                     if (c->shape == ColliderShape::Mesh) {
-                        assetPicker("Mesh source", c->model, assets, [](const std::string& path) {
-                            return modelAsset(path);
-                        });
+                        assetPicker("Mesh source (None = rendered model)",
+                                    c->model,
+                                    assets,
+                                    [](const std::string& path) { return modelAsset(path); });
                         if (ImGui::BeginDragDropTarget()) {
                             if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                                 std::string path = static_cast<const char*>(drop->Data);
@@ -805,17 +804,17 @@ inline void drawInspector(World& world,
                             }
                             ImGui::EndDragDropTarget();
                         }
-                        ImGui::BeginDisabled(c->model.empty());
                         ImGui::SliderInt("Mesh detail", &c->meshDetail, 2, 15);
                         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                             ImGui::SetTooltip(
                                 "Lower = fewer triangles. 15 preserves source triangles. Simplification can remove small features.");
                         }
-                        ImGui::EndDisabled();
                         ImGui::TextWrapped(
-                            "Static triangle-mesh collider (concave surfaces supported). RigidBody movement is disabled for this shape. Empty source uses Size as a triangle box.");
-                        if (c->model.empty()) {
-                            editVector("Size", c->size);
+                            "Static triangle-mesh collider. None uses this object's rendered .lemesh model. An explicit source overrides it. No cube fallback. RigidBody movement is disabled for this shape.");
+                        const auto* visual = world.tryGet<MeshRenderer>(selected);
+                        if (c->model.empty() && (!visual || visual->model.empty())) {
+                            ImGui::TextWrapped(
+                                "No model source: choose a .lemesh asset above, or add this collider to a model's mesh child. Primitive meshes require an explicit model source.");
                         }
                     } else if (c->shape == ColliderShape::Box) {
                         editVector("Size", c->size, 0.02f, 0.01f, 10000);
@@ -838,6 +837,9 @@ inline void drawInspector(World& world,
                         }
                     }
                     ImGui::Checkbox("Is trigger", &c->isTrigger);
+                    ImGui::SeparatorText("Contact surface");
+                    ImGui::TextDisabled(
+                        "Surface properties also apply to static colliders (no RigidBody).");
                     ImGui::SliderFloat("Friction", &c->friction, 0, 1);
                     ImGui::SliderFloat("Bounciness", &c->bounciness, 0, 1);
                 }

@@ -39,7 +39,7 @@
 ---@field angularVelocity Vec3
 ---@class Collider
 ---@field shape 'Box'|'Sphere'|'Capsule'|'Cone'|'Mesh'
----@field model string Static triangle-mesh .lemesh source; empty uses Size
+---@field model string Static triangle-mesh .lemesh source; empty follows the rendered model
 ---@field meshDetail integer Mesh detail 2..15 (default 8); 15 preserves source triangles
 ---@field size Vec3
 ---@field center Vec3

@@ -99,7 +99,9 @@ void TransformEditor::draw(World& world,
     }
     if (changed) {
         const auto* collider = world.tryGet<Collider>(entity);
-        const bool round = collider && collider->shape != ColliderShape::Box;
+        const bool round = collider && (collider->shape == ColliderShape::Sphere ||
+                                        collider->shape == ColliderShape::Capsule ||
+                                        collider->shape == ColliderShape::Cone);
         if (round && tool_ == TransformTool::Scale) {
             // ImGuizmo returns absolute scale relative to the start of its drag.
             // Compare against that baseline, not last frame's uniform result.

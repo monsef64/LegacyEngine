@@ -2854,7 +2854,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | Field | Type / meaning |
 | --- | --- |
 | `shape` | `'Box' / 'Sphere' / 'Capsule' / 'Cone' / 'Mesh'` |
-| `model` | `string Static triangle-mesh .lemesh source; empty uses Size` |
+| `model` | `string Static triangle-mesh .lemesh source; empty follows the rendered model` |
 | `meshDetail` | `integer Mesh detail 2..15 (default 8); 15 preserves source triangles` |
 | `size` | `Vec3` |
 | `center` | `Vec3` |

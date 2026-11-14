@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <cmath>
 
-inline MeshData colliderWireframe(const Collider& collider, Vec3 scale) {
+inline MeshData colliderWireframe(const Collider& collider,
+                                  Vec3 scale,
+                                  const std::vector<Vec3>* triangles = nullptr) {
     MeshData mesh;
     mesh.topology = MeshData::Topology::Lines;
     const Vec3 center = collider.center * scale;
@@ -14,7 +16,20 @@ inline MeshData colliderWireframe(const Collider& collider, Vec3 scale) {
         mesh.vertices.push_back({a + center, {}});
         mesh.vertices.push_back({b + center, {}});
     };
-    if (collider.shape == ColliderShape::Box || collider.shape == ColliderShape::Mesh) {
+    if (collider.shape == ColliderShape::Mesh) {
+        if (triangles) {
+            mesh.vertices.reserve(triangles->size() * 2);
+            for (std::size_t i = 0; i + 2 < triangles->size(); i += 3) {
+                const auto a = (*triangles)[i] * scale, b = (*triangles)[i + 1] * scale,
+                           c = (*triangles)[i + 2] * scale;
+                line(a, b);
+                line(b, c);
+                line(c, a);
+            }
+        }
+        return mesh;
+    }
+    if (collider.shape == ColliderShape::Box) {
         const Vec3 size = collider.size * scale;
         const Vec3 half{std::max(std::abs(size.x) * 0.5f, 0.0005f),
                         std::max(std::abs(size.y) * 0.5f, 0.0005f),

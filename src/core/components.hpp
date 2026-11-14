@@ -57,7 +57,7 @@ struct Collider {
     float radius = 0.5f;
     float height = 1.0f;
     bool isTrigger = false;
-    std::string model;  // Triangle mesh source .lemesh; empty uses a triangle box of size
+    std::string model;  // Triangle mesh source .lemesh; empty follows this entity's rendered model
     int meshDetail = 8; // detail 2..15; 15 preserves triangles, smaller is simpler
 };
 

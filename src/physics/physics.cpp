@@ -1,4 +1,5 @@
 #include "physics/physics.hpp"
+#include "models/collider_source.hpp"
 #include "models/mesh_simplify.hpp"
 #include "models/model_asset.hpp"
 #include <set>
@@ -419,22 +420,20 @@ struct Physics::Impl {
                     }
                     std::vector<Vec3> vertices;
                     if (box->model.empty()) {
-                        for (const auto& v : makeBox(box->halfSize * 2).vertices) {
-                            vertices.push_back(v.position);
-                        }
-                    } else {
-                        auto found = hullPoints.find(key);
-                        if (found == hullPoints.end()) {
-                            found = hullPoints
-                                        .emplace(key,
-                                                 simplifyMeshTriangles(
-                                                     loadModelAsset(assets, box->model),
-                                                     box->meshDetail))
-                                        .first;
-                        }
-                        for (auto v : found->second) {
-                            vertices.push_back(v * box->hullScale);
-                        }
+                        throw std::runtime_error(
+                            "Mesh collider needs a .lemesh source or a MeshRenderer with a model asset; no box fallback is used");
+                    }
+                    auto found = hullPoints.find(key);
+                    if (found == hullPoints.end()) {
+                        found =
+                            hullPoints
+                                .emplace(key,
+                                         simplifyMeshTriangles(loadModelAsset(assets, box->model),
+                                                               box->meshDetail))
+                                .first;
+                    }
+                    for (auto v : found->second) {
+                        vertices.push_back(v * box->hullScale);
                     }
                     if (vertices.empty()) {
                         throw std::runtime_error("Mesh collider has no non-degenerate triangles");
@@ -647,7 +646,10 @@ void Physics::update(World& world, float seconds, const std::function<void(float
             if (!isActive(world, entity)) {
                 return;
             }
-            const BoxCollider* boxCollider = world.tryGet<BoxCollider>(entity);
+            const auto* component = world.tryGet<BoxCollider>(entity);
+            const auto resolved =
+                component ? effectiveCollider(world, entity, *component) : Collider{};
+            const BoxCollider* boxCollider = component ? &resolved : nullptr;
             const RigidBody* rigidBody = world.tryGet<RigidBody>(entity);
             if (!boxCollider && !rigidBody) {
                 return; // takes no part in the physics
