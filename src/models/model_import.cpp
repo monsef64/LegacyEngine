@@ -22,11 +22,18 @@ std::string modelImportExtensions() {
     return result;
 }
 bool importableModel(const std::filesystem::path& path) {
+    if (AssetManager::extension(path) == ".blend") {
+        return false;
+    }
     Assimp::Importer importer;
     return importer.IsExtensionSupported(AssetManager::extension(path));
 }
 std::string
 importModel(AssetManager& assets, const std::filesystem::path& source, const std::string& folder) {
+    if (AssetManager::extension(source) == ".blend") {
+        throw std::runtime_error(
+            "Blender files are not supported; export to glTF, FBX, or OBJ first");
+    }
     if (!std::filesystem::is_regular_file(source) ||
         std::filesystem::file_size(source) > 256 * 1024 * 1024) {
         throw std::runtime_error("Model source must be a file smaller than 256 MiB");

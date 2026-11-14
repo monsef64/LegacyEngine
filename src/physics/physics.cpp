@@ -1,5 +1,5 @@
 #include "physics/physics.hpp"
-#include "models/convex_simplify.hpp"
+#include "models/mesh_simplify.hpp"
 #include "models/model_asset.hpp"
 #include <set>
 #include <tuple>
@@ -79,7 +79,7 @@ struct Box {
     std::string model;
     Vec3 hullScale{1, 1, 1};
     unsigned revision = 0;
-    int convexDetail = 8;
+    int meshDetail = 8;
     ColliderShape shape = ColliderShape::Box;
     float radius = 0.5f, height = 1.0f;
     Vec3 halfSize;
@@ -97,9 +97,9 @@ Box toBox(const BoxCollider& collider, Vec3 scale) {
                     std::max(std::abs(size.y) * 0.5f, smallest),
                     std::max(std::abs(size.z) * 0.5f, smallest)};
     box.shape = collider.shape;
-    if (box.shape == ColliderShape::Convex) {
+    if (box.shape == ColliderShape::Mesh) {
         box.model = collider.model;
-        box.convexDetail = std::clamp(collider.convexDetail, 2, 15);
+        box.meshDetail = std::clamp(collider.meshDetail, 2, 15);
         box.hullScale = scale;
         box.revision = modelAssetRevision;
     }
@@ -259,7 +259,7 @@ bool boxesMeet(Vec3 center, Vec3 halfSize, const OrientedBox& box) {
 struct Physics::Impl {
     // What the simulation holds for one entity.
     struct Body {
-        rp3d::ConvexMesh* hull = nullptr;
+        rp3d::TriangleMesh* hull = nullptr;
         bool hullInvalid = false;
         Entity entity;
         rp3d::RigidBody* body = nullptr;       // null while the entity is left out (see update())
@@ -371,14 +371,16 @@ struct Physics::Impl {
             case ColliderShape::Capsule:
                 common.destroyCapsuleShape(static_cast<rp3d::CapsuleShape*>(body.shape));
                 break;
-            case ColliderShape::Convex:
+            case ColliderShape::Mesh:
+                common.destroyConcaveMeshShape(static_cast<rp3d::ConcaveMeshShape*>(body.shape));
+                break;
             case ColliderShape::Cone:
                 common.destroyConvexMeshShape(static_cast<rp3d::ConvexMeshShape*>(body.shape));
                 break;
             }
         }
         if (body.hull) {
-            common.destroyConvexMesh(body.hull);
+            common.destroyTriangleMesh(body.hull);
             body.hull = nullptr;
         }
         body.body = nullptr;
@@ -408,48 +410,63 @@ struct Physics::Impl {
             case ColliderShape::Capsule:
                 body.shape = common.createCapsuleShape(box->radius, box->height);
                 break;
-            case ColliderShape::Convex: {
-                std::vector<Vec3> vertices;
+            case ColliderShape::Mesh: {
                 try {
+                    const auto key = std::make_pair(box->model, box->meshDetail);
+                    if (hullRevision != modelAssetRevision) {
+                        hullPoints.clear();
+                        hullRevision = modelAssetRevision;
+                    }
+                    std::vector<Vec3> vertices;
                     if (box->model.empty()) {
-                        for (int i = 0; i < 8; ++i) {
-                            vertices.push_back({i & 1 ? box->halfSize.x : -box->halfSize.x,
-                                                i & 2 ? box->halfSize.y : -box->halfSize.y,
-                                                i & 4 ? box->halfSize.z : -box->halfSize.z});
+                        for (const auto& v : makeBox(box->halfSize * 2).vertices) {
+                            vertices.push_back(v.position);
                         }
                     } else {
-                        if (hullRevision != modelAssetRevision) {
-                            hullPoints.clear();
-                            hullRevision = modelAssetRevision;
-                        }
-                        const auto key = std::make_pair(box->model, box->convexDetail);
                         auto found = hullPoints.find(key);
                         if (found == hullPoints.end()) {
-                            auto& points = hullPoints[key];
-                            points = simplifyConvexPoints(loadModelAsset(assets, box->model),
-                                                          box->convexDetail);
-                            found = hullPoints.find(key);
+                            found = hullPoints
+                                        .emplace(key,
+                                                 simplifyMeshTriangles(
+                                                     loadModelAsset(assets, box->model),
+                                                     box->meshDetail))
+                                        .first;
                         }
-                        for (auto point : found->second) {
-                            vertices.push_back(point * box->hullScale);
+                        for (auto v : found->second) {
+                            vertices.push_back(v * box->hullScale);
                         }
                     }
-                    if (vertices.size() < 4) {
-                        throw std::runtime_error("Convex source requires four non-coplanar points");
+                    if (vertices.empty()) {
+                        throw std::runtime_error("Mesh collider has no non-degenerate triangles");
                     }
-                    const rp3d::VertexArray array(vertices.data(),
-                                                  sizeof(Vec3),
-                                                  rp3d::uint32(vertices.size()),
-                                                  rp3d::VertexArray::DataType::VERTEX_FLOAT_TYPE);
+                    std::vector<unsigned> indices(vertices.size());
+                    for (unsigned i = 0; i < indices.size(); ++i) {
+                        indices[i] = i;
+                    }
+                    // Reverse winding after a mirrored scale.
+                    if (!box->model.empty() &&
+                        box->hullScale.x * box->hullScale.y * box->hullScale.z < 0) {
+                        for (std::size_t i = 0; i < indices.size(); i += 3) {
+                            std::swap(indices[i + 1], indices[i + 2]);
+                        }
+                    }
+                    const rp3d::TriangleVertexArray array(
+                        rp3d::uint32(vertices.size()),
+                        vertices.data(),
+                        sizeof(Vec3),
+                        rp3d::uint32(indices.size() / 3),
+                        indices.data(),
+                        3 * sizeof(unsigned),
+                        rp3d::TriangleVertexArray::VertexDataType::VERTEX_FLOAT_TYPE,
+                        rp3d::TriangleVertexArray::IndexDataType::INDEX_INTEGER_TYPE);
                     std::vector<rp3d::Message> messages;
-                    body.hull = common.createConvexMesh(array, messages);
+                    body.hull = common.createTriangleMesh(array, messages);
                     if (!body.hull) {
-                        throw std::runtime_error(
-                            "Convex hull generation failed (degenerate or coplanar source)");
+                        throw std::runtime_error("Triangle mesh creation failed");
                     }
-                    body.shape = common.createConvexMeshShape(body.hull);
+                    body.shape = common.createConcaveMeshShape(body.hull);
                 } catch (const std::exception& e) {
-                    std::fprintf(stderr, "Convex collider: %s\n", e.what());
+                    std::fprintf(stderr, "Mesh collider: %s\n", e.what());
                     release(body);
                     body.hullInvalid = true;
                     return;
@@ -469,7 +486,7 @@ struct Physics::Impl {
         // An entity without a RigidBody is an obstacle that never moves.
         body.dynamic = rigidBody != nullptr;
         body.rigidBody = rigidBody ? *rigidBody : RigidBody{};
-        if (rigidBody) {
+        if (rigidBody && (!box || box->shape != ColliderShape::Mesh)) {
             applyMass(body);
             body.body->enableGravity(rigidBody->useGravity);
             body.body->setLinearVelocity(toRp3d(rigidBody->linearVelocity));
@@ -484,6 +501,10 @@ struct Physics::Impl {
         float mass = std::max(body.rigidBody.mass, 0.0f);
         if (mass > 0.0f) {
             mass = std::max(mass, kSmallestMass);
+        }
+        if (body.box.shape == ColliderShape::Mesh) {
+            body.body->setType(rp3d::BodyType::STATIC);
+            return;
         }
         if (body.collider) {
             // ReactPhysics3D works out the mass, the centre of mass and the
@@ -518,7 +539,7 @@ struct Physics::Impl {
         const bool hasBox = boxCollider != nullptr;
         const Box box = hasBox ? toBox(*boxCollider, transform.scale) : Box{};
         if (!body.body && body.hullInvalid && box.shape == body.box.shape &&
-            box.convexDetail == body.box.convexDetail && box.model == body.box.model &&
+            box.meshDetail == body.box.meshDetail && box.model == body.box.model &&
             box.hullScale == body.box.hullScale && box.halfSize == body.box.halfSize &&
             box.revision == body.box.revision) {
             return;
@@ -566,7 +587,7 @@ struct Physics::Impl {
         // and for a change of shape, the body is made again. They are rare.
         if (!body.body || dynamic != body.dynamic || hasBox != body.hasBox ||
             box.halfSize != body.box.halfSize || box.center != body.box.center ||
-            box.convexDetail != body.box.convexDetail || box.model != body.box.model ||
+            box.meshDetail != body.box.meshDetail || box.model != body.box.model ||
             box.hullScale != body.box.hullScale || box.revision != body.box.revision ||
             box.shape != body.box.shape || box.radius != body.box.radius ||
             box.height != body.box.height || (moved && !dynamic)) {
@@ -651,9 +672,11 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                         }
                     }
                     if (rigidBody) {
-                        const auto desired = rigidBody->isKinematic ? rp3d::BodyType::KINEMATIC
-                                             : rigidBody->mass > 0  ? rp3d::BodyType::DYNAMIC
-                                                                    : rp3d::BodyType::STATIC;
+                        const auto desired = body.box.shape == ColliderShape::Mesh
+                                                 ? rp3d::BodyType::STATIC
+                                             : rigidBody->isKinematic ? rp3d::BodyType::KINEMATIC
+                                             : rigidBody->mass > 0    ? rp3d::BodyType::DYNAMIC
+                                                                      : rp3d::BodyType::STATIC;
                         if (body.body->getType() != desired) {
                             body.body->setType(desired);
                         }
@@ -967,7 +990,7 @@ void Physics::setAssetRoot(const std::filesystem::path& root) {
         impl_->assets.root = root;
         impl_->hullPoints.clear();
         for (auto& entry : impl_->bodies) {
-            if (entry.second.box.shape == ColliderShape::Convex) {
+            if (entry.second.box.shape == ColliderShape::Mesh) {
                 impl_->release(entry.second);
                 entry.second.hullInvalid = false;
             }

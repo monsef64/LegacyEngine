@@ -12,6 +12,7 @@
 struct EditorSettings {
     bool external = false, visible = false, alwaysShowColliders = false;
     int theme = 0;
+    int autosaveSeconds = 120; // zero disables autosave
     GridSettings grid;
     std::string error;
     std::filesystem::path file() const {
@@ -43,6 +44,16 @@ struct EditorSettings {
                 grid = loaded;
             }
         }
+        {
+            std::ifstream in(file());
+            std::string line;
+            std::getline(in, line);
+            std::getline(in, line);
+            int delay;
+            if (in >> delay) {
+                autosaveSeconds = std::clamp(delay, 0, 3600);
+            }
+        }
         if (ImGui::GetCurrentContext()) {
             applyEditorPalette(theme);
         }
@@ -50,10 +61,10 @@ struct EditorSettings {
     std::string signature() const {
         std::ostringstream out;
         out.precision(9);
-        out << external << theme << alwaysShowColliders << grid.visible << ':' << grid.cells << ':'
-            << grid.plane << ':' << grid.spacing << ':' << grid.position.x << ':' << grid.position.y
-            << ':' << grid.position.z << ':' << grid.color.x << ':' << grid.color.y << ':'
-            << grid.color.z;
+        out << autosaveSeconds << ':' << external << theme << alwaysShowColliders << grid.visible
+            << ':' << grid.cells << ':' << grid.plane << ':' << grid.spacing << ':'
+            << grid.position.x << ':' << grid.position.y << ':' << grid.position.z << ':'
+            << grid.color.x << ':' << grid.color.y << ':' << grid.color.z;
         return out.str();
     }
     void save() {
@@ -63,7 +74,8 @@ struct EditorSettings {
             out << external << ' ' << theme << ' ' << alwaysShowColliders << '\n'
                 << grid.visible << ' ' << grid.cells << ' ' << grid.plane << ' ' << grid.spacing
                 << ' ' << grid.position.x << ' ' << grid.position.y << ' ' << grid.position.z << ' '
-                << grid.color.x << ' ' << grid.color.y << ' ' << grid.color.z;
+                << grid.color.x << ' ' << grid.color.y << ' ' << grid.color.z << '\n'
+                << autosaveSeconds;
         }
     }
     bool openExternal(const std::filesystem::path& folder, bool isFile = false) {
@@ -111,6 +123,12 @@ struct EditorSettings {
             if (ImGui::Checkbox("Always Show Colliders", &alwaysShowColliders)) {
                 save();
             }
+            if (ImGui::InputInt("Autosave delay (seconds)", &autosaveSeconds)) {
+                autosaveSeconds = std::clamp(autosaveSeconds, 0, 3600);
+                save();
+            }
+            ImGui::TextDisabled(
+                "0 disables autosave. Only previously saved projects are autosaved.");
             ImGui::SeparatorText("Scene Grid");
             auto next = grid;
             bool changed = ImGui::Checkbox("Show grid", &next.visible);

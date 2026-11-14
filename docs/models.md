@@ -1,7 +1,7 @@
 # Importing static 3D models
 
 Use **Assets > Import > Files / Models** and choose a format filter: glTF/GLB,
-FBX, OBJ, Collada, Blender, STL/PLY, or **all Assimp formats**. The full filter is
+FBX, OBJ, Collada, STL/PLY, or **all enabled Assimp formats** (excluding Blender). The full filter is
 generated from the bundled Assimp 5.4.3 importers. Support varies by file version
 and encoding. Animation playback and skinning are not implemented.
 
@@ -40,8 +40,8 @@ in Inspector. Models remain static; source cameras/lights are not instantiated.
 
 Drop a bundle into Scene, double-click it, or use **Instantiate in level**. This
 creates an **empty root GameObject named after the model** with one child per mesh,
-each with its own material reference and fitted static box Collider. No RigidBody
-is added. Source node nesting is flattened below the root. Old version-1 `.lemesh`
+each with its own material reference. No Collider or RigidBody is added; add
+collision components explicitly when needed. Source node nesting is flattened below the root. Old version-1 `.lemesh`
 assets remain supported and instantiate as a root with one mesh child.
 
 ## Import settings and Transform scale
@@ -50,7 +50,7 @@ Single-click a model in Assets to open **Model import settings** in Inspector.
 Set **Import scale** (0.000001–1000000) and click **Apply import scale**. It scales
 geometry before the object's Transform, allowing very small models without
 fighting the Transform editor's minimum scale. All instances update; associated
-Box collider bounds are refitted. Convex hulls rebuild using the new geometry.
+Box collider bounds are refitted. Mesh colliders rebuild using the new geometry.
 Mesh-part assets share their parent bundle's import scale. Changing this shared
 asset setting is saved immediately, not recorded as a scene Undo operation.
 
@@ -59,12 +59,17 @@ single MeshRenderer has one material; instantiate a bundle to retain its separat
 materials. Selecting a primitive clears the model reference. GPU geometry is
 cached and refreshed after in-editor import-setting changes. External geometry
 edits require reimport/project reload. Assets and references travel with Save As,
-levels and prefabs; scene formats JSON 14 / legacy text 19 persist convex sources and hull detail.
+levels and prefabs; scene formats JSON 14 / legacy text 19 persist mesh sources and detail (old convex settings migrate).
 
-See [scripting](scripting.md#convex-model-colliders) for `shape = "Convex"` and
-model-backed hull sources. Convex colliders simplify source points with a **Hull detail** slider (2–15,
-default 8), then generate the hull from the retained points. Lower values simplify
-more; the result can cut into visible geometry. Rendered geometry is unchanged.
+See [scripting](scripting.md#mesh-colliders) for `shape = "Mesh"` and
+static triangle-mesh sources. The **Mesh detail** slider (2–15, default 8)
+clusters vertices at lower values; 15 preserves original triangles. Simplification
+can remove small details. Rendered geometry is unchanged.
+
+Blender `.blend` import is disabled in Assimp and rejected by the asset importer,
+including directory imports that contain Blender files. Export to glTF, FBX,
+or OBJ first. Cached, fixed-size model icons frame the full geometry independent
+of import scale. Hover previews appear after 1.5 seconds.
 
 Assimp's bundled notice is in `data/licenses/assimp.txt`. Model files themselves
 remain subject to their creators' licenses.

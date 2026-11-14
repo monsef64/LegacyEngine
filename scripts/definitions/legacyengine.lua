@@ -38,9 +38,9 @@
 ---@field linearVelocity Vec3
 ---@field angularVelocity Vec3
 ---@class Collider
----@field shape 'Box'|'Sphere'|'Capsule'|'Cone'|'Convex'
----@field model string Convex source .lemesh path; empty uses Size; simplified before hull generation
----@field convexDetail integer Voxel resolution 2..15 (default 8); lower is simpler
+---@field shape 'Box'|'Sphere'|'Capsule'|'Cone'|'Mesh'
+---@field model string Static triangle-mesh .lemesh source; empty uses Size
+---@field meshDetail integer Mesh detail 2..15 (default 8); 15 preserves source triangles
 ---@field size Vec3
 ---@field center Vec3
 ---@field radius number

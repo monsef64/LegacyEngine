@@ -112,7 +112,7 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"height", 'f'},
       {"isTrigger", 'b'},
       {"model", 's'},
-      {"convexDetail", 'i'}}},
+      {"meshDetail", 'i'}}},
     {"RigidBody",
      {{"mass", 'f'},
       {"useGravity", 'b'},
@@ -229,8 +229,8 @@ inline void writeSchema(std::ostream& out, const Json& original, const std::vect
     }
     for (auto f : fields) {
         const std::string name = f.name;
-        if (name == "convexDetail" && !object.contains(name)) {
-            out << 8 << ' ';
+        if (name == "meshDetail" && !object.contains(name)) {
+            out << object.value("convexDetail", 8) << ' ';
             continue;
         }
         if (name == "model" && !object.contains(name)) {

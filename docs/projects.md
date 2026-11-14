@@ -78,3 +78,8 @@ to main, and manual dispatch. It builds Release using MinGW-w64 GCC in MSYS2's
 64-bit UCRT64 environment, Ninja, and vendored SDL (not MSVC). It uploads
 `LegacyEngine-Windows-x64` containing the executable, required MinGW runtime
 DLLs, runtime data and license. It does not run automated tests.
+
+Mesh collider migration: shape value 4 now means a static triangle-mesh collider,
+not Convex. New saves use `meshDetail`; `convexDetail` is still read from older
+JSON files. Project > Fix Project rewrites supported scene data with current
+fields and keeps `.before-fix.bak` backups.

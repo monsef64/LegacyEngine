@@ -9,6 +9,7 @@
 #include "editor/editor_settings.hpp"
 #include "editor/script_editor.hpp"
 #include "materials/material_io.hpp"
+#include "models/model_asset.hpp"
 #include "platform/project_dialog.hpp"
 #include "platform/system_trash.hpp"
 #include "project/project_assets.hpp"
@@ -52,7 +53,9 @@ fileBadge(const std::string& path, ImVec2 pos, bool folder = false, unsigned thu
     if (thumbnail) {
         draw->AddImage(static_cast<ImTextureID>(thumbnail),
                        ImVec2(pos.x, pos.y),
-                       ImVec2(pos.x + 32, pos.y + 32));
+                       ImVec2(pos.x + 32, pos.y + 32),
+                       modelAsset(path) ? ImVec2(0, 1) : ImVec2(0, 0),
+                       modelAsset(path) ? ImVec2(1, 0) : ImVec2(1, 1));
         return;
     }
     draw->AddRectFilled(pos, ImVec2(pos.x + 32, pos.y + 32), IM_COL32(35, 45, 60, 255), 4);
@@ -87,6 +90,7 @@ class AssetBrowser {
     EditorSettings settings;
     std::filesystem::path projectFolder;
     ProjectDialog dialog;
+    ImGuiTextFilter search;
     AudioPreview preview;
     TexturePreviewCache thumbnails;
     void importFile(const std::string& path) {
@@ -347,11 +351,19 @@ class AssetBrowser {
             if (!preview.error.empty()) {
                 ImGui::TextWrapped("%s", preview.error.c_str());
             }
+            search.Draw("Search assets", -1);
             ImGui::BeginChild("Asset files", ImVec2(0, -32));
             try {
                 std::vector<std::string> files;
                 const auto folder = assets.resolve(currentFolder);
-                if (std::filesystem::is_directory(folder)) {
+                if (search.IsActive()) {
+                    for (const auto& path : assets.files()) {
+                        if ((currentFolder.empty() || path.rfind(currentFolder + "/", 0) == 0) &&
+                            search.PassFilter(path.c_str())) {
+                            files.push_back(path);
+                        }
+                    }
+                } else if (std::filesystem::is_directory(folder)) {
                     for (const auto& entry : std::filesystem::directory_iterator(folder)) {
                         if (files.size() >= 10000) {
                             break;
@@ -378,6 +390,9 @@ class AssetBrowser {
                           : 1;
                 if (ImGui::BeginTable("Asset items", columns, ImGuiTableFlags_SizingStretchSame)) {
                     for (const auto& file : files) {
+                        if (!search.PassFilter(file.c_str())) {
+                            continue;
+                        }
                         const bool folderItem = std::filesystem::is_directory(assets.resolve(file));
                         const auto assetPath = std::filesystem::path(file);
                         const std::string fullName =
@@ -412,15 +427,19 @@ class AssetBrowser {
                                               ImVec2(0, grid_ ? 84.0f + gridSpacing_ : 28.0f));
                         const auto itemMin = ImGui::GetItemRectMin(),
                                    itemMax = ImGui::GetItemRectMax();
-                        const unsigned thumbnail = folderItem || !ImGui::IsItemVisible()
-                                                       ? 0
-                                                       : thumbnails.texture(assets, file);
+                        unsigned thumbnail = folderItem || !ImGui::IsItemVisible()
+                                                 ? 0
+                                                 : thumbnails.texture(assets, file);
+                        if (!folderItem && modelAsset(file) && ImGui::IsItemVisible() &&
+                            assetPreview) {
+                            thumbnail = assetPreview(assets, file, 2).texture;
+                        }
                         if (!grid_) {
                             fileBadge(file, iconPosition, folderItem, thumbnail);
                         }
                         const bool itemHovered = ImGui::IsMouseHoveringRect(itemMin, itemMax);
                         if (itemHovered && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) &&
-                            GImGui->HoveredIdTimer >= 3.0f && ImGui::BeginTooltip()) {
+                            GImGui->HoveredIdTimer >= 1.5f && ImGui::BeginTooltip()) {
                             ImGui::TextUnformatted(fullName.c_str());
                             const std::string type = folderItem                   ? "Folder"
                                                      : modelAsset(file)           ? "3D Model"

@@ -1,7 +1,7 @@
 [
   {
-    "name": "convexDetail",
-    "signature": "Collider.convexDetail: integer 2..15 (default 8), lower simplifies the convex source more"
+    "name": "meshDetail",
+    "signature": "Collider.meshDetail: integer 2..15 (default 8), 15 preserves source triangles; lower simplifies the static mesh"
   },
   {
     "name": "onCollisionEnter",
@@ -789,7 +789,7 @@
   },
   {
     "name": "shape",
-    "signature": "Collider.shape: Box | Sphere | Capsule | Cone | Convex; Collider.model selects a .lemesh hull source"
+    "signature": "Collider.shape: Box | Sphere | Capsule | Cone | Mesh; Collider.model selects a static .lemesh triangle source"
   },
   {
     "name": "radius",

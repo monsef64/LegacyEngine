@@ -77,6 +77,10 @@ class AssetManager {
         return result;
     }
     std::string import(const std::filesystem::path& source, const std::string& parent = {}) {
+        if (extension(source) == ".blend") {
+            throw std::runtime_error(
+                "Blender files cannot be imported; export to glTF, FBX, or OBJ first");
+        }
         if (root.empty()) {
             throw std::runtime_error("No project asset root is configured");
         }
@@ -115,6 +119,10 @@ class AssetManager {
         std::uintmax_t bytes = 0;
         std::size_t count = 0;
         auto validate = [&](const auto& file) {
+            if (extension(file) == ".blend") {
+                throw std::runtime_error(
+                    "Directory contains unsupported Blender files; export or remove them before import");
+            }
             if (std::filesystem::is_symlink(file)) {
                 throw std::runtime_error(
                     "Directories containing symbolic links cannot be imported");

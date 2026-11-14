@@ -38,6 +38,7 @@ class TransformEditor {
         heldBody_ = false;
         heldEntity_ = {};
         dragging_ = hovered_ = false;
+        face_ = -1;
     }
     void drawToolbar();
     void draw(World& world,
@@ -49,6 +50,17 @@ class TransformEditor {
               ImDrawList* drawList = nullptr);
 
   private:
+    bool drawColliderFaces(World& world,
+                           Entity entity,
+                           const OrbitCamera& camera,
+                           float aspect,
+                           const EditorRect& scene,
+                           ImDrawList* drawList);
+    int face_ = -1;
+    Collider faceStart_;
+    Transform faceTransform_;
+    Vec3 faceOrigin_, faceAxis_;
+    float faceParameter_ = 0;
     bool localSpace_ = false;
     TransformTool tool_ = TransformTool::Move;
     bool hovered_ = false, dragging_ = false, heldBody_ = false;

@@ -1,4 +1,6 @@
 #include "editor/transform_editor.hpp"
+#include "core/hierarchy.hpp"
+#include <limits>
 
 namespace {
 // Vector-drawn icons: no font-dependent Unicode symbols or external icon files.
@@ -52,8 +54,17 @@ void TransformEditor::draw(World& world,
         finish(world);
         return;
     }
-    if (heldBody_ && heldEntity_ != entity) {
+    if ((heldBody_ || face_ >= 0) && heldEntity_ != entity) {
         finish(world);
+    }
+    if (scene && drawColliderFaces(world,
+                                   entity,
+                                   camera,
+                                   aspect,
+                                   *scene,
+                                   drawList ? drawList : ImGui::GetBackgroundDrawList())) {
+        ImGuizmo::Enable(false);
+        return;
     }
     Transform& transform = world.get<Transform>(entity);
     Mat4 model = transformMatrix(transform.position, transform.rotation, transform.scale);
@@ -137,4 +148,133 @@ void TransformEditor::drawToolbar() {
         localSpace_ = true;
     }
     ImGui::EndDisabled();
+}
+
+// Face gestures edit the collider, never the object's Transform. Ray/axis closest
+// points give perspective-correct motion, including rotated and mirrored objects.
+bool TransformEditor::drawColliderFaces(World& world,
+                                        Entity entity,
+                                        const OrbitCamera& camera,
+                                        float aspect,
+                                        const EditorRect& scene,
+                                        ImDrawList* draw) {
+    auto* collider = world.tryGet<Collider>(entity);
+    if (!collider || collider->shape != ColliderShape::Box || scene.width <= 0 ||
+        scene.height <= 0) {
+        if (face_ >= 0) {
+            finish(world);
+        }
+        return false;
+    }
+    auto component = [](Vec3& v, int axis) -> float& {
+        return axis == 0 ? v.x : axis == 1 ? v.y : v.z;
+    };
+    const auto pose = world.get<Transform>(entity);
+    const auto mouse = ImGui::GetIO().MousePos;
+    auto parameter = [&](Vec3 origin, Vec3 axis, float& value) {
+        const auto ray = camera.rayThrough(
+            (mouse.x - scene.x) / scene.width, (mouse.y - scene.y) / scene.height, aspect);
+        const auto delta = origin - ray.origin;
+        const float c = dot(axis, ray.direction), denominator = 1 - c * c;
+        if (denominator < .0001f) {
+            return false;
+        }
+        value = (c * dot(ray.direction, delta) - dot(axis, delta)) / denominator;
+        return std::isfinite(value);
+    };
+    if (face_ >= 0) {
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            finish(world);
+            return true;
+        }
+        float current;
+        if (parameter(faceOrigin_, faceAxis_, current)) {
+            const int axis = face_ / 2;
+            const float sign = face_ % 2 ? 1.f : -1.f;
+            const float scale = component(faceTransform_.scale, axis);
+            const float delta = (current - faceParameter_) / scale;
+            const float size = std::max(.001f, component(faceStart_.size, axis) + sign * delta);
+            *collider = faceStart_;
+            component(collider->size, axis) = size;
+            component(collider->center, axis) +=
+                sign * (size - component(faceStart_.size, axis)) * .5f;
+        }
+    }
+    const auto vp = camera.viewProjection(aspect);
+    ImVec2 points[6];
+    bool visible[6]{};
+    Vec3 worldPoints[6];
+    int hovered = -1;
+    float nearest = 64, depth = std::numeric_limits<float>::max();
+    draw->PushClipRect(
+        ImVec2(scene.x, scene.y), ImVec2(scene.x + scene.width, scene.y + scene.height), true);
+    for (int face = 0; face < 6; ++face) {
+        const int axis = face / 2;
+        auto local = collider->center;
+        component(local, axis) +=
+            (face % 2 ? 1.f : -1.f) * std::abs(component(collider->size, axis)) * .5f;
+        const auto p = pose.position + rotateVector(pose.rotation, local * pose.scale);
+        worldPoints[face] = p;
+        const auto& m = vp.m;
+        const float w = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
+        if (w <= .001f) {
+            continue;
+        }
+        const float x = (m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12]) / w,
+                    y = (m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13]) / w;
+        const float z = (m[2] * p.x + m[6] * p.y + m[10] * p.z + m[14]) / w;
+        if (z < -1 || z > 1) {
+            continue;
+        }
+        points[face] =
+            ImVec2(scene.x + (x + 1) * .5f * scene.width, scene.y + (1 - y) * .5f * scene.height);
+        visible[face] = true;
+        const float dx = mouse.x - points[face].x, dy = mouse.y - points[face].y,
+                    d = dx * dx + dy * dy;
+        if (d <= nearest && (d < nearest - .01f || w < depth) && scene.contains(mouse.x, mouse.y) &&
+            ImGui::IsWindowHovered()) {
+            nearest = d;
+            depth = w;
+            hovered = face;
+        }
+    }
+    for (int face = 0; face < 6; ++face) {
+        if (visible[face]) {
+            const bool active = face == face_ || (face_ < 0 && face == hovered);
+            draw->AddCircleFilled(points[face],
+                                  active ? 6.f : 4.f,
+                                  active ? IM_COL32(255, 210, 70, 255)
+                                         : IM_COL32(80, 245, 130, 255));
+            draw->AddCircle(points[face], active ? 6.f : 4.f, IM_COL32(10, 30, 15, 255), 0, 1.5f);
+        }
+    }
+    draw->PopClipRect();
+    if (face_ < 0 && !dragging_ && hovered >= 0) {
+        hovered_ = true;
+        ImGui::SetTooltip("Drag to resize this collider face (opposite face stays fixed)");
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            faceTransform_ = pose;
+            const int axis = hovered / 2;
+            if (std::abs(component(faceTransform_.scale, axis)) >= 1e-8f) {
+                Vec3 unit{};
+                component(unit, axis) = 1;
+                faceAxis_ = rotateVector(pose.rotation, unit);
+                faceOrigin_ = worldPoints[hovered];
+                if (parameter(faceOrigin_, faceAxis_, faceParameter_)) {
+                    face_ = hovered;
+                    faceStart_ = *collider;
+                    heldEntity_ = entity;
+                    dragging_ = true;
+                    if (world.has<RigidBody>(entity)) {
+                        savedBody_ = world.get<RigidBody>(entity);
+                        savedBody_.linearVelocity = savedBody_.angularVelocity = {};
+                        heldBody_ = true;
+                        world.remove<RigidBody>(entity);
+                    }
+                }
+            }
+        }
+        return true;
+    }
+    return face_ >= 0;
 }

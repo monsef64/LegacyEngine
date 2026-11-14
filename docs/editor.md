@@ -230,7 +230,7 @@ return to its component Inspector.
 
 File labels hide extensions and truncate names longer than twelve characters
 with `...`; folder names are never shortened. Labels are centered in grid view
-and left-aligned in list view. Hover an item for three seconds to see its
+and left-aligned in list view. Hover an item for 1.5 seconds to see its
 full name and type with a large preview: textures, rendered model/mesh geometry,
 material spheres, cubemaps, and static prefab geometry; scripts show an excerpt
 and audio shows a waveform and duration (hovering does not start playback).
@@ -272,7 +272,7 @@ forwarded to gameplay. Repeated key-down events do not toggle repeatedly.
 Asset import now offers **Files / Models** and **Directory (full structure)**.
 Imports and OS drops go into the current Assets folder. Clicking a model opens
 its shared import-scale settings in Inspector; see [models](models.md) for
-multiple mesh/material support and convex collision geometry. Instantiation
+multiple mesh/material support and static triangle-mesh collision geometry. Instantiation
 creates a named empty model root with mesh children.
 
 After deselecting an object, **Alt+left-drag** still orbits its last remembered
@@ -283,3 +283,56 @@ open a naming popup. Enter a filename (the `.mat` suffix is optional), then
 choose **Create** or press Enter. **Cancel** / Escape creates nothing. Invalid
 filenames and existing names are rejected without overwriting assets. Successful
 creation saves the material in Assets and assigns it to the MeshRenderer.
+
+## Autosave, safe exit, and project cleanup
+
+Editor Settings includes **Autosave delay (seconds)** (default 120; 0 disables).
+Autosave starts only after the project has a disk path, saves dirty edit-mode
+content, and pauses during Play, prefab editing, gestures, and file dialogs.
+Failures leave the project open and report the save error.
+
+Closing the engine, File > Quit, and Alt+F4 use the same exit flow. Play mode is
+stopped/restored first. Unsaved projects offer **Save / Discard / Cancel**; saved,
+unchanged projects exit without that dialog. Canceling Save As or a failed save
+does not exit. Pending dialogs/transitions and prefab editing must be finished first.
+
+**Project > Fix Project** rewrites the current project and saved `.level`/`.prefab`
+assets using the current supported schema, dropping retired component fields.
+It preserves `.before-fix.bak` copies before rewriting. It does not guess how to
+repair corrupt files or unsupported future formats. Review backups before deleting.
+
+Assets has a case-insensitive search field (searches recursively within the current
+folder). Inspector asset buttons open a separate searchable selection window,
+filtered to matching types. Model thumbnails are fixed-size and cached, with
+bounded per-frame generation. Separate Game windows also show FPS when enabled.
+Scene free-look and game cursor locking use relative mode plus window capture and
+viewport confinement; releasing capture or losing focus restores the pointer.
+
+## Project backups
+
+**Project > Backup** first saves the current project, then writes a ZIP of the
+entire project directory, including assets, settings, and empty folders, to
+`Backups/ProjectName_Backup_YYYY-MM-DD_HH-MM-SS.zip`. The root `Backups` folder
+is excluded to avoid recursively archiving older backups. Repeated backups in
+the same second get a numbered suffix. Save the project to disk first; Backup
+is disabled during Play, prefab editing, and pending editor operations.
+
+Backups use portable, uncompressed ZIP entries and stream files instead of
+loading the project into memory. Symbolic links and unsupported filesystem
+entries are rejected. This implementation supports ZIP32 archives (less than
+4 GiB total and at most 65,534 entries); larger projects report an error rather
+than producing a truncated archive. Failed writes remove the partial ZIP.
+The Project menu shows the last successful backup path on hover.
+
+## Collider face handles
+
+Select an object with a **Box collider** to see a dot at the center of each face
+in Scene. Drag a dot along that face's axis to change the collider Size and
+Center while the opposite face stays fixed. Rotation, nonuniform scale, and
+mirrored Transform scales are respected; resizing never scales the visible mesh.
+Face resizing is grouped into one Undo/Redo operation per drag. Release the mouse
+to finish; the minimum local size is 0.001. Orbit the camera if a face's axis is
+pointing directly toward the camera and cannot be dragged reliably.
+
+Sphere/Capsule/Cone dimensions remain editable in Inspector. Mesh colliders use
+their source triangles, so box-face resizing does not apply to them.

@@ -60,7 +60,6 @@ class ProjectDialog {
             {"FBX", "fbx"},
             {"Wavefront OBJ", "obj"},
             {"Collada", "dae"},
-            {"Blender", "blend"},
             {"STL / PLY", "stl;ply"},
             {"LegacyEngine Mesh", "lemesh"},
             {"Scripts", "ls;lua"},
