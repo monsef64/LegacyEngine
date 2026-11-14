@@ -7,8 +7,8 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
-    {"convexDetail",
-     "Collider.convexDetail: integer 2..15 (default 8), lower simplifies the convex source more"},
+    {"meshDetail",
+     "Collider.meshDetail: integer 2..15 (default 8), 15 preserves source triangles; lower simplifies the static mesh"},
     {"onCollisionEnter",
      "onCollisionEnter(collider) - solid Rigidbody contact begins; collider exposes gameObject and transform"},
     {"onCollisionStay", "onCollisionStay(collider) - solid contact persists during a physics step"},
@@ -226,7 +226,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"linearVelocity", "RigidBody.linearVelocity: {x,y,z}"},
     {"angularVelocity", "RigidBody.angularVelocity: {x,y,z}"},
     {"shape",
-     "Collider.shape: Box | Sphere | Capsule | Cone | Convex; Collider.model selects a .lemesh hull source"},
+     "Collider.shape: Box | Sphere | Capsule | Cone | Mesh; Collider.model selects a static .lemesh triangle source"},
     {"radius", "Collider.radius: number"},
     {"height", "Collider.height: number"},
     {"size", "Collider.size: {x,y,z}"},

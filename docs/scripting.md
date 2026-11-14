@@ -205,41 +205,36 @@ in `scripts/examples/character_controller_fps.ls`.
 [Physics scripting and queries](physics-queries.md) covers RigidBody methods,
 `color.red`-style RGB values, Collider trigger callbacks, Raycast results and layer masks.
 
-## Convex model colliders
+## Mesh colliders
 
 ```lua
 local collider = self:getComponent(Collider) or self:addComponent(Collider)
-collider.shape = "Convex"
-collider.convexDetail = 8 -- 2 = simpler, 15 = more detail
+collider.shape = "Mesh"
+collider.meshDetail = 15 -- 2 = simpler, 15 = original triangles
 collider.model = "Models/Crate_data/Mesh_0.lemesh"
 collider.center = {x=0, y=0, z=0}
-collider.isTrigger = false
 ```
 
-`Collider.model` is a project-relative baked model asset, not an FBX/OBJ source.
-Physics builds a real convex hull from that geometry, including its import scale
-and the object's Transform scale. Concave spaces are filled by the convex hull;
-use several child convex colliders to approximate a concave model. The source is voxel-simplified using `convexDetail` (2–15, default 8), then a hull
-is generated from at most 3381 retained points. Dense source models are accepted;
-the result still needs at least four non-coplanar points. Invalid hulls are disabled and logged,
-not silently replaced by a box. Use a separate low-poly collision model when
-needed. Changing detail, source, shape, Transform scale or model import settings rebuilds
-the hull. Settings affect all instances using the same model.
+Mesh colliders use real triangle geometry, including concave surfaces and holes,
+not a convex hull. They are **static only**: a RigidBody on the same object will
+not make it move. Use Box/Sphere/Capsule/Cone colliders for moving bodies.
+Import scale and Transform scale apply to the collision geometry. Triangle
+winding controls which surface side collides; mirrored scales reverse winding.
 
-For a source-free convex box, set `collider.model = ""` and assign `collider.size`.
-The existing Box/Sphere/Capsule/Cone types remain available. Triggers, RigidBody
-forces, query layer filters and collision callbacks work with Convex too. The
-Scene wireframe currently shows a bounding-box guide, not every hull edge.
+`meshDetail` ranges from 2 to 15 (default 8). At 15 the original non-degenerate
+triangles are retained. Lower settings cluster vertices and remove collapsed
+triangles; this can remove small features or close small openings. This is not
+an exact triangle-count slider. The render model is unchanged. Invalid or empty
+triangle sources are disabled and logged. Empty `model` uses `size` as a triangle
+box. Source/detail/scale changes rebuild the collider. The Scene wireframe is
+still a bounding guide, not every collision triangle.
 
-`MeshRenderer.model` also accepts a `.lemesh` path. Prefer instantiating model
-assets through the editor when preserving imported mesh/material children; a
-single MeshRenderer assigned a model bundle renders combined geometry with its
-one assigned engine material. Setting `renderer.mesh = "Cube"` (or another
-primitive name) clears `renderer.model`.
+Old saved collider shape 4 (Convex) migrates to static Mesh, retaining its source
+and detail setting. Old JSON `convexDetail` is accepted when `meshDetail` is absent.
+Lua accepts the old `"Convex"` shape name and `convexDetail` property as migration
+aliases, but reports the shape as `"Mesh"`.
 
-The Convex Inspector's **Hull detail** slider controls the same `convexDetail`
-property. It changes voxel resolution, not an exact polygon count. Lower values
-usually produce simpler hulls. Axis extremes are retained, but simplification can
-cut into visible geometry; it is not guaranteed to conservatively enclose the
-original mesh. The source model/render mesh is not modified. A source-free convex
-box does not use this setting.
+`MeshRenderer.model` also accepts a `.lemesh` path. Instantiate a model bundle
+through the editor to preserve separate part materials. A single MeshRenderer
+assigned a bundle uses its one assigned material. Choosing a primitive clears
+its model reference.

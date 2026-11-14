@@ -117,6 +117,9 @@ struct Field {
 };
 Field field(lua_State* L, const Component& c, const char* key) {
     const Handle& h = c.object;
+    if (c.type == 2 && !std::strcmp(key, "convexDetail")) {
+        key = "meshDetail";
+    }
     if (!h.world->alive(h.entity) || !has(h, c.type)) {
         luaL_error(L, "Component no longer exists");
     }
@@ -204,7 +207,7 @@ Field field(lua_State* L, const Component& c, const char* key) {
         FIELD(radius, Number);
         FIELD(height, Number);
         FIELD(shape, Shape);
-        FIELD(convexDetail, Integer);
+        FIELD(meshDetail, Integer);
         FIELD(model, String);
         break;
     }
@@ -1202,8 +1205,8 @@ int LuaScene::componentIndex(lua_State* L) {
                        : (*static_cast<ColliderShape*>(f.value) == ColliderShape::Sphere) ? "Sphere"
                        : (*static_cast<ColliderShape*>(f.value) == ColliderShape::Capsule)
                            ? "Capsule"
-                       : (*static_cast<ColliderShape*>(f.value) == ColliderShape::Convex) ? "Convex"
-                                                                                          : "Cone");
+                       : (*static_cast<ColliderShape*>(f.value) == ColliderShape::Mesh) ? "Mesh"
+                                                                                        : "Cone");
         break;
     case Kind::Mesh: {
         const auto m = *static_cast<MeshHandle*>(f.value);
@@ -1293,9 +1296,10 @@ int LuaScene::componentNewIndex(lua_State* L) {
     switch (f.kind) {
     case Kind::Integer: {
         auto value = luaL_checkinteger(L, 3);
-        if (c.type == 2 && !std::strcmp(gameplayKey, "convexDetail")) {
+        if (c.type == 2 && (!std::strcmp(gameplayKey, "meshDetail") ||
+                            !std::strcmp(gameplayKey, "convexDetail"))) {
             if (value < 2 || value > 15) {
-                return luaL_error(L, "Convex detail must be between 2 and 15");
+                return luaL_error(L, "Mesh detail must be between 2 and 15");
             }
             *static_cast<int*>(f.value) = int(value);
             break;
@@ -1366,14 +1370,14 @@ int LuaScene::componentNewIndex(lua_State* L) {
 
     case Kind::Shape: {
         const char* s = luaL_checkstring(L, 3);
-        int i = !std::strcmp(s, "Box")       ? 0
-                : !std::strcmp(s, "Sphere")  ? 1
-                : !std::strcmp(s, "Capsule") ? 2
-                : !std::strcmp(s, "Convex")  ? 4
-                : !std::strcmp(s, "Cone")    ? 3
-                                             : -1;
+        int i = !std::strcmp(s, "Box")                                   ? 0
+                : !std::strcmp(s, "Sphere")                              ? 1
+                : !std::strcmp(s, "Capsule")                             ? 2
+                : (!std::strcmp(s, "Mesh") || !std::strcmp(s, "Convex")) ? 4
+                : !std::strcmp(s, "Cone")                                ? 3
+                                                                         : -1;
         if (i < 0) {
-            return luaL_error(L, "Expected Box, Sphere, Capsule, Cone or Convex");
+            return luaL_error(L, "Expected Box, Sphere, Capsule, Cone or Mesh");
         }
         *static_cast<ColliderShape*>(f.value) = static_cast<ColliderShape>(i);
         break;

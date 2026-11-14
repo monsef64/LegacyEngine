@@ -11,30 +11,40 @@ inline bool assetPicker(const char* label,
     if (label[0] != '#') {
         ImGui::TextUnformatted(label);
     }
+    static ImGuiID active = 0;
+    static ImGuiTextFilter search;
+    const auto id = ImGui::GetID("Asset selection");
     if (ImGui::Button(value.empty() ? "None - select asset" : value.c_str(), ImVec2(-1, 0))) {
-        ImGui::OpenPopup("Assets");
+        active = id;
+        search.Clear();
     }
-    if (ImGui::BeginPopup("Assets")) {
-        if (ImGui::Selectable("None", value.empty())) {
-            value.clear();
-            changed = true;
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::Separator();
-        ScriptTree tree;
-        if (assets) {
-            for (const auto& path : assets->files()) {
-                if (supported(path)) {
-                    tree.add(path);
+    if (active == id) {
+        ImGui::SetNextWindowSize(ImVec2(560, 420), ImGuiCond_FirstUseEver);
+        bool open = true;
+        if (ImGui::Begin("Select asset###MatchingAssetSelector", &open)) {
+            search.Draw("Search", -1);
+            ImGui::BeginChild("Matching assets");
+            if (ImGui::Selectable("None", value.empty())) {
+                value.clear();
+                changed = true;
+                open = false;
+            }
+            if (assets) {
+                for (const auto& path : assets->files()) {
+                    if (supported(path) && search.PassFilter(path.c_str()) &&
+                        ImGui::Selectable(path.c_str(), value == path)) {
+                        value = path;
+                        changed = true;
+                        open = false;
+                    }
                 }
             }
+            ImGui::EndChild();
         }
-        if (auto selected = tree.draw(value)) {
-            value = *selected;
-            changed = true;
-            ImGui::CloseCurrentPopup();
+        ImGui::End();
+        if (!open) {
+            active = 0;
         }
-        ImGui::EndPopup();
     }
     ImGui::PopID();
     return changed;

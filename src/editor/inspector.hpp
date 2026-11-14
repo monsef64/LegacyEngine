@@ -780,11 +780,11 @@ inline void drawInspector(World& world,
                 if (auto* c = world.tryGet<Collider>(selected);
                     componentID == 2 && c &&
                     componentHeader<Collider>(world, selected, "Collider")) {
-                    const char* names[]{"Box", "Sphere", "Capsule", "Cone", "Convex"};
+                    const char* names[]{"Box", "Sphere", "Capsule", "Cone", "Mesh"};
                     int shape = static_cast<int>(c->shape);
                     if (ImGui::Combo("Collider shape", &shape, names, 5)) {
                         c->shape = static_cast<ColliderShape>(shape);
-                        if (c->shape == ColliderShape::Convex && c->model.empty()) {
+                        if (c->shape == ColliderShape::Mesh && c->model.empty()) {
                             if (const auto* mesh = world.tryGet<MeshRenderer>(selected)) {
                                 c->model = mesh->model;
                                 c->center = {};
@@ -792,8 +792,8 @@ inline void drawInspector(World& world,
                         }
                     }
                     editVector("Center", c->center);
-                    if (c->shape == ColliderShape::Convex) {
-                        assetPicker("Convex model", c->model, assets, [](const std::string& path) {
+                    if (c->shape == ColliderShape::Mesh) {
+                        assetPicker("Mesh source", c->model, assets, [](const std::string& path) {
                             return modelAsset(path);
                         });
                         if (ImGui::BeginDragDropTarget()) {
@@ -806,14 +806,14 @@ inline void drawInspector(World& world,
                             ImGui::EndDragDropTarget();
                         }
                         ImGui::BeginDisabled(c->model.empty());
-                        ImGui::SliderInt("Hull detail", &c->convexDetail, 2, 15);
+                        ImGui::SliderInt("Mesh detail", &c->meshDetail, 2, 15);
                         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                             ImGui::SetTooltip(
-                                "Lower = simpler hull, higher = more detail. Simplifies source points before convex hull generation; may cut into the visible mesh.");
+                                "Lower = fewer triangles. 15 preserves source triangles. Simplification can remove small features.");
                         }
                         ImGui::EndDisabled();
                         ImGui::TextWrapped(
-                            "Simplified convex hull. Empty source uses Size; the detail slider then has no effect. Degenerate sources are rejected.");
+                            "Static triangle-mesh collider (concave surfaces supported). RigidBody movement is disabled for this shape. Empty source uses Size as a triangle box.");
                         if (c->model.empty()) {
                             editVector("Size", c->size);
                         }

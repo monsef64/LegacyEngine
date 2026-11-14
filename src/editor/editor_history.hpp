@@ -197,7 +197,7 @@ inline std::string sceneSignature(World& world) {
             scalar(c.radius);
             scalar(c.height);
             scalar(c.isTrigger);
-            scalar(c.convexDetail);
+            scalar(c.meshDetail);
             scalar(c.model.size());
             result += c.model;
         });

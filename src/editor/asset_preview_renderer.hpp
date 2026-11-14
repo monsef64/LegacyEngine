@@ -16,6 +16,7 @@
 class AssetPreviewRenderer {
     struct Slot {
         SceneSurface surface;
+        int lastUsed = 0;
         AssetPreviewData data;
         std::unique_ptr<World> world;
         OrbitCamera camera;
@@ -27,9 +28,11 @@ class AssetPreviewRenderer {
     Renderer& renderer_;
     ProjectIO::Meshes meshes_;
     std::array<Slot, 2> slots_;
+    std::map<std::string, std::unique_ptr<Slot>> icons_;
     MaterialTextureCache textures_;
     TexturePreviewCache thumbnails_;
     std::filesystem::path root_;
+    int iconFrame_ = -1, iconBudget_ = 4;
 
     void build(Slot& slot, const AssetManager& assets, const std::string& path) {
         slot.data = {};
@@ -178,7 +181,7 @@ class AssetPreviewRenderer {
         const auto center = (low + high) * .5f;
         const auto size = high - low;
         const float radius =
-            materialAsset(path) ? .5f : std::max(.000001f, std::sqrt(dot(size, size)) * .5f);
+            materialAsset(path) ? .5f : std::max(1e-20f, std::sqrt(dot(size, size)) * .5f);
         if (any) {
             scene.each<Transform, MeshRenderer>([&](Entity, Transform& pose, MeshRenderer&) {
                 pose.position = (pose.position - center) * (1 / radius);
@@ -203,12 +206,42 @@ class AssetPreviewRenderer {
     }
 
     const AssetPreviewData& get(const AssetManager& assets, const std::string& path, int index) {
-        auto& slot = slots_[std::clamp(index, 0, 1)];
+        if (iconFrame_ != ImGui::GetFrameCount()) {
+            iconFrame_ = ImGui::GetFrameCount();
+            iconBudget_ = 4;
+        }
+        if (index == 2 && !icons_.count(path)) {
+            static const AssetPreviewData unavailable;
+            if (iconBudget_ <= 0) {
+                return unavailable;
+            }
+            if (icons_.size() >= 256) {
+                auto oldest = icons_.end();
+                for (auto it = icons_.begin(); it != icons_.end(); ++it) {
+                    if (it->second->lastUsed < iconFrame_ - 1 &&
+                        (oldest == icons_.end() ||
+                         it->second->lastUsed < oldest->second->lastUsed)) {
+                        oldest = it;
+                    }
+                }
+                if (oldest == icons_.end()) {
+                    return unavailable;
+                }
+                icons_.erase(oldest);
+            }
+            icons_[path] = std::make_unique<Slot>();
+            --iconBudget_;
+        }
+        auto& slot = index == 2 ? *icons_.at(path) : slots_[std::clamp(index, 0, 1)];
+        slot.lastUsed = iconFrame_;
         const auto now = std::chrono::steady_clock::now();
         if (root_ != assets.root) {
             root_ = assets.root;
             textures_.clear();
             thumbnails_.clear();
+            for (auto& item : icons_) {
+                item.second->key.clear();
+            }
             for (auto& item : slots_) {
                 item.key.clear();
             }
@@ -227,6 +260,9 @@ class AssetPreviewRenderer {
                 slot.key = key;
                 slot.revision = modelAssetRevision;
                 build(slot, assets, path);
+                if (index == 2) {
+                    slot.data.width = slot.data.height = 64;
+                }
             }
             if (slot.world && rebuild) {
                 GLint drawFramebuffer = 0, readFramebuffer = 0, viewport[4], scissor[4];

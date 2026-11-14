@@ -17,6 +17,7 @@
 #include "editor/editor_input.hpp"
 #include "editor/editor_layout.hpp"
 #include "editor/editor_theme.hpp"
+#include "editor/fix_project.hpp"
 #include "editor/input_settings.hpp"
 #include "editor/inspector.hpp"
 #include "editor/level_objects.hpp"
@@ -34,6 +35,7 @@
 #include "platform/engine_log.hpp"
 #include "platform/project_dialog.hpp"
 #include "prefabs/prefab.hpp"
+#include "project/project_backup.hpp"
 #include "project/project_document.hpp"
 #include "project/project_io.hpp"
 #include "project/rendering_settings.hpp"
@@ -265,7 +267,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     bool newLevelPopup = false;
     char newLevelName[129] = "New Level";
     ProjectDialog projectDialog;
-    std::string currentProject, projectError, savedProjectState, lastWindowTitle;
+    std::string currentProject, projectError, savedProjectState, lastWindowTitle, backupStatus;
     bool projectDirty = true;
     InputState input;
     input.window = window;
@@ -290,7 +292,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     FrameProfiler profiler;
     activeProfiler = &profiler;
     Uint64 lastTicks = SDL_GetTicksNS();
-    bool running = true;
+    bool running = true, exitRequested = false, exitAfterSave = false;
+    auto lastAutosave = std::chrono::steady_clock::now();
 
     // The left mouse button does two things. Pressed and released in one
     // place, it is a click, which selects. Moving away cancels
@@ -433,6 +436,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                  event.button.button == SDL_BUTTON_RIGHT)) {
                 cameraLooking = false;
                 SDL_SetWindowRelativeMouseMode(window, false);
+                SDL_SetWindowMouseGrab(window, false);
+                SDL_SetWindowMouseRect(window, nullptr);
             }
             ImGui_ImplSDL3_ProcessEvent(&event);
             input.event(event);
@@ -471,7 +476,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 break;
             case SDL_EVENT_QUIT:
                 SDL_Log("Shutdown requested: SDL quit event");
-                running = false;
+                exitRequested = true;
+                break;
+            case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+                exitRequested = true;
                 break;
             case SDL_EVENT_KEY_DOWN:
                 break; // Escape is reserved for UI cancellation, never application exit.
@@ -479,6 +487,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (event.button.button == SDL_BUTTON_RIGHT && !playMode.active() && sceneHovered &&
                     layout.scene.contains(event.button.x, event.button.y) &&
                     !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
+                    SDL_SetWindowMouseGrab(window, true);
                     cameraLooking = SDL_SetWindowRelativeMouseMode(window, true);
                     clicking = false;
                 }
@@ -600,7 +609,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 ImGui::Separator();
                 if (ImGui::MenuItem("Quit")) {
                     SDL_Log("Shutdown requested: File > Quit");
-                    running = false;
+                    exitRequested = true;
                 }
                 ImGui::EndMenu();
             }
@@ -613,6 +622,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                              ImGuiInputFlags_RouteGlobal);
         }
         auto saveTo = [&](const std::string& path) {
+            bool saved = false;
             auto assetRoot = projectAssetsPath(path);
             try {
                 scripts.saveFile(browser.assets);
@@ -627,7 +637,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
             } catch (const std::exception& e) {
                 projectError = e.what();
-                return;
+                exitAfterSave = false;
+                return false;
             }
             if (ProjectIO::save(
                     path, world, embeddedLegacySource, camera, projectMeshes, projectError)) {
@@ -639,9 +650,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 browser.assets.root = assetRoot;
                 currentProject = path;
-                savedProjectState = projectContentState(world, {}, camera);
+                savedProjectState = projectContentState(world, embeddedLegacySource, camera);
                 projectDirty = false;
+                saved = true;
+                lastAutosave = std::chrono::steady_clock::now();
+                if (exitAfterSave) {
+                    running = false;
+                }
             }
+            exitAfterSave = false;
+            return saved;
         };
         if (projectEnabled) {
             if (saveProject && !currentProject.empty()) {
@@ -669,6 +687,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
         if (auto result = projectDialog.poll()) {
+            if (result->path.empty() || !result->error.empty()) {
+                exitAfterSave = false;
+            }
             if (!result->error.empty()) {
                 projectError = result->error;
             } else if (!result->path.empty()) {
@@ -716,8 +737,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         physics.reset();
                         clicking = false;
                         currentProject = result->path;
-                        savedProjectState = projectContentState(world, {}, camera);
+                        savedProjectState =
+                            projectContentState(world, embeddedLegacySource, camera);
                         projectDirty = false;
+                        lastAutosave = std::chrono::steady_clock::now();
                     }
                 }
             }
@@ -804,6 +827,37 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         bool showAbout = false;
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("Project", !prefabLevel)) {
+                if (ImGui::MenuItem(
+                        "Backup", nullptr, false, projectEnabled && !currentProject.empty())) {
+                    try {
+                        if (saveTo(currentProject)) {
+                            backupStatus =
+                                "Backup created: " + backupProject(currentProject).u8string();
+                        }
+                    } catch (const std::exception& e) {
+                        projectError = e.what();
+                    }
+                }
+                if (!backupStatus.empty()) {
+                    ImGui::TextDisabled("Last backup created");
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("%s", backupStatus.c_str());
+                    }
+                }
+
+                if (ImGui::MenuItem(
+                        "Fix Project", nullptr, false, projectEnabled && !currentProject.empty())) {
+                    try {
+                        if (!std::filesystem::exists(currentProject + ".before-fix.bak")) {
+                            std::filesystem::copy_file(currentProject,
+                                                       currentProject + ".before-fix.bak");
+                        }
+                        fixProjectAssets(browser.assets, projectMeshes);
+                        saveTo(currentProject);
+                    } catch (const std::exception& e) {
+                        projectError = e.what();
+                    }
+                }
                 if (ImGui::MenuItem("Input Settings")) {
                     inputSettings.visible = true;
                 }
@@ -1442,21 +1496,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     mesh.model = part.mesh;
                     mesh.material = part.material;
                     world.add(child, mesh);
-                    Vec3 low = part.data.vertices.front().position, high = low;
-                    for (const auto& v : part.data.vertices) {
-                        low = {std::min(low.x, v.position.x),
-                               std::min(low.y, v.position.y),
-                               std::min(low.z, v.position.z)};
-                        high = {std::max(high.x, v.position.x),
-                                std::max(high.y, v.position.y),
-                                std::max(high.z, v.position.z)};
-                    }
-                    Collider collider;
-                    collider.center = (low + high) * .5f;
-                    const auto size = high - low;
-                    collider.size = {
-                        std::max(.001f, size.x), std::max(.001f, size.y), std::max(.001f, size.z)};
-                    world.add(child, collider);
                 }
                 selectedEntity = root;
                 browser.selected.clear();
@@ -1684,7 +1723,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     camera, sceneRect, editAllowed && !cameraLooking && !editor.dragging());
                 editor.draw(world,
                             selectedEntity,
-                            !orientationInteracting && !cameraLooking &&
+                            editAllowed && !orientationInteracting && !cameraLooking &&
                                 !(SDL_GetModState() & SDL_KMOD_ALT),
                             camera,
                             static_cast<float>(sceneSurface.width) / sceneSurface.height,
@@ -2092,6 +2131,29 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                       h,
                                       GL_COLOR_BUFFER_BIT,
                                       GL_LINEAR);
+                    if (showFPS) {
+                        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                        ImDrawList overlay(ImGui::GetDrawListSharedData());
+                        overlay._ResetForNewFrame();
+                        overlay.PushClipRect(ImVec2(0, 0), ImVec2(float(w), float(h)));
+                        overlay.PushTexture(ImGui::GetIO().Fonts->TexRef);
+                        char label[64];
+                        std::snprintf(label, sizeof(label), "FPS: %.0f", ImGui::GetIO().Framerate);
+                        const auto text = ImGui::CalcTextSize(label);
+                        overlay.AddRectFilled(
+                            ImVec2(4, 4), ImVec2(text.x + 16, text.y + 16), IM_COL32(0, 0, 0, 180));
+                        overlay.AddText(ImVec2(8, 8), IM_COL32_WHITE, label);
+                        overlay.PopTexture();
+                        overlay.PopClipRect();
+                        ImDrawData data;
+                        data.Valid = true;
+                        data.DisplayPos = ImVec2(0, 0);
+                        data.DisplaySize = ImVec2(float(w), float(h));
+                        data.FramebufferScale = ImVec2(1, 1);
+                        data.Textures = ImGui::GetDrawData()->Textures;
+                        data.AddDrawList(&overlay);
+                        ImGui_ImplOpenGL3_RenderDrawData(&data);
+                    }
                     SDL_GL_SwapWindow(gameWindow);
                     SDL_GL_MakeCurrent(window, context);
                 } else {
@@ -2111,8 +2173,112 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         // Compare persisted content, not history depth: Undo back to the saved
         // state clears the marker, while Lua/camera edits also mark it dirty.
         if (!prefabLevel && !playMode.active() && !editor.dragging()) {
-            projectDirty = currentProject.empty() ||
-                           projectContentState(world, {}, camera) != savedProjectState;
+            projectDirty =
+                currentProject.empty() || scripts.hasUnsavedChanges() ||
+                projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
+        }
+        if (projectEnabled && !currentProject.empty() && projectDirty &&
+            browser.settings.autosaveSeconds > 0 &&
+            std::chrono::steady_clock::now() - lastAutosave >=
+                std::chrono::seconds(browser.settings.autosaveSeconds)) {
+            lastAutosave = std::chrono::steady_clock::now();
+            saveTo(currentProject);
+        }
+        if (exitRequested) {
+            exitRequested = false;
+            input.releaseMouse();
+            cameraLooking = false;
+            SDL_SetWindowRelativeMouseMode(window, false);
+            SDL_SetWindowMouseGrab(window, false);
+            SDL_SetWindowMouseRect(window, nullptr);
+            if (playMode.active()) {
+                // Run stop callbacks before restoring, so their edits are discarded too.
+                levels.suspended = true;
+                levels.cancel();
+                LuaConsole::clearEvents();
+                audio.clear();
+                componentScripts.stop();
+                scripts.shutdown();
+                LuaConsole::clearEvents();
+                if (gameWindow) {
+                    input.releaseMouse();
+                    input.window = window;
+                    SDL_DestroyWindow(gameWindow);
+                    gameWindow = nullptr;
+                }
+                mouseOver = {};
+                mousePressedObject = {};
+                playMode.stop(world);
+                input.releaseMouse();
+                physics.reset();
+                scripts.resetRuntime();
+                scripts.setSource(editSource);
+                embeddedLegacySource = editLegacySource;
+                browser.openedScript = editScriptPath;
+                scripts.setAssetContext(editScriptPath, editSelection);
+                camera = editCamera;
+                history = std::move(editHistory);
+                levels.commit(editLevelName, false);
+                levels.suspended = false;
+                selectedEntity = world.alive(editSelection) ? editSelection : Entity{};
+                projectDirty =
+                    currentProject.empty() || scripts.hasUnsavedChanges() ||
+                    projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
+            }
+            if (prefabLevel || levels.busy() || projectDialog.pending()) {
+                projectError =
+                    "Stop Play mode, finish prefab editing, and close pending dialogs before exiting.";
+            } else if (!projectDirty) {
+                running = false;
+            } else {
+                const SDL_MessageBoxButtonData buttons[]{
+                    {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel"},
+                    {0, 1, "Discard"},
+                    {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 2, "Save"}};
+                const SDL_MessageBoxData box{SDL_MESSAGEBOX_WARNING,
+                                             window,
+                                             "Unsaved project",
+                                             "Save project changes before exiting?",
+                                             3,
+                                             buttons,
+                                             nullptr};
+                int choice = 0;
+                if (SDL_ShowMessageBox(&box, &choice)) {
+                    if (choice == 1) {
+                        running = false;
+                    }
+                    if (choice == 2) {
+                        exitAfterSave = true;
+                        if (currentProject.empty()) {
+                            projectDialog.show(window, true, currentProject);
+                        } else {
+                            saveTo(currentProject);
+                        }
+                    }
+                }
+            }
+        }
+        if (cameraLooking || input.mouseLocked) {
+            if (input.window == gameWindow && gameWindow) {
+                SDL_SetWindowMouseGrab(gameWindow, true);
+            } else {
+                const auto origin = ImGui::GetMainViewport()->Pos;
+                const SDL_Rect rect = cameraLooking ? SDL_Rect{int(sceneRect.x - origin.x),
+                                                               int(sceneRect.y - origin.y),
+                                                               int(sceneRect.width),
+                                                               int(sceneRect.height)}
+                                                    : SDL_Rect{int(gameImageOrigin.x - origin.x),
+                                                               int(gameImageOrigin.y - origin.y),
+                                                               int(gameImageSize.x),
+                                                               int(gameImageSize.y)};
+                if (rect.w > 0 && rect.h > 0) {
+                    SDL_SetWindowMouseRect(window, &rect);
+                }
+                SDL_SetWindowMouseGrab(window, true);
+            }
+        } else {
+            SDL_SetWindowMouseRect(window, nullptr);
+            SDL_SetWindowMouseGrab(window, false);
         }
         const std::string title =
             projectWindowTitle(currentProject, projectDirty, levels.current());

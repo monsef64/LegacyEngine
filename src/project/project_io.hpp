@@ -143,8 +143,8 @@ inline std::string encodeLegacy(World& world,
             writeVec(out, c->center);
             out << c->friction << ' ' << c->bounciness << ' ' << static_cast<int>(c->shape) << ' '
                 << c->radius << ' ' << c->height << ' ' << c->isTrigger << ' '
-                << std::quoted(c->model) << ' ' << c->convexDetail << ' ';
-            require(c->convexDetail >= 2 && c->convexDetail <= 15);
+                << std::quoted(c->model) << ' ' << c->meshDetail << ' ';
+            require(c->meshDetail >= 2 && c->meshDetail <= 15);
             require(c->model.empty() || (materialPathValid(c->model) &&
                                          std::filesystem::path(c->model).extension() == ".lemesh"));
         }
@@ -396,8 +396,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          std::filesystem::path(c.model).extension() == ".lemesh"));
             }
             if (version >= 19) {
-                in >> c.convexDetail;
-                require(c.convexDetail >= 2 && c.convexDetail <= 15);
+                in >> c.meshDetail;
+                require(c.meshDetail >= 2 && c.meshDetail <= 15);
             }
             result.world.add(e, c);
         }

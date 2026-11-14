@@ -98,6 +98,7 @@ set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_BLEND_IMPORTER OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(assimp
   URL https://github.com/assimp/assimp/archive/refs/tags/v5.4.3.tar.gz)
 FetchContent_MakeAvailable(assimp)

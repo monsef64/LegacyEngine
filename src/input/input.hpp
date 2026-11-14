@@ -50,6 +50,10 @@ struct InputState {
         if (!SDL_SetWindowRelativeMouseMode(window, locked)) {
             return false;
         }
+        SDL_SetWindowMouseGrab(window, locked);
+        if (!locked) {
+            SDL_SetWindowMouseRect(window, nullptr);
+        }
         mouseLocked = locked;
         return true;
     }
@@ -66,6 +70,8 @@ struct InputState {
     void releaseMouse() {
         if (window) {
             SDL_SetWindowRelativeMouseMode(window, false);
+            SDL_SetWindowMouseGrab(window, false);
+            SDL_SetWindowMouseRect(window, nullptr);
             SDL_ShowCursor();
         }
         mouseLocked = false;
