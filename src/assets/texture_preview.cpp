@@ -193,16 +193,27 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
         e.checked = now;
         try {
             const auto file = assets.resolve(path);
-            const bool dependencyCurrent =
-                e.dependency.empty() ||
-                (e.dependencyModified ==
-                     std::filesystem::last_write_time(assets.resolve(e.dependency)) &&
-                 e.dependencyBytes == std::filesystem::file_size(assets.resolve(e.dependency)));
+            bool dependencyCurrent = true;
+            if (!e.dependency.empty()) {
+                const auto dependency = assets.resolve(e.dependency);
+                const bool exists = std::filesystem::is_regular_file(dependency);
+                dependencyCurrent =
+                    exists == e.dependencyExists &&
+                    (!exists ||
+                     (e.dependencyModified == std::filesystem::last_write_time(dependency) &&
+                      e.dependencyBytes == std::filesystem::file_size(dependency)));
+            }
             if (dependencyCurrent && e.modified == std::filesystem::last_write_time(file) &&
                 e.bytes == std::filesystem::file_size(file)) {
                 return e.texture;
             }
         } catch (...) {
+            // Never return a previously cached, now-deleted texture next frame.
+            if (e.texture) {
+                glDeleteTextures(1, &e.texture);
+            }
+            e.texture = 0;
+            e.failed = true;
             return 0;
         }
         if (e.texture) {
@@ -238,12 +249,15 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
             entry.dependency = material.texture;
             if (!entry.dependency.empty()) {
                 const auto dependency = assets.resolve(entry.dependency);
-                entry.dependencyModified = std::filesystem::last_write_time(dependency);
-                entry.dependencyBytes = std::filesystem::file_size(dependency);
+                entry.dependencyExists = std::filesystem::is_regular_file(dependency);
+                if (entry.dependencyExists) {
+                    entry.dependencyModified = std::filesystem::last_write_time(dependency);
+                    entry.dependencyBytes = std::filesystem::file_size(dependency);
+                }
             }
             TextureThumbnail albedo;
             bool textured = false;
-            if (!material.texture.empty()) {
+            if (!material.texture.empty() && entry.dependencyExists) {
                 albedo = loadTextureThumbnail(assets, material.texture);
                 textured = true;
             }

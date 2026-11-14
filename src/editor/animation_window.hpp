@@ -182,6 +182,85 @@ class AnimationWindow {
     int samples_ = 30;
     float zoom_ = 1;
     bool curves_ = false, draggingKey_ = false;
+    // Value-owned clipboard survives track edits and switching clips. Copy full
+    // property keys (all XYZ/quaternion lanes), never pointers into a clip.
+    std::vector<AnimationKey> copiedKeys_;
+    std::string copiedProperty_;
+    bool canCopyKeys(bool wholeTrack = false) const {
+        if (track_ < 0 || track_ >= int(clip_.tracks.size())) {
+            return false;
+        }
+        const auto& keys = clip_.tracks[track_].keys;
+        return !keys.empty() && (wholeTrack || (key_ >= 0 && key_ < int(keys.size())));
+    }
+    bool canPasteKeys() const {
+        return !copiedKeys_.empty() && track_ >= 0 && track_ < int(clip_.tracks.size()) &&
+               clip_.tracks[track_].property == copiedProperty_;
+    }
+    void copyKeys(bool wholeTrack = false) {
+        if (!canCopyKeys(wholeTrack)) {
+            return;
+        }
+        const auto& track = clip_.tracks[track_];
+        copiedKeys_ = wholeTrack ? track.keys : std::vector<AnimationKey>{track.keys[key_]};
+        copiedProperty_ = track.property;
+        const float origin = copiedKeys_.front().time;
+        for (auto& key : copiedKeys_) {
+            key.time -= origin;
+        }
+        error_.clear();
+    }
+    void pasteKeys() {
+        if (!canPasteKeys()) {
+            error_ = "Select a destination track with the same property as the copied keys.";
+            return;
+        }
+        const float start = std::clamp(time_, 0.f, clip_.duration);
+        const float end = start + copiedKeys_.back().time;
+        if (!std::isfinite(end) || end > 86400) {
+            error_ = "Pasted keys would exceed the 86400-second clip limit.";
+            return;
+        }
+        // Stage the entire operation so limits cannot leave a partial paste.
+        auto keys = clip_.tracks[track_].keys;
+        for (auto key : copiedKeys_) {
+            key.time += start;
+            auto at = std::lower_bound(
+                keys.begin(), keys.end(), key.time, [](const auto& existing, float time) {
+                    return existing.time < time;
+                });
+            if (at != keys.end() && std::abs(at->time - key.time) < .00001f) {
+                *at = key;
+            } else if (at != keys.begin() && std::abs((at - 1)->time - key.time) < .00001f) {
+                *(at - 1) = key;
+            } else {
+                keys.insert(at, key);
+            }
+        }
+        std::size_t total = keys.size();
+        for (int i = 0; i < int(clip_.tracks.size()); ++i) {
+            if (i != track_) {
+                total += clip_.tracks[i].keys.size();
+            }
+        }
+        if (keys.size() > 4096 || total > 16384) {
+            error_ = "Paste exceeds the animation key limit (4096 per track, 16384 per clip).";
+            return;
+        }
+        auto& destination = clip_.tracks[track_].keys;
+        destination = std::move(keys);
+        auto pasted = std::lower_bound(destination.begin(),
+                                       destination.end(),
+                                       start,
+                                       [](const auto& key, float time) { return key.time < time; });
+        key_ = int(pasted - destination.begin());
+        clip_.duration = std::max(clip_.duration, end);
+        playing_ = false;
+        draggingKey_ = false;
+        resetPose_ = false;
+        dirty_ = previewDirty_ = true;
+        error_.clear();
+    }
     void captureKey(World& world, Entity selected, int index) {
         auto& track = clip_.tracks[index];
         const auto target = animationTarget(world, selected, track.target);
@@ -368,6 +447,16 @@ class AnimationWindow {
                 if (editMode &&
                     ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteFocused)) {
                     saveClip(assets);
+                }
+                if (!ImGui::GetIO().WantTextInput &&
+                    !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+                    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C, ImGuiInputFlags_RouteFocused)) {
+                        copyKeys();
+                    }
+                    if (editMode &&
+                        ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_V, ImGuiInputFlags_RouteFocused)) {
+                        pasteKeys();
+                    }
                 }
                 {
                     DisabledScope disabled(!editMode);
@@ -870,6 +959,35 @@ class AnimationWindow {
                 ImGui::SameLine();
                 ImGui::TextDisabled(
                     "%zu tracks | frame %d", rows.size(), int(std::round(time_ * samples_)));
+                {
+                    DisabledScope disabled(!canCopyKeys());
+                    if (ImGui::Button("Copy key")) {
+                        copyKeys();
+                    }
+                }
+                ImGui::SameLine();
+                {
+                    DisabledScope disabled(!canCopyKeys(true));
+                    if (ImGui::Button("Copy track keys")) {
+                        copyKeys(true);
+                    }
+                }
+                ImGui::SameLine();
+                {
+                    DisabledScope disabled(!editMode || !canPasteKeys());
+                    if (ImGui::Button("Paste at playhead")) {
+                        pasteKeys();
+                    }
+                }
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip(
+                        "Ctrl+C / Ctrl+V | paste onto a matching property track.\nAll XYZ lanes are copied. Matching times are replaced; other keys remain.\nTrack copies preserve relative timing and extend the clip if needed.");
+                }
+                if (!copiedKeys_.empty()) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled(
+                        "%zu copied (%s)", copiedKeys_.size(), copiedProperty_.c_str());
+                }
                 if (track_ >= 0 && track_ < int(clip_.tracks.size())) {
                     DisabledScope disabled(!editMode);
                     auto& track = clip_.tracks[track_];

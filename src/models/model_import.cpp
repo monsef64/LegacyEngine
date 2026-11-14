@@ -143,79 +143,101 @@ std::string importModel(AssetManager& assets,
     for (unsigned i = 2; std::filesystem::exists(assets.resolve(path)); ++i) {
         path = (prefix / (stem + " (" + std::to_string(i) + ").lemesh")).generic_string();
     }
-    std::string dataFolder = (std::filesystem::path(path).parent_path() /
-                              (std::filesystem::path(path).stem().string() + "_data"))
-                                 .generic_string();
-    for (unsigned i = 2; std::filesystem::exists(assets.resolve(dataFolder)); ++i) {
-        dataFolder = (prefix / (stem + "_data_" + std::to_string(i))).generic_string();
-    }
-    std::filesystem::create_directories(assets.resolve(dataFolder));
+    // Keep generated files alongside the model, grouped by its manifest in the
+    // browser rather than exposing a generated directory as a separate asset.
+    std::vector<std::string> generated;
+    Json subAssetNames = Json::object();
+    auto allocateChild = [&](const std::string& leaf) {
+        const auto name = std::filesystem::path(leaf).filename();
+        const auto base = std::filesystem::path(path).stem().string() + "__" + name.stem().string();
+        auto candidate = (prefix / (base + name.extension().string())).generic_string();
+        for (unsigned i = 2; std::filesystem::exists(assets.resolve(candidate)); ++i) {
+            candidate = (prefix / (base + "_" + std::to_string(i) + name.extension().string()))
+                            .generic_string();
+        }
+        generated.push_back(candidate);
+        subAssetNames[candidate] = name.stem().string();
+        return candidate;
+    };
     Json parts = Json::array();
     std::map<unsigned, std::string> materials;
     std::size_t count = 0;
     std::string warnings;
     try {
-        auto texture =
-            [&](const aiMaterial* material, aiTextureType type, const std::string& label) {
-                aiString name;
-                if (material->GetTexture(type, 0, &name) != AI_SUCCESS) {
-                    return std::string{};
-                }
-                try {
-                    if (const auto* embedded = scene->GetEmbeddedTexture(name.C_Str())) {
-                        const std::string ext =
-                            embedded->mHeight == 0 ? std::string(embedded->achFormatHint) : "tga";
-                        const auto file =
-                            dataFolder + "/" + label + "." + (ext == "jpeg" ? "jpg" : ext);
-                        if (!materialTexturePath(file)) {
-                            throw std::runtime_error("Unsupported embedded texture format");
-                        }
-                        std::ofstream out(assets.resolve(file), std::ios::binary);
-                        if (!embedded->mHeight) {
-                            if (embedded->mWidth > 256 * 1024 * 1024) {
-                                throw std::runtime_error("Embedded texture too large");
-                            }
-                            out.write(reinterpret_cast<const char*>(embedded->pcData),
-                                      embedded->mWidth);
-                        } else {
-                            if (embedded->mWidth > 16384 || embedded->mHeight > 16384) {
-                                throw std::runtime_error("Embedded texture too large");
-                            }
-                            unsigned char header[18]{};
-                            header[2] = 2;
-                            header[12] = embedded->mWidth & 255;
-                            header[13] = embedded->mWidth >> 8;
-                            header[14] = embedded->mHeight & 255;
-                            header[15] = embedded->mHeight >> 8;
-                            header[16] = 32;
-                            header[17] = 0x28;
-                            out.write(reinterpret_cast<const char*>(header), 18);
-                            for (unsigned i = 0; i < embedded->mWidth * embedded->mHeight; ++i) {
-                                const auto& p = embedded->pcData[i];
-                                const unsigned char bgra[]{p.b, p.g, p.r, p.a};
-                                out.write(reinterpret_cast<const char*>(bgra), 4);
-                            }
-                        }
-                        out.close();
-                        if (!out) {
-                            throw std::runtime_error("Cannot copy embedded texture");
-                        }
-                        return file;
+        auto texture = [&](const aiMaterial* material,
+                           aiTextureType type,
+                           const std::string& label) {
+            aiString name;
+            if (material->GetTexture(type, 0, &name) != AI_SUCCESS) {
+                return std::string{};
+            }
+            const auto before = generated.size();
+            try {
+                if (const auto* embedded = scene->GetEmbeddedTexture(name.C_Str())) {
+                    const std::string ext =
+                        embedded->mHeight == 0 ? std::string(embedded->achFormatHint) : "tga";
+                    const auto file = allocateChild(label + "." + (ext == "jpeg" ? "jpg" : ext));
+                    if (!materialTexturePath(file)) {
+                        throw std::runtime_error("Unsupported embedded texture format");
                     }
-                    std::string textureName = name.C_Str();
-                    std::replace(textureName.begin(), textureName.end(), '\\', '/');
-                    const auto file = std::filesystem::path(textureName).is_absolute()
-                                          ? std::filesystem::path(textureName)
-                                          : source.parent_path() / textureName;
-                    if (!materialTexturePath(file.filename().string())) {
-                        throw std::runtime_error("Unsupported texture format");
+                    std::ofstream out(assets.resolve(file), std::ios::binary);
+                    if (!embedded->mHeight) {
+                        if (embedded->mWidth > 256 * 1024 * 1024) {
+                            throw std::runtime_error("Embedded texture too large");
+                        }
+                        out.write(reinterpret_cast<const char*>(embedded->pcData),
+                                  embedded->mWidth);
+                    } else {
+                        if (embedded->mWidth > 16384 || embedded->mHeight > 16384) {
+                            throw std::runtime_error("Embedded texture too large");
+                        }
+                        unsigned char header[18]{};
+                        header[2] = 2;
+                        header[12] = embedded->mWidth & 255;
+                        header[13] = embedded->mWidth >> 8;
+                        header[14] = embedded->mHeight & 255;
+                        header[15] = embedded->mHeight >> 8;
+                        header[16] = 32;
+                        header[17] = 0x28;
+                        out.write(reinterpret_cast<const char*>(header), 18);
+                        for (unsigned i = 0; i < embedded->mWidth * embedded->mHeight; ++i) {
+                            const auto& p = embedded->pcData[i];
+                            const unsigned char bgra[]{p.b, p.g, p.r, p.a};
+                            out.write(reinterpret_cast<const char*>(bgra), 4);
+                        }
                     }
-                    return assets.import(file, dataFolder);
-                } catch (const std::exception& error) {
-                    warnings += std::string(name.C_Str()) + ": " + error.what() + "\n";
-                    return std::string{};
+                    out.close();
+                    if (!out) {
+                        throw std::runtime_error("Cannot copy embedded texture");
+                    }
+                    return file;
                 }
-            };
+                std::string textureName = name.C_Str();
+                std::replace(textureName.begin(), textureName.end(), '\\', '/');
+                const auto file = std::filesystem::path(textureName).is_absolute()
+                                      ? std::filesystem::path(textureName)
+                                      : source.parent_path() / textureName;
+                if (!materialTexturePath(file.filename().string())) {
+                    throw std::runtime_error("Unsupported texture format");
+                }
+                if (std::filesystem::is_symlink(file) || !std::filesystem::is_regular_file(file) ||
+                    std::filesystem::file_size(file) > 256ull * 1024 * 1024) {
+                    throw std::runtime_error("Invalid or oversized model texture");
+                }
+                const auto copied = allocateChild(label + file.extension().string());
+                std::filesystem::copy_file(file, assets.resolve(copied));
+                return copied;
+            } catch (const std::exception& error) {
+                while (generated.size() > before) {
+                    std::error_code ignored;
+                    std::filesystem::remove(assets.resolve(generated.back()), ignored);
+                    subAssetNames.erase(generated.back());
+                    generated.pop_back();
+                }
+                warnings += std::string(name.C_Str()) + ": " + error.what() + "\n";
+                return std::string{};
+            }
+        };
         for (unsigned instance = 0; instance < meshNodes.size(); ++instance) {
             const unsigned m = meshNodes[instance].first;
             const auto* mesh = scene->mMeshes[m];
@@ -271,7 +293,10 @@ std::string importModel(AssetManager& assets,
             if (parts.size() >= 1024) {
                 throw std::runtime_error("Model exceeds 1024 mesh parts");
             }
-            const auto meshPath = dataFolder + "/Mesh_" + std::to_string(instance) + ".lemesh";
+            const auto meshPath = allocateChild("Mesh_" + std::to_string(instance) + ".lemesh");
+            if (mesh->mName.length) {
+                subAssetNames[meshPath] = mesh->mName.C_Str();
+            }
             writeJsonFile(assets.resolve(meshPath),
                           {{"format", "LegacyEngineMesh"},
                            {"version", 1},
@@ -300,7 +325,12 @@ std::string importModel(AssetManager& assets,
                 if (!material.normalMap.empty()) {
                     material.shader = 1;
                 }
-                const auto materialPath = dataFolder + "/" + label + ".mat";
+                const auto materialPath = allocateChild(label + ".mat");
+                aiString materialName;
+                if (sourceMaterial->Get(AI_MATKEY_NAME, materialName) == AI_SUCCESS &&
+                    materialName.length) {
+                    subAssetNames[materialPath] = materialName.C_Str();
+                }
                 saveMaterial(assets, materialPath, material);
                 found = materials.emplace(mesh->mMaterialIndex, materialPath).first;
             }
@@ -314,19 +344,22 @@ std::string importModel(AssetManager& assets,
             throw std::runtime_error("Model contains no triangle geometry");
         }
         for (unsigned i = 0; i < animations.size(); ++i) {
-            writeJsonFile(
-                assets.resolve(dataFolder + "/Animation_" + std::to_string(i) + ".leanim"),
-                {{"format", "LegacyEngineAnimation"},
-                 {"version", 1},
-                 {"duration", animations[i]["duration"]},
-                 {"tracks", Json::array()},
-                 {"model", path},
-                 {"modelAnimation", i}});
+            const auto animationPath = allocateChild("Animation_" + std::to_string(i) + ".leanim");
+            subAssetNames[animationPath] = animations[i]["name"];
+            writeJsonFile(assets.resolve(animationPath),
+                          {{"format", "LegacyEngineAnimation"},
+                           {"version", 1},
+                           {"duration", animations[i]["duration"]},
+                           {"tracks", Json::array()},
+                           {"model", path},
+                           {"modelAnimation", i}});
         }
         writeJsonFile(assets.resolve(path),
                       {{"format", "LegacyEngineMesh"},
                        {"version", 2},
                        {"importScale", 1},
+                       {"subAssets", generated},
+                       {"subAssetNames", subAssetNames},
                        {"parts", std::move(parts)},
                        {"warnings", warnings},
                        {"nodes", nodes},
@@ -337,7 +370,9 @@ std::string importModel(AssetManager& assets,
         return path;
     } catch (...) {
         std::error_code error;
-        std::filesystem::remove_all(assets.resolve(dataFolder), error);
+        for (const auto& file : generated) {
+            std::filesystem::remove(assets.resolve(file), error);
+        }
         throw;
     }
 }

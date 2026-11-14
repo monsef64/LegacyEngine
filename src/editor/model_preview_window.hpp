@@ -207,7 +207,9 @@ class ModelPreviewWindow {
                              ImVec2(1, 0));
                 if (ImGui::IsItemHovered()) {
                     if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
-                        camera_.look(ImGui::GetIO().MouseDelta.x, ImGui::GetIO().MouseDelta.y);
+                        camera_.orbit(camera_.target,
+                                      ImGui::GetIO().MouseDelta.x,
+                                      ImGui::GetIO().MouseDelta.y);
                     }
                     camera_.zoom(ImGui::GetIO().MouseWheel);
                 }

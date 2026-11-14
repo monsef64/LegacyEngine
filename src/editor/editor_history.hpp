@@ -269,6 +269,23 @@ class EditorHistory {
         error.clear();
         return true;
     }
+    // Filesystem-only actions do not alter the scene. Reuse its snapshot rather
+    // than deep-copying a potentially large world for every asset deletion.
+    bool performAsset(World& world, Entity selection, std::function<void(bool)> action) {
+        commit(world, selection);
+        try {
+            action(true);
+        } catch (const std::exception& e) {
+            error = e.what();
+            return false;
+        }
+        Entry next{baseline_.scene, selection, baseline_.signature, std::move(action)};
+        push(undo_, std::move(baseline_));
+        redo_.clear();
+        baseline_ = std::move(next);
+        error.clear();
+        return true;
+    }
     bool undo(World& world, Entity& selection) {
         return restore(world, selection, undo_, redo_);
     }
@@ -278,7 +295,7 @@ class EditorHistory {
 
   private:
     struct Entry {
-        std::unique_ptr<World> scene;
+        std::shared_ptr<World> scene;
         Entity selection;
         std::string signature;
         std::function<void(bool)> action;

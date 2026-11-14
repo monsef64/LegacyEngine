@@ -57,7 +57,9 @@ inline bool editVector(const char* label,
     value = {v[0], v[1], v[2]};
     return true;
 }
-template <class T> inline bool componentHeader(World& world, Entity entity, const char* name) {
+template <class T>
+inline bool
+componentHeader(World& world, Entity entity, const char* name, const T& defaults = T{}) {
     ImGui::Spacing();
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4);
@@ -77,6 +79,13 @@ template <class T> inline bool componentHeader(World& world, Entity entity, cons
         }
         if (ImGui::MenuItem("Paste values", nullptr, false, componentClipboard.matches<T>())) {
             componentClipboard.paste<T>(world, entity);
+        }
+        if (ImGui::MenuItem("Reset")) {
+            if constexpr (std::is_same_v<T, Transform>) {
+                setLocalTransform(world, entity, Transform{});
+            } else {
+                world.get<T>(entity) = defaults;
+            }
         }
         ImGui::Separator();
         bool allowed = true;
@@ -547,7 +556,8 @@ inline void drawInspector(World& world,
                 }
                 if (auto* r = world.tryGet<MeshRenderer>(selected);
                     componentID == 3 && r &&
-                    componentHeader<MeshRenderer>(world, selected, "MeshRenderer")) {
+                    componentHeader<MeshRenderer>(
+                        world, selected, "MeshRenderer", MeshRenderer{meshes[0]})) {
                     if (assetPicker("Model asset",
                                     r->model,
                                     assets,

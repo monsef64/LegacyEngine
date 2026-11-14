@@ -13,6 +13,7 @@ extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
 }
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <unordered_map>
@@ -886,8 +887,13 @@ int LuaScene::api(lua_State* L) {
 // A bound closure supports both obj.getComponent(Type) and obj:getComponent(Type).
 int LuaScene::objectMethod(lua_State* L) {
     const Handle bound = handle(L, lua_upvalueindex(3));
-    if (luaL_testudata(L, 1, "GameObject")) {
-        const Handle explicitSelf = handle(L, 1);
+    auto* selfComponent = static_cast<Component*>(luaL_testudata(L, 1, "Component"));
+    if (luaL_testudata(L, 1, "GameObject") || selfComponent) {
+        if (selfComponent && (!selfComponent->object.world->alive(selfComponent->object.entity) ||
+                              !has(selfComponent->object, selfComponent->type))) {
+            return luaL_error(L, "Component no longer exists");
+        }
+        const Handle explicitSelf = selfComponent ? selfComponent->object : handle(L, 1);
         const int operation = static_cast<int>(lua_tointeger(L, lua_upvalueindex(2)));
         if (explicitSelf.entity == bound.entity && explicitSelf.scene == bound.scene &&
             !(operation == 7 && lua_gettop(L) == 1)) {
@@ -1061,6 +1067,56 @@ int LuaScene::componentIndex(lua_State* L) {
     const char* key = luaL_checkstring(L, 2);
     if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
         return luaL_error(L, "Component no longer exists");
+    }
+    const char* sharedMethods[]{"getComponent",
+                                "addComponent",
+                                "removeComponent",
+                                "getComponentInParent",
+                                "getComponentInChildren",
+                                "findComponentInParent",
+                                "findComponentInChildren",
+                                "setActive",
+                                "isActive",
+                                "setParent",
+                                "getParent",
+                                "destroy",
+                                "getPosition",
+                                "setPosition",
+                                "getRotation",
+                                "setRotation",
+                                "getScale",
+                                "setScale",
+                                "getForward",
+                                "getRight",
+                                "getUp",
+                                "getBackward",
+                                "getLeft",
+                                "getDown",
+                                "translate",
+                                "lookAt",
+                                "setName",
+                                "getName"};
+    bool shared = false;
+    for (const auto* method : sharedMethods) {
+        shared |= !std::strcmp(key, method);
+    }
+    if (shared) {
+        c.object.scene->pushObject(c.object.entity);
+        lua_replace(L, 1);
+        return objectIndex(L);
+    }
+    // Component aliases resolve on the same owner, without storing raw pointers.
+    for (int type = 0; type < 17; ++type) {
+        std::string alias = type == 14 ? "fpsCamera" : types[type];
+        alias[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(alias[0])));
+        if (!std::strcmp(key, alias.c_str())) {
+            if (has(c.object, type)) {
+                component(L, c.object, type);
+            } else {
+                lua_pushnil(L);
+            }
+            return 1;
+        }
     }
     if (!std::strcmp(key, "gameObject")) {
         c.object.scene->pushObject(c.object.entity);

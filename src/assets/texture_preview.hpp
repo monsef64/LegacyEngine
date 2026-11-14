@@ -21,7 +21,7 @@ class TexturePreviewCache {
         std::uint64_t touched = 0;
         std::filesystem::file_time_type modified{};
         std::uintmax_t bytes = 0;
-        bool failed = false;
+        bool failed = false, dependencyExists = false;
         std::string dependency;
         std::filesystem::file_time_type dependencyModified{};
         std::uintmax_t dependencyBytes = 0;
