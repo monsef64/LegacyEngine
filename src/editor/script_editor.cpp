@@ -31,6 +31,15 @@ void ScriptEditor::draw(const EditorLayout* layout,
                     ImVec2(std::min(200.0f, ImGui::GetContentRegionAvail().x * .3f), 0),
                     ImGuiChildFlags_Borders);
                 ImGui::TextUnformatted("Scripts");
+                std::optional<std::string> createScriptIn;
+                if (ImGui::Button("New Script", ImVec2(-1, 0))) {
+                    createScriptIn =
+                        std::filesystem::path(assetPath_).parent_path().generic_string();
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "Create a .ls file beside the open script, or in Assets if none is open");
+                }
                 try {
                     if (treeRoot_ != assets->root || ImGui::GetTime() >= treeRefresh_) {
                         auto tree = buildScriptTree(*assets);
@@ -38,7 +47,7 @@ void ScriptEditor::draw(const EditorLayout* layout,
                         treeRoot_ = assets->root;
                         treeRefresh_ = ImGui::GetTime() + .5;
                     }
-                    if (auto chosen = scriptTree_.draw(assetPath_)) {
+                    if (auto chosen = scriptTree_.draw(assetPath_, "", &createScriptIn)) {
                         saveFile(*assets);
                         auto text = assets->readScript(*chosen);
                         setSource(text);
@@ -46,6 +55,32 @@ void ScriptEditor::draw(const EditorLayout* layout,
                         if (openedScript) {
                             *openedScript = *chosen;
                         }
+                        fileError_.clear();
+                    }
+                    if (ImGui::BeginPopupContextWindow("Script Explorer actions",
+                                                       ImGuiPopupFlags_MouseButtonRight |
+                                                           ImGuiPopupFlags_NoOpenOverItems)) {
+                        if (ImGui::MenuItem("New LegacyScript in Assets")) {
+                            createScriptIn = "";
+                        }
+                        ImGui::EndPopup();
+                    }
+                    if (createScriptIn) {
+                        // Save the current document before switching to the newly created asset.
+                        saveFile(*assets);
+                        const auto folder = std::filesystem::path(*createScriptIn);
+                        auto path = (folder / "NewScript.ls").generic_string();
+                        for (unsigned n = 2; std::filesystem::exists(assets->resolve(path)); ++n) {
+                            path = (folder / ("NewScript (" + std::to_string(n) + ").ls"))
+                                       .generic_string();
+                        }
+                        assets->writeScript(path, "");
+                        setSource("");
+                        assetPath_ = path;
+                        if (openedScript) {
+                            *openedScript = path;
+                        }
+                        treeRefresh_ = 0;
                         fileError_.clear();
                     }
                 } catch (const std::exception& e) {
