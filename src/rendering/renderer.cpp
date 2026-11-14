@@ -3,6 +3,7 @@
 #include "core/profiler.hpp"
 #include "lighting/cascades.hpp"
 #include "lighting/lighting.hpp"
+#include "models/model_asset.hpp"
 #include "physics/collider_debug.hpp"
 #include "rendering/shader_data.hpp"
 #include "scene/camera_gizmo.hpp"
@@ -161,6 +162,18 @@ bool Renderer::init() {
     return true;
 }
 
+void Renderer::clearModelCache() {
+    for (const auto& entry : modelMeshes_) {
+        if (entry.second.id < meshes_.size()) {
+            auto& mesh = meshes_[entry.second.id];
+            glDeleteBuffers(1, &mesh.vertexBuffer);
+            glDeleteVertexArrays(1, &mesh.vertexArray);
+            mesh = {};
+        }
+    }
+    modelMeshes_.clear();
+    modelError.clear();
+}
 void Renderer::shutdown() {
     editorGrid_ = {};
     gridCells_ = 0;
@@ -177,6 +190,7 @@ void Renderer::shutdown() {
         glDeleteVertexArrays(1, &mesh.vertexArray);
     }
     meshes_.clear();
+    modelMeshes_.clear();
     glDeleteTextures(1, &shadowTexture_);
     glDeleteFramebuffers(1, &shadowFramebuffer_);
     shadowTexture_ = shadowFramebuffer_ = 0;
@@ -248,6 +262,23 @@ void Renderer::draw(World& world,
                     int x,
                     int y,
                     bool editorView) {
+    // Resolve persistent asset references before shadow and visible-mesh gathering.
+    world.each<MeshRenderer>([&](Entity, MeshRenderer& mesh) {
+        if (mesh.model.empty()) {
+            return;
+        }
+        auto found = modelMeshes_.find(mesh.model);
+        if (found == modelMeshes_.end()) {
+            MeshHandle handle;
+            try {
+                handle = createMesh(loadModelAsset(materialAssets_, mesh.model));
+            } catch (const std::exception& e) {
+                modelError = mesh.model + ": " + e.what();
+            }
+            found = modelMeshes_.emplace(mesh.model, handle).first;
+        }
+        mesh.mesh = found->second;
+    });
     materialTextures_.beginFrame();
     glDisable(GL_SCISSOR_TEST);
     glViewport(x, y, width, height);

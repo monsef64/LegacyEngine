@@ -100,7 +100,8 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"specular", 'f'},
       {"material", 's'},
       {"materialOverrides", 'i'},
-      {"materialValues", 'j'}}},
+      {"materialValues", 'j'},
+      {"model", 's'}}},
     {"Collider",
      {{"size", 'f', 3},
       {"center", 'f', 3},
@@ -226,6 +227,10 @@ inline void writeSchema(std::ostream& out, const Json& original, const std::vect
     }
     for (auto f : fields) {
         const std::string name = f.name;
+        if (name == "model" && !object.contains(name)) {
+            out << std::quoted(std::string{}) << ' ';
+            continue;
+        }
         if (!object.contains(name) && (name == "isTrigger" || name == "isKinematic")) {
             out << false << ' ';
             continue;
@@ -288,7 +293,7 @@ inline Json fromLegacy(const std::string& text) {
     in >> magic >> version;
     Json doc = read(in, {{"script", 's'}, {"assets", 's'}});
     doc["format"] = "LegacyEngine";
-    doc["version"] = 11;
+    doc["version"] = 12;
     doc["editorCamera"] = read(in,
                                {{"target", 'f', 3},
                                 {"yaw", 'f'},
@@ -329,12 +334,13 @@ inline Json fromLegacy(const std::string& text) {
 }
 inline std::string toLegacy(const Json& doc) {
     if (doc.at("format") != "LegacyEngine" ||
-        (doc.at("version") != 9 && doc.at("version") != 10 && doc.at("version") != 11) ||
+        (doc.at("version") != 9 && doc.at("version") != 10 && doc.at("version") != 11 &&
+         doc.at("version") != 12) ||
         !doc.at("objects").is_array() || doc.at("objects").size() > 10000) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 16\n";
+    out << std::setprecision(17) << "LegacyEngineProject 17\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),

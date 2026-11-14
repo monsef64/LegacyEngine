@@ -67,8 +67,9 @@ children’s local flags. Activity participates in scene Undo/Redo and Play/Stop
 restoration. Wait timers, pending audio events and runtime subscriptions are not
 serialized; new runtimes start when the level is played again.
 
-Scene format 11 adds CharacterController and FPSCamera settings; format 9 projects
-and legacy text scenes through version 15 remain readable. Re-saving upgrades the format.
+Scene format 12 adds imported static model asset references. Earlier JSON scene
+formats 9–11 and legacy text scenes through version 17 remain readable. Re-saving
+upgrades the format.
 
 ### Windows x64 build artifact
 

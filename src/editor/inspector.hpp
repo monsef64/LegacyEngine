@@ -9,6 +9,7 @@
 #include "editor/rotation_editor.hpp"
 #include "editor/transform_edit.hpp"
 #include "materials/material_io.hpp"
+#include "models/model_asset.hpp"
 #include "project/layers.hpp"
 #include "scene/scene_camera.hpp"
 #include "scripting/script_exports.hpp"
@@ -400,26 +401,6 @@ inline void drawInspector(World& world,
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Active");
             }
-            const Entity parent = getParent(world, selected);
-            const auto* parentName = world.tryGet<ObjectName>(parent);
-            if (ImGui::BeginCombo("Parent",
-                                  parent == Entity{} ? "None"
-                                  : parentName       ? parentName->value.c_str()
-                                                     : "Object")) {
-                if (ImGui::Selectable("None", parent == Entity{})) {
-                    setParent(world, selected, {});
-                }
-                for (const auto& entry : levelObjects(world)) {
-                    if (canParent(world, selected, entry.entity)) {
-                        ImGui::PushID(static_cast<int>(entry.entity.index));
-                        if (ImGui::Selectable(entry.name.c_str(), parent == entry.entity)) {
-                            setParent(world, selected, entry.entity);
-                        }
-                        ImGui::PopID();
-                    }
-                }
-                ImGui::EndCombo();
-            }
             auto ordered =
                 world.has<InspectorOrder>(selected)
                     ? world.get<InspectorOrder>(selected).types
@@ -468,6 +449,22 @@ inline void drawInspector(World& world,
                 if (auto* r = world.tryGet<MeshRenderer>(selected);
                     componentID == 3 && r &&
                     componentHeader<MeshRenderer>(world, selected, "MeshRenderer")) {
+                    if (assetPicker("Model asset",
+                                    r->model,
+                                    assets,
+                                    [](const std::string& path) { return modelAsset(path); }) &&
+                        r->model.empty()) {
+                        r->mesh = meshes[0];
+                    }
+                    if (ImGui::BeginDragDropTarget()) {
+                        if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                            std::string path = static_cast<const char*>(drop->Data);
+                            if (modelAsset(path)) {
+                                r->model = path;
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
                     const char* names[]{"Cube", "Sphere", "Capsule", "Cone", "Plane"};
                     int current = -1;
                     for (int i = 0; i < std::min(meshCount, 5); ++i) {
@@ -479,6 +476,7 @@ inline void drawInspector(World& world,
                         for (int i = 0; i < std::min(meshCount, 5); ++i) {
                             if (ImGui::Selectable(names[i], current == i)) {
                                 r->mesh = meshes[i];
+                                r->model.clear();
                                 if (i != 0) {
                                     if (auto* t = world.tryGet<Transform>(selected)) {
                                         const float scale =

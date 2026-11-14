@@ -250,3 +250,13 @@ an explorer folder and choose **New LegacyScript (.ls)** to create one there;
 right-click empty explorer space to create one at the Assets root. Filenames
 start at `NewScript.ls` and use numbered suffixes to avoid overwriting files.
 The current document is saved before switching. The tree refreshes automatically.
+
+See [static 3D model import](models.md) for Assimp format choices, baked model
+assets, model placement and the current static-only limitations.
+
+The Inspector no longer has a Parent dropdown; drag objects in Hierarchy to
+change their parent or use its unparent action. For the separate Game window,
+press **F11** or **Alt+Enter** while it has focus to toggle desktop fullscreen.
+The editor toolbar also provides **Fullscreen Game / Windowed Game** while that
+window is open. These shortcuts are reserved for window control and are not
+forwarded to gameplay. Repeated key-down events do not toggle repeatedly.

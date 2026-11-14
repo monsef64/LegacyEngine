@@ -90,5 +90,9 @@ inline bool drawSceneOrientation(OrbitCamera& camera, const EditorRect& scene, b
     }
     ImGui::EndDisabled();
     ImGui::SetCursorScreenPos(old);
+    // Restoring the cursor after the full-size Scene image can place it just
+    // outside the content region. Submit an item so ImGui 1.92 accounts for
+    // that position instead of reporting an unconsumed cursor extension.
+    ImGui::Dummy(ImVec2(0, 0));
     return hovered || active;
 }

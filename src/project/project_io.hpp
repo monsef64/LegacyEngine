@@ -68,7 +68,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 16\n";
+    out << std::setprecision(9) << "LegacyEngineProject 17\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -123,14 +123,20 @@ inline std::string encodeLegacy(World& world,
                     mesh = i;
                 }
             }
-            require(mesh >= 0);
+            require(m->model.empty() || (materialPathValid(m->model) &&
+                                         std::filesystem::path(m->model).extension() == ".lemesh"));
+            require(mesh >= 0 || !m->model.empty());
+            if (!m->model.empty()) {
+                mesh = 2;
+            }
             out << mesh << ' ';
             writeVec(out, m->color);
             out << m->checkerboard << ' ' << m->specular << ' ';
             require(m->material.empty() || materialAsset(m->material));
             require(m->materialOverrides <= 127 && validMaterial(m->materialValues));
             out << std::quoted(m->material) << ' ' << m->materialOverrides << ' '
-                << std::quoted(materialJson(m->materialValues).dump()) << ' ';
+                << std::quoted(materialJson(m->materialValues).dump()) << ' '
+                << std::quoted(m->model) << ' ';
         }
         if (auto* c = world.tryGet<Collider>(e)) {
             writeVec(out, c->size);
@@ -261,7 +267,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 16));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 17));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -354,6 +360,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                 require(values.size() <= 64 * 1024 && m.materialOverrides <= 127 &&
                         (m.material.empty() || materialAsset(m.material)));
                 m.materialValues = parseMaterial(parseJson(values));
+            }
+            if (version >= 17) {
+                in >> std::quoted(m.model);
+                require(m.model.empty() ||
+                        (materialPathValid(m.model) &&
+                         std::filesystem::path(m.model).extension() == ".lemesh"));
             }
             result.world.add(e, m);
         }

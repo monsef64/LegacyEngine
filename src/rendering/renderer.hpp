@@ -17,7 +17,7 @@
 
 class Renderer {
   public:
-    std::string materialError;
+    std::string materialError, modelError;
     void setShadowSettings(ShadowSettings settings) {
         if (settings.valid()) {
             shadowSettings_ = settings;
@@ -29,6 +29,7 @@ class Renderer {
     }
     void setAssetRoot(const std::filesystem::path& root) {
         if (materialAssets_.root != root) {
+            clearModelCache();
             materialCache_.clear();
             materialTextures_.clear();
             skyboxRenderer_.clear();
@@ -130,6 +131,8 @@ class Renderer {
     std::vector<ShadowCaster> shadowCasters_;
     std::vector<Lighting::Light> lights_;
 
+    void clearModelCache();
+    std::map<std::string, MeshHandle> modelMeshes_;
     std::vector<GpuMesh> meshes_; // MeshHandle::id is an index into this
 
     // Flat colour, for lines.

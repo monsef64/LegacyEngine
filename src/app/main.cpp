@@ -272,6 +272,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     std::optional<EditorSettings> settingsGesture;
     bool separateGame = false;
     SDL_Window* gameWindow = nullptr;
+    auto toggleGameFullscreen = [&]() {
+        if (!gameWindow) {
+            return;
+        }
+        const bool fullscreen = (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_FULLSCREEN) != 0;
+        if (!SDL_SetWindowFullscreen(gameWindow, !fullscreen)) {
+            projectError = SDL_GetError();
+        }
+    };
     Entity mouseOver, mousePressedObject;
     ImVec2 gameImageOrigin{}, gameImageSize{};
     bool showFPS = false, showGameColliders = false, showProfiler = false;
@@ -372,6 +381,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 continue;
             }
             if (gameWindow && SDL_GetWindowFromEvent(&event) == gameWindow) {
+                const bool fullscreenKey =
+                    event.type == SDL_EVENT_KEY_DOWN &&
+                    (event.key.key == SDLK_F11 ||
+                     (event.key.key == SDLK_RETURN && (event.key.mod & SDL_KMOD_ALT)));
+                if (fullscreenKey) {
+                    if (!event.key.repeat) {
+                        toggleGameFullscreen();
+                    }
+                    continue;
+                }
                 input.event(event);
                 continue;
             }
@@ -1230,6 +1249,17 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui::BeginDisabled(playMode.active());
         ImGui::Checkbox("Separate Game window", &separateGame);
         ImGui::EndDisabled();
+        if (gameWindow) {
+            ImGui::SameLine();
+            const bool fullscreen = (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_FULLSCREEN) != 0;
+            if (ImGui::Button(fullscreen ? "Windowed Game" : "Fullscreen Game")) {
+                toggleGameFullscreen();
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Toggle separate Game fullscreen (F11 or Alt+Enter in Game window)");
+            }
+        }
         ImGui::End();
         bool hierarchyFocused = false;
         int hierarchyCreate = -1;
@@ -1345,6 +1375,41 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 world.add(source, PrefabInstance{relative});
                 history.commit(world, selectedEntity);
                 browser.selected = relative;
+            } catch (const std::exception& e) {
+                browser.assets.error = e.what();
+            }
+        }
+        if (!browser.spawnModelRequest.empty() && !playMode.active()) {
+            const auto path = std::exchange(browser.spawnModelRequest, {});
+            try {
+                const auto data =
+                    loadModelAsset(browser.assets, path); // validate before changing the world
+                editor.finish(world);
+                selectedEntity = world.create();
+                world.add(selectedEntity, ObjectName{std::filesystem::path(path).stem().string()});
+                world.add(selectedEntity, Transform{camera.target});
+                MeshRenderer mesh{cubeMesh};
+                mesh.model = path;
+                world.add(selectedEntity, mesh);
+                Vec3 low = data.vertices.front().position, high = low;
+                for (const auto& vertex : data.vertices) {
+                    low = {std::min(low.x, vertex.position.x),
+                           std::min(low.y, vertex.position.y),
+                           std::min(low.z, vertex.position.z)};
+                    high = {std::max(high.x, vertex.position.x),
+                            std::max(high.y, vertex.position.y),
+                            std::max(high.z, vertex.position.z)};
+                }
+                Collider collider;
+                collider.center = (low + high) * .5f;
+                const auto size = high - low;
+                collider.size = {
+                    std::max(.001f, size.x), std::max(.001f, size.y), std::max(.001f, size.z)};
+                world.add(selectedEntity, collider);
+                if (prefabLevel) {
+                    setParent(world, selectedEntity, Prefabs::root(world));
+                }
+                browser.selected.clear();
             } catch (const std::exception& e) {
                 browser.assets.error = e.what();
             }
@@ -1467,6 +1532,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         terminalErrors.report("Skybox", renderer.skyboxError());
         terminalErrors.report("Material", renderer.materialError);
+        terminalErrors.report("Model", renderer.modelError);
         terminalErrors.report("Audio", audio.error);
         terminalErrors.report("Assets", browser.assets.error);
         terminalErrors.report("Asset preview", browser.preview.error);
@@ -1537,7 +1603,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (ImGui::BeginDragDropTarget()) {
                     if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                         const std::string path = static_cast<const char*>(asset->Data);
-                        if (Prefabs::asset(path)) {
+                        if (modelAsset(path)) {
+                            browser.spawnModelRequest = path;
+                        } else if (Prefabs::asset(path)) {
                             browser.spawnPrefabRequest = path;
                         } else {
                             attachScriptAsset(world, selectedEntity, path);

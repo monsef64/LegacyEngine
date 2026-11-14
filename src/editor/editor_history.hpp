@@ -165,7 +165,11 @@ inline std::string sceneSignature(World& world) {
         });
         component(e, Transform{}, transform);
         component(e, MeshRenderer{}, [&](const MeshRenderer& m) {
-            scalar(m.mesh.id);
+            if (m.model.empty()) {
+                scalar(m.mesh.id);
+            }
+            scalar(m.model.size());
+            result += m.model;
             vec(m.color);
             scalar(m.checkerboard);
             scalar(m.specular);

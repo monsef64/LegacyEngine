@@ -34,7 +34,7 @@ inline const char* assetIcon(const std::string& path, bool folder = false) {
     if (textureAsset(path)) {
         return "\xef\x87\x85"; // file-image
     }
-    if (ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb") {
+    if (ext == ".lemesh" || ext == ".obj" || ext == ".fbx" || ext == ".gltf" || ext == ".glb") {
         return "\xef\x86\xb2"; // cube
     }
     if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {
@@ -81,7 +81,7 @@ class AssetBrowser {
     }
     AssetManager assets;
     Entity prefabCreation;
-    std::string editPrefabRequest, spawnPrefabRequest, editCubemapRequest;
+    std::string editPrefabRequest, spawnPrefabRequest, editCubemapRequest, spawnModelRequest;
     std::string selected, openedScript, currentFolder;
     EditorSettings settings;
     std::filesystem::path projectFolder;
@@ -90,7 +90,8 @@ class AssetBrowser {
     TexturePreviewCache thumbnails;
     void importFile(const std::string& path) {
         try {
-            selected = assets.import(path);
+            selected = importableModel(path) ? importModel(assets, path, currentFolder)
+                                             : assets.import(path);
             assets.error.clear();
         } catch (const std::exception& e) {
             assets.error = e.what();
@@ -132,6 +133,7 @@ class AssetBrowser {
             return false;
         };
         std::filesystem::rename(assets.resolve(selected), assets.resolve(relative));
+        world.each<MeshRenderer>([&](Entity, MeshRenderer& mesh) { remap(mesh.model); });
         world.each<LuaScript>([&](Entity, LuaScript& s) {
             remap(s.path);
             for (auto& entry : s.additional) {
@@ -354,6 +356,7 @@ class AssetBrowser {
                             GImGui->HoveredIdTimer >= 3.0f && ImGui::BeginTooltip()) {
                             ImGui::TextUnformatted(fullName.c_str());
                             const std::string type = folderItem                   ? "Folder"
+                                                     : modelAsset(file)           ? "3D Model"
                                                      : materialAsset(file)        ? "Material"
                                                      : textureAsset(file)         ? "Texture"
                                                      : AssetManager::script(file) ? "LegacyScript"
@@ -388,6 +391,9 @@ class AssetBrowser {
                         }
                         if (clicked) {
                             selected = file;
+                            if (!folderItem && modelAsset(file) && ImGui::IsMouseDoubleClicked(0)) {
+                                spawnModelRequest = file;
+                            }
                             if (!folderItem && cubemapAsset(file) &&
                                 ImGui::IsMouseDoubleClicked(0)) {
                                 editCubemapRequest = file;
@@ -418,6 +424,13 @@ class AssetBrowser {
                                     assets.error = e.what();
                                 }
                             }
+                        }
+                        if (!folderItem && modelAsset(file) &&
+                            ImGui::BeginPopupContextItem("Model actions")) {
+                            if (ImGui::MenuItem("Instantiate in level")) {
+                                spawnModelRequest = file;
+                            }
+                            ImGui::EndPopup();
                         }
                         if (!folderItem && AssetManager::extension(file) == ".prefab" &&
                             ImGui::BeginPopupContextItem("Prefab actions")) {
