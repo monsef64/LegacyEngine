@@ -76,31 +76,74 @@ class AssetManager {
         std::sort(result.begin(), result.end());
         return result;
     }
-    std::string import(const std::filesystem::path& source) {
+    std::string import(const std::filesystem::path& source, const std::string& parent = {}) {
         if (root.empty()) {
             throw std::runtime_error("No project asset root is configured");
         }
-        if (!std::filesystem::is_regular_file(source)) {
-            throw std::runtime_error("Drop individual files, not directories");
+        const auto destinationRoot = resolve(parent);
+        std::filesystem::create_directories(destinationRoot);
+        const auto canonicalSource = std::filesystem::weakly_canonical(source);
+        if (std::filesystem::is_symlink(source)) {
+            throw std::runtime_error("Cannot import symbolic links");
         }
-        if (std::filesystem::file_size(source) > 256 * 1024 * 1024) {
-            throw std::runtime_error("Asset exceeds 256 MiB import limit");
-        }
-        std::filesystem::create_directories(root);
-        if (source.parent_path() == root) {
-            return source.filename().generic_string();
-        }
-        auto name = source.filename();
-        int n = 2;
-        while (std::filesystem::exists(root / name)) {
-            if (std::filesystem::equivalent(source, root / name)) {
-                return name.generic_string();
+        if (std::filesystem::is_directory(source)) {
+            const auto inside = destinationRoot.lexically_relative(canonicalSource);
+            if (inside.empty() || *inside.begin() != "..") {
+                throw std::runtime_error("Cannot import a directory into itself");
             }
-            name = source.stem().string() + " (" + std::to_string(n++) + ")" +
-                   source.extension().string();
+        } else if (!std::filesystem::is_regular_file(source)) {
+            throw std::runtime_error("Expected a file or directory");
         }
-        std::filesystem::copy_file(source, root / name);
-        return name.generic_string();
+        auto leaf = canonicalSource.filename();
+        if (leaf.empty()) {
+            throw std::runtime_error("Cannot import a filesystem root");
+        }
+        auto relative = (std::filesystem::path(parent) / leaf).generic_string();
+        if (std::filesystem::exists(resolve(relative)) &&
+            std::filesystem::equivalent(source, resolve(relative))) {
+            return relative;
+        }
+        unsigned suffix = 2;
+        while (std::filesystem::exists(resolve(relative))) {
+            const auto name =
+                std::filesystem::is_directory(source) ? leaf.string() : leaf.stem().string();
+            relative = (std::filesystem::path(parent) /
+                        (name + " (" + std::to_string(suffix++) + ")" +
+                         (std::filesystem::is_directory(source) ? "" : leaf.extension().string())))
+                           .generic_string();
+        }
+        std::uintmax_t bytes = 0;
+        std::size_t count = 0;
+        auto validate = [&](const auto& file) {
+            if (std::filesystem::is_symlink(file)) {
+                throw std::runtime_error(
+                    "Directories containing symbolic links cannot be imported");
+            }
+            if (std::filesystem::is_regular_file(file)) {
+                bytes += std::filesystem::file_size(file);
+                if (++count > 10000 || bytes > 1024ull * 1024 * 1024 ||
+                    std::filesystem::file_size(file) > 256 * 1024 * 1024) {
+                    throw std::runtime_error(
+                        "Import exceeds file count/size limits (10,000 files, 1 GiB total, 256 MiB per file)");
+                }
+            }
+        };
+        if (std::filesystem::is_directory(source)) {
+            for (const auto& file : std::filesystem::recursive_directory_iterator(source)) {
+                validate(file.path());
+            }
+        } else {
+            validate(source);
+        }
+        try {
+            std::filesystem::copy(
+                source, resolve(relative), std::filesystem::copy_options::recursive);
+        } catch (...) {
+            std::error_code error;
+            std::filesystem::remove_all(resolve(relative), error);
+            throw;
+        }
+        return relative;
     }
     std::string readScript(const std::string& path) const {
         auto file = resolve(path);

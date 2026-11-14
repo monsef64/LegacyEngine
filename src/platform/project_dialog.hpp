@@ -75,6 +75,16 @@ class ProjectDialog {
                                nullptr,
                                false);
     }
+    void showImportDirectory(SDL_Window* window) {
+        {
+            std::lock_guard<std::mutex> lock(state_->mutex);
+            if (state_->busy) {
+                return;
+            }
+            state_->busy = true;
+        }
+        SDL_ShowOpenFolderDialog(callback, new Request{state_, false}, window, nullptr, false);
+    }
     std::optional<Result> poll() {
         std::lock_guard<std::mutex> lock(state_->mutex);
         if (!state_->result) {

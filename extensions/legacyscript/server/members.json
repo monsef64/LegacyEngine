@@ -80,7 +80,9 @@
     "stop": "fun(self:RigidBody) Clear velocities and queued forces/impulses"
   },
   "Collider": {
-    "shape": "'Box'|'Sphere'|'Capsule'|'Cone'",
+    "shape": "'Box'|'Sphere'|'Capsule'|'Cone'|'Convex'",
+    "model": "string Convex source .lemesh path; empty uses Size; simplified before hull generation",
+    "convexDetail": "integer Voxel resolution 2..15 (default 8); lower is simpler",
     "size": "Vec3",
     "center": "Vec3",
     "radius": "number",
@@ -105,7 +107,8 @@
     "mesh": "'Cube'|'Sphere'|'Capsule'|'Cone'|'Plane'",
     "color": "Vec3",
     "checkerboard": "boolean",
-    "specular": "number"
+    "specular": "number",
+    "model": "string Static .lemesh asset path; setting mesh to a primitive clears this"
   },
   "ObjectName": {
     "value": "string"

@@ -90,8 +90,38 @@ class AssetBrowser {
     TexturePreviewCache thumbnails;
     void importFile(const std::string& path) {
         try {
-            selected = importableModel(path) ? importModel(assets, path, currentFolder)
-                                             : assets.import(path);
+            if (std::filesystem::is_directory(path)) {
+                selected = assets.import(path, currentFolder);
+                std::vector<std::string> sources;
+                for (const auto& entry :
+                     std::filesystem::recursive_directory_iterator(assets.resolve(selected))) {
+                    if (entry.is_regular_file() && importableModel(entry.path())) {
+                        sources.push_back(entry.path().string());
+                    }
+                }
+                std::string failures;
+                for (const auto& source : sources) {
+                    try {
+                        const auto folder =
+                            std::filesystem::path(source)
+                                .parent_path()
+                                .lexically_relative(std::filesystem::weakly_canonical(assets.root))
+                                .generic_string();
+                        importModel(assets, source, folder);
+                    } catch (const std::exception& error) {
+                        failures += std::filesystem::path(source).filename().string() + ": " +
+                                    error.what() + "\n";
+                    }
+                }
+                if (!failures.empty()) {
+                    assets.error =
+                        "Directory copied; some models could not be converted:\n" + failures;
+                    return;
+                }
+            } else {
+                selected = importableModel(path) ? importModel(assets, path, currentFolder)
+                                                 : assets.import(path, currentFolder);
+            }
             assets.error.clear();
         } catch (const std::exception& e) {
             assets.error = e.what();
@@ -134,6 +164,7 @@ class AssetBrowser {
         };
         std::filesystem::rename(assets.resolve(selected), assets.resolve(relative));
         world.each<MeshRenderer>([&](Entity, MeshRenderer& mesh) { remap(mesh.model); });
+        world.each<Collider>([&](Entity, Collider& collider) { remap(collider.model); });
         world.each<LuaScript>([&](Entity, LuaScript& s) {
             remap(s.path);
             for (auto& entry : s.additional) {
@@ -160,6 +191,31 @@ class AssetBrowser {
             remap(r.materialValues.normalMap);
         });
         for (const auto& file : assets.files()) {
+            if (modelAsset(file)) {
+                try {
+                    auto document = modelDocument(assets, file);
+                    bool changed = false;
+                    if (document.contains("settings")) {
+                        auto value = document.at("settings").get<std::string>();
+                        changed |= remap(value);
+                        document["settings"] = value;
+                    }
+                    if (document.contains("parts")) {
+                        for (auto& part : document["parts"]) {
+                            for (const char* key : {"mesh", "material"}) {
+                                auto value = part.at(key).get<std::string>();
+                                changed |= remap(value);
+                                part[key] = value;
+                            }
+                        }
+                    }
+                    if (changed) {
+                        writeJsonFile(assets.resolve(file), document);
+                    }
+                } catch (const std::exception& error) {
+                    assets.error = error.what();
+                }
+            }
             if (materialAsset(file)) {
                 try {
                     auto p = loadMaterial(assets, file);
@@ -191,6 +247,7 @@ class AssetBrowser {
         preview.stop();
         thumbnails.clear();
         selected = relative;
+        ++modelAssetRevision;
     }
     void setRoot(const std::filesystem::path& root) {
         preview.stop();
@@ -243,10 +300,19 @@ class AssetBrowser {
             ImGui::SetCursorPosX(
                 std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 112));
             if (ImGui::Button("\xef\x95\xad##Import", ImVec2(32, 26))) {
-                dialog.showImport(window);
+                ImGui::OpenPopup("Import assets");
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Import files");
+            }
+            if (ImGui::BeginPopup("Import assets")) {
+                if (ImGui::MenuItem("Files / Models")) {
+                    dialog.showImport(window);
+                }
+                if (ImGui::MenuItem("Directory (full structure)")) {
+                    dialog.showImportDirectory(window);
+                }
+                ImGui::EndPopup();
             }
             ImGui::SameLine();
             if (ImGui::Button("\xef\x87\x89##NewScript", ImVec2(32, 26))) {

@@ -38,7 +38,9 @@
 ---@field linearVelocity Vec3
 ---@field angularVelocity Vec3
 ---@class Collider
----@field shape 'Box'|'Sphere'|'Capsule'|'Cone'
+---@field shape 'Box'|'Sphere'|'Capsule'|'Cone'|'Convex'
+---@field model string Convex source .lemesh path; empty uses Size; simplified before hull generation
+---@field convexDetail integer Voxel resolution 2..15 (default 8); lower is simpler
 ---@field size Vec3
 ---@field center Vec3
 ---@field radius number
@@ -649,3 +651,6 @@ function onCollisionEnter(collider) end
 function onCollisionStay(collider) end
 ---@param collider Collider|nil
 function onCollisionExit(collider) end
+
+---@class MeshRenderer
+---@field model string Static .lemesh asset path; setting mesh to a primitive clears this

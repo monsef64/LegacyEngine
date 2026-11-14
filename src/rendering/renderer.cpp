@@ -262,6 +262,10 @@ void Renderer::draw(World& world,
                     int x,
                     int y,
                     bool editorView) {
+    if (modelRevision_ != modelAssetRevision) {
+        clearModelCache();
+        modelRevision_ = modelAssetRevision;
+    }
     // Resolve persistent asset references before shadow and visible-mesh gathering.
     world.each<MeshRenderer>([&](Entity, MeshRenderer& mesh) {
         if (mesh.model.empty()) {

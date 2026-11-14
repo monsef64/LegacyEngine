@@ -14,6 +14,7 @@
 #include "scene/scene_camera.hpp"
 #include "scripting/script_exports.hpp"
 #include <ImGuizmo.h>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -341,6 +342,77 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
     }
 }
 
+inline void
+drawModelImportInspector(World& world, const AssetManager& assets, const std::string& path) {
+    try {
+        auto document = modelDocument(assets, path);
+        const auto settings = document.value("settings", path);
+        if (settings != path) {
+            document = modelDocument(assets, settings);
+        }
+        static std::string current;
+        static float scale = 1;
+        static std::string error;
+        const auto key = assets.root.generic_string() + "/" + settings;
+        if (current != key) {
+            current = key;
+            scale = modelImportScale(document);
+            error.clear();
+        }
+        ImGui::TextWrapped("Model import settings: %s", settings.c_str());
+        ImGui::InputFloat("Import scale", &scale, .001f, .1f, "%.6f");
+        ImGui::TextWrapped(
+            "Applied before Transform scale (0.000001 to 1000000). Shared instances and their Box collider bounds are updated.");
+        if (ImGui::Button("Apply import scale")) {
+            try {
+                saveModelImportScale(assets, settings, scale);
+                world.each<MeshRenderer, Collider>(
+                    [&](Entity, MeshRenderer& renderer, Collider& collider) {
+                        if (renderer.model.empty() || collider.shape != ColliderShape::Box) {
+                            return;
+                        }
+                        const auto doc = modelDocument(assets, renderer.model);
+                        if (renderer.model != settings &&
+                            doc.value("settings", std::string{}) != settings) {
+                            return;
+                        }
+                        const auto mesh = loadModelAsset(assets, renderer.model);
+                        Vec3 low = mesh.vertices.front().position, high = low;
+                        for (const auto& v : mesh.vertices) {
+                            low = {std::min(low.x, v.position.x),
+                                   std::min(low.y, v.position.y),
+                                   std::min(low.z, v.position.z)};
+                            high = {std::max(high.x, v.position.x),
+                                    std::max(high.y, v.position.y),
+                                    std::max(high.z, v.position.z)};
+                        }
+                        collider.center = (low + high) * .5f;
+                        auto size = high - low;
+                        collider.size = {std::max(.001f, size.x),
+                                         std::max(.001f, size.y),
+                                         std::max(.001f, size.z)};
+                    });
+                error.clear();
+            } catch (const std::exception& e) {
+                error = e.what();
+            }
+        }
+        if (document.contains("parts")) {
+            ImGui::Text("Mesh parts: %d", int(document.at("parts").size()));
+        }
+        if (document.contains("warnings")) {
+            ImGui::TextWrapped("%s", document.at("warnings").get<std::string>().c_str());
+        }
+        ImGui::TextWrapped(
+            "Static models only. Materials can be edited from the generated model data folder.");
+        if (!error.empty()) {
+            ImGui::TextWrapped("%s", error.c_str());
+        }
+    } catch (const std::exception& error) {
+        ImGui::TextWrapped("%s", error.what());
+    }
+}
+
 inline void drawInspector(World& world,
                           Entity selected,
                           const EditorRect& rect,
@@ -354,7 +426,11 @@ inline void drawInspector(World& world,
     }
     placeEditorPanel(rect);
     if (beginEditorPanel("Inspector", fixedPanelFlags)) {
-        if (assets && materialAsset(selectedAsset)) {
+        if (assets && modelAsset(selectedAsset)) {
+            ImGui::BeginDisabled(editingGizmo);
+            drawModelImportInspector(world, *assets, selectedAsset);
+            ImGui::EndDisabled();
+        } else if (assets && materialAsset(selectedAsset)) {
             ImGui::BeginDisabled(editingGizmo);
             drawMaterialAssetInspector(*assets, selectedAsset);
             ImGui::EndDisabled();
@@ -520,25 +596,103 @@ inline void drawInspector(World& world,
                                 }
                                 ImGui::EndDragDropTarget();
                             }
-                            auto create = [&]() {
-                                auto path = createMaterial(*assets);
-                                MaterialProperties p;
-                                p.color = r->color;
-                                p.specular = r->specular;
-                                saveMaterial(*assets, path, p);
-                                r->material = path;
-                                r->materialOverrides = 0;
-                            };
+                            static char materialName[128] = "NewMaterial";
+                            static bool focusMaterialName = false;
                             bool createRequested = false;
                             if (ImGui::BeginPopupContextItem("Material slot actions")) {
                                 createRequested = ImGui::MenuItem("Create Material");
                                 ImGui::EndPopup();
                             }
-                            if (createRequested) {
-                                create();
-                            }
                             if (r->material.empty() && ImGui::SmallButton("Create Material")) {
-                                create();
+                                createRequested = true;
+                            }
+                            if (createRequested) {
+                                std::snprintf(materialName, sizeof(materialName), "NewMaterial");
+                                materialError.clear();
+                                focusMaterialName = true;
+                                ImGui::OpenPopup("Create Material asset");
+                            }
+                            if (ImGui::BeginPopupModal("Create Material asset",
+                                                       nullptr,
+                                                       ImGuiWindowFlags_AlwaysAutoResize)) {
+                                ImGui::TextUnformatted("Name the material (saved in Assets)");
+                                if (focusMaterialName) {
+                                    ImGui::SetKeyboardFocusHere();
+                                    focusMaterialName = false;
+                                }
+                                const bool enter =
+                                    ImGui::InputText("Name",
+                                                     materialName,
+                                                     sizeof(materialName),
+                                                     ImGuiInputTextFlags_EnterReturnsTrue |
+                                                         ImGuiInputTextFlags_AutoSelectAll);
+                                if (ImGui::Button("Create") || enter) {
+                                    try {
+                                        std::string name = materialName;
+                                        const auto first = name.find_first_not_of(" \t");
+                                        name = first == std::string::npos
+                                                   ? ""
+                                                   : name.substr(first,
+                                                                 name.find_last_not_of(" \t") -
+                                                                     first + 1);
+                                        if (AssetManager::extension(name) == ".mat") {
+                                            name.resize(name.size() - 4);
+                                        }
+                                        if (name.empty() || name == "." || name == ".." ||
+                                            name.back() == '.' || name.back() == ' ' ||
+                                            name.find_first_of("/\\:*?\"<>|") !=
+                                                std::string::npos) {
+                                            throw std::runtime_error(
+                                                "Enter a filename without folders or special characters");
+                                        }
+                                        for (unsigned char c : name) {
+                                            if (c < 32) {
+                                                throw std::runtime_error(
+                                                    "Invalid filename character");
+                                            }
+                                        }
+                                        std::string device =
+                                            std::filesystem::path(name).stem().string();
+                                        for (auto& c : device) {
+                                            c = static_cast<char>(
+                                                std::toupper(static_cast<unsigned char>(c)));
+                                        }
+                                        if (device == "CON" || device == "PRN" || device == "AUX" ||
+                                            device == "NUL" ||
+                                            (device.size() == 4 &&
+                                             (device.substr(0, 3) == "COM" ||
+                                              device.substr(0, 3) == "LPT") &&
+                                             device[3] >= '1' && device[3] <= '9')) {
+                                            throw std::runtime_error(
+                                                "That filename is reserved on Windows");
+                                        }
+                                        const auto path = name + ".mat";
+                                        if (std::filesystem::exists(assets->resolve(path))) {
+                                            throw std::runtime_error(
+                                                "A material with that name already exists");
+                                        }
+                                        MaterialProperties material;
+                                        material.color = r->color;
+                                        material.specular = r->specular;
+                                        saveMaterial(*assets, path, material);
+                                        r->material = path;
+                                        r->materialOverrides = 0;
+                                        materialError.clear();
+                                        ImGui::CloseCurrentPopup();
+                                    } catch (const std::exception& error) {
+                                        materialError = error.what();
+                                    }
+                                }
+                                ImGui::SameLine();
+                                if (ImGui::Button("Cancel") ||
+                                    ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                                    materialError.clear();
+                                    ImGui::CloseCurrentPopup();
+                                }
+                                if (!materialError.empty()) {
+                                    ImGui::TextWrapped("%s", materialError.c_str());
+                                }
+                                ImGui::EndPopup();
                             }
                             if (!r->material.empty()) {
                                 auto edited = loadMaterial(*assets, r->material);
@@ -624,13 +778,44 @@ inline void drawInspector(World& world,
                 if (auto* c = world.tryGet<Collider>(selected);
                     componentID == 2 && c &&
                     componentHeader<Collider>(world, selected, "Collider")) {
-                    const char* names[]{"Box", "Sphere", "Capsule", "Cone"};
+                    const char* names[]{"Box", "Sphere", "Capsule", "Cone", "Convex"};
                     int shape = static_cast<int>(c->shape);
-                    if (ImGui::Combo("Collider shape", &shape, names, 4)) {
+                    if (ImGui::Combo("Collider shape", &shape, names, 5)) {
                         c->shape = static_cast<ColliderShape>(shape);
+                        if (c->shape == ColliderShape::Convex && c->model.empty()) {
+                            if (const auto* mesh = world.tryGet<MeshRenderer>(selected)) {
+                                c->model = mesh->model;
+                                c->center = {};
+                            }
+                        }
                     }
                     editVector("Center", c->center);
-                    if (c->shape == ColliderShape::Box) {
+                    if (c->shape == ColliderShape::Convex) {
+                        assetPicker("Convex model", c->model, assets, [](const std::string& path) {
+                            return modelAsset(path);
+                        });
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                                std::string path = static_cast<const char*>(drop->Data);
+                                if (modelAsset(path)) {
+                                    c->model = path;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                        ImGui::BeginDisabled(c->model.empty());
+                        ImGui::SliderInt("Hull detail", &c->convexDetail, 2, 15);
+                        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                            ImGui::SetTooltip(
+                                "Lower = simpler hull, higher = more detail. Simplifies source points before convex hull generation; may cut into the visible mesh.");
+                        }
+                        ImGui::EndDisabled();
+                        ImGui::TextWrapped(
+                            "Simplified convex hull. Empty source uses Size; the detail slider then has no effect. Degenerate sources are rejected.");
+                        if (c->model.empty()) {
+                            editVector("Size", c->size);
+                        }
+                    } else if (c->shape == ColliderShape::Box) {
                         editVector("Size", c->size, 0.02f, 0.01f, 10000);
                     } else {
                         ImGui::DragFloat("Radius",

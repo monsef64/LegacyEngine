@@ -14,7 +14,7 @@ inline MeshData colliderWireframe(const Collider& collider, Vec3 scale) {
         mesh.vertices.push_back({a + center, {}});
         mesh.vertices.push_back({b + center, {}});
     };
-    if (collider.shape == ColliderShape::Box) {
+    if (collider.shape == ColliderShape::Box || collider.shape == ColliderShape::Convex) {
         const Vec3 size = collider.size * scale;
         const Vec3 half{std::max(std::abs(size.x) * 0.5f, 0.0005f),
                         std::max(std::abs(size.y) * 0.5f, 0.0005f),

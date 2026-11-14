@@ -68,7 +68,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 17\n";
+    out << std::setprecision(9) << "LegacyEngineProject 19\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -142,7 +142,11 @@ inline std::string encodeLegacy(World& world,
             writeVec(out, c->size);
             writeVec(out, c->center);
             out << c->friction << ' ' << c->bounciness << ' ' << static_cast<int>(c->shape) << ' '
-                << c->radius << ' ' << c->height << ' ' << c->isTrigger << ' ';
+                << c->radius << ' ' << c->height << ' ' << c->isTrigger << ' '
+                << std::quoted(c->model) << ' ' << c->convexDetail << ' ';
+            require(c->convexDetail >= 2 && c->convexDetail <= 15);
+            require(c->model.empty() || (materialPathValid(c->model) &&
+                                         std::filesystem::path(c->model).extension() == ".lemesh"));
         }
         if (auto* b = world.tryGet<RigidBody>(e)) {
             out << b->mass << ' ' << b->useGravity << ' ';
@@ -267,7 +271,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 17));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 19));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -377,13 +381,23 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             c.bounciness = number(in);
             int shape = -1;
             in >> shape;
-            require(shape >= 0 && shape < 4);
+            require(shape >= 0 && shape < (version >= 18 ? 5 : 4));
             c.shape = static_cast<ColliderShape>(shape);
             c.radius = number(in);
             c.height = number(in);
             require(c.radius > 0 && c.height >= 0);
             if (version >= 16) {
                 in >> c.isTrigger;
+            }
+            if (version >= 18) {
+                in >> std::quoted(c.model);
+                require(c.model.empty() ||
+                        (materialPathValid(c.model) &&
+                         std::filesystem::path(c.model).extension() == ".lemesh"));
+            }
+            if (version >= 19) {
+                in >> c.convexDetail;
+                require(c.convexDetail >= 2 && c.convexDetail <= 15);
             }
             result.world.add(e, c);
         }
