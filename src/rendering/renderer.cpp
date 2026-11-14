@@ -211,7 +211,15 @@ void Renderer::shutdown() {
 MeshHandle Renderer::createMesh(const MeshData& data) {
     GpuMesh mesh;
     mesh.vertexCount = static_cast<int>(data.vertices.size());
+    if (!data.vertices.empty()) {
+        mesh.low = mesh.high = data.vertices.front().position;
+    }
     for (const auto& vertex : data.vertices) {
+        const auto p = vertex.position;
+        mesh.low = {
+            std::min(mesh.low.x, p.x), std::min(mesh.low.y, p.y), std::min(mesh.low.z, p.z)};
+        mesh.high = {
+            std::max(mesh.high.x, p.x), std::max(mesh.high.y, p.y), std::max(mesh.high.z, p.z)};
         mesh.radius = std::max(mesh.radius, std::sqrt(dot(vertex.position, vertex.position)));
     }
     mesh.lines = data.topology == MeshData::Topology::Lines;

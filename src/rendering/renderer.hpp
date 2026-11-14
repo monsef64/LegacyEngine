@@ -62,6 +62,14 @@ class Renderer {
               int y = 0,
               bool editorView = true);
 
+    bool meshBounds(MeshHandle handle, Vec3& low, Vec3& high) const {
+        if (handle.id >= meshes_.size() || !meshes_[handle.id].vertexCount) {
+            return false;
+        }
+        low = meshes_[handle.id].low;
+        high = meshes_[handle.id].high;
+        return true;
+    }
     void updateSkyboxFades(World& world, float dt);
     void drawEditorGrid(const GridSettings& settings, const Mat4& viewProjection);
 
@@ -110,6 +118,7 @@ class Renderer {
         unsigned int vertexBuffer = 0;
         int vertexCount = 0;
         float radius = 0;
+        Vec3 low{}, high{};
         bool lines = false;
     };
 

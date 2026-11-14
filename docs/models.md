@@ -71,5 +71,5 @@ including directory imports that contain Blender files. Export to glTF, FBX,
 or OBJ first. Cached, fixed-size model icons frame the full geometry independent
 of import scale. Hover previews appear after 1.5 seconds.
 
-Assimp's bundled notice is in `data/licenses/assimp.txt`. Model files themselves
+Assimp's bundled notice is in `data/license/assimp.txt`. Model files themselves
 remain subject to their creators' licenses.
