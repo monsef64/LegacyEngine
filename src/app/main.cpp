@@ -299,7 +299,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     bool cameraLooking = false, orientationInteracting = false;
     unsigned renderedFrames = 0;
     constexpr unsigned smokeFrames = 120;
+    std::optional<Vec3> lastOrbitPivot;
     while (running) {
+        if (!playMode.active()) {
+            if (const auto* pose = world.tryGet<Transform>(selectedEntity)) {
+                lastOrbitPivot = pose->position;
+            }
+        }
         profiler.begin(showProfiler);
         int windowWidth = 1, windowHeight = 1;
         SDL_GetWindowSize(window, &windowWidth, &windowHeight);
@@ -492,6 +498,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     clicking = false;
                     if (const auto* t = world.tryGet<Transform>(selectedEntity)) {
                         camera.orbit(t->position, event.motion.xrel, event.motion.yrel);
+                    } else if (lastOrbitPivot) {
+                        camera.orbit(*lastOrbitPivot, event.motion.xrel, event.motion.yrel);
                     }
                 }
                 if (event.motion.state & SDL_BUTTON_RMASK) {
@@ -1382,33 +1390,72 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (!browser.spawnModelRequest.empty() && !playMode.active()) {
             const auto path = std::exchange(browser.spawnModelRequest, {});
             try {
-                const auto data =
-                    loadModelAsset(browser.assets, path); // validate before changing the world
+                const auto document = modelDocument(browser.assets, path);
+                struct Part {
+                    std::string name, mesh, material;
+                    MeshData data;
+                };
+                std::vector<Part> parts;
+                if (document.at("version") == 2) {
+                    if (!document.at("parts").is_array() || document.at("parts").empty() ||
+                        document.at("parts").size() > 1024) {
+                        throw std::runtime_error("Invalid model parts");
+                    }
+                    for (const auto& part : document.at("parts")) {
+                        const auto mesh = part.at("mesh").get<std::string>();
+                        parts.push_back({part.at("name").get<std::string>(),
+                                         mesh,
+                                         part.at("material").get<std::string>(),
+                                         loadModelAsset(browser.assets, mesh)});
+                    }
+                } else {
+                    parts.push_back({"Mesh", path, "", loadModelAsset(browser.assets, path)});
+                }
+                std::size_t totalVertices = 0;
+                for (const auto& part : parts) {
+                    totalVertices += part.data.vertices.size();
+                    if (part.name.size() > 4096 ||
+                        (!part.material.empty() && !materialAsset(part.material))) {
+                        throw std::runtime_error("Invalid model metadata");
+                    }
+                }
+                if (totalVertices > maxModelVertices ||
+                    world.entities().size() + parts.size() + 1 > ProjectIO::maxObjects) {
+                    throw std::runtime_error("Model placement exceeds scene/model limits");
+                }
                 editor.finish(world);
-                selectedEntity = world.create();
-                world.add(selectedEntity, ObjectName{std::filesystem::path(path).stem().string()});
-                world.add(selectedEntity, Transform{camera.target});
-                MeshRenderer mesh{cubeMesh};
-                mesh.model = path;
-                world.add(selectedEntity, mesh);
-                Vec3 low = data.vertices.front().position, high = low;
-                for (const auto& vertex : data.vertices) {
-                    low = {std::min(low.x, vertex.position.x),
-                           std::min(low.y, vertex.position.y),
-                           std::min(low.z, vertex.position.z)};
-                    high = {std::max(high.x, vertex.position.x),
-                            std::max(high.y, vertex.position.y),
-                            std::max(high.z, vertex.position.z)};
-                }
-                Collider collider;
-                collider.center = (low + high) * .5f;
-                const auto size = high - low;
-                collider.size = {
-                    std::max(.001f, size.x), std::max(.001f, size.y), std::max(.001f, size.z)};
-                world.add(selectedEntity, collider);
+                const auto root = world.create();
+                world.add(root, ObjectName{std::filesystem::path(path).stem().string()});
+                world.add(root, Transform{camera.target});
                 if (prefabLevel) {
-                    setParent(world, selectedEntity, Prefabs::root(world));
+                    setParent(world, root, Prefabs::root(world));
                 }
+                for (const auto& part : parts) {
+                    const auto child = world.create();
+                    world.add(child, ObjectName{part.name});
+                    world.add(child, Transform{camera.target});
+                    setParent(world, child, root);
+                    MeshRenderer mesh{cubeMesh};
+                    mesh.model = part.mesh;
+                    mesh.material = part.material;
+                    world.add(child, mesh);
+                    Vec3 low = part.data.vertices.front().position, high = low;
+                    for (const auto& v : part.data.vertices) {
+                        low = {std::min(low.x, v.position.x),
+                               std::min(low.y, v.position.y),
+                               std::min(low.z, v.position.z)};
+                        high = {std::max(high.x, v.position.x),
+                                std::max(high.y, v.position.y),
+                                std::max(high.z, v.position.z)};
+                    }
+                    Collider collider;
+                    collider.center = (low + high) * .5f;
+                    const auto size = high - low;
+                    collider.size = {
+                        std::max(.001f, size.x), std::max(.001f, size.y), std::max(.001f, size.z)};
+                    world.add(child, collider);
+                }
+                selectedEntity = root;
                 browser.selected.clear();
             } catch (const std::exception& e) {
                 browser.assets.error = e.what();
@@ -1805,6 +1852,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         renderer.updateSkyboxFades(world, playMode.playing() ? std::min(seconds, .25f) : 0.0f);
         updateHierarchy(world);
         profiler.checkpoint(ProfilePart::Hierarchy);
+        physics.setAssetRoot(browser.assets.root);
         physics.update(world, playMode.playing() ? seconds : 0.0f, [&](float dt) {
             scripts.fixedUpdate(dt);
             componentScripts.fixedUpdate(dt);

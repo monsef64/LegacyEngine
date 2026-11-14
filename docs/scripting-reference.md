@@ -2853,7 +2853,9 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
-| `shape` | `'Box' / 'Sphere' / 'Capsule' / 'Cone'` |
+| `shape` | `'Box' / 'Sphere' / 'Capsule' / 'Cone' / 'Convex'` |
+| `model` | `string Convex source .lemesh path; empty uses Size; simplified before hull generation` |
+| `convexDetail` | `integer Voxel resolution 2..15 (default 8); lower is simpler` |
 | `size` | `Vec3` |
 | `center` | `Vec3` |
 | `radius` | `number` |
@@ -2873,6 +2875,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `color` | `Vec3` |
 | `checkerboard` | `boolean` |
 | `specular` | `number` |
+| `model` | `string Static .lemesh asset path; setting mesh to a primitive clears this` |
 
 ### ObjectName fields
 

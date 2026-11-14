@@ -260,3 +260,18 @@ press **F11** or **Alt+Enter** while it has focus to toggle desktop fullscreen.
 The editor toolbar also provides **Fullscreen Game / Windowed Game** while that
 window is open. These shortcuts are reserved for window control and are not
 forwarded to gameplay. Repeated key-down events do not toggle repeatedly.
+
+Asset import now offers **Files / Models** and **Directory (full structure)**.
+Imports and OS drops go into the current Assets folder. Clicking a model opens
+its shared import-scale settings in Inspector; see [models](models.md) for
+multiple mesh/material support and convex collision geometry. Instantiation
+creates a named empty model root with mesh children.
+
+After deselecting an object, **Alt+left-drag** still orbits its last remembered
+position. Right-drag free-look and the existing camera navigation remain available.
+
+Inspector's **Create Material** button and material-slot context action first
+open a naming popup. Enter a filename (the `.mat` suffix is optional), then
+choose **Create** or press Enter. **Cancel** / Escape creates nothing. Invalid
+filenames and existing names are rejected without overwriting assets. Successful
+creation saves the material in Assets and assigns it to the MeshRenderer.

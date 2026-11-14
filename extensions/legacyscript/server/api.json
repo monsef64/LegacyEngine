@@ -1,5 +1,9 @@
 [
   {
+    "name": "convexDetail",
+    "signature": "Collider.convexDetail: integer 2..15 (default 8), lower simplifies the convex source more"
+  },
+  {
     "name": "onCollisionEnter",
     "signature": "onCollisionEnter(collider) - solid Rigidbody contact begins; collider exposes gameObject and transform"
   },
@@ -785,7 +789,7 @@
   },
   {
     "name": "shape",
-    "signature": "Collider.shape: Box | Sphere | Capsule | Cone"
+    "signature": "Collider.shape: Box | Sphere | Capsule | Cone | Convex; Collider.model selects a .lemesh hull source"
   },
   {
     "name": "radius",

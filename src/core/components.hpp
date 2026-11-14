@@ -38,7 +38,7 @@ struct MeshRenderer {
     std::string model; // project-relative baked .lemesh; empty selects a built-in primitive
 };
 
-enum class ColliderShape { Box, Sphere, Capsule, Cone };
+enum class ColliderShape { Box, Sphere, Capsule, Cone, Convex };
 
 // A solid shape around the entity that other colliders cannot pass through. It
 // follows the entity's Transform, scale included.
@@ -57,6 +57,8 @@ struct Collider {
     float radius = 0.5f;
     float height = 1.0f;
     bool isTrigger = false;
+    std::string model;    // Convex source .lemesh; empty uses a convex box of size
+    int convexDetail = 8; // voxel resolution 2..15; smaller is simpler
 };
 
 // Backward-compatible name: existing box scene code remains valid.

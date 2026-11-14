@@ -27,6 +27,7 @@
 #include "core/math.hpp"
 #include "physics/queries.hpp"
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 
@@ -45,6 +46,7 @@ class Physics {
     overlapSphere(Vec3 origin, float radius, const std::function<bool(Entity)>& filter = {}) const;
     Physics();
     ~Physics();
+    void setAssetRoot(const std::filesystem::path& root);
     void reset(); // Discard solver bodies, contacts and accumulated time.
     Physics(const Physics&) = delete;
     Physics& operator=(const Physics&) = delete;

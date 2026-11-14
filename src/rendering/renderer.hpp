@@ -132,6 +132,7 @@ class Renderer {
     std::vector<Lighting::Light> lights_;
 
     void clearModelCache();
+    unsigned modelRevision_ = 0;
     std::map<std::string, MeshHandle> modelMeshes_;
     std::vector<GpuMesh> meshes_; // MeshHandle::id is an index into this
 
