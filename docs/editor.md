@@ -228,8 +228,15 @@ settings, UV tiling and specular in Inspector. Changes save directly to the
 shared asset, affecting every object that uses it. Select another object to
 return to its component Inspector.
 
-Asset labels hide extensions, center their text, and truncate names longer
-than eight characters with `...`. Hover an item for three seconds to see its
+Asset labels hide extensions, center their text in grid view (left-aligned in list view), and truncate names longer
+than twelve characters with `...`. Hover an item for three seconds to see its
 full name and type (and thumbnail where available). Paths on disk are unchanged.
 The default dock layout places Prefab Window below Hierarchy. When the separate
 Game window is open, the embedded Game viewport is not displayed or rendered.
+
+The Assets spacing slider sits left of the view-mode buttons. It changes grid
+cell spacing only and is disabled in list view. Inspector's header displays the
+object name, layer and unlabeled Active checkbox on a single row. Scene editing
+always uses freecam controls; the old toolbar toggle has been removed (Game
+FPSCamera movement settings are unchanged). Layers and Rendering are available
+directly from Project, without a Project Settings submenu.

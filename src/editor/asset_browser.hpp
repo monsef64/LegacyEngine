@@ -302,8 +302,10 @@ class AssetBrowser {
                     return da != db ? da > db : a < b;
                 });
                 const int columns =
-                    grid_ ? std::clamp(
-                                static_cast<int>(ImGui::GetContentRegionAvail().x / 120), 1, 64)
+                    grid_ ? std::clamp(static_cast<int>(ImGui::GetContentRegionAvail().x /
+                                                        (120 + gridSpacing_)),
+                                       1,
+                                       64)
                           : 1;
                 if (ImGui::BeginTable("Asset items", columns, ImGuiTableFlags_SizingStretchSame)) {
                     for (const auto& file : files) {
@@ -313,7 +315,7 @@ class AssetBrowser {
                             folderItem ? assetPath.filename().string() : assetPath.stem().string();
                         std::size_t end = 0;
                         int characters = 0;
-                        for (; end < fullName.size() && characters < 8; ++end) {
+                        for (; end < fullName.size() && characters < 12; ++end) {
                             if ((static_cast<unsigned char>(fullName[end]) & 0xc0) != 0x80) {
                                 ++characters;
                             }
@@ -336,7 +338,7 @@ class AssetBrowser {
                                               selected == file,
                                               ImGuiSelectableFlags_AllowDoubleClick |
                                                   ImGuiSelectableFlags_AllowOverlap,
-                                              ImVec2(0, grid_ ? 84.0f : 28.0f));
+                                              ImVec2(0, grid_ ? 84.0f + gridSpacing_ : 28.0f));
                         const auto itemMin = ImGui::GetItemRectMin(),
                                    itemMax = ImGui::GetItemRectMax();
                         const unsigned thumbnail = folderItem || !ImGui::IsItemVisible()
@@ -375,7 +377,8 @@ class AssetBrowser {
                                           thumbnail);
                             }
                             const auto text = ImGui::CalcTextSize(display.c_str());
-                            draw->AddText(ImVec2((a.x + b.x - text.x) * .5f,
+                            draw->AddText(ImVec2(grid_ ? (a.x + b.x - text.x) * .5f
+                                                       : a.x + ImGui::GetStyle().FramePadding.x,
                                                  grid_ ? a.y + 42 : (a.y + b.y - text.y) * .5f),
                                           ImGui::GetColorU32(ImGuiCol_Text),
                                           display.c_str());
@@ -613,6 +616,17 @@ class AssetBrowser {
             ImGui::EndChild();
             ImGui::EndDisabled();
             ImGui::SetCursorPosX(
+                std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 220));
+            ImGui::BeginDisabled(!grid_);
+            ImGui::SetNextItemWidth(
+                std::min(140.f, std::max(40.f, ImGui::GetContentRegionAvail().x - 80)));
+            ImGui::SliderFloat("##GridSpacing", &gridSpacing_, 0, 64, "Spacing %.0f");
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                ImGui::SetTooltip("Grid spacing (grid view only)");
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(
                 std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 60));
             for (int mode = 0; mode < 2; ++mode) {
                 if (mode) {
@@ -684,5 +698,6 @@ class AssetBrowser {
         }
     }
     char rename_[256]{};
+    float gridSpacing_ = 0;
     bool renameRequested_ = false, deleteRequested_ = false, grid_ = false, renameFocus_ = false;
 };

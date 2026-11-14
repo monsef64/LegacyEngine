@@ -362,14 +362,21 @@ inline void drawInspector(World& world,
         } else {
             ImGui::PushID(static_cast<int>(selected.index));
             ImGui::BeginDisabled(editingGizmo);
-            bool objectActive =
-                !world.has<ObjectActivity>(selected) || world.get<ObjectActivity>(selected).enabled;
-            if (ImGui::Checkbox("Active", &objectActive)) {
-                setObjectActive(world, selected, objectActive);
+            const float available = ImGui::GetContentRegionAvail().x;
+            const float checkWidth = ImGui::GetFrameHeight();
+            const float gap = ImGui::GetStyle().ItemSpacing.x;
+            const float layerWidth = std::max(40.f, std::min(150.f, available * .32f));
+            auto* objectName = world.tryGet<ObjectName>(selected);
+            char name[257];
+            std::snprintf(name, sizeof(name), "%s", objectName ? objectName->value.c_str() : "");
+            ImGui::SetNextItemWidth(std::max(30.f, available - layerWidth - checkWidth - 2 * gap));
+            if (ImGui::InputText("##Name", name, sizeof(name))) {
+                world.add(selected, ObjectName{name});
             }
-            const float layerWidth = std::min(180.0f, ImGui::GetContentRegionAvail().x * .5f);
-            ImGui::SameLine(std::max(ImGui::GetCursorPosX(),
-                                     ImGui::GetWindowContentRegionMax().x - layerWidth));
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("GameObject name");
+            }
+            ImGui::SameLine();
             ImGui::SetNextItemWidth(layerWidth);
             int layer = LayerSettings::effective(world, selected);
             if (ImGui::BeginCombo("##Layer", LayerSettings::names[layer].c_str())) {
@@ -384,11 +391,14 @@ inline void drawInspector(World& world,
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("GameObject layer");
             }
-            auto* objectName = world.tryGet<ObjectName>(selected);
-            char name[257];
-            std::snprintf(name, sizeof(name), "%s", objectName ? objectName->value.c_str() : "");
-            if (ImGui::InputText("Name", name, sizeof(name))) {
-                world.add(selected, ObjectName{name});
+            ImGui::SameLine();
+            bool objectActive =
+                !world.has<ObjectActivity>(selected) || world.get<ObjectActivity>(selected).enabled;
+            if (ImGui::Checkbox("##Active", &objectActive)) {
+                setObjectActive(world, selected, objectActive);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Active");
             }
             const Entity parent = getParent(world, selected);
             const auto* parentName = world.tryGet<ObjectName>(parent);

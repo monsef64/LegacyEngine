@@ -7,6 +7,11 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"onCollisionEnter",
+     "onCollisionEnter(collider) - solid Rigidbody contact begins; collider exposes gameObject and transform"},
+    {"onCollisionStay", "onCollisionStay(collider) - solid contact persists during a physics step"},
+    {"onCollisionExit",
+     "onCollisionExit(collider) - solid contact ends; other collider may be nil if removed"},
     {"Raycast", "Raycast - Line, adjustable LineOfSight fan, or Sphere overlap query component"},
     {"color",
      "color.red, green, blue, white, black, yellow, cyan, magenta, gray, orange, purple, pink - RGB vectors"},

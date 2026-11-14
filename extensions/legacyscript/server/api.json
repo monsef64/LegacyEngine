@@ -1,5 +1,17 @@
 [
   {
+    "name": "onCollisionEnter",
+    "signature": "onCollisionEnter(collider) - solid Rigidbody contact begins; collider exposes gameObject and transform"
+  },
+  {
+    "name": "onCollisionStay",
+    "signature": "onCollisionStay(collider) - solid contact persists during a physics step"
+  },
+  {
+    "name": "onCollisionExit",
+    "signature": "onCollisionExit(collider) - solid contact ends; other collider may be nil if removed"
+  },
+  {
     "name": "Raycast",
     "signature": "Raycast - Line, adjustable LineOfSight fan, or Sphere overlap query component"
   },

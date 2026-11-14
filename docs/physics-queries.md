@@ -66,7 +66,7 @@ very fast objects can cross a thin sensor between updates.
 
 ## Layers
 
-Open **Project > Project Settings > Layers** to add/remove named layers (up to 32
+Open **Project > Layers** to add/remove named layers (up to 32
 including the built-in **Default** layer). The Inspector's **Layer** field assigns
 a GameObject. Scripting uses `object.layer = "Enemies"` (the layer must exist).
 Deleting a layer resets matching objects in the current level to Default and
@@ -143,3 +143,31 @@ local tint = color.orange
 ```
 
 Colors are ordinary per-script RGB tables, not integers or HDR/alpha colors.
+
+## Solid collision callbacks
+
+Non-trigger contacts provide `onCollisionEnter(collider)`,
+`onCollisionStay(collider)` and `onCollisionExit(collider)`. These are separate
+from trigger events and use the solver's contact notifications, not an all-pairs
+scene scan. At least one participating body must be simulated for the backend
+to produce contact events (two static objects do not generate collisions).
+
+```lua
+function onCollisionEnter(collider)
+    if collider then debug.log("Hit", collider.gameObject:getName()) end
+end
+function onCollisionStay(collider)
+    -- collider.transform and collider.gameObject expose the other object.
+end
+function onCollisionExit(collider)
+    if collider then debug.log("Separated", collider.gameObject:getName()) end
+end
+```
+
+Notifications are queued during fixed physics steps and delivered to both
+objects' active scripts after simulation. A frame with several fixed steps may
+therefore deliver multiple events. No simulation means no collision callbacks;
+sleeping bodies follow the physics backend's contact-notification behavior.
+Check for nil or invalid handles if another callback removed the other object.
+These receive the other Collider, not a contact-point/manifold table. Destroying
+a body does not guarantee an Exit notification from the backend.
