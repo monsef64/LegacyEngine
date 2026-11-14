@@ -241,3 +241,12 @@ object name, layer and unlabeled Active checkbox on a single row. Scene editing
 always uses freecam controls; the old toolbar toggle has been removed (Game
 FPSCamera movement settings are unchanged). Layers and Rendering are available
 directly from Project, without a Project Settings submenu.
+
+### Creating scripts in Script Explorer
+
+Use **New Script** in Script Editor's explorer to create and open an empty `.ls`
+asset beside the current script, or in Assets when no script is open. Right-click
+an explorer folder and choose **New LegacyScript (.ls)** to create one there;
+right-click empty explorer space to create one at the Assets root. Filenames
+start at `NewScript.ls` and use numbered suffixes to avoid overwriting files.
+The current document is saved before switching. The tree refreshes automatically.

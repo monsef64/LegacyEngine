@@ -25,11 +25,19 @@ struct ScriptTree {
         folders[first].add(rest);
     }
     std::optional<std::string> draw(const std::string& selected,
-                                    const std::string& prefix = "") const {
+                                    const std::string& prefix = "",
+                                    std::optional<std::string>* createScriptIn = nullptr) const {
         std::optional<std::string> result;
         for (const auto& [name, folder] : folders) {
-            if (ImGui::TreeNode(name.c_str())) {
-                if (auto chosen = folder.draw(selected, prefix + name + "/")) {
+            const bool open = ImGui::TreeNode(name.c_str());
+            if (createScriptIn && ImGui::BeginPopupContextItem()) {
+                if (ImGui::MenuItem("New LegacyScript (.ls)")) {
+                    *createScriptIn = prefix + name;
+                }
+                ImGui::EndPopup();
+            }
+            if (open) {
+                if (auto chosen = folder.draw(selected, prefix + name + "/", createScriptIn)) {
                     result = chosen;
                 }
                 ImGui::TreePop();
