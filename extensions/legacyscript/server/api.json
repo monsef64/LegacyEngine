@@ -1,5 +1,45 @@
 [
   {
+    "name": "Animation",
+    "signature": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"
+  },
+  {
+    "name": "onAnimationFinish",
+    "signature": "onAnimationFinish() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "onAnimationStart",
+    "signature": "onAnimationStart() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "onAnimationStopped",
+    "signature": "onAnimationStopped() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "onAnimationPause",
+    "signature": "onAnimationPause() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "onAnimationResume",
+    "signature": "onAnimationResume() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "getComponentInParent",
+    "signature": "getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent"
+  },
+  {
+    "name": "getComponentInChildren",
+    "signature": "getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants"
+  },
+  {
+    "name": "findComponentInParent",
+    "signature": "findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent"
+  },
+  {
+    "name": "findComponentInChildren",
+    "signature": "findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren"
+  },
+  {
     "name": "meshDetail",
     "signature": "Collider.meshDetail: integer 2..15 (default 8), 15 preserves source triangles; lower simplifies the static mesh"
   },

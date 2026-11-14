@@ -171,7 +171,7 @@ Use getComponent(Type) for attached self, getComponent(object, Type) for an expl
 - `overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil`
 - `overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil`
 - `overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil`
-- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil`
+- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
 - `overload fun(componentType:ComponentType):any`
 
 ```lua
@@ -1213,6 +1213,62 @@ local result = onCollisionExit(camera, function onCollisionExit(collider)
 end)
 ```
 
+### getComponentInParent
+
+`getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent`
+
+- `param gameObject GameObject`
+- `param componentType ComponentType`
+- `return any|nil`
+- `overload fun(componentType:ComponentType):any|nil`
+
+```lua
+local body = self:getComponentInParent(RigidBody)
+if body then debug.log(body.mass) end
+```
+
+### getComponentInChildren
+
+`getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants`
+
+- `param gameObject GameObject`
+- `param componentType ComponentType`
+- `return any|nil`
+- `overload fun(componentType:ComponentType):any|nil`
+
+```lua
+local camera = self:getComponentInChildren(Camera)
+if camera then debug.log(camera.gameObject:getName()) end
+```
+
+### findComponentInParent
+
+`findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent`
+
+- `param gameObject GameObject`
+- `param componentType ComponentType`
+- `return any|nil`
+- `overload fun(componentType:ComponentType):any|nil`
+
+```lua
+local body = findComponentInParent(self, RigidBody)
+if body then debug.log(body.mass) end
+```
+
+### findComponentInChildren
+
+`findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren`
+
+- `param gameObject GameObject`
+- `param componentType ComponentType`
+- `return any|nil`
+- `overload fun(componentType:ComponentType):any|nil`
+
+```lua
+local camera = findComponentInChildren(Camera)
+if camera then debug.log(camera.gameObject:getName()) end
+```
+
 ### print
 
 `print(...) - log tab-separated values`
@@ -1225,7 +1281,7 @@ print("Player position", self:getPosition().x)
 
 ### GameObject.getComponent
 
-`getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil`
+`getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
 
 - `getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
 
@@ -1234,9 +1290,53 @@ local object = self
 object:getComponent(Transform)
 ```
 
+### GameObject.getComponentInParent
+
+`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+
+- `getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent`
+
+```lua
+local object = self
+object:getComponentInParent(RigidBody)
+```
+
+### GameObject.getComponentInChildren
+
+`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+
+- `getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants`
+
+```lua
+local object = self
+object:getComponentInChildren(Camera)
+```
+
+### GameObject.findComponentInParent
+
+`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+
+- `findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent`
+
+```lua
+local object = self
+object:findComponentInParent(RigidBody)
+```
+
+### GameObject.findComponentInChildren
+
+`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+
+- `findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren`
+
+```lua
+local object = self
+object:findComponentInChildren(Camera)
+```
+
 ### GameObject.addComponent
 
-`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript`
+`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation`
 
 - `addComponent(gameObject, componentType) -> live component`
 
@@ -1254,6 +1354,66 @@ object:addComponent(Collider)
 ```lua
 local object = self
 object:removeComponent(Collider)
+```
+
+### GameObject.onAnimationFinish
+
+`onAnimationFinish()|nil`
+
+- `onAnimationFinish() - targeted animation lifecycle callback`
+
+```lua
+self.onAnimationFinish = function()
+    debug.log("Object callback: onAnimationFinish")
+end
+```
+
+### GameObject.onAnimationStart
+
+`onAnimationStart()|nil`
+
+- `onAnimationStart() - targeted animation lifecycle callback`
+
+```lua
+self.onAnimationStart = function()
+    debug.log("Object callback: onAnimationStart")
+end
+```
+
+### GameObject.onAnimationStopped
+
+`onAnimationStopped()|nil`
+
+- `onAnimationStopped() - targeted animation lifecycle callback`
+
+```lua
+self.onAnimationStopped = function()
+    debug.log("Object callback: onAnimationStopped")
+end
+```
+
+### GameObject.onAnimationPause
+
+`onAnimationPause()|nil`
+
+- `onAnimationPause() - targeted animation lifecycle callback`
+
+```lua
+self.onAnimationPause = function()
+    debug.log("Object callback: onAnimationPause")
+end
+```
+
+### GameObject.onAnimationResume
+
+`onAnimationResume()|nil`
+
+- `onAnimationResume() - targeted animation lifecycle callback`
+
+```lua
+self.onAnimationResume = function()
+    debug.log("Object callback: onAnimationResume")
+end
 ```
 
 ### GameObject.onStart
@@ -2799,6 +2959,70 @@ local component = self:getComponent(Raycast) or self:addComponent(Raycast)
 component:setLayers({'Default'})
 ```
 
+## Animation
+
+### Animation.play
+
+`play(self:Animation)`
+
+- `audio:play() - restart assigned clip`
+
+```lua
+local component = self:getComponent(Animation) or self:addComponent(Animation)
+component:play()
+```
+
+### Animation.stop
+
+`stop(self:Animation) Stops and rewinds to frame zero`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local component = self:getComponent(Animation) or self:addComponent(Animation)
+component:stop()
+```
+
+### Animation.pause
+
+`pause(self:Animation)`
+
+- `audio:pause()`
+
+```lua
+local component = self:getComponent(Animation) or self:addComponent(Animation)
+component:pause()
+```
+
+### Animation.resume
+
+`resume(self:Animation)`
+
+- `audio:resume()`
+
+```lua
+local component = self:getComponent(Animation) or self:addComponent(Animation)
+component:resume()
+```
+
+### Animation.crossFade
+
+`crossFade(self:Animation,clip:string,seconds?:number) Timed transition; default 0.25 seconds`
+
+```lua
+local animation = self:getComponent(Animation)
+animation:crossFade("Character_data/Animation_1.leanim", 0.3)
+```
+
+### Animation.reset
+
+`reset(self:Animation) Stops and restores the pre-play values`
+
+```lua
+local component = self:getComponent(Animation) or self:addComponent(Animation)
+component:reset()
+```
+
 ## Component fields and type tokens
 
 Component type names such as `Transform`, `Skybox`, `PointLight` and `AudioSource`
@@ -3063,6 +3287,19 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `Line` | `integer` |
 | `LineOfSight` | `integer` |
 | `Sphere` | `integer` |
+
+### Animation fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `gameObject` | `GameObject` |
+| `clip` | `string` |
+| `loop` | `boolean` |
+| `playOnStart` | `boolean` |
+| `isPlaying` | `boolean Read-only` |
+| `paused` | `boolean Read-only` |
+| `time` | `number Read-only seconds` |
+| `error` | `string Read-only loading error` |
 
 ## Skybox1 to Skybox2 transition
 

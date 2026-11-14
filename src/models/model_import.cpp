@@ -6,6 +6,7 @@
 #include <assimp/material.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#include <functional>
 #include <map>
 
 std::string modelImportExtensions() {
@@ -40,12 +41,96 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
     }
     Assimp::Importer importer;
     importer.SetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, true);
-    const auto* scene = importer.ReadFile(
-        source.string(),
-        aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_PreTransformVertices |
-            aiProcess_ValidateDataStructure | aiProcess_SortByPType);
+    const auto* scene =
+        importer.ReadFile(source.string(),
+                          aiProcess_Triangulate | aiProcess_GenSmoothNormals |
+                              aiProcess_ValidateDataStructure | aiProcess_SortByPType);
     if (!scene || !scene->HasMeshes()) {
         throw std::runtime_error(std::string("Assimp import failed: ") + importer.GetErrorString());
+    }
+    if (scene->mNumAnimations > 256) {
+        throw std::runtime_error("Too many model animations");
+    }
+    auto matrix = [](const aiMatrix4x4& m) {
+        Json a = Json::array();
+        for (int c = 0; c < 4; ++c) {
+            for (int r = 0; r < 4; ++r) {
+                a.push_back(m[r][c]);
+            }
+        }
+        return a;
+    };
+    Json nodes = Json::array();
+    std::map<std::string, int> nodeIds;
+    std::vector<std::pair<unsigned, int>> meshNodes;
+    std::function<void(const aiNode*, int)> visit = [&](const aiNode* node, int parent) {
+        if (nodes.size() >= 4096) {
+            throw std::runtime_error("Model exceeds 4096 skeleton nodes");
+        }
+        int id = int(nodes.size());
+        nodeIds[node->mName.C_Str()] = id;
+        aiVector3D scale, pos;
+        aiQuaternion rot;
+        node->mTransformation.Decompose(scale, rot, pos);
+        nodes.push_back({{"parent", parent},
+                         {"matrix", matrix(node->mTransformation)},
+                         {"position", {pos.x, pos.y, pos.z}},
+                         {"rotation", {rot.x, rot.y, rot.z, rot.w}},
+                         {"scale", {scale.x, scale.y, scale.z}}});
+        for (unsigned i = 0; i < node->mNumMeshes; ++i) {
+            meshNodes.push_back({node->mMeshes[i], id});
+        }
+        for (unsigned i = 0; i < node->mNumChildren; ++i) {
+            visit(node->mChildren[i], id);
+        }
+    };
+    visit(scene->mRootNode, -1);
+    Json animations = Json::array();
+    std::size_t keyCount = 0;
+    for (unsigned i = 0; i < scene->mNumAnimations; ++i) {
+        const auto* a = scene->mAnimations[i];
+        double rate = a->mTicksPerSecond > 0 ? a->mTicksPerSecond : 25;
+        double duration = a->mDuration / rate;
+        if (!std::isfinite(duration) || duration <= 0 || duration > 86400) {
+            throw std::runtime_error("Invalid model animation duration");
+        }
+        Json channels = Json::array();
+        for (unsigned c = 0; c < a->mNumChannels; ++c) {
+            const auto* ch = a->mChannels[c];
+            auto found = nodeIds.find(ch->mNodeName.C_Str());
+            if (found == nodeIds.end()) {
+                throw std::runtime_error("Animation references missing node");
+            }
+            keyCount += ch->mNumPositionKeys + ch->mNumRotationKeys + ch->mNumScalingKeys;
+            if (keyCount > 1000000) {
+                throw std::runtime_error("Model animation key limit exceeded");
+            }
+            Json positions = Json::array(), rotations = Json::array(), scales = Json::array();
+            for (unsigned k = 0; k < ch->mNumPositionKeys; ++k) {
+                auto v = ch->mPositionKeys[k];
+                positions.push_back({v.mTime / rate, v.mValue.x, v.mValue.y, v.mValue.z});
+            }
+            for (unsigned k = 0; k < ch->mNumRotationKeys; ++k) {
+                auto v = ch->mRotationKeys[k];
+                rotations.push_back(
+                    {v.mTime / rate, v.mValue.x, v.mValue.y, v.mValue.z, v.mValue.w});
+            }
+            for (unsigned k = 0; k < ch->mNumScalingKeys; ++k) {
+                auto v = ch->mScalingKeys[k];
+                scales.push_back({v.mTime / rate, v.mValue.x, v.mValue.y, v.mValue.z});
+            }
+            channels.push_back({{"node", found->second},
+                                {"positions", positions},
+                                {"rotations", rotations},
+                                {"scales", scales}});
+        }
+        if (a->mNumMeshChannels || a->mNumMorphMeshChannels) {
+            throw std::runtime_error(
+                "Morph/vertex animations are not supported; skeletal animations are supported");
+        }
+        animations.push_back({{"name", a->mName.length ? a->mName.C_Str() : "Animation"},
+                              {"duration", duration},
+                              {"channels", channels}});
     }
     const auto prefix = std::filesystem::path(folder);
     const auto stem = source.stem().string();
@@ -126,9 +211,31 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
                     return std::string{};
                 }
             };
-        for (unsigned m = 0; m < scene->mNumMeshes; ++m) {
+        for (unsigned instance = 0; instance < meshNodes.size(); ++instance) {
+            const unsigned m = meshNodes[instance].first;
             const auto* mesh = scene->mMeshes[m];
-            Json vertices = Json::array();
+            Json vertices = Json::array(), weights = Json::array(), bones = Json::array();
+            std::vector<Json> vertexWeights(mesh->mNumVertices, Json::array());
+            if (mesh->mNumBones > 4096) {
+                throw std::runtime_error("Too many mesh bones");
+            }
+            for (unsigned b = 0; b < mesh->mNumBones; ++b) {
+                const auto* bone = mesh->mBones[b];
+                auto found = nodeIds.find(bone->mName.C_Str());
+                if (found == nodeIds.end()) {
+                    throw std::runtime_error("Missing bone node");
+                }
+                bones.push_back({{"node", found->second}, {"offset", matrix(bone->mOffsetMatrix)}});
+                for (unsigned w = 0; w < bone->mNumWeights; ++w) {
+                    const auto value = bone->mWeights[w];
+                    if (value.mVertexId >= mesh->mNumVertices || !std::isfinite(value.mWeight) ||
+                        value.mWeight < 0) {
+                        throw std::runtime_error("Invalid bone weight");
+                    }
+                    vertexWeights[value.mVertexId].push_back({b, value.mWeight});
+                }
+            }
+
             for (unsigned f = 0; f < mesh->mNumFaces; ++f) {
                 const auto& face = mesh->mFaces[f];
                 if (face.mNumIndices != 3) {
@@ -147,6 +254,7 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
                         throw std::runtime_error("Invalid model vertex");
                     }
                     vertices.push_back({p.x, p.y, p.z, n.x, n.y, n.z, uv.x, uv.y});
+                    weights.push_back(vertexWeights[index]);
                 }
             }
             if (vertices.empty()) {
@@ -155,12 +263,15 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
             if (parts.size() >= 1024) {
                 throw std::runtime_error("Model exceeds 1024 mesh parts");
             }
-            const auto meshPath = dataFolder + "/Mesh_" + std::to_string(m) + ".lemesh";
+            const auto meshPath = dataFolder + "/Mesh_" + std::to_string(instance) + ".lemesh";
             writeJsonFile(assets.resolve(meshPath),
                           {{"format", "LegacyEngineMesh"},
                            {"version", 1},
                            {"settings", path},
-                           {"vertices", std::move(vertices)}});
+                           {"vertices", std::move(vertices)},
+                           {"weights", weights},
+                           {"bones", bones},
+                           {"node", meshNodes[instance].second}});
             if (std::filesystem::file_size(assets.resolve(meshPath)) > 256 * 1024 * 1024) {
                 throw std::runtime_error("Baked mesh too large");
             }
@@ -199,7 +310,19 @@ importModel(AssetManager& assets, const std::filesystem::path& source, const std
                        {"version", 2},
                        {"importScale", 1},
                        {"parts", std::move(parts)},
-                       {"warnings", warnings}});
+                       {"warnings", warnings},
+                       {"nodes", nodes},
+                       {"animations", animations}});
+        for (unsigned i = 0; i < animations.size(); ++i) {
+            writeJsonFile(
+                assets.resolve(dataFolder + "/Animation_" + std::to_string(i) + ".leanim"),
+                {{"format", "LegacyEngineAnimation"},
+                 {"version", 1},
+                 {"duration", animations[i]["duration"]},
+                 {"tracks", Json::array()},
+                 {"model", path},
+                 {"modelAnimation", i}});
+        }
         ++modelAssetRevision;
         return path;
     } catch (...) {

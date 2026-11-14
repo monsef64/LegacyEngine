@@ -153,6 +153,12 @@ inline std::string sceneSignature(World& world) {
                 scalar(id);
             }
         });
+        component(e, Animation{}, [&](const Animation& a) {
+            scalar(a.clip.size());
+            result += a.clip;
+            scalar(a.loop);
+            scalar(a.playOnStart);
+        });
         component(e, Raycast{}, [&](const Raycast& q) {
             scalar(q.type);
             scalar(q.distance);

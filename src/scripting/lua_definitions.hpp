@@ -7,6 +7,22 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"Animation",
+     "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"},
+    {"onAnimationFinish", "onAnimationFinish() - targeted animation lifecycle callback"},
+    {"onAnimationStart", "onAnimationStart() - targeted animation lifecycle callback"},
+    {"onAnimationStopped", "onAnimationStopped() - targeted animation lifecycle callback"},
+    {"onAnimationPause", "onAnimationPause() - targeted animation lifecycle callback"},
+    {"onAnimationResume", "onAnimationResume() - targeted animation lifecycle callback"},
+
+    {"getComponentInParent",
+     "getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent"},
+    {"getComponentInChildren",
+     "getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants"},
+    {"findComponentInParent",
+     "findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent"},
+    {"findComponentInChildren",
+     "findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren"},
     {"meshDetail",
      "Collider.meshDetail: integer 2..15 (default 8), 15 preserves source triangles; lower simplifies the static mesh"},
     {"onCollisionEnter",

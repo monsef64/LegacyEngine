@@ -6,9 +6,11 @@
 //   * +Y is up, the ground is the XZ plane (y = 0)
 //   * right-handed coordinates (the OpenGL convention)
 
+#include "animation/animation_system.hpp"
 #include "audio/audio_system.hpp"
 #include "core/components.hpp"
 #include "core/ecs.hpp"
+#include "editor/animation_window.hpp"
 #include "editor/asset_browser.hpp"
 #include "editor/asset_preview_renderer.hpp"
 #include "editor/create_menu.hpp"
@@ -21,6 +23,7 @@
 #include "editor/input_settings.hpp"
 #include "editor/inspector.hpp"
 #include "editor/level_objects.hpp"
+#include "editor/model_preview_window.hpp"
 #include "editor/play_mode.hpp"
 #include "editor/playback_controls.hpp"
 #include "editor/profiler_window.hpp"
@@ -240,6 +243,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     AssetBrowser browser;
     ScriptComponents componentScripts;
     AudioSystem audio;
+    AnimationSystem animations;
+    AnimationWindow animationWindow;
+    ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
     AssetPreviewRenderer assetPreviews(
         renderer, {gridMesh, planeMesh, cubeMesh, sphereMesh, capsuleMesh, coneMesh});
@@ -820,6 +826,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 for (int i = 0; i < 7; ++i) {
                     ImGui::MenuItem(panelNames[i], nullptr, &panelOpen[i]);
                 }
+                ImGui::MenuItem("Animation", nullptr, &animationWindow.visible);
                 ImGui::Separator();
                 if (ImGui::MenuItem("Reset layout")) {
                     resetWorkspace = true;
@@ -1373,6 +1380,20 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                     ? browser.assets.root
                                     : std::filesystem::absolute(currentProject).parent_path();
         browser.draw(window, world, selectedEntity, scripts, editAllowed, &history);
+        if (!browser.previewModelRequest.empty()) {
+            modelPreviewWindow.open(browser.assets, std::exchange(browser.previewModelRequest, {}));
+        }
+        modelPreviewWindow.draw(browser.assets, renderer, ImGui::GetIO().DeltaTime);
+        if (!browser.editAnimationRequest.empty()) {
+            animationWindow.open(browser.assets, std::exchange(browser.editAnimationRequest, {}));
+        }
+        animationWindow.draw(world,
+                             selectedEntity,
+                             browser.assets,
+                             renderer,
+                             history,
+                             editAllowed,
+                             ImGui::GetIO().DeltaTime);
         if (!browser.editCubemapRequest.empty()) {
             const auto path = std::exchange(browser.editCubemapRequest, {});
             try {
@@ -1488,6 +1509,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 const auto root = world.create();
                 world.add(root, ObjectName{std::filesystem::path(path).stem().string()});
                 world.add(root, Transform{camera.target});
+                if (document.contains("animations") && !document.at("animations").empty()) {
+                    const auto firstPart = document.at("parts").at(0).at("mesh").get<std::string>();
+                    Animation animation;
+                    animation.clip =
+                        (std::filesystem::path(firstPart).parent_path() / "Animation_0.leanim")
+                            .generic_string();
+                    world.add(root, animation);
+                }
                 if (prefabLevel) {
                     setParent(world, root, Prefabs::root(world));
                 }
@@ -1911,6 +1940,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
             scripts.update(std::min(seconds, 0.25f));
             componentScripts.update(std::min(seconds, 0.25f));
+            animations.update(world, browser.assets, std::min(seconds, .25f));
+            const auto animationEvents = animations.events;
+            for (const auto& event : animationEvents) {
+                scripts.console().objectEvent(event.owner, event.name);
+                componentScripts.objectEvent(event.owner, event.name);
+            }
+        } else if (!playMode.active()) {
+            animations.clear();
         }
         profiler.checkpoint(ProfilePart::Scripts);
         LuaConsole::dispatchEvents();

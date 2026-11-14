@@ -68,7 +68,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 19\n";
+    out << std::setprecision(9) << "LegacyEngineProject 20\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -101,7 +101,8 @@ inline std::string encodeLegacy(World& world,
             (world.has<PrefabInstance>(e) ? 16384 : 0) |
             (world.has<CharacterController>(e) ? 32768 : 0) |
             (world.has<FPSCamera>(e) ? 65536 : 0) | (world.has<ObjectLayer>(e) ? 131072 : 0) |
-            (world.has<InspectorOrder>(e) ? 262144 : 0) | (world.has<Raycast>(e) ? 524288 : 0);
+            (world.has<InspectorOrder>(e) ? 262144 : 0) | (world.has<Raycast>(e) ? 524288 : 0) |
+            (world.has<Animation>(e) ? 1048576 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -254,6 +255,13 @@ inline std::string encodeLegacy(World& world,
             writeVec(out, q->offset);
             out << q->layerMask << ' ' << q->includeTriggers << ' ';
         }
+        if (const auto* animation = world.tryGet<Animation>(e)) {
+            require(animation->clip.empty() ||
+                    (materialPathValid(animation->clip) &&
+                     std::filesystem::path(animation->clip).extension() == ".leanim"));
+            out << std::quoted(animation->clip) << ' ' << animation->loop << ' '
+                << animation->playOnStart << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -271,7 +279,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 19));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 20));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -334,7 +342,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 14 ? 16383u
                          : version < 15 ? 32767u
                          : version < 16 ? 131071u
-                                        : 1048575u) &&
+                         : version < 20 ? 1048575u
+                                        : 2097151u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -573,10 +582,10 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= 16);
+            require(types.size() <= 17);
             std::vector<int> seen;
             for (int id : types) {
-                require(id >= 0 && id < 16 &&
+                require(id >= 0 && id < 17 &&
                         std::find(seen.begin(), seen.end(), id) == seen.end());
                 seen.push_back(id);
             }
@@ -594,6 +603,14 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             require(q.type >= 0 && q.type <= 2 && q.distance > 0 && q.radius > 0 && q.angle >= 0 &&
                     q.angle <= 360 && q.samples >= 2 && q.samples <= 181);
             result.world.add(e, q);
+        }
+        if (mask & 1048576) {
+            Animation animation;
+            in >> std::quoted(animation.clip) >> animation.loop >> animation.playOnStart;
+            require(animation.clip.empty() ||
+                    (materialPathValid(animation.clip) &&
+                     std::filesystem::path(animation.clip).extension() == ".leanim"));
+            result.world.add(e, animation);
         }
         require(bool(in));
     }

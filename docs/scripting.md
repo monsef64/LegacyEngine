@@ -243,3 +243,111 @@ aliases, but reports the shape as `"Mesh"`.
 through the editor to preserve separate part materials. A single MeshRenderer
 assigned a bundle uses its one assigned material. Choosing a primitive clears
 its model reference.
+
+## Hierarchy component searches
+
+All four methods include the calling object before searching the hierarchy:
+
+```lua
+local body = self:getComponentInParent(RigidBody)
+local camera = self:getComponentInChildren(Camera)
+local collider = findComponentInParent(self, Collider)
+local light = findComponentInChildren(PointLight) -- attached self
+```
+
+`getComponentInParent` walks nearest parent first. `getComponentInChildren`
+searches descendants breadth-first, so a nearer match wins over a deeper match.
+`findComponentInParent` and `findComponentInChildren` are aliases with the same
+behavior. Each returns the first live component or `nil`, never a list and never
+creates a component. Searches include inactive objects. Equal-depth child matches
+use the engine's component traversal order; do not rely on a particular sibling
+winning when several carry the same component.
+
+Each supports `object:method(Type)`, `object.method(Type)`,
+`method(object, Type)`, and implicit `method(Type)` for an attached script's self.
+String component names are also accepted. Returned component handles refer to the
+matching owner, not necessarily the object that started the search. Destroyed or
+foreign object handles are rejected; cycles cannot cause infinite traversal.
+
+
+## Property animation
+
+Open **Windows → Animation** to create/edit a project-relative `.leanim` clip. Select the
+GameObject to preview, add tracks targeting self (empty path) or named descendants
+(`Arm/Hand`), select a property and capture keys from the selected object's current values.
+Edit key times/values in the linear timeline, scrub or use Play/Pause/Stop/Reset.
+The isolated preview does not execute scripts or physics or modify the scene.
+**Apply frame to Scene** is explicit and undoable. Save the clip, then assign it to the
+selected object's Animation component. Numeric/vector values interpolate linearly,
+rotations use shortest-path normalized quaternion interpolation, and booleans step.
+
+```lua
+local animation = self:getComponent(Animation) or self:addComponent(Animation)
+animation.clip = "Animations/example.leanim"
+animation.loop = false
+animation:play()
+-- animation:pause(); animation:resume()
+-- animation:stop()   -- stop and rewind to the first frame
+-- animation:reset()  -- stop and restore the pre-play property values
+self.onAnimationFinish = function()
+    debug.log("Animation finished")
+end
+```
+
+`isPlaying`, `paused`, `time` and `error` are read-only. `playOnStart` opts in to automatic
+playback. Lifecycle callbacks are `onAnimationStart`, `onAnimationFinish`,
+`onAnimationStopped`, `onAnimationPause`, and `onAnimationResume`. Finish is emitted only
+at a nonlooping clip's natural end, not on stop/reset or loop boundaries.
+### Imported skeletal animation
+
+Reimport previously imported animated models: older `.lemesh` assets were baked to static
+geometry and cannot recover their discarded skeletons. New imports preserve node transforms,
+bones, weights and all skeletal animation clips (up to the documented import limits).
+Each animation generates `<model>_data/Animation_N.leanim`. Assign one of these assets to
+an Animation component on the instantiated model root, or use the first clip assigned on
+placement. `playOnStart` is opt-in. The same Lua controls and lifecycle callbacks apply.
+Static meshes, multiple mesh parts/materials and instanced nodes remain supported.
+
+Click a `.lemesh` in Assets to open **Model Preview**. Select any imported animation in
+the dropdown; Play/Pause/Stop/Reset and the time slider operate on an isolated preview.
+Stop rewinds the selected clip, while Reset returns to bind pose. Right-drag looks around
+and the wheel zooms. Use the asset context menu **Instantiate in level** to place a model.
+
+Skinning runs on the GPU using OpenGL 3.3 transform feedback. Rest vertices and all
+bone influences stay in static GPU buffers; the CPU samples/blends node poses and
+uploads only a matrix palette. Lit, unlit, transparent and shadow passes consume
+the same GPU-skinned vertex buffer. Bounds are conservative palette-transformed
+source bounds; no vertex readback is required. Asset-cache invalidation and renderer
+shutdown release skinning buffers. Hardware texture-buffer limits are checked.
+CPU bind-pose evaluation remains available for import bounds and static colliders.
+Morph-target animation, retargeting and animated physics colliders remain unsupported.
+
+### Clip blending
+
+```lua
+local animation = self:getComponent(Animation)
+animation:crossFade("Character_data/Animation_1.leanim", 0.3)
+```
+
+`crossFade(clipPath, seconds)` starts the destination clip at zero and transitions
+over the supplied duration (default 0.25 seconds; zero switches immediately).
+Duration must be finite and between 0 and 3600 seconds, and is limited to the
+incoming clip's length. Skeletal clips must reference the same model/skeleton;
+retargeting between different models is not implicit. Two property clips can
+also cross-fade: destination properties blend from their current values, rotations
+use shortest-path quaternion interpolation, and bools switch halfway through.
+Properties absent from the destination retain their current values.
+
+Skeletal blending interpolates local translation/scale and shortest-path quaternions
+before accumulating the node hierarchy. Both clips advance during a normal fade.
+Interrupting a fade captures the currently blended local pose as the new source,
+so successive transitions do not snap back to an earlier clip. Pause freezes the
+fade; Resume continues it. Play, Stop and Reset cancel an active fade. Reset still
+restores the original pre-play properties across all transitioned clips.
+`onAnimationStart` fires for the destination, and `onAnimationFinish` only at its
+natural nonlooping end; outgoing clips do not emit synthetic finish events.
+Invalid transitions report the error via `animation.error` and preserve playback.
+
+Model Preview has **Blend clip changes** and a duration slider. Change the animation
+while playing to preview a fade. Inspector runtime controls also include a
+cross-fade target asset and duration. Blend progress is transient, not serialized.

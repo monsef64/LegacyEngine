@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/animation_clip.hpp"
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
@@ -144,6 +145,9 @@ template <class T> inline bool componentHeader(World& world, Entity entity, cons
         if constexpr (std::is_same_v<T, Raycast>) {
             type = 15;
         }
+        if constexpr (std::is_same_v<T, Animation>) {
+            type = 16;
+        }
         EditorComponentPayload payload{entity, type};
         ImGui::SetDragDropPayload("EDITOR_COMPONENT", &payload, sizeof(payload));
         ImGui::TextUnformatted(name);
@@ -168,8 +172,9 @@ template <class T> inline bool componentHeader(World& world, Entity entity, cons
                                 "Skybox",
                                 "CharacterController",
                                 "FPSCamera",
-                                "Raycast"};
-            for (int i = 0; i < 16; ++i) {
+                                "Raycast",
+                                "Animation"};
+            for (int i = 0; i < 17; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -178,9 +183,9 @@ template <class T> inline bool componentHeader(World& world, Entity entity, cons
                 auto& order =
                     world.has<InspectorOrder>(entity)
                         ? world.get<InspectorOrder>(entity)
-                        : world.add(
-                              entity,
-                              InspectorOrder{{0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15}});
+                        : world.add(entity,
+                                    InspectorOrder{
+                                        {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16}});
                 auto from = std::find(order.types.begin(), order.types.end(), source.type);
                 if (from != order.types.end()) {
                     order.types.erase(from);
@@ -215,7 +220,8 @@ inline void drawScriptExports(World& world,
                                  "Skybox",
                                  "CharacterController",
                                  "FPSCamera",
-                                 "Raycast"};
+                                 "Raycast",
+                                 "Animation"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -274,7 +280,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 16 &&
+                        if (target.type >= 0 && target.type < 17 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -482,8 +488,8 @@ inline void drawInspector(World& world,
             auto ordered =
                 world.has<InspectorOrder>(selected)
                     ? world.get<InspectorOrder>(selected).types
-                    : std::vector<int>{0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15};
-            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15}) {
+                    : std::vector<int>{0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16};
+            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -1168,10 +1174,65 @@ inline void drawInspector(World& world,
                     }
                 }
             }
+            if (auto* a = world.tryGet<Animation>(selected);
+                a && componentHeader<Animation>(world, selected, "Animation")) {
+                assetPicker("Animation clip", a->clip, assets, [](const std::string& path) {
+                    return animationAsset(path);
+                });
+                ImGui::Checkbox("Loop", &a->loop);
+                ImGui::Checkbox("Play on start", &a->playOnStart);
+                if (ImGui::Button("Play##Animation")) {
+                    a->request(AnimationAction::Play);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Stop##Animation")) {
+                    a->request(AnimationAction::Stop);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Pause##Animation")) {
+                    a->request(AnimationAction::Pause);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Resume##Animation")) {
+                    a->request(AnimationAction::Resume);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reset##Animation")) {
+                    a->request(AnimationAction::Reset);
+                }
+                static std::string fadeTarget;
+                static float fadeSeconds = .25f;
+                assetPicker("Cross-fade target", fadeTarget, assets, [](const std::string& p) {
+                    return animationAsset(p);
+                });
+                ImGui::DragFloat("Cross-fade seconds",
+                                 &fadeSeconds,
+                                 .01f,
+                                 0,
+                                 3600,
+                                 "%.2f",
+                                 ImGuiSliderFlags_AlwaysClamp);
+                if (ImGui::Button("Cross-fade##Animation") && !fadeTarget.empty()) {
+                    a->request(AnimationAction::CrossFade, fadeTarget, fadeSeconds);
+                }
+                ImGui::Text("%s - %.3f seconds",
+                            a->isPlaying ? "Playing"
+                            : a->paused  ? "Paused"
+                                         : "Stopped",
+                            a->time);
+                if (!a->error.empty()) {
+                    ImGui::TextWrapped("%s", a->error.c_str());
+                }
+                ImGui::TextDisabled(
+                    "Author .leanim clips in Windows > Animation. Runtime controls require Play mode.");
+            }
             if (ImGui::Button("Add Component")) {
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<Animation>(selected) && ImGui::MenuItem("Animation")) {
+                    world.add(selected, Animation{});
+                }
                 if (!world.has<Raycast>(selected) && ImGui::MenuItem("Raycast")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});

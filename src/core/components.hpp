@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "animation/animation_component.hpp"
 #include "audio/audio_source.hpp"
 #include "core/ecs.hpp"
 #include "core/math.hpp"

@@ -10,9 +10,18 @@
   "GameObject": {
     "name": "string",
     "parent": "GameObject|nil",
-    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|nil",
-    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript",
+    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
+    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
+    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
+    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
+    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
+    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation",
     "removeComponent": "fun(componentType:ComponentType)",
+    "onAnimationFinish": "fun()|nil",
+    "onAnimationStart": "fun()|nil",
+    "onAnimationStopped": "fun()|nil",
+    "onAnimationPause": "fun()|nil",
+    "onAnimationResume": "fun()|nil",
     "onStart": "fun()|nil",
     "onUpdate": "fun(deltaTime:number)|nil",
     "onFixedUpdate": "fun(deltaTime:number)|nil",
@@ -333,5 +342,21 @@
     "Line": "integer",
     "LineOfSight": "integer",
     "Sphere": "integer"
+  },
+  "Animation": {
+    "gameObject": "GameObject",
+    "clip": "string",
+    "loop": "boolean",
+    "playOnStart": "boolean",
+    "isPlaying": "boolean Read-only",
+    "paused": "boolean Read-only",
+    "time": "number Read-only seconds",
+    "error": "string Read-only loading error",
+    "play": "fun(self:Animation)",
+    "stop": "fun(self:Animation) Stops and rewinds to frame zero",
+    "pause": "fun(self:Animation)",
+    "resume": "fun(self:Animation)",
+    "crossFade": "fun(self:Animation,clip:string,seconds?:number) Timed transition; default 0.25 seconds",
+    "reset": "fun(self:Animation) Stops and restores the pre-play values"
   }
 }
