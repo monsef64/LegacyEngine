@@ -2,8 +2,10 @@
 // This executable supplies its own SDL and Vulkan entry points; it does not
 // replace a graphical test with a real Vulkan driver and validation layers.
 #include "rendering/vulkan_context.hpp"
+#include "rendering/vulkan_surface_format.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
+#include <cmath>
 
 #include <cassert>
 #include <cstring>
@@ -352,6 +354,18 @@ VKAPI_ATTR VkResult VKAPI_CALL vkQueuePresentKHR(VkQueue, const VkPresentInfoKHR
 
 int main() {
     using Result = VulkanContext::FrameResult;
+    const VkColorSpaceKHR srgb = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    assert(chooseEditorSurfaceFormat({{VK_FORMAT_B8G8R8A8_SRGB, srgb},
+                                      {VK_FORMAT_R8G8B8A8_UNORM, srgb},
+                                      {VK_FORMAT_B8G8R8A8_UNORM, srgb}})
+               .format == VK_FORMAT_B8G8R8A8_UNORM);
+    assert(chooseEditorSurfaceFormat({{VK_FORMAT_UNDEFINED, srgb}}).format ==
+           VK_FORMAT_B8G8R8A8_UNORM);
+    assert(chooseEditorSurfaceFormat({{VK_FORMAT_B8G8R8A8_SRGB, srgb}}).format ==
+           VK_FORMAT_B8G8R8A8_SRGB);
+    assert(vulkanSrgbFormat(VK_FORMAT_B8G8R8A8_SRGB));
+    assert(!vulkanSrgbFormat(VK_FORMAT_B8G8R8A8_UNORM));
+    assert(std::abs(editorSrgbToLinear(.5f) - .214041f) < .00001f);
     SDL_Window* window = mock::handle<SDL_Window*>(1);
     mock::reset();
     {

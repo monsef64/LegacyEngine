@@ -1,6 +1,6 @@
 #pragma once
 #include "models/model_asset.hpp"
-// Supported extensions come from the importers enabled in the bundled Assimp.
+// Model import is restricted to OBJ and glTF/GLB, including animated glTF.
 std::string modelImportExtensions();
 bool importableModel(const std::filesystem::path& path);
 std::string importModel(AssetManager& assets,

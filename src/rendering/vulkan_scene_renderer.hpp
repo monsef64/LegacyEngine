@@ -9,12 +9,14 @@
 #include "lighting/shadow_settings.hpp"
 #include "materials/material_io.hpp"
 #include "models/model_asset.hpp"
+#include "rendering/temporal_history.hpp"
 #include "rendering/vulkan_material_textures.hpp"
 #include "rendering/vulkan_model_animation.hpp"
 #include "rendering/vulkan_scene_surface.hpp"
 #include "rendering/vulkan_skybox_cache.hpp"
 #include "scene/skybox_transition.hpp"
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <stdexcept>
 #include <tuple>
@@ -122,7 +124,16 @@ class VulkanSceneRenderer {
         });
         updateSkyboxTransitions(world, dt);
     }
+    // Pending resources render using an empty mesh / default texture until ready.
+    // Preview surfaces can use this to redraw after background work completes.
+    bool pendingStreaming() const {
+        return !pendingModels_.empty() || deferredModels_ || textures_.pending();
+    }
     void clearModelCache() {
+        modelWorker_.cancelQueued();
+        pendingModels_.clear();
+        modelFailures_.clear();
+        deferredModels_ = false;
         // Remove entries only after the GPU resource was successfully released.
         while (!models_.empty()) {
             surface_.destroyMesh(models_.begin()->second);
@@ -130,6 +141,9 @@ class VulkanSceneRenderer {
         }
         while (!animated_.empty()) {
             surface_.destroyMesh(animated_.begin()->second.mesh);
+            if (animated_.begin()->second.previous.id != UINT32_MAX) {
+                surface_.destroyMesh(animated_.begin()->second.previous);
+            }
             animated_.erase(animated_.begin());
         }
         documents_.clear();
@@ -167,7 +181,58 @@ class VulkanSceneRenderer {
             target, world, viewProjection, width, height, cameraPosition, true, overlays, region);
     }
 
+    // Experimental input generation for a temporal upscaler, not an FSR
+    // dispatch. The caller must enable the target's motion pipeline and keep
+    // one history per view. At present only opaque triangles
+    // and full viewports are supported. Missing object history must reset the
+    // upscaler until a reactive/disocclusion mask is implemented. If supplied,
+    // consume executes after input generation but before history commits. It
+    // must throw on dispatch/submission failure so the previous frame remains
+    // intact. Its GPU work must finish before the target is reused or resized.
+    struct TemporalDrawResult {
+        TemporalHistory::Frame frame;
+        bool missingObjectHistory = false;
+    };
+    TemporalDrawResult
+    drawTemporalTo(VulkanSceneSurface& target,
+                   const World& world,
+                   const Mat4& viewProjection,
+                   const TemporalHistory::Configuration& config,
+                   TemporalHistory& history,
+                   Vec3 cameraPosition = {},
+                   bool lit = false,
+                   bool forceReset = false,
+                   const std::function<void(const TemporalDrawResult&)>& consume = {}) {
+        TemporalDrawResult result{history.begin(config, viewProjection, forceReset), false};
+        try {
+            TemporalPass temporal{history, result.frame, result.missingObjectHistory};
+            drawImpl(target,
+                     world,
+                     viewProjection,
+                     config.render.width,
+                     config.render.height,
+                     cameraPosition,
+                     lit,
+                     {},
+                     nullptr,
+                     &temporal);
+            if (consume) {
+                consume(result);
+            }
+            history.commit();
+            return result;
+        } catch (...) {
+            history.discard();
+            throw;
+        }
+    }
+
   private:
+    struct TemporalPass {
+        TemporalHistory& history;
+        TemporalHistory::Frame frame;
+        bool& missingObjectHistory;
+    };
     void drawImpl(VulkanSceneSurface& target,
                   const World& world,
                   const Mat4& viewProjection,
@@ -176,7 +241,8 @@ class VulkanSceneRenderer {
                   Vec3 cameraPosition,
                   bool lit,
                   const std::vector<VulkanSceneSurface::Draw>& overlays,
-                  const VulkanSceneSurface::RenderRegion* region) {
+                  const VulkanSceneSurface::RenderRegion* region,
+                  TemporalPass* temporal = nullptr) {
         if (!surface_.sharesMeshesWith(target)) {
             throw std::runtime_error("Vulkan scene target does not share renderer meshes");
         }
@@ -185,6 +251,15 @@ class VulkanSceneRenderer {
             modelRevision_ = modelAssetRevision;
         }
         ++drawFrame_;
+        deferredModels_ = false;
+        const auto now = std::chrono::steady_clock::now();
+        for (auto it = pendingModels_.begin(); it != pendingModels_.end();) {
+            if (now - it->second.used > std::chrono::seconds(2)) {
+                it = pendingModels_.erase(it);
+            } else {
+                ++it;
+            }
+        }
         // Remove dead, hidden or retargeted entities before applying the cache
         // limit, so replacing many animated entities in one frame still works.
         for (auto it = animated_.begin(); it != animated_.end();) {
@@ -194,12 +269,20 @@ class VulkanSceneRenderer {
             if (!component || component->model != std::get<2>(it->first) ||
                 !isActive(world, entity)) {
                 surface_.destroyMesh(it->second.mesh);
+                if (it->second.previous.id != UINT32_MAX) {
+                    surface_.destroyMesh(it->second.previous);
+                }
                 it = animated_.erase(it);
             } else {
                 ++it;
             }
         }
         std::vector<VulkanSceneSurface::Draw> draws;
+        std::vector<VulkanSceneSurface::MotionDraw> motionDraws;
+        const Mat4 rasterViewProjection =
+            temporal ? TemporalSampling::jitterViewProjection(
+                           viewProjection, temporal->frame.jitter, {width, height})
+                     : viewProjection;
         std::vector<VulkanSceneSurface::SkyDraw> skyDraws;
         {
             ProfileScope skyProfile(ProfilePart::Skybox);
@@ -213,6 +296,9 @@ class VulkanSceneRenderer {
             });
             skyboxError.clear();
             if (activeSky) {
+                if (temporal) {
+                    throw std::runtime_error("Temporal sky motion is not implemented");
+                }
                 if (!target.supportsSkybox()) {
                     throw std::runtime_error("Vulkan skybox pipeline is not initialized");
                 }
@@ -327,8 +413,14 @@ class VulkanSceneRenderer {
                     throw std::runtime_error("Vulkan flat renderer does not yet support materials");
                 }
                 MeshHandle mesh = renderer.mesh;
+                AnimatedMesh* animatedMesh = nullptr;
+                std::optional<MeshData> posedMesh;
+                uint64_t stableGeometryRevision = 0;
                 if (!renderer.model.empty()) {
-                    const auto& doc = cachedModelDocument(assets_, renderer.model, &documents_);
+                    if (!prepareModel(renderer.model)) {
+                        return;
+                    }
+                    const auto& doc = documents_.at(renderer.model);
                     const Animation* animation = nullptr;
                     Entity current = entity;
                     for (std::size_t depth = 0; depth < 4096 && world.alive(current); ++depth) {
@@ -355,11 +447,15 @@ class VulkanSceneRenderer {
                         }
                         auto data = loadVulkanAnimatedModel(
                             assets_, renderer.model, *animation, documents_);
+                        if (temporal) {
+                            stableGeometryRevision =
+                                surface_.meshRevision(models_.at(renderer.model));
+                        }
                         if (found == animated_.end()) {
                             const auto handle = surface_.createMesh(data);
                             try {
-                                found =
-                                    animated_.emplace(key, AnimatedMesh{handle, drawFrame_}).first;
+                                found = animated_.emplace(key, AnimatedMesh{handle, {}, drawFrame_})
+                                            .first;
                             } catch (...) {
                                 surface_.destroyMesh(handle);
                                 throw;
@@ -369,23 +465,12 @@ class VulkanSceneRenderer {
                             found->second.seen = drawFrame_;
                         }
                         mesh = found->second.mesh;
-                    } else {
-                        auto found = models_.find(renderer.model);
-                        if (found == models_.end()) {
-                            if (models_.size() >= 1024) {
-                                throw std::runtime_error("Vulkan model cache limit exceeded");
-                            }
-                            auto data =
-                                loadModelAsset(assets_, renderer.model, 0, -1, 0, &documents_);
-                            auto handle = surface_.createMesh(data);
-                            try {
-                                found = models_.emplace(renderer.model, handle).first;
-                            } catch (...) {
-                                surface_.destroyMesh(handle);
-                                throw;
-                            }
+                        if (temporal) {
+                            animatedMesh = &found->second;
+                            posedMesh = std::move(data);
                         }
-                        mesh = found->second;
+                    } else {
+                        mesh = models_.at(renderer.model);
                     }
                 }
                 if (mesh.id == UINT32_MAX) {
@@ -395,7 +480,7 @@ class VulkanSceneRenderer {
                     transformMatrix(transform.position, transform.rotation, transform.scale);
                 VulkanSceneSurface::Draw draw{
                     mesh,
-                    multiply(viewProjection, model),
+                    multiply(rasterViewProjection, model),
                     {renderer.color.x, renderer.color.y, renderer.color.z, 1},
                     transform.scale.x * transform.scale.y * transform.scale.z < 0,
                     false};
@@ -447,6 +532,38 @@ class VulkanSceneRenderer {
                         }
                     }
                 }
+                if (temporal) {
+                    if (draw.transparent || surface_.meshIsLines(mesh)) {
+                        throw std::runtime_error(
+                            "Temporal transparency and lines are not implemented");
+                    }
+                    const uint64_t key = (uint64_t(entity.generation) << 32) | entity.index;
+                    TemporalHistory::Object object;
+                    MeshHandle previousMesh;
+                    if (posedMesh) {
+                        const auto deformed = temporal->history.deformedObject(
+                            key, stableGeometryRevision, model, *posedMesh);
+                        object = deformed.transform;
+                        if (deformed.previousMesh) {
+                            if (animatedMesh->previous.id == UINT32_MAX) {
+                                animatedMesh->previous =
+                                    surface_.createMesh(*deformed.previousMesh);
+                            } else {
+                                surface_.updateMesh(animatedMesh->previous, *deformed.previousMesh);
+                            }
+                            previousMesh = animatedMesh->previous;
+                        }
+                    } else {
+                        object = temporal->history.object(key, surface_.meshRevision(mesh), model);
+                    }
+                    temporal->missingObjectHistory |= !object.hasHistory;
+                    motionDraws.push_back({mesh,
+                                           previousMesh,
+                                           draw.viewProjectionModel,
+                                           object.currentViewProjectionModel,
+                                           object.previousViewProjectionModel,
+                                           draw.mirrored});
+                }
                 if (draw.transparent) {
                     const Vec3 delta = transform.position - cameraPosition;
                     transparent.push_back({draw, dot(delta, delta)});
@@ -457,6 +574,9 @@ class VulkanSceneRenderer {
             for (auto it = animated_.begin(); it != animated_.end();) {
                 if (it->second.seen != drawFrame_) {
                     surface_.destroyMesh(it->second.mesh);
+                    if (it->second.previous.id != UINT32_MAX) {
+                        surface_.destroyMesh(it->second.previous);
+                    }
                     it = animated_.erase(it);
                 } else {
                     ++it;
@@ -487,9 +607,88 @@ class VulkanSceneRenderer {
                       hasShadows ? &shadowPlan : nullptr,
                       skyDraws,
                       region);
+        if (temporal) {
+            target.renderMotionVectors(width, height, motionDraws);
+        }
     }
 
   private:
+    struct StreamedModel {
+        MeshData mesh;
+        std::map<std::string, Json> documents;
+    };
+    struct PendingModel {
+        std::future<StreamedModel> future;
+        std::chrono::steady_clock::time_point used;
+    };
+    struct ModelFailure {
+        std::string message;
+        std::chrono::steady_clock::time_point retry;
+    };
+    bool prepareModel(const std::string& path) {
+        if (models_.count(path) && documents_.count(path)) {
+            pendingModels_.erase(path);
+            return true;
+        }
+        const auto now = std::chrono::steady_clock::now();
+        auto failure = modelFailures_.find(path);
+        if (failure != modelFailures_.end()) {
+            if (now < failure->second.retry) {
+                throw std::runtime_error(failure->second.message);
+            }
+            modelFailures_.erase(failure);
+        }
+        auto pending = pendingModels_.find(path);
+        if (pending == pendingModels_.end()) {
+            if (pendingModels_.size() >= 2) {
+                deferredModels_ = true;
+                return false;
+            }
+            const auto assets = assets_;
+            auto future = modelWorker_.submit([assets, path] {
+                StreamedModel result;
+                result.mesh = loadModelAsset(assets, path, 0, -1, 0, &result.documents);
+                return result;
+            });
+            if (future) {
+                pendingModels_.emplace(path, PendingModel{std::move(*future), now});
+            } else {
+                deferredModels_ = true;
+            }
+            return false;
+        }
+        pending->second.used = now;
+        if (pending->second.future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            return false;
+        }
+        StreamedModel loaded;
+        try {
+            loaded = pending->second.future.get();
+        } catch (const std::exception& error) {
+            std::string message = error.what();
+            pendingModels_.erase(pending);
+            if (modelFailures_.size() >= 128) {
+                modelFailures_.erase(modelFailures_.begin());
+            }
+            modelFailures_[path] = {message, now + std::chrono::seconds(1)};
+            throw std::runtime_error(message);
+        }
+        pendingModels_.erase(pending);
+        if (!models_.count(path)) {
+            if (models_.size() >= 1024) {
+                throw std::runtime_error("Vulkan model cache limit exceeded");
+            }
+            const auto handle = surface_.createMesh(loaded.mesh);
+            try {
+                models_.emplace(path, handle);
+            } catch (...) {
+                surface_.destroyMesh(handle);
+                throw;
+            }
+        }
+        documents_.merge(loaded.documents);
+        return true;
+    }
     VulkanSceneSurface& surface_;
     VulkanMaterialTextures textures_;
     VulkanSkyboxCache skies_;
@@ -499,10 +698,14 @@ class VulkanSceneRenderer {
     unsigned modelRevision_ = 0;
     uint64_t drawFrame_ = 0;
     struct AnimatedMesh {
-        MeshHandle mesh;
+        MeshHandle mesh, previous;
         uint64_t seen;
     };
     std::map<std::tuple<uint32_t, uint32_t, std::string>, AnimatedMesh> animated_;
     std::map<std::string, MeshHandle> models_;
     std::map<std::string, Json> documents_;
+    std::map<std::string, PendingModel> pendingModels_;
+    std::map<std::string, ModelFailure> modelFailures_;
+    bool deferredModels_ = false;
+    BackgroundWorker modelWorker_;
 };

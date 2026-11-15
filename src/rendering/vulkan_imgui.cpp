@@ -1,4 +1,5 @@
 #include "rendering/vulkan_imgui.hpp"
+#include "rendering/vulkan_surface_format.hpp"
 #include <SDL3/SDL.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_vulkan.h>
@@ -7,6 +8,9 @@
 #include <type_traits>
 
 namespace {
+const uint32_t imguiSrgbShader[] = {
+#include "imgui_srgb.inc"
+};
 void check(VkResult result) {
     if (result < 0) {
         throw std::runtime_error("ImGui Vulkan error " + std::to_string(static_cast<int>(result)));
@@ -20,7 +24,8 @@ template <class Handle> ImTextureID textureId(Handle handle) {
     }
 }
 } // namespace
-VulkanImGui::VulkanImGui(SDL_Window* window, VulkanContext& context) : context_(context) {
+VulkanImGui::VulkanImGui(SDL_Window* window, VulkanContext& context)
+    : window_(window), context_(context) {
     if (!window || !ImGui::GetCurrentContext()) {
         throw std::runtime_error("Vulkan ImGui requires a window and ImGui context");
     }
@@ -57,7 +62,19 @@ void VulkanImGui::shutdownRenderer() noexcept {
     rendererReady_ = false;
 }
 void VulkanImGui::resetRenderer() {
+    const bool hadRenderer = rendererReady_;
     shutdownRenderer();
+    if (hadRenderer) {
+        // ImGui_ImplVulkan_Shutdown calls DestroyPlatformWindows, which also
+        // clears/destroys the SDL main viewport data. Reinitialize the SDL
+        // backend so future input events can find their window again.
+        ImGui_ImplSDL3_Shutdown();
+        platformReady_ = false;
+        if (!ImGui_ImplSDL3_InitForVulkan(window_)) {
+            throw std::runtime_error("Could not reinitialize SDL3 ImGui backend");
+        }
+        platformReady_ = true;
+    }
     if (context_.imageCount() < 2) {
         throw std::runtime_error("ImGui Vulkan requires at least two swapchain images");
     }
@@ -73,6 +90,11 @@ void VulkanImGui::resetRenderer() {
     info.ImageCount = context_.imageCount();
     info.PipelineInfoMain.RenderPass = context_.renderPass();
     info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    if (vulkanSrgbFormat(context_.colorFormat())) {
+        info.CustomShaderFragCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        info.CustomShaderFragCreateInfo.codeSize = sizeof(imguiSrgbShader);
+        info.CustomShaderFragCreateInfo.pCode = imguiSrgbShader;
+    }
     info.CheckVkResultFn = check;
     try {
         if (!ImGui_ImplVulkan_Init(&info)) {
@@ -208,9 +230,9 @@ VulkanContext::FrameResult VulkanImGui::endFrame() {
     }
     return context_.present(
         [](VkCommandBuffer cmd) { ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd); },
-        .07f,
-        .08f,
-        .10f);
+        vulkanSrgbFormat(context_.colorFormat()) ? editorSrgbToLinear(.07f) : .07f,
+        vulkanSrgbFormat(context_.colorFormat()) ? editorSrgbToLinear(.08f) : .08f,
+        vulkanSrgbFormat(context_.colorFormat()) ? editorSrgbToLinear(.10f) : .10f);
 }
 
 VulkanContext::FrameResult VulkanImGui::presentSecondary(VulkanContext& secondary,
@@ -271,7 +293,7 @@ VulkanContext::FrameResult VulkanImGui::presentSecondary(VulkanContext& secondar
     data.AddDrawList(&list);
     return secondary.present(
         [&](VkCommandBuffer commands) { ImGui_ImplVulkan_RenderDrawData(&data, commands); },
-        .07f,
-        .08f,
-        .10f);
+        vulkanSrgbFormat(context_.colorFormat()) ? editorSrgbToLinear(.07f) : .07f,
+        vulkanSrgbFormat(context_.colorFormat()) ? editorSrgbToLinear(.08f) : .08f,
+        vulkanSrgbFormat(context_.colorFormat()) ? editorSrgbToLinear(.10f) : .10f);
 }

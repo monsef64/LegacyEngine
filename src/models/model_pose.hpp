@@ -4,6 +4,9 @@
 #include "rendering/mesh.hpp"
 #include <algorithm>
 #include <array>
+#if defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+#include <xmmintrin.h>
+#endif
 
 inline Mat4 modelMatrix(const Json& value) {
     if (!value.is_array() || value.size() != 16) {
@@ -18,11 +21,26 @@ inline Mat4 modelMatrix(const Json& value) {
     }
     return m;
 }
-inline Vec3 modelPoint(const Mat4& m, Vec3 p, bool direction = false) {
-    float w = direction ? 0.f : 1.f;
+inline Vec3 modelPointScalar(const Mat4& m, Vec3 p, bool direction = false) {
+    const float w = direction ? 0.f : 1.f;
     return {m.m[0] * p.x + m.m[4] * p.y + m.m[8] * p.z + m.m[12] * w,
             m.m[1] * p.x + m.m[5] * p.y + m.m[9] * p.z + m.m[13] * w,
             m.m[2] * p.x + m.m[6] * p.y + m.m[10] * p.z + m.m[14] * w};
+}
+inline Vec3 modelPoint(const Mat4& m, Vec3 p, bool direction = false) {
+#if defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+    // Mat4 is column-major. Evaluate the three output coordinates together,
+    // keeping the scalar operation order and allowing unaligned matrix storage.
+    const __m128 x = _mm_mul_ps(_mm_loadu_ps(m.m), _mm_set1_ps(p.x));
+    const __m128 y = _mm_mul_ps(_mm_loadu_ps(m.m + 4), _mm_set1_ps(p.y));
+    const __m128 z = _mm_mul_ps(_mm_loadu_ps(m.m + 8), _mm_set1_ps(p.z));
+    const __m128 w = _mm_mul_ps(_mm_loadu_ps(m.m + 12), _mm_set1_ps(direction ? 0.f : 1.f));
+    float values[4];
+    _mm_storeu_ps(values, _mm_add_ps(_mm_add_ps(_mm_add_ps(x, y), z), w));
+    return {values[0], values[1], values[2]};
+#else
+    return modelPointScalar(m, p, direction);
+#endif
 }
 // Inverse-transpose normal transform, including nonuniform node/bone scale.
 inline Vec3 modelNormal(const Mat4& m, Vec3 n) {

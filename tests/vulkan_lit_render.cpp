@@ -3,9 +3,11 @@
 #include "rendering/vulkan_scene_renderer.hpp"
 #include "rendering/vulkan_scene_surface.hpp"
 #include <SDL3/SDL.h>
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 static void require(bool ok, const char* what) {
@@ -204,6 +206,13 @@ int main(int argc, char** argv) {
         require(profiler.stats(int(ProfilePart::Lights)).last > 0 &&
                     profiler.stats(int(ProfilePart::Surfaces)).last > 0,
                 "Vulkan light/surface profiling not recorded");
+        require(renderer.pendingStreaming(), "material decode was not scheduled in background");
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (renderer.pendingStreaming() && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            renderer.drawLitTo(surface, world, identity, 64, 64, {0, 0, 2});
+        }
+        require(!renderer.pendingStreaming(), "material streaming timed out");
         p = pixel();
         require(p[1] > 248 && p[0] < 3 && p[2] < 3, "ECS material or light not rendered");
         world.get<MeshRenderer>(entity).materialOverrides = MaterialColor;
@@ -211,6 +220,46 @@ int main(int argc, char** argv) {
         renderer.drawLitTo(surface, world, identity, 64, 64, {0, 0, 2});
         p = pixel();
         require(p[1] >= 125 && p[1] <= 130, "material override not applied");
+
+        // Clearing a cache while a decode is in flight must not publish pixels
+        // from the old project into a different root with the same asset name.
+        const auto otherRoot = fixture.path / "other";
+        std::filesystem::create_directories(otherRoot);
+        const unsigned char smallTga[]{0, 0, 2, 0, 0, 0,  0,    0, 0,   0, 0,
+                                       0, 1, 0, 1, 0, 24, 0x20, 0, 255, 0};
+        {
+            std::ofstream out(otherRoot / "green.tga", std::ios::binary);
+            out.write(reinterpret_cast<const char*>(smallTga), sizeof(smallTga));
+        }
+        AssetManager otherAssets;
+        otherAssets.root = otherRoot;
+        VulkanMaterialTextures cache(surface);
+        cache.beginFrame();
+        require(!cache.get(assets, "green.tga") && cache.pending(), "old texture did not schedule");
+        require(!cache.get(otherAssets, "green.tga"), "new root was not scheduled");
+        const auto switchDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        const VulkanTexture* streamed = nullptr;
+        while (!streamed && std::chrono::steady_clock::now() < switchDeadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            cache.beginFrame();
+            streamed = cache.get(otherAssets, "green.tga");
+        }
+        require(streamed && streamed->width() == 1 && streamed->height() == 1,
+                "old project texture survived a root switch");
+        std::ofstream(otherRoot / "broken.tga") << "bad data";
+        require(!cache.get(otherAssets, "broken.tga"), "invalid texture was not scheduled");
+        bool invalidRejected = false;
+        const auto errorDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (!invalidRejected && std::chrono::steady_clock::now() < errorDeadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            cache.beginFrame();
+            try {
+                cache.get(otherAssets, "broken.tga");
+            } catch (const std::runtime_error&) {
+                invalidRejected = true;
+            }
+        }
+        require(invalidRejected, "invalid asynchronous texture did not report an error");
     } catch (const std::exception& e) {
         std::fprintf(stderr, "Vulkan lit test: %s\n", e.what());
         result = 1;

@@ -9,6 +9,7 @@
 #include "editor/editor_layout.hpp"
 #include "editor/editor_settings.hpp"
 #include "editor/script_editor.hpp"
+#include "editor/search_box.hpp"
 #include "materials/material_io.hpp"
 #include "models/model_asset.hpp"
 #include "platform/project_dialog.hpp"
@@ -634,7 +635,7 @@ class AssetBrowser {
                 preview.error.clear();
                 errorUntil_ = ImGui::GetTime() + 5;
             }
-            search.Draw("Search assets", -1);
+            searchBox("Search assets", search);
             if (!currentFolder.empty() &&
                 !std::filesystem::is_directory(assets.resolve(currentFolder))) {
                 currentFolder.clear();

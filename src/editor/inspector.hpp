@@ -5,6 +5,7 @@
 #include "audio/audio_clip.hpp"
 #include "editor/asset_picker.hpp"
 #include "editor/asset_preview_ui.hpp"
+#include "editor/collider_menu.hpp"
 #include "editor/component_clipboard.hpp"
 #include "editor/editor_layout.hpp"
 #include "editor/level_objects.hpp"
@@ -1299,8 +1300,19 @@ inline void drawInspector(World& world,
                 if (!world.has<MeshRenderer>(selected) && ImGui::MenuItem("MeshRenderer")) {
                     world.add(selected, MeshRenderer{meshes[0]});
                 }
-                if (!world.has<Collider>(selected) && ImGui::MenuItem("Collider")) {
-                    world.add(selected, Collider{});
+                if (!world.has<Collider>(selected) && ImGui::BeginMenu("Collider")) {
+                    const std::pair<const char*, ColliderShape> shapes[]{
+                        {"Box", ColliderShape::Box},
+                        {"Sphere", ColliderShape::Sphere},
+                        {"Capsule", ColliderShape::Capsule},
+                        {"Cone", ColliderShape::Cone},
+                        {"Mesh", ColliderShape::Mesh}};
+                    for (const auto& shape : shapes) {
+                        if (ImGui::MenuItem(shape.first)) {
+                            addColliderShape(world, selected, shape.second);
+                        }
+                    }
+                    ImGui::EndMenu();
                 }
                 if (!world.has<RigidBody>(selected) && ImGui::MenuItem("RigidBody")) {
                     world.add(selected, RigidBody{});

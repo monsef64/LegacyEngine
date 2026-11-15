@@ -49,6 +49,9 @@
 #include "rendering/vulkan_camera_region.hpp"
 #include "rendering/vulkan_editor_overlays.hpp"
 #include "rendering/vulkan_scene_renderer.hpp"
+#ifdef LEGACY_FSR3_GAME
+#include "rendering/vulkan_fsr3_game.hpp"
+#endif
 #include "scene/camera.hpp"
 #include "scene/scene_camera.hpp"
 #include "scene/skybox_transition.hpp"
@@ -62,6 +65,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -285,6 +289,18 @@ static bool run(SDL_Window* window,
                                    shaders.unlitVertex,
                                    shaders.unlitFragment,
                                    &sceneSurface);
+#ifdef LEGACY_FSR3_GAME
+    gameSurface.enableTransferDestination();
+    std::unique_ptr<VulkanSceneSurface> fsrInputSurface;
+    std::unique_ptr<VulkanFsr3Game> fsrGame;
+    TemporalHistory fsrHistory;
+    TemporalSampling::Extent fsrRender{}, fsrDisplay{};
+    std::string fsrStatus = "Off";
+    std::uint64_t fsrFrameNumber = 0, fsrLastFrame = 0;
+    Vec3 fsrPreviousEye{}, fsrPreviousForward{};
+    bool fsrHasPreviousEye = false, fsrHardwareUnavailable = false;
+    int fsrLastQuality = 0;
+#endif
     VulkanSceneSurface cameraPreviewSurface(context.physicalDevice(),
                                             context.device(),
                                             context.graphicsQueue(),
@@ -339,6 +355,7 @@ static bool run(SDL_Window* window,
     levels.setRoot(browser.assets.root);
     LevelSystem::active = &levels;
     RenderingSettings renderingSettings;
+    RenderingSettings::active = &renderingSettings;
     renderingSettings.applyVsync = [&](bool enabled) { context.setVsync(enabled); };
     renderingSettings.presentationStatus = [&] {
         return renderingSettings.vsync ? std::string("Vulkan VSync requested")
@@ -403,9 +420,16 @@ static bool run(SDL_Window* window,
     unsigned smokeScene = 0, smokeGame = 0, smokeEmbeddedGame = 0, smokeCamera = 0,
              smokeSecondary = 0;
     bool smokeFailed = false;
+#ifdef LEGACY_FSR3_GAME
+    const bool smokeFsr = smokeTest && std::getenv("LEGACY_SMOKE_FSR") != nullptr;
+    unsigned smokeFsrEmbedded = 0, smokeFsrDetached = 0, smokeFsrFallback = 0, smokeFsrOff = 0;
+#endif
     constexpr unsigned smokeFrames = 120;
     std::optional<Vec3> lastOrbitPivot;
     while (running) {
+#ifdef LEGACY_FSR3_GAME
+        ++fsrFrameNumber;
+#endif
         if (!playMode.active()) {
             if (const auto* pose = world.tryGet<Transform>(selectedEntity)) {
                 lastOrbitPivot = pose->position;
@@ -421,6 +445,18 @@ static bool run(SDL_Window* window,
         scripts.console().setAssetRoot(browser.assets.root);
         inputSettings.load(browser.assets, input);
         renderingSettings.load(browser.assets);
+#ifdef LEGACY_FSR3_GAME
+        if (smokeFsr) {
+            renderingSettings.fsr3GameQuality =
+                renderedFrames < 5 || renderedFrames >= 90 ? 0 : (renderedFrames < 50 ? 2 : 3);
+            if (const auto e = activeCamera(world); world.alive(e)) {
+                world.get<Camera>(e).orthographic = renderedFrames >= 60 && renderedFrames < 65;
+            }
+            if (gameWindow && renderedFrames == 70) {
+                SDL_SetWindowSize(gameWindow, 640, 360);
+            }
+        }
+#endif
         layerSettings.load(browser.assets);
         if (levels.root() != browser.assets.root) {
             levels.setRoot(browser.assets.root);
@@ -1182,6 +1218,23 @@ static bool run(SDL_Window* window,
                                                           : "Undo VSync setting");
                     });
                 }
+#ifdef LEGACY_FSR3_GAME
+                int gameQuality = renderingSettings.fsr3GameQuality;
+                if (ImGui::Combo(
+                        "Game upscaling (experimental)",
+                        &gameQuality,
+                        "Off\0FSR 3 Native AA\0FSR 3 Quality\0FSR 3 Balanced\0FSR 3 Performance\0FSR 3 Ultra Performance\0")) {
+                    const int before = renderingSettings.fsr3GameQuality;
+                    history.perform(world, selectedEntity, [&, before, gameQuality](bool forward) {
+                        renderingSettings.fsr3GameQuality = forward ? gameQuality : before;
+                        renderingSettings.save(browser.assets);
+                    });
+                }
+                ImGui::TextWrapped("Game FSR: %s", fsrStatus.c_str());
+#else
+                ImGui::TextWrapped(
+                    "Game FSR 3 is unavailable in this build; native rendering is used.");
+#endif
                 const auto shadowsBefore = renderingSettings.shadows;
                 bool shadowChanged = ImGui::Combo("Shadow mapping",
                                                   &renderingSettings.shadows.mode,
@@ -1290,7 +1343,7 @@ static bool run(SDL_Window* window,
                 "About LegacyEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::TextUnformatted("LegacyEngine");
             ImGui::TextUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
-            ImGui::TextUnformatted("SDL3 / Vulkan / Dear ImGui / ReactPhysics3D");
+            ImGui::TextUnformatted("SDL3 / Vulkan / Dear ImGui / Jolt Physics");
             if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                 ImGui::CloseCurrentPopup();
             }
@@ -2340,14 +2393,165 @@ static bool run(SDL_Window* window,
                                                   effectiveCollider(world, entity, collider));
                             });
                         }
-                        renderer.drawLitTo(gameSurface,
-                                           world,
-                                           vp,
-                                           gameSurface.width(),
-                                           gameSurface.height(),
-                                           cameraEye(t, c),
-                                           overlays.draws(),
-                                           &region);
+                        bool gameUpscaled = false;
+#ifdef LEGACY_FSR3_GAME
+                        const int quality = renderingSettings.fsr3GameQuality;
+                        if (quality != fsrLastQuality) {
+                            fsrLastQuality = quality;
+                            fsrHardwareUnavailable = false;
+                            fsrHistory.invalidate();
+                            fsrGame.reset();
+                            fsrHasPreviousEye = false;
+                        }
+                        if (!quality) {
+                            fsrStatus = "Off";
+                            fsrHistory.invalidate();
+                        } else if (c.orthographic || region.x || region.y ||
+                                   region.width != gameSurface.width() ||
+                                   region.height != gameSurface.height() || showGameColliders) {
+                            fsrStatus =
+                                "Native fallback: FSR needs a perspective, full-viewport camera without collider overlays.";
+                            fsrHistory.invalidate();
+                        } else if (fsrHardwareUnavailable) {
+                            // Keep the last diagnostic; changing quality retries initialization.
+                            fsrHistory.invalidate();
+                        } else {
+                            bool dispatchAttempted = false;
+                            bool initialization = true;
+                            try {
+                                const TemporalSampling::Extent display{gameSurface.width(),
+                                                                       gameSurface.height()};
+                                const auto render = TemporalSampling::renderExtent(
+                                    display, static_cast<TemporalSampling::Quality>(quality - 1));
+                                if (render.width < 64 || render.height < 64) {
+                                    throw std::runtime_error("Game viewport is too small for FSR");
+                                }
+                                if (!fsrInputSurface) {
+                                    auto inputs = std::make_unique<VulkanSceneSurface>(
+                                        context.physicalDevice(),
+                                        context.device(),
+                                        context.graphicsQueue(),
+                                        context.graphicsFamily(),
+                                        shaders.unlitVertex,
+                                        shaders.unlitFragment,
+                                        &sceneSurface);
+                                    inputs->enableLighting(
+                                        shaders.litVertex, litFragment, shadowVertex);
+                                    inputs->enableMotionVectors(
+                                        loadVulkanShader("motion.vert.spv"),
+                                        loadVulkanShader("motion.frag.spv"));
+                                    fsrInputSurface = std::move(inputs);
+                                }
+                                if (!fsrGame || !(render == fsrRender) ||
+                                    !(display == fsrDisplay)) {
+                                    fsrGame.reset();
+                                    fsrHistory.invalidate();
+                                    fsrRender = render;
+                                    fsrDisplay = display;
+                                    fsrGame = std::make_unique<VulkanFsr3Game>(
+                                        VulkanFsr3Game::Device{context.instance(),
+                                                               context.physicalDevice(),
+                                                               context.device(),
+                                                               context.graphicsQueue(),
+                                                               context.graphicsFamily(),
+                                                               context.apiVersion()},
+                                        render,
+                                        display);
+                                }
+                                initialization = false;
+                                const auto hashCombine = [](std::uint64_t a, std::uint64_t b) {
+                                    return a ^ (b + 0x9e3779b97f4a7c15ULL + (a << 6) + (a >> 2));
+                                };
+                                std::uint64_t sceneId =
+                                    hashCombine(world.restoreRevision(),
+                                                std::hash<std::string>{}(currentProject));
+                                sceneId = hashCombine(sceneId,
+                                                      std::hash<std::string>{}(levels.current()));
+                                sceneId = hashCombine(sceneId, playMode.active());
+                                std::uint64_t projection =
+                                    hashCombine(std::hash<float>{}(c.fieldOfView),
+                                                std::hash<float>{}(c.nearClip));
+                                projection = hashCombine(projection, std::hash<float>{}(c.farClip));
+                                projection = hashCombine(projection, std::uint64_t(quality));
+                                const auto cameraId = (uint64_t(e.generation) << 32) | e.index;
+                                const auto eye = cameraEye(t, c);
+                                const auto forward =
+                                    rotateVector(normalize(t.rotation), {0, 0, -1});
+                                const Vec3 delta = eye - fsrPreviousEye;
+                                const bool cut = !fsrHasPreviousEye ||
+                                                 fsrLastFrame + 1 != fsrFrameNumber ||
+                                                 seconds > .25f || dot(delta, delta) > 100.f ||
+                                                 dot(forward, fsrPreviousForward) < .5f;
+                                TemporalHistory::Configuration temporalConfig{
+                                    render, display, sceneId, cameraId, projection};
+                                renderer.drawTemporalTo(
+                                    *fsrInputSurface,
+                                    world,
+                                    vp,
+                                    temporalConfig,
+                                    fsrHistory,
+                                    eye,
+                                    true,
+                                    cut,
+                                    [&](const auto& frame) {
+                                        dispatchAttempted = true;
+                                        fsrGame->dispatch(
+                                            {fsrInputSurface->colorImage(),
+                                             fsrInputSurface->motionDepthImage(),
+                                             fsrInputSurface->motionImage(),
+                                             gameSurface.colorImage(),
+                                             frame.frame.jitter,
+                                             frame.frame.reset || frame.missingObjectHistory,
+                                             std::clamp(seconds * 1000.f, 1.f, 250.f),
+                                             c.nearClip,
+                                             c.farClip,
+                                             radians(c.fieldOfView)});
+                                    });
+                                fsrPreviousEye = eye;
+                                fsrPreviousForward = forward;
+                                fsrHasPreviousEye = true;
+                                fsrLastFrame = fsrFrameNumber;
+                                fsrStatus = "Active (Game view only)";
+                                gameUpscaled = true;
+                            } catch (const std::exception& fsrError) {
+                                fsrHistory.invalidate();
+                                fsrHasPreviousEye = false;
+                                fsrStatus = std::string("Native fallback: ") + fsrError.what();
+                                if (dispatchAttempted || initialization) {
+                                    fsrGame.reset();
+                                    // A tiny window can grow without changing quality.
+                                    if (gameSurface.width() >= 192 && gameSurface.height() >= 192) {
+                                        fsrHardwareUnavailable = true;
+                                    }
+                                }
+                            }
+                        }
+#endif
+                        if (!gameUpscaled) {
+                            renderer.drawLitTo(gameSurface,
+                                               world,
+                                               vp,
+                                               gameSurface.width(),
+                                               gameSurface.height(),
+                                               cameraEye(t, c),
+                                               overlays.draws(),
+                                               &region);
+                        }
+#ifdef LEGACY_FSR3_GAME
+                        if (smokeFsr) {
+                            if (gameUpscaled) {
+                                if (gameWindow) {
+                                    ++smokeFsrDetached;
+                                } else {
+                                    ++smokeFsrEmbedded;
+                                }
+                            } else if (renderingSettings.fsr3GameQuality && c.orthographic) {
+                                ++smokeFsrFallback;
+                            } else if (!renderingSettings.fsr3GameQuality && renderedFrames >= 90) {
+                                ++smokeFsrOff;
+                            }
+                        }
+#endif
                         if (smokeTest) {
                             if (!smokeGame && !hasVisibleGeometry(gameSurface)) {
                                 throw std::runtime_error("Smoke test: Game image is empty");
@@ -2583,6 +2787,19 @@ static bool run(SDL_Window* window,
                 smokeCamera,
                 smokeSecondary);
     }
+#ifdef LEGACY_FSR3_GAME
+    if (smokeFsr) {
+        SDL_Log("Game FSR smoke: embedded=%u detached=%u fallback=%u off=%u status=%s",
+                smokeFsrEmbedded,
+                smokeFsrDetached,
+                smokeFsrFallback,
+                smokeFsrOff,
+                fsrStatus.c_str());
+        if (!smokeFsrEmbedded || !smokeFsrDetached || !smokeFsrFallback || !smokeFsrOff) {
+            smokeFailed = true;
+        }
+    }
+#endif
     return !smokeTest || (renderedFrames >= smokeFrames && !smokeFailed && smokeScene &&
                           smokeGame && smokeEmbeddedGame && smokeCamera && smokeSecondary);
 }

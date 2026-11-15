@@ -706,3 +706,10 @@ function findComponentInChildren(gameObject,componentType) end
 ---@field reset fun(self:Animation) Stops and restores the pre-play values
 ---@type ComponentToken
 Animation = {}
+
+---Project rendering settings. Game FSR is experimental and may fall back to native.
+---@class RenderingSettingsAPI
+---@field getGameFsrQuality fun():integer Returns the requested mode, not whether FSR is active
+---@field setGameFsrQuality fun(mode:integer) 0=Off, 1=Native AA, 2=Quality, 3=Balanced, 4=Performance, 5=Ultra Performance
+---@type RenderingSettingsAPI
+Rendering = {}

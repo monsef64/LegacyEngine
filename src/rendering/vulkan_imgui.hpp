@@ -62,6 +62,7 @@ class VulkanImGui {
     void forgetImage(const void* key);
     void resetRenderer();
     void shutdownRenderer() noexcept;
+    SDL_Window* window_;
     VulkanContext& context_;
     std::map<const void*, Image> images_;
     uint64_t swapchainGeneration_ = 0;

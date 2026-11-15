@@ -1,9 +1,9 @@
-# Importing static 3D models
+# Importing 3D models
 
-Use **Assets > Import > Files / Models** and choose a format filter: glTF/GLB,
-FBX, OBJ, Collada, STL/PLY, or **all enabled Assimp formats** (excluding Blender). The full filter is
-generated from the bundled Assimp 5.4.3 importers. Support varies by file version
-and encoding. Animation playback and skinning are not implemented.
+Use **Assets > Import > Files / Models** to import OBJ or glTF/GLB. Static and
+skeletal animated glTF models are supported. Other source formats are not parsed
+by the bundled Assimp build; export them to OBJ or glTF first. Previously imported
+LegacyEngine model assets remain usable.
 
 ## Directories and destination folders
 
@@ -15,19 +15,22 @@ Symbolic links and recursive imports into the source are rejected. Limits are
 10,000 files, 1 GiB total, and 256 MiB per file. Copy failures remove the incomplete
 new destination. Source files/directories are never modified.
 
-Directory imports also convert recognized model sources after copying. Original
-models, textures and dependencies remain in the copied structure. Failed model
-conversions are reported while retaining copied files and successful conversions.
+Directory imports also convert recognized model sources after copying. Other files,
+including unsupported model formats, are copied as generic assets and are not
+converted (except `.blend` files, which are rejected). Original models, textures
+and dependencies remain in the copied structure. Failed model conversions are
+reported while retaining copied files and successful conversions.
 A single model import bakes geometry and copies supported referenced textures;
 external files (such as a glTF .bin) must exist beside the source during import.
 
 ## Meshes and materials
 
-New imports create a `.lemesh` model bundle and a sibling `_data` folder containing
-separate mesh assets, engine `.mat` files and copied/embedded textures. Node
-transforms are baked into vertices while mesh parts/material assignments are
-preserved. Normals and the first UV channel are imported; absent normals are
-generated. Point/line-only models are rejected. Limits are 500,000 triangles total,
+New imports create a `.lemesh` model bundle and sibling generated mesh, material,
+animation and texture assets, grouped under the bundle in the browser. Source
+node transforms, skeletons and skeletal animations are retained in the bundle;
+mesh parts and material assignments are preserved. Normals and the first UV
+channel are imported; absent normals are generated. Point/line-only models are
+rejected. Limits are 500,000 triangles total,
 1024 mesh parts and 256 MiB per source/baked geometry file.
 
 Basic diffuse colors, diffuse textures and normal maps are converted. Compressed
@@ -36,7 +39,7 @@ are written as TGA. Unsupported or missing textures are listed as import warning
 and fall back to material color. This is **not full PBR conversion**: metallic,
 roughness, opacity/blending, special shaders, layered/procedural textures and other
 source-specific material features are not reproduced. Edit generated `.mat` assets
-in Inspector. Models remain static; source cameras/lights are not instantiated.
+in Inspector. Source cameras/lights are not instantiated.
 
 Drop a bundle into Scene, double-click it, or use **Instantiate in level**. This
 creates an **empty root GameObject named after the model** with one child per mesh,
@@ -66,10 +69,10 @@ static triangle-mesh sources. The **Mesh detail** slider (2–15, default 8)
 clusters vertices at lower values; 15 preserves original triangles. Simplification
 can remove small details. Rendered geometry is unchanged.
 
-Blender `.blend` import is disabled in Assimp and rejected by the asset importer,
-including directory imports that contain Blender files. Export to glTF, FBX,
-or OBJ first. Cached, fixed-size model icons frame the full geometry independent
-of import scale. Hover previews appear after 1.5 seconds.
+Blender `.blend` files are rejected by the asset importer, including directory
+imports containing Blender files. Export to glTF or OBJ first. Cached, fixed-size
+model icons frame the full geometry independent of import scale. Hover previews
+appear after 1.5 seconds.
 
 Assimp's bundled notice is in `data/license/assimp.txt`. Model files themselves
 remain subject to their creators' licenses.

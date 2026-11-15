@@ -77,6 +77,11 @@ class World {
         generations_ = source.generations_;
         freeSlots_ = source.freeSlots_;
         pools_ = std::move(pools);
+        ++restoreRevision_;
+    }
+    // Changes on snapshot/project restore even when entity IDs are reused.
+    uint64_t restoreRevision() const {
+        return restoreRevision_;
     }
 
     std::vector<Entity> entities() const {
@@ -375,6 +380,7 @@ class World {
         std::abort();
     }
 
+    std::uint64_t restoreRevision_ = 0;
     std::vector<std::uint32_t> generations_;       // current generation of every slot
     std::vector<std::uint32_t> freeSlots_;         // slots of destroyed entities
     std::vector<std::unique_ptr<PoolBase>> pools_; // indexed by typeId<T>()

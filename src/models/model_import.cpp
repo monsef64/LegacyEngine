@@ -10,32 +10,18 @@
 #include <map>
 
 std::string modelImportExtensions() {
-    static const auto result = [] {
-        Assimp::Importer importer;
-        aiString extensions;
-        importer.GetExtensionList(extensions);
-        std::string value = extensions.C_Str();
-        for (std::size_t p = 0; (p = value.find("*.", p)) != std::string::npos;) {
-            value.erase(p, 2);
-        }
-        return value;
-    }();
-    return result;
+    return "obj;gltf;glb";
 }
 bool importableModel(const std::filesystem::path& path) {
-    if (AssetManager::extension(path) == ".blend") {
-        return false;
-    }
-    Assimp::Importer importer;
-    return importer.IsExtensionSupported(AssetManager::extension(path));
+    const auto extension = AssetManager::extension(path);
+    return extension == ".obj" || extension == ".gltf" || extension == ".glb";
 }
 std::string importModel(AssetManager& assets,
                         const std::filesystem::path& source,
                         const std::string& folder,
                         bool publishRevision) {
-    if (AssetManager::extension(source) == ".blend") {
-        throw std::runtime_error(
-            "Blender files are not supported; export to glTF, FBX, or OBJ first");
+    if (!importableModel(source)) {
+        throw std::runtime_error("Unsupported model format; import an OBJ, glTF or GLB file");
     }
     if (!std::filesystem::is_regular_file(source) ||
         std::filesystem::file_size(source) > 256 * 1024 * 1024) {

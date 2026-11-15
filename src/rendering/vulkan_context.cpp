@@ -1,4 +1,5 @@
 #include "rendering/vulkan_context.hpp"
+#include "rendering/vulkan_surface_format.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -111,6 +112,7 @@ VulkanContext::VulkanContext(SDL_Window* window, VulkanContext& owner, bool vsyn
         throw std::runtime_error("Invalid Vulkan secondary window or owner");
     }
     instance_ = owner.instance_;
+    apiVersion_ = owner.apiVersion_;
     physical_ = owner.physical_;
     device_ = owner.device_;
     graphicsQueue_ = owner.graphicsQueue_;
@@ -164,7 +166,18 @@ void VulkanContext::initialize() {
     VkApplicationInfo app{};
     app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app.pApplicationName = "LegacyEngine";
-    app.apiVersion = VK_API_VERSION_1_0;
+#ifdef LEGACY_FSR3_GAME
+    // FSR shaders require Vulkan 1.2. Keep native rendering available on older
+    // loaders/devices; the Game upscaler performs its own capability checks.
+    if (auto enumerateVersion = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+            vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"))) {
+        uint32_t supported = VK_API_VERSION_1_0;
+        if (enumerateVersion(&supported) == VK_SUCCESS && supported >= VK_API_VERSION_1_2) {
+            apiVersion_ = VK_API_VERSION_1_2;
+        }
+    }
+#endif
+    app.apiVersion = apiVersion_;
     VkInstanceCreateInfo create{};
     create.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create.flags = instanceFlags;
@@ -279,17 +292,7 @@ bool VulkanContext::createSwapchain() {
     if (!(caps.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)) {
         throw std::runtime_error("Vulkan surface does not support color attachments");
     }
-    VkSurfaceFormatKHR format = formats.front();
-    if (formats.size() == 1 && format.format == VK_FORMAT_UNDEFINED) {
-        format.format = VK_FORMAT_B8G8R8A8_SRGB;
-    }
-    for (const auto& candidate : formats) {
-        if (candidate.format == VK_FORMAT_B8G8R8A8_SRGB &&
-            candidate.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            format = candidate;
-            break;
-        }
-    }
+    const VkSurfaceFormatKHR format = chooseEditorSurfaceFormat(formats);
     colorFormat_ = format.format;
     VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
     if (!vsync_) {

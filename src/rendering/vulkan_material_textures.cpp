@@ -1,12 +1,33 @@
 #include "rendering/vulkan_material_textures.hpp"
 #include "materials/material.hpp"
-#include <algorithm>
-#include <fstream>
-#include <memory>
-#include <stb_image.h>
 #include <stdexcept>
-#include <vector>
 
+void VulkanMaterialTextures::beginFrame() {
+    ++frame_;
+    deferred_ = false;
+    // Multiple surfaces may render between uses of a preview. Use wall time,
+    // not draw count, to avoid canceling a still-visible preview's request.
+    const auto now = std::chrono::steady_clock::now();
+    for (auto it = pending_.begin(); it != pending_.end();) {
+        if (now - it->second.used > std::chrono::seconds(2)) {
+            it = pending_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+void VulkanMaterialTextures::clear() {
+    worker_.cancelQueued();
+    pending_.clear();
+    failures_.clear();
+    entries_.clear();
+    bytes_ = 0;
+    root_.clear();
+    deferred_ = false;
+}
+bool VulkanMaterialTextures::pending() const {
+    return !pending_.empty() || deferred_;
+}
 const VulkanTexture* VulkanMaterialTextures::get(const AssetManager& assets,
                                                  const std::string& path) {
     if (path.empty()) {
@@ -14,6 +35,10 @@ const VulkanTexture* VulkanMaterialTextures::get(const AssetManager& assets,
     }
     if (!materialTexturePath(path)) {
         throw std::runtime_error("Unsupported material texture");
+    }
+    if (root_ != assets.root) {
+        clear();
+        root_ = assets.root;
     }
     const auto now = std::chrono::steady_clock::now();
     auto found = entries_.find(path);
@@ -33,23 +58,47 @@ const VulkanTexture* VulkanMaterialTextures::get(const AssetManager& assets,
         bytes_ -= e.bytes;
         entries_.erase(found);
     }
-    const auto file = assets.resolve(path);
-    const auto size = std::filesystem::file_size(file);
-    if (size > 32 * 1024 * 1024) {
-        throw std::runtime_error("Material texture exceeds 32 MiB");
+    auto failed = failures_.find(path);
+    if (failed != failures_.end()) {
+        if (now < failed->second.retry) {
+            throw std::runtime_error(failed->second.message);
+        }
+        failures_.erase(failed);
     }
-    std::ifstream in(file, std::ios::binary);
-    std::vector<unsigned char> encoded(static_cast<std::size_t>(size));
-    in.read(reinterpret_cast<char*>(encoded.data()), static_cast<std::streamsize>(size));
-    if (!in || in.peek() != std::char_traits<char>::eof()) {
-        throw std::runtime_error("Cannot read material texture");
+    auto work = pending_.find(path);
+    if (work == pending_.end()) {
+        // At most two decoded images are retained while waiting for upload.
+        if (pending_.size() >= 2) {
+            deferred_ = true;
+            return nullptr;
+        }
+        auto future =
+            worker_.submit([assets, path] { return decodeStreamedTexture(assets, path); });
+        if (future) {
+            pending_.emplace(path, Pending{std::move(*future), now});
+        } else {
+            deferred_ = true;
+        }
+        return nullptr;
     }
-    int w = 0, h = 0, channels = 0;
-    if (!stbi_info_from_memory(encoded.data(), int(size), &w, &h, &channels) || w <= 0 || h <= 0 ||
-        w > 4096 || h > 4096) {
-        throw std::runtime_error("Material texture requires at most 4096 x 4096 pixels");
+    work->second.used = now;
+    if (work->second.future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        return nullptr;
     }
-    const std::size_t cost = std::size_t(w) * h * 4 * 4 / 3 + 16;
+    StreamedTexture decoded;
+    try {
+        decoded = work->second.future.get();
+    } catch (const std::exception& error) {
+        std::string message = error.what();
+        pending_.erase(work);
+        if (failures_.size() >= 128) {
+            failures_.erase(failures_.begin());
+        }
+        failures_[path] = {message, now + std::chrono::seconds(1)};
+        throw std::runtime_error(message);
+    }
+    pending_.erase(work);
+    const std::size_t cost = std::size_t(decoded.width) * decoded.height * 4 * 4 / 3 + 16;
     while (bytes_ + cost > 128 * 1024 * 1024 || entries_.size() >= 128) {
         auto oldest = entries_.end();
         for (auto it = entries_.begin(); it != entries_.end(); ++it) {
@@ -64,31 +113,19 @@ const VulkanTexture* VulkanMaterialTextures::get(const AssetManager& assets,
         bytes_ -= oldest->second.bytes;
         entries_.erase(oldest);
     }
-    std::unique_ptr<unsigned char, decltype(&stbi_image_free)> data(
-        stbi_load_from_memory(encoded.data(), int(size), &w, &h, &channels, 4), stbi_image_free);
-    if (!data) {
-        throw std::runtime_error("Cannot decode material texture");
-    }
-    // File rows are top-down; mesh UVs follow the engine's bottom-up convention.
-    std::vector<uint8_t> pixels(std::size_t(w) * h * 4);
-    for (int y = 0; y < h; ++y) {
-        std::copy_n(data.get() + std::size_t(h - 1 - y) * w * 4,
-                    std::size_t(w) * 4,
-                    pixels.data() + std::size_t(y) * w * 4);
-    }
     Entry entry;
     entry.bytes = cost;
     entry.used = frame_;
     entry.checked = now;
-    entry.stamp = std::filesystem::last_write_time(file);
-    entry.size = size;
+    entry.stamp = decoded.stamp;
+    entry.size = decoded.size;
     entry.image = std::make_unique<VulkanTexture>(surface_.physicalDevice(),
                                                   surface_.device(),
                                                   surface_.graphicsQueue(),
                                                   surface_.graphicsFamily(),
-                                                  uint32_t(w),
-                                                  uint32_t(h),
-                                                  pixels,
+                                                  decoded.width,
+                                                  decoded.height,
+                                                  decoded.pixels,
                                                   VulkanTexture::Address::Repeat,
                                                   true);
     auto result = entries_.emplace(path, std::move(entry)).first;

@@ -170,7 +170,9 @@ item to expand/collapse it; a new import starts expanded. List view indents chil
 items; grid view places them after the root with a subtle grouped outline.
 Double-click remains the action to open Model Preview; toggling expansion does
 not open it. Expanded children retain normal selection, drag, preview and Delete
-behavior. Search includes child display names even for collapsed models.
+behavior. Search includes child display names even for collapsed models. Use the
+**×** inside the search field to clear the filter; the Hierarchy and asset picker
+search fields have the same control.
 
 Existing `_data` imports are left unchanged (no automatic destructive migration).
 Reimport to use the new flat/grouped layout. Deleting a new root trashes all its

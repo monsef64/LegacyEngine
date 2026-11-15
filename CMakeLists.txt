@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16...3.31)
+cmake_minimum_required(VERSION 3.20...3.31)
 
 project(LegacyEngine LANGUAGES C CXX)
 
@@ -47,51 +47,29 @@ else()
   FetchContent_MakeAvailable(SDL3)
 endif()
 
-# --- ReactPhysics3D (physics) -----------------------------------------------
-#
-# Always downloaded and linked statically. It is fetched as an archive rather
-# than with git: the archive is a fraction of the size, and it leaves out the
-# git submodules, which only the demo program of ReactPhysics3D needs.
+# --- Jolt Physics ------------------------------------------------------------
+# Keep Jolt compatible with baseline x86-64 CPUs and the engine's toolchain.
+set(BUILD_SHARED_LIBS OFF)
+set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
+set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
+set(CPP_RTTI_ENABLED ON CACHE BOOL "" FORCE)
+set(CPP_EXCEPTIONS_ENABLED ON CACHE BOOL "" FORCE)
+set(ENABLE_OBJECT_STREAM OFF CACHE BOOL "" FORCE)
+set(DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "" FORCE)
+set(PROFILER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "" FORCE)
+foreach(feature USE_SSE4_1 USE_SSE4_2 USE_AVX USE_AVX2 USE_AVX512 USE_LZCNT USE_TZCNT USE_F16C USE_FMADD)
+  set(${feature} OFF CACHE BOOL "" FORCE)
+endforeach()
+set(LEGACY_JOLT_TAG "v5.3.0" CACHE STRING "Jolt Physics release tag")
+FetchContent_Declare(jolt
+  URL https://github.com/jrouwe/JoltPhysics/archive/refs/tags/${LEGACY_JOLT_TAG}.tar.gz
+  SOURCE_SUBDIR Build)
+FetchContent_MakeAvailable(jolt)
 
-set(LEGACY_REACTPHYSICS3D_TAG "v0.10.2" CACHE STRING "ReactPhysics3D git tag to download")
-
-message(STATUS "LegacyEngine: downloading ReactPhysics3D ${LEGACY_REACTPHYSICS3D_TAG}")
-FetchContent_Declare(
-  ReactPhysics3D
-  URL https://github.com/DanielChappuis/reactphysics3d/archive/refs/tags/${LEGACY_REACTPHYSICS3D_TAG}.tar.gz
-)
-set(BUILD_SHARED_LIBS OFF) # ReactPhysics3D follows this variable
-FetchContent_MakeAvailable(ReactPhysics3D)
-
-# ReactPhysics3D 0.10.2 uses std::chrono::system_clock::to_time_t in
-# DefaultLogger.h/.cpp without including <chrono>. Some standard libraries
-# provide it transitively, but MSVC does not. Repair the downloaded header so
-# both the dependency and its consumers receive the required declaration.
-# Keep this idempotent for existing build directories and newer upstream tags.
-set(rp3d_logger_header "${reactphysics3d_SOURCE_DIR}/include/reactphysics3d/utils/DefaultLogger.h")
-file(READ "${rp3d_logger_header}" rp3d_logger_source)
-if(NOT rp3d_logger_source MATCHES "#include[ \t]*[<\"]chrono[>\"]")
-  string(REPLACE "#include <ctime>"
-    "#include <ctime>\n#include <chrono> // LegacyEngine compatibility fix: explicit clock declarations"
-    rp3d_logger_fixed "${rp3d_logger_source}")
-  if(rp3d_logger_fixed STREQUAL rp3d_logger_source)
-    message(FATAL_ERROR "ReactPhysics3D logger changed: review the missing <chrono> compatibility fix")
-  endif()
-  file(WRITE "${rp3d_logger_header}" "${rp3d_logger_fixed}")
-endif()
-
-# The warnings of its code are not ours to fix: none while it is compiled, and
-# none from its headers when our code includes them.
-if(MSVC)
-  target_compile_options(reactphysics3d PRIVATE /w)
-else()
-  target_compile_options(reactphysics3d PRIVATE -w)
-endif()
-get_target_property(reactphysics3d_includes reactphysics3d INTERFACE_INCLUDE_DIRECTORIES)
-set_target_properties(reactphysics3d PROPERTIES
-  INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${reactphysics3d_includes}")
-
-# --- Assimp: static model import, all supported source formats ----------------
+# --- Assimp: OBJ and animated/static glTF import only -----------------------
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
@@ -99,8 +77,18 @@ set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
 set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT ON CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_BLEND_IMPORTER OFF CACHE BOOL "" FORCE)
+# Clear any importer overrides left in an incremental build cache.
+get_cmake_property(legacy_cached_variables CACHE_VARIABLES)
+foreach(variable IN LISTS legacy_cached_variables)
+  if(variable MATCHES "^ASSIMP_BUILD_.*_IMPORTER$" AND
+     NOT variable STREQUAL "ASSIMP_BUILD_OBJ_IMPORTER" AND
+     NOT variable STREQUAL "ASSIMP_BUILD_GLTF_IMPORTER")
+    set(${variable} OFF CACHE BOOL "" FORCE)
+  endif()
+endforeach()
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
 FetchContent_Declare(assimp
   URL https://github.com/assimp/assimp/archive/refs/tags/v5.4.3.tar.gz)
 FetchContent_MakeAvailable(assimp)
@@ -176,6 +164,11 @@ target_include_directories(legacy_simdjson SYSTEM PUBLIC third_party/simdjson)
 add_library(legacy_json STATIC src/project/json_io.cpp)
 target_include_directories(legacy_json PUBLIC src PRIVATE ${assimp_SOURCE_DIR}/contrib/zlib ${assimp_BINARY_DIR}/contrib/zlib)
 target_link_libraries(legacy_json PRIVATE legacy_simdjson zlibstatic libzstd_static)
+# Compile the backend once with the same configuration macros as Jolt. Tests
+# may undefine NDEBUG for their own assertions without changing Jolt's ABI.
+add_library(legacy_physics STATIC src/physics/physics.cpp)
+target_include_directories(legacy_physics PUBLIC src)
+target_link_libraries(legacy_physics PRIVATE Jolt PUBLIC legacy_json)
 # Level storage/transitions have no dependency on Lua or the editor.
 add_library(legacy_levels STATIC src/levels/level_system.cpp)
 target_include_directories(legacy_levels PUBLIC src)
@@ -188,7 +181,6 @@ target_link_libraries(legacy_imgui PUBLIC legacy_json)
 add_executable(LegacyEngine
   src/app/main.cpp
   src/rendering/mesh.cpp
-  src/physics/physics.cpp
   src/editor/transform_editor.cpp
   src/editor/script_editor.cpp
 )
@@ -204,7 +196,7 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf"
 string(REGEX REPLACE "(..)" "0x\\1," LEGACY_ICON_BYTES "${LEGACY_ICON_HEX}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma once\ninline const unsigned char editorIconData[] = {${LEGACY_ICON_BYTES}};\n")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d imguizmo lua_console legacy_models)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 legacy_physics imguizmo lua_console legacy_models)
 target_include_directories(LegacyEngine PRIVATE third_party/stb)
 
 if(MSVC)
@@ -257,7 +249,7 @@ if(LEGACY_BUILD_VULKAN_SHADERS)
     message(FATAL_ERROR "Vulkan shader builds require glslangValidator or glslang")
   endif()
   set(legacy_vulkan_shader_outputs)
-  foreach(shader IN ITEMS lit.vert lit.frag unlit.vert unlit.frag shadow.vert skybox.vert skybox.frag skinning.comp)
+  foreach(shader IN ITEMS lit.vert lit.frag unlit.vert unlit.frag shadow.vert skybox.vert skybox.frag skinning.comp motion.vert motion.frag)
     set(source "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/${shader}")
     set(output "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/${shader}.spv")
     add_custom_command(OUTPUT "${output}"
@@ -285,24 +277,39 @@ if(LEGACY_BUILD_VULKAN_SHADERS)
     add_test(NAME vulkan_skinning_compute COMMAND vulkan_skinning_compute_tests
       "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/skinning.comp.spv")
     set_tests_properties(vulkan_skinning_compute PROPERTIES SKIP_RETURN_CODE 77)
-    foreach(pipeline IN ITEMS lit unlit skybox)
+    foreach(pipeline IN ITEMS lit unlit skybox motion)
       add_test(NAME vulkan_shader_link_${pipeline} COMMAND "${LEGACY_GLSLANG}" -V -l
         "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/${pipeline}.vert"
         "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/${pipeline}.frag"
         -o "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/test-link-${pipeline}.spv")
     endforeach()
+    add_test(NAME vulkan_shader_link_imgui_srgb COMMAND "${LEGACY_GLSLANG}" -V -l
+      "${imgui_SOURCE_DIR}/backends/vulkan/glsl_shader.vert"
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/imgui_srgb.frag"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/test-link-imgui-srgb.spv")
   endif()
 endif()
 
 if(LEGACY_BUILD_VULKAN_PROTOTYPE AND LEGACY_BUILD_VULKAN_SHADERS)
-  add_library(legacy_vulkan_scene STATIC src/rendering/mesh.cpp src/rendering/vulkan_scene_surface.cpp src/rendering/vulkan_scene_shadows.cpp src/rendering/vulkan_scene_sky.cpp src/rendering/vulkan_texture.cpp src/rendering/vulkan_material_textures.cpp src/rendering/vulkan_skybox_cache.cpp)
+  add_library(legacy_vulkan_scene STATIC src/rendering/mesh.cpp src/rendering/vulkan_scene_surface.cpp src/rendering/vulkan_motion_vectors.cpp src/rendering/vulkan_scene_shadows.cpp src/rendering/vulkan_scene_sky.cpp src/rendering/vulkan_texture.cpp src/rendering/streamed_texture.cpp src/rendering/vulkan_material_textures.cpp src/rendering/vulkan_skybox_cache.cpp)
   target_include_directories(legacy_vulkan_scene PUBLIC src PRIVATE third_party/stb)
-  target_link_libraries(legacy_vulkan_scene PUBLIC Vulkan::Vulkan legacy_json legacy_thumbnail_data)
+  target_link_libraries(legacy_vulkan_scene PUBLIC Vulkan::Vulkan legacy_json legacy_thumbnail_data Threads::Threads)
+  # Embed the sRGB-attachment fallback shader in the backend so every consumer
+  # (including tests and secondary windows) has it without runtime data paths.
+  set(imgui_srgb_spv "${CMAKE_CURRENT_BINARY_DIR}/generated/imgui_srgb.inc")
+  add_custom_command(OUTPUT "${imgui_srgb_spv}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    COMMAND "${LEGACY_GLSLANG}" -V --target-env vulkan1.0 -x
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/imgui_srgb.frag" -o "${imgui_srgb_spv}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/imgui_srgb.frag"
+    VERBATIM)
+  add_custom_target(imgui_srgb_shader DEPENDS "${imgui_srgb_spv}")
   # Share one ImGui core between the editor, ImGuizmo and Vulkan backend.
   add_library(legacy_vulkan_imgui STATIC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
     src/rendering/vulkan_imgui.cpp)
-  target_include_directories(legacy_vulkan_imgui PUBLIC src)
+  add_dependencies(legacy_vulkan_imgui imgui_srgb_shader)
+  target_include_directories(legacy_vulkan_imgui PUBLIC src PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
   target_link_libraries(legacy_vulkan_imgui PUBLIC legacy_imgui Vulkan::Vulkan legacy_vulkan_context legacy_vulkan_scene)
   add_library(legacy_vulkan_thumbnails STATIC src/assets/vulkan_thumbnail_cache.cpp)
   target_include_directories(legacy_vulkan_thumbnails PUBLIC src)
@@ -316,7 +323,88 @@ if(LEGACY_BUILD_VULKAN_PROTOTYPE AND LEGACY_BUILD_VULKAN_SHADERS)
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${legacy_vulkan_shader_outputs}
       "$<TARGET_FILE_DIR:LegacyEngine>/data/shaders/vulkan/compiled"
     VERBATIM)
+  set(LEGACY_FSR3_EXPERIMENT_DIR "" CACHE PATH "Optional built Linux FSR SDK experiment directory")
+  option(LEGACY_FSR3_GAME "Build experimental FSR 3 support for the Game view (Linux only)" OFF)
+  if(LEGACY_FSR3_GAME)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
+       NOT EXISTS "${LEGACY_FSR3_EXPERIMENT_DIR}/build/libffx_fsr3upscaler_vk.a")
+      message(FATAL_ERROR "Game FSR requires the Linux SDK experiment built by tools/build_fsr3_experiment.sh")
+    endif()
+    add_library(legacy_fsr3_game SHARED src/rendering/vulkan_fsr3_game.cpp)
+    target_include_directories(legacy_fsr3_game PUBLIC src PRIVATE
+      "${LEGACY_FSR3_EXPERIMENT_DIR}/port/fsr3-linux" "${LEGACY_FSR3_EXPERIMENT_DIR}/sdk/sdk/include")
+    target_compile_definitions(legacy_fsr3_game PRIVATE FFX_GCC "FFX_SDK_DEFAULT_CONTEXT_SIZE=(1024 * 256)")
+    target_link_libraries(legacy_fsr3_game PRIVATE "${LEGACY_FSR3_EXPERIMENT_DIR}/build/libffx_fsr3upscaler_vk.a" Vulkan::Vulkan)
+    # Restrict linker wrapping and SDK symbols to this shared library; wrapping
+    # the editor itself intercepts its Vulkan calls before host initialization.
+    target_link_options(legacy_fsr3_game PRIVATE "LINKER:-Bsymbolic" "LINKER:--exclude-libs,ALL")
+    foreach(fn vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties2 vkGetPhysicalDeviceFeatures
+               vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceMemoryProperties vkEnumerateDeviceExtensionProperties
+               vkGetDeviceProcAddr vkCreateBuffer)
+      target_link_options(legacy_fsr3_game PRIVATE "LINKER:--wrap=${fn}")
+    endforeach()
+    target_link_libraries(LegacyEngine PRIVATE legacy_fsr3_game)
+    target_compile_definitions(LegacyEngine PRIVATE LEGACY_FSR3_GAME=1)
+    target_compile_definitions(legacy_vulkan_context PRIVATE LEGACY_FSR3_GAME=1)
+  endif()
   if(BUILD_TESTING)
+    if(LEGACY_FSR3_GAME)
+      add_executable(vulkan_fsr3_game_tests tests/vulkan_fsr3_game.cpp)
+      target_link_libraries(vulkan_fsr3_game_tests PRIVATE legacy_fsr3_game legacy_vulkan_scene legacy_vulkan_context)
+      add_dependencies(vulkan_fsr3_game_tests vulkan_shaders)
+      add_test(NAME vulkan_fsr3_game COMMAND vulkan_fsr3_game_tests
+        "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+        "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv"
+        "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/motion.vert.spv"
+        "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/motion.frag.spv")
+      set_tests_properties(vulkan_fsr3_game PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 180)
+      if(LEGACY_TEST_EDITOR_SMOKE)
+        add_test(NAME vulkan_editor_fsr_smoke COMMAND LegacyEngine --smoke-test)
+        set_tests_properties(vulkan_editor_fsr_smoke PROPERTIES
+          ENVIRONMENT "LEGACY_SMOKE_FSR=1" TIMEOUT 300)
+      endif()
+    endif()
+    # The standalone test links the port only into its own process.
+    if(LEGACY_FSR3_EXPERIMENT_DIR)
+      if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        message(FATAL_ERROR "The experimental FSR port test is Linux-only")
+      endif()
+      set(fsr_root "${LEGACY_FSR3_EXPERIMENT_DIR}")
+      if(NOT EXISTS "${fsr_root}/build/libffx_fsr3upscaler_vk.a" OR
+         NOT EXISTS "${fsr_root}/port/fsr3-linux/tests/fsr3_selftest.cpp" OR
+         NOT EXISTS "${fsr_root}/sdk/sdk/include/FidelityFX/host/ffx_fsr3upscaler.h")
+        message(FATAL_ERROR "Build the FSR experiment with tools/build_fsr3_experiment.sh first")
+      endif()
+      add_executable(fsr3_engine_experiment tests/fsr3_engine_experiment.cpp)
+      target_link_libraries(fsr3_engine_experiment PRIVATE legacy_vulkan_scene "${fsr_root}/build/libffx_fsr3upscaler_vk.a" Vulkan::Vulkan)
+      target_include_directories(fsr3_engine_experiment PRIVATE "${fsr_root}/port/fsr3-linux" "${fsr_root}/sdk/sdk/include")
+      target_compile_definitions(fsr3_engine_experiment PRIVATE FFX_GCC "FFX_SDK_DEFAULT_CONTEXT_SIZE=(1024 * 256)"
+        LEGACY_FSR3_SELFTEST_SOURCE="${fsr_root}/port/fsr3-linux/tests/fsr3_selftest.cpp")
+      foreach(fn vkGetPhysicalDeviceProperties vkGetPhysicalDeviceProperties2 vkGetPhysicalDeviceFeatures
+                 vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceMemoryProperties vkEnumerateDeviceExtensionProperties
+                 vkGetDeviceProcAddr vkCreateBuffer)
+        target_link_options(fsr3_engine_experiment PRIVATE "LINKER:--wrap=${fn}")
+      endforeach()
+      add_dependencies(fsr3_engine_experiment vulkan_shaders)
+      add_test(NAME fsr3_engine_experiment COMMAND fsr3_engine_experiment
+        "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+        "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv"
+        "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/motion.vert.spv"
+        "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/motion.frag.spv")
+      set_tests_properties(fsr3_engine_experiment PROPERTIES TIMEOUT 180)
+    endif()
+    add_executable(vulkan_motion_vectors_tests tests/vulkan_motion_vectors.cpp)
+    target_link_libraries(vulkan_motion_vectors_tests PRIVATE legacy_vulkan_scene legacy_vulkan_context legacy_models)
+    target_compile_definitions(vulkan_motion_vectors_tests PRIVATE LEGACY_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+    add_dependencies(vulkan_motion_vectors_tests vulkan_shaders)
+    add_test(NAME vulkan_motion_vectors COMMAND vulkan_motion_vectors_tests
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/motion.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/motion.frag.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/lit.vert.spv"
+      "${legacy_vulkan_lit_no_shadow}")
+    set_tests_properties(vulkan_motion_vectors PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
     add_executable(vulkan_scene_render_tests tests/vulkan_scene_render.cpp)
     target_link_libraries(vulkan_scene_render_tests PRIVATE legacy_vulkan_scene legacy_vulkan_context)
     add_dependencies(vulkan_scene_render_tests vulkan_shaders)
@@ -395,9 +483,35 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(shape_tests tests/shapes.cpp src/rendering/mesh.cpp src/physics/physics.cpp)
+  add_executable(temporal_sampling_tests tests/temporal_sampling.cpp)
+  target_include_directories(temporal_sampling_tests PRIVATE src)
+  if(MSVC)
+    target_compile_options(temporal_sampling_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(temporal_sampling_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME temporal_sampling COMMAND temporal_sampling_tests)
+  add_executable(temporal_history_tests tests/temporal_history.cpp)
+  target_include_directories(temporal_history_tests PRIVATE src)
+  if(MSVC)
+    target_compile_options(temporal_history_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(temporal_history_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME temporal_history COMMAND temporal_history_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(physics_backend_tests tests/physics_backend.cpp)
+  target_link_libraries(physics_backend_tests PRIVATE legacy_physics legacy_json)
+  target_include_directories(physics_backend_tests PRIVATE src)
+  add_test(NAME physics_backend COMMAND physics_backend_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(shape_tests tests/shapes.cpp src/rendering/mesh.cpp)
   target_include_directories(shape_tests PRIVATE src)
-  target_link_libraries(shape_tests PRIVATE ReactPhysics3D::reactphysics3d legacy_json)
+  target_link_libraries(shape_tests PRIVATE legacy_physics legacy_json)
   add_test(NAME shapes COMMAND shape_tests)
 endif()
 
@@ -429,24 +543,71 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(lua_scene_tests tests/lua_scene.cpp src/physics/physics.cpp)
-  target_link_libraries(lua_scene_tests PRIVATE lua_console ReactPhysics3D::reactphysics3d)
+  add_executable(lua_scene_tests tests/lua_scene.cpp)
+  target_link_libraries(lua_scene_tests PRIVATE lua_console legacy_physics)
   add_test(NAME lua_scene COMMAND lua_scene_tests)
   set_tests_properties(lua_scene PROPERTIES TIMEOUT 15)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(create_hierarchy_tests tests/create_hierarchy.cpp src/physics/physics.cpp src/rendering/mesh.cpp)
+  add_executable(create_hierarchy_tests tests/create_hierarchy.cpp src/rendering/mesh.cpp)
   target_include_directories(create_hierarchy_tests PRIVATE src)
-  target_link_libraries(create_hierarchy_tests PRIVATE legacy_imgui ReactPhysics3D::reactphysics3d)
+  target_link_libraries(create_hierarchy_tests PRIVATE legacy_imgui legacy_physics)
   add_test(NAME create_hierarchy COMMAND create_hierarchy_tests)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(editor_layout_tests tests/editor_layout.cpp src/physics/physics.cpp)
+  add_executable(editor_layout_tests tests/editor_layout.cpp)
   target_include_directories(editor_layout_tests PRIVATE src)
-  target_link_libraries(editor_layout_tests PRIVATE imguizmo ReactPhysics3D::reactphysics3d)
+  target_link_libraries(editor_layout_tests PRIVATE imguizmo legacy_physics)
   add_test(NAME editor_layout COMMAND editor_layout_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(asset_streaming_tests tests/asset_streaming.cpp src/rendering/streamed_texture.cpp)
+  target_include_directories(asset_streaming_tests PRIVATE src third_party/stb)
+  target_link_libraries(asset_streaming_tests PRIVATE legacy_json legacy_thumbnail_data Threads::Threads)
+  if(MSVC)
+    target_compile_options(asset_streaming_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(asset_streaming_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME asset_streaming COMMAND asset_streaming_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(collider_menu_tests tests/collider_menu.cpp)
+  target_include_directories(collider_menu_tests PRIVATE src)
+  if(MSVC)
+    target_compile_options(collider_menu_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(collider_menu_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME collider_menu COMMAND collider_menu_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(model_import_tests tests/model_import.cpp)
+  target_link_libraries(model_import_tests PRIVATE legacy_models)
+  target_compile_definitions(model_import_tests PRIVATE LEGACY_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+  if(MSVC)
+    target_compile_options(model_import_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(model_import_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME model_import COMMAND model_import_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(search_box_tests tests/search_box.cpp)
+  target_include_directories(search_box_tests PRIVATE src)
+  target_link_libraries(search_box_tests PRIVATE legacy_imgui)
+  if(MSVC)
+    target_compile_options(search_box_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(search_box_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME search_box COMMAND search_box_tests)
 endif()
 
 if(BUILD_TESTING)
@@ -463,9 +624,9 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(play_mode_tests tests/play_mode.cpp src/physics/physics.cpp)
+  add_executable(play_mode_tests tests/play_mode.cpp)
   target_include_directories(play_mode_tests PRIVATE src)
-  target_link_libraries(play_mode_tests PRIVATE legacy_imgui ReactPhysics3D::reactphysics3d)
+  target_link_libraries(play_mode_tests PRIVATE legacy_imgui legacy_physics)
   if(MSVC)
     target_compile_options(play_mode_tests PRIVATE /UNDEBUG)
   else()
@@ -720,6 +881,8 @@ option(LEGACY_BUILD_BENCHMARKS "Build CPU render-setup benchmarks" OFF)
 if(LEGACY_BUILD_BENCHMARKS)
   add_executable(render_setup_benchmark benchmarks/render_setup.cpp)
   target_include_directories(render_setup_benchmark PRIVATE src)
+  add_executable(model_point_benchmark benchmarks/model_point.cpp)
+  target_include_directories(model_point_benchmark PRIVATE src)
 endif()
 
 if(BUILD_TESTING)

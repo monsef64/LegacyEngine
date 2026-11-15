@@ -248,7 +248,10 @@ cell spacing only and is disabled in list view. Inspector's header displays the
 object name, layer and unlabeled Active checkbox on a single row. Scene editing
 always uses freecam controls; the old toolbar toggle has been removed (Game
 FPSCamera movement settings are unchanged). Layers and Rendering are available
-directly from Project, without a Project Settings submenu.
+directly from Project, without a Project Settings submenu. Optional experimental
+Linux builds offer Game-only FSR upscaling in Project > Rendering, with native
+fallback when unsupported. Scene and previews remain native. See
+[FSR integration](fsr3-integration.md) for build instructions and limitations.
 
 ### Creating scripts in Script Explorer
 
@@ -259,8 +262,9 @@ right-click empty explorer space to create one at the Assets root. Filenames
 start at `NewScript.ls` and use numbered suffixes to avoid overwriting files.
 The current document is saved before switching. The tree refreshes automatically.
 
-See [static 3D model import](models.md) for Assimp format choices, baked model
-assets, model placement and the current static-only limitations.
+See [3D model import](models.md) for Assimp format choices, animated and static
+model assets, and model placement. See [scene asset streaming](asset-streaming.md)
+for background-loading behavior and its current limitations.
 
 The Inspector no longer has a Parent dropdown; drag objects in Hierarchy to
 change their parent or use its unparent action. For the separate Game window,

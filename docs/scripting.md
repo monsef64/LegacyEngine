@@ -220,6 +220,8 @@ not a convex hull. They are **static only**: a RigidBody on the same object will
 not make it move. Use Box/Sphere/Capsule/Cone colliders for moving bodies.
 Import scale and Transform scale apply to the collision geometry. Triangle
 winding controls which surface side collides; mirrored scales reverse winding.
+Mesh-to-mesh overlaps (including trigger events) are not supported; use a
+primitive collider for at least one member of a trigger pair.
 
 `meshDetail` ranges from 2 to 15 (default 8). At 15 the original non-degenerate
 triangles are retained. Lower settings cluster vertices and remove collapsed
@@ -348,3 +350,17 @@ Invalid transitions report the error via `animation.error` and preserve playback
 Model Preview has **Blend clip changes** and a duration slider. Change the animation
 while playing to preview a fade. Inspector runtime controls also include a
 cross-fade target asset and duration. Blend progress is transient, not serialized.
+
+### Game FSR setting
+
+`Rendering.setGameFsrQuality(mode)` saves the requested Game-view upscaling
+mode in the project: `0` off, `1` native AA, `2` quality, `3` balanced,
+`4` performance, `5` ultra performance. `Rendering.getGameFsrQuality()` returns
+the requested setting, not the active backend. FSR requires the optional Linux
+experimental build; unsupported builds, devices, cameras and scenes render
+natively. Scene and asset/camera previews are never upscaled.
+
+```lua
+Rendering.setGameFsrQuality(2)
+debug.log("Requested Game FSR mode", Rendering.getGameFsrQuality())
+```

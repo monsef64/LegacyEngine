@@ -85,6 +85,10 @@
   },
   {
     "file": "models.md",
-    "title": "Static 3D model import"
+    "title": "3D model import"
+  },
+  {
+    "file": "asset-streaming.md",
+    "title": "Scene asset streaming"
   }
 ]

@@ -13,7 +13,7 @@ These are manual checks, not automated tests. Build success alone does not verif
 - Reset, change original properties, replay/reset again: the new pre-play values must restore.
 
 ## Imported animated models
-- Reimport a rigged glTF/FBX with multiple animations and multiple materials.
+- Import a rigged glTF/GLB with multiple animations and multiple materials.
 - Click the asset: check Model Preview lists every clip and shows the bind pose initially.
 - Check Play/Pause/Stop/Reset, scrubbing, duration, looping and clip switching.
 - Check skinning, normals and nonuniform bone scale against the source model.
@@ -61,7 +61,7 @@ These are manual checks, not automated tests. Build success alone does not verif
 - Position axes share vector-key times: dragging a diamond on any axis must keep the vector key ordered and update its time on all three lanes. Curves should display the selected axis.
 
 ## Imported bind geometry versus default bone pose
-- Import a rigged arms/weapon FBX whose default joint transforms differ from its
+- Use a rigged glTF or a previously imported arms/weapon model whose default joint transforms differ from its
   authored skin bind pose. Without starting playback, compare the mesh against
   the source application's bind geometry: the importer must not deform it using
   default bone transforms.
@@ -75,7 +75,7 @@ These are manual checks, not automated tests. Build success alone does not verif
   restart/reopen the editor to clear already-built geometry/preview caches.
 - Verify transformed mesh nodes (including nonuniform scale), multiple mesh parts,
   unweighted vertices and ordinary non-skinned models remain correctly placed.
-- Visual confirmation on the user's affected source FBX/glTF is still required.
+- Visual confirmation on the affected previously imported model is still required. New FBX imports are not supported; export as glTF first.
 
 ## Copy/paste property keyframes
 

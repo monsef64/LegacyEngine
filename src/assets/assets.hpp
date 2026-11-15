@@ -81,7 +81,7 @@ class AssetManager {
                        bool forceCopy = false) {
         if (extension(source) == ".blend") {
             throw std::runtime_error(
-                "Blender files cannot be imported; export to glTF, FBX, or OBJ first");
+                "Blender files cannot be imported; export to glTF or OBJ first");
         }
         if (root.empty()) {
             throw std::runtime_error("No project asset root is configured");

@@ -1,4 +1,4 @@
-// The physics simulation, done by ReactPhysics3D.
+// The physics simulation, implemented with Jolt Physics.
 //
 // It reads the components of the world (see components.hpp):
 //
@@ -9,17 +9,8 @@
 // to be registered: add, change or remove the components, or destroy the
 // entity, and the simulation follows on the next update().
 //
-// Three things to know about it:
-//
-//   * ReactPhysics3D lets things that rest on each other overlap by up to
-//     1 cm, which keeps them steady. A 1 m cube lying on the ground can have
-//     its centre at y = 0.49 instead of 0.5.
-//   * It is made for things of everyday size. A box that is smaller than about
-//     2 cm on every side sinks into what it lands on, or falls through it.
-//   * An entity with a number in its Transform, Collider or RigidBody that
-//     is NaN, infinite or beyond a million (the result of a division by zero,
-//     say, or of falling for minutes) is left out of the simulation and
-//     reported on stderr. It takes part again once the number is repaired.
+// Values that are NaN, infinite or beyond a million are excluded from the
+// simulation until repaired. The solver advances on fixed 60 Hz steps.
 
 #pragma once
 
@@ -76,6 +67,6 @@ class Physics {
     bool checkBox(Vec3 center, Vec3 size) const;
 
   private:
-    struct Impl; // keeps ReactPhysics3D out of the rest of the engine
+    struct Impl; // keeps Jolt out of the rest of the engine
     std::unique_ptr<Impl> impl_;
 };
