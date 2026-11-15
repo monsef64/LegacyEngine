@@ -1,5 +1,6 @@
 #pragma once
 #include "editor/script_explorer.hpp"
+#include "editor/search_box.hpp"
 #include <functional>
 // Filter first so empty/unsupported folders never appear in the picker.
 inline bool assetPicker(const char* label,
@@ -22,7 +23,7 @@ inline bool assetPicker(const char* label,
         ImGui::SetNextWindowSize(ImVec2(560, 420), ImGuiCond_FirstUseEver);
         bool open = true;
         if (ImGui::Begin("Select asset###MatchingAssetSelector", &open)) {
-            search.Draw("Search", -1);
+            searchBox("Search", search);
             ImGui::BeginChild("Matching assets");
             if (ImGui::Selectable("None", value.empty())) {
                 value.clear();

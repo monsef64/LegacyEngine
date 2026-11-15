@@ -1,4 +1,5 @@
 #include "rendering/vulkan_context.hpp"
+#include "rendering/vulkan_surface_format.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -279,17 +280,7 @@ bool VulkanContext::createSwapchain() {
     if (!(caps.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)) {
         throw std::runtime_error("Vulkan surface does not support color attachments");
     }
-    VkSurfaceFormatKHR format = formats.front();
-    if (formats.size() == 1 && format.format == VK_FORMAT_UNDEFINED) {
-        format.format = VK_FORMAT_B8G8R8A8_SRGB;
-    }
-    for (const auto& candidate : formats) {
-        if (candidate.format == VK_FORMAT_B8G8R8A8_SRGB &&
-            candidate.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            format = candidate;
-            break;
-        }
-    }
+    const VkSurfaceFormatKHR format = chooseEditorSurfaceFormat(formats);
     colorFormat_ = format.format;
     VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
     if (!vsync_) {

@@ -303,6 +303,9 @@ int main(int argc, char** argv) {
         static_assert(sizeof(AssetPreviewData{}.texture) >= sizeof(ImTextureID),
                       "Preview texture IDs must not be truncated");
         unsigned presented = 0, gamePresented = 0;
+        ImVec2 buttonPosition{}, textPosition{};
+        unsigned clicks = 0;
+        char text[64]{};
         for (unsigned frame = 0; frame < 80; ++frame) {
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
@@ -317,6 +320,41 @@ int main(int argc, char** argv) {
             }
             if (frame == 15) {
                 context.setVsync(true);
+            }
+            if (frame == 50) {
+                context.setVsync(false);
+            }
+            const bool buttonClick = (frame >= 18 && frame <= 20) || (frame >= 45 && frame <= 47) ||
+                                     (frame >= 55 && frame <= 57);
+            const bool textClick = frame >= 62 && frame <= 64;
+            if (buttonClick || textClick) {
+                const unsigned phase = textClick     ? frame - 62
+                                       : frame >= 55 ? frame - 55
+                                       : frame >= 45 ? frame - 45
+                                                     : frame - 18;
+                const auto pos = textClick ? textPosition : buttonPosition;
+                SDL_Event mouse{};
+                if (phase == 0) {
+                    mouse.type = SDL_EVENT_MOUSE_MOTION;
+                    mouse.motion.windowID = SDL_GetWindowID(window);
+                    mouse.motion.x = pos.x;
+                    mouse.motion.y = pos.y;
+                } else {
+                    mouse.type =
+                        phase == 1 ? SDL_EVENT_MOUSE_BUTTON_DOWN : SDL_EVENT_MOUSE_BUTTON_UP;
+                    mouse.button.windowID = SDL_GetWindowID(window);
+                    mouse.button.button = SDL_BUTTON_LEFT;
+                    mouse.button.x = pos.x;
+                    mouse.button.y = pos.y;
+                }
+                gui.processEvent(mouse);
+            }
+            if (frame == 65) {
+                SDL_Event typed{};
+                typed.type = SDL_EVENT_TEXT_INPUT;
+                typed.text.windowID = SDL_GetWindowID(window);
+                typed.text.text = "hello";
+                gui.processEvent(typed);
             }
             if (frame == 40) {
                 SDL_SetWindowSize(window, 640, 480);
@@ -343,6 +381,17 @@ int main(int argc, char** argv) {
             ImGui::SetNextWindowSize(ImVec2(300, 300));
             ImGui::Begin("Scene");
             ImGui::Text("Vulkan ImGui and scene texture");
+            if (ImGui::Button("Input regression")) {
+                ++clicks;
+            }
+            const auto buttonMin = ImGui::GetItemRectMin();
+            const auto buttonMax = ImGui::GetItemRectMax();
+            buttonPosition =
+                ImVec2((buttonMin.x + buttonMax.x) * .5f, (buttonMin.y + buttonMax.y) * .5f);
+            ImGui::InputText("Input text", text, sizeof(text));
+            const auto textMin = ImGui::GetItemRectMin();
+            const auto textMax = ImGui::GetItemRectMax();
+            textPosition = ImVec2(textMin.x + 15, (textMin.y + textMax.y) * .5f);
             const auto sceneTexture = gui.texture(scene);
             if (frame == 0) {
                 bool refused = false;
@@ -434,6 +483,8 @@ int main(int argc, char** argv) {
             }
             require(ImGui::GetDrawData()->TotalVtxCount > 0, "ImGui produced no draw commands");
         }
+        require(clicks == 3, "UI clicks were lost after swapchain recreation");
+        require(std::string(text) == "hello", "UI text input was lost after swapchain recreation");
         require(presented >= 75 && context.swapchainGeneration() >= 3,
                 "Presentation or swapchain recreation failed");
         require(gamePresented >= 75 && gameContext.swapchainGeneration() >= 2,

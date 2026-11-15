@@ -1,4 +1,5 @@
 #pragma once
+#include "editor/search_box.hpp"
 
 #include "assets/assets.hpp"
 #include "core/components.hpp"
@@ -320,14 +321,7 @@ inline bool drawLevelObjects(World& world,
             changed = true;
         };
         static ImGuiTextFilter search;
-        search.Draw("Search", -60);
-        ImGui::SameLine();
-        if (ImGui::SmallButton("x##ClearSearch")) {
-            search.Clear();
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Clear search");
-        }
+        searchBox("Search", search);
         const auto visible = hierarchyMatches(world, objects, search.InputBuf);
 
         if (!selectionEnabled) {

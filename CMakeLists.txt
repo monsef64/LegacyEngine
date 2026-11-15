@@ -291,6 +291,10 @@ if(LEGACY_BUILD_VULKAN_SHADERS)
         "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/${pipeline}.frag"
         -o "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/test-link-${pipeline}.spv")
     endforeach()
+    add_test(NAME vulkan_shader_link_imgui_srgb COMMAND "${LEGACY_GLSLANG}" -V -l
+      "${imgui_SOURCE_DIR}/backends/vulkan/glsl_shader.vert"
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/imgui_srgb.frag"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/test-link-imgui-srgb.spv")
   endif()
 endif()
 
@@ -298,11 +302,22 @@ if(LEGACY_BUILD_VULKAN_PROTOTYPE AND LEGACY_BUILD_VULKAN_SHADERS)
   add_library(legacy_vulkan_scene STATIC src/rendering/mesh.cpp src/rendering/vulkan_scene_surface.cpp src/rendering/vulkan_scene_shadows.cpp src/rendering/vulkan_scene_sky.cpp src/rendering/vulkan_texture.cpp src/rendering/vulkan_material_textures.cpp src/rendering/vulkan_skybox_cache.cpp)
   target_include_directories(legacy_vulkan_scene PUBLIC src PRIVATE third_party/stb)
   target_link_libraries(legacy_vulkan_scene PUBLIC Vulkan::Vulkan legacy_json legacy_thumbnail_data)
+  # Embed the sRGB-attachment fallback shader in the backend so every consumer
+  # (including tests and secondary windows) has it without runtime data paths.
+  set(imgui_srgb_spv "${CMAKE_CURRENT_BINARY_DIR}/generated/imgui_srgb.inc")
+  add_custom_command(OUTPUT "${imgui_srgb_spv}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    COMMAND "${LEGACY_GLSLANG}" -V --target-env vulkan1.0 -x
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/imgui_srgb.frag" -o "${imgui_srgb_spv}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/imgui_srgb.frag"
+    VERBATIM)
+  add_custom_target(imgui_srgb_shader DEPENDS "${imgui_srgb_spv}")
   # Share one ImGui core between the editor, ImGuizmo and Vulkan backend.
   add_library(legacy_vulkan_imgui STATIC
     ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
     src/rendering/vulkan_imgui.cpp)
-  target_include_directories(legacy_vulkan_imgui PUBLIC src)
+  add_dependencies(legacy_vulkan_imgui imgui_srgb_shader)
+  target_include_directories(legacy_vulkan_imgui PUBLIC src PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
   target_link_libraries(legacy_vulkan_imgui PUBLIC legacy_imgui Vulkan::Vulkan legacy_vulkan_context legacy_vulkan_scene)
   add_library(legacy_vulkan_thumbnails STATIC src/assets/vulkan_thumbnail_cache.cpp)
   target_include_directories(legacy_vulkan_thumbnails PUBLIC src)
@@ -447,6 +462,18 @@ if(BUILD_TESTING)
   target_include_directories(editor_layout_tests PRIVATE src)
   target_link_libraries(editor_layout_tests PRIVATE imguizmo ReactPhysics3D::reactphysics3d)
   add_test(NAME editor_layout COMMAND editor_layout_tests)
+endif()
+
+if(BUILD_TESTING)
+  add_executable(search_box_tests tests/search_box.cpp)
+  target_include_directories(search_box_tests PRIVATE src)
+  target_link_libraries(search_box_tests PRIVATE legacy_imgui)
+  if(MSVC)
+    target_compile_options(search_box_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(search_box_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME search_box COMMAND search_box_tests)
 endif()
 
 if(BUILD_TESTING)
