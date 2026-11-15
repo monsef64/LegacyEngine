@@ -708,6 +708,7 @@ MeshHandle VulkanSceneSurface::createMesh(const MeshData& mesh) {
     const auto count = static_cast<uint32_t>(mesh.vertices.size());
     Mesh stored{};
     stored.count = count;
+    stored.revision = ++nextMeshRevision_;
     stored.lines = mesh.topology == MeshData::Topology::Lines;
     stored.alive = true;
     meshBoundsData(mesh, stored.low, stored.high);
@@ -756,6 +757,7 @@ void VulkanSceneSurface::updateMesh(MeshHandle handle, const MeshData& mesh) {
             upload(current.vertices, mesh.vertices.data(), VkDeviceSize(count) * sizeof(Vertex));
         }
         current.count = count;
+        current.revision = ++nextMeshRevision_;
         current.lines = mesh.topology == MeshData::Topology::Lines;
         meshBoundsData(mesh, current.low, current.high);
     } catch (...) {
@@ -771,6 +773,14 @@ bool VulkanSceneSurface::meshIsLines(MeshHandle handle) const {
         throw std::runtime_error("Invalid Vulkan mesh handle");
     }
     return meshes[handle.id].lines;
+}
+
+uint64_t VulkanSceneSurface::meshRevision(MeshHandle handle) const {
+    const auto& meshes = meshOwner_ ? meshOwner_->meshes_ : meshes_;
+    if (handle.id >= meshes.size() || !meshes[handle.id].alive) {
+        throw std::runtime_error("Invalid Vulkan mesh handle");
+    }
+    return meshes[handle.id].revision;
 }
 
 bool VulkanSceneSurface::meshBounds(MeshHandle handle, Vec3& low, Vec3& high) const {
@@ -846,7 +856,8 @@ void VulkanSceneSurface::resize(uint32_t width, uint32_t height) {
     };
     createImage(VK_FORMAT_R8G8B8A8_UNORM,
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                    (transferDestination_ ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0),
                 VK_IMAGE_ASPECT_COLOR_BIT,
                 color_,
                 colorMemory_,
@@ -1133,6 +1144,12 @@ void VulkanSceneSurface::render(uint32_t width,
         throw;
     }
 }
+void VulkanSceneSurface::enableTransferDestination() {
+    if (failed_ || color_ || rendered_) {
+        throw std::runtime_error("Transfer destination must be enabled before rendering");
+    }
+    transferDestination_ = true;
+}
 void VulkanSceneSurface::prepare(uint32_t width, uint32_t height) {
     if (failed_) {
         throw std::runtime_error("Vulkan scene surface cannot be reused after an error");
@@ -1266,6 +1283,7 @@ void VulkanSceneSurface::cleanup() noexcept {
     }
     vkDeviceWaitIdle(device_);
     destroyImages();
+    cleanupMotion();
     cleanupSky();
     cleanupLighting();
     for (auto& mesh : meshes_) {

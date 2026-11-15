@@ -42,7 +42,7 @@ for folder, filename, target in [
 # simdjson distributes the complete Apache-2.0 text.
 copy(ROOT / 'third_party/simdjson/LICENSE', 'Apache-2.0.txt')
 for folder, filename, target in [
-    ('sdl3', 'LICENSE.txt', 'SDL3.txt'), ('reactphysics3d', 'LICENSE', 'ReactPhysics3D.txt'),
+    ('sdl3', 'LICENSE.txt', 'SDL3.txt'), ('jolt', 'LICENSE', 'Jolt.txt'),
     ('imgui', 'LICENSE.txt', 'DearImGui.txt'), ('imguizmo', 'LICENSE', 'ImGuizmo.txt'),
     ('assimp', 'LICENSE', 'assimp.txt')]:
     copy(args.build / '_deps' / (folder + '-src') / filename, target)

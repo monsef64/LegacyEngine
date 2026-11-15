@@ -1,6 +1,6 @@
 # LegacyEngine
 
-A C++17 3D editor built with SDL3, Vulkan, Dear ImGui, ReactPhysics3D, miniaudio and Lua 5.4.
+A C++17 3D editor built with SDL3, Vulkan, Dear ImGui, Jolt Physics, miniaudio and Lua 5.4.
 LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lua.
 
 ![LegacyEngine editor](docs/screenshot.png)
@@ -15,7 +15,7 @@ LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lu
 
 ## Build
 
-Requires a C++17 compiler, CMake 3.16+, Git, Vulkan headers and loader, `glslangValidator`, and platform window/audio development libraries.
+Requires a C++17 compiler, CMake 3.20+, Git, Vulkan headers and loader, `glslangValidator`, and platform window/audio development libraries.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release

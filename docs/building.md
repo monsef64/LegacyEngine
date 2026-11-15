@@ -1,7 +1,7 @@
 # Build and test
-Requires a C++17 compiler, CMake 3.16+, Git, Vulkan headers and loader, a Vulkan
+Requires a C++17 compiler, CMake 3.20+, Git, Vulkan headers and loader, a Vulkan
 shader compiler (`glslangValidator` or `glslang`), and platform development libraries.
-CMake fetches SDL3 (if not installed), ReactPhysics3D, Dear ImGui, ImGuizmo and Lua.
+CMake fetches SDL3 (if not installed), Jolt Physics, Dear ImGui, ImGuizmo and Lua.
 Roboto/Font Awesome fonts, miniaudio, simdjson, nlohmann/json and stb_image
 are included under `third_party/`.
 

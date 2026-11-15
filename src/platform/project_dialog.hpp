@@ -55,12 +55,9 @@ class ProjectDialog {
         }
         static const std::string extensions = modelImportExtensions();
         static const SDL_DialogFileFilter filters[]{
-            {"3D Models (all Assimp formats)", extensions.c_str()},
+            {"3D Models (OBJ / glTF / GLB)", extensions.c_str()},
             {"glTF / GLB", "gltf;glb"},
-            {"FBX", "fbx"},
             {"Wavefront OBJ", "obj"},
-            {"Collada", "dae"},
-            {"STL / PLY", "stl;ply"},
             {"LegacyEngine Mesh", "lemesh"},
             {"Scripts", "ls;lua"},
             {"Images", "png;jpg;jpeg;bmp;tga;hdr"},

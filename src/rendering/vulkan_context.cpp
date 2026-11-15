@@ -112,6 +112,7 @@ VulkanContext::VulkanContext(SDL_Window* window, VulkanContext& owner, bool vsyn
         throw std::runtime_error("Invalid Vulkan secondary window or owner");
     }
     instance_ = owner.instance_;
+    apiVersion_ = owner.apiVersion_;
     physical_ = owner.physical_;
     device_ = owner.device_;
     graphicsQueue_ = owner.graphicsQueue_;
@@ -165,7 +166,18 @@ void VulkanContext::initialize() {
     VkApplicationInfo app{};
     app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app.pApplicationName = "LegacyEngine";
-    app.apiVersion = VK_API_VERSION_1_0;
+#ifdef LEGACY_FSR3_GAME
+    // FSR shaders require Vulkan 1.2. Keep native rendering available on older
+    // loaders/devices; the Game upscaler performs its own capability checks.
+    if (auto enumerateVersion = reinterpret_cast<PFN_vkEnumerateInstanceVersion>(
+            vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"))) {
+        uint32_t supported = VK_API_VERSION_1_0;
+        if (enumerateVersion(&supported) == VK_SUCCESS && supported >= VK_API_VERSION_1_2) {
+            apiVersion_ = VK_API_VERSION_1_2;
+        }
+    }
+#endif
+    app.apiVersion = apiVersion_;
     VkInstanceCreateInfo create{};
     create.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     create.flags = instanceFlags;

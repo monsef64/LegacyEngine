@@ -72,10 +72,11 @@ class VulkanEditorPreviewBackend final : public EditorPreviewBackend {
             surface = std::move(created);
             redraw = true;
         }
-        if (redraw || surface->width() != uint32_t(width) ||
+        if (redraw || waiting_[index] || surface->width() != uint32_t(width) ||
             surface->height() != uint32_t(height)) {
             renderer_.setAssetRoot(assets.root);
             renderer_.drawLitTo(*surface, world, vp, uint32_t(width), uint32_t(height), eye);
+            waiting_[index] = renderer_.pendingStreaming();
         }
         return {gui_.texture(*surface), false};
     }
@@ -90,4 +91,5 @@ class VulkanEditorPreviewBackend final : public EditorPreviewBackend {
     VulkanImGui& gui_;
     Shaders shaders_;
     std::array<std::unique_ptr<VulkanSceneSurface>, 2> surfaces_;
+    std::array<bool, 2> waiting_{};
 };

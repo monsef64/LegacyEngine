@@ -4,9 +4,11 @@
 #include "rendering/vulkan_scene_renderer.hpp"
 #include "rendering/vulkan_scene_surface.hpp"
 #include <SDL3/SDL.h>
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 static std::vector<uint32_t> load(const char* path) {
@@ -206,6 +208,46 @@ int main(int argc, char** argv) {
         require(renderer.modelBounds(modelAssets, "triangle.lemesh", low, high) && low.x == -.8f &&
                     high.x == .8f,
                 "static model preview bounds incorrect");
+        // A mesh not already loaded by modelBounds is decoded on a worker.
+        std::filesystem::copy_file(fixture.path / "triangle.lemesh",
+                                   fixture.path / "streamed.lemesh");
+        world.get<MeshRenderer>(object).model = "streamed.lemesh";
+        renderer.draw(world, identity, 64, 64);
+        require(renderer.pendingStreaming(), "model streaming was not scheduled");
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (renderer.pendingStreaming() && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            renderer.draw(world, identity, 64, 64);
+        }
+        require(!renderer.pendingStreaming(), "model streaming timed out");
+        pixels = surface.readPixels();
+        require(pixel(32, 32, 2) > 250, "streamed model did not render");
+        // Invalidate a queued job before switching project roots. A completion
+        // from the old root must never populate the new project's cache.
+        std::filesystem::copy_file(fixture.path / "triangle.lemesh",
+                                   fixture.path / "switch.lemesh");
+        world.get<MeshRenderer>(object).model = "switch.lemesh";
+        renderer.draw(world, identity, 64, 64);
+        require(renderer.pendingStreaming(), "root-switch test did not queue a model");
+        const auto otherRoot = fixture.path / "other";
+        std::filesystem::create_directories(otherRoot);
+        writeJsonFile(otherRoot / "switch.lemesh", Json::parse(R"({
+            "format":"LegacyEngineMesh", "version":1,
+            "vertices":[[0.82,-0.8,0,0,0,1,0,0],[0.98,-0.8,0,0,0,1,1,0],[0.9,0.8,0,0,0,1,0.5,1]]
+        })"));
+        renderer.setAssetRoot(otherRoot);
+        renderer.draw(world, identity, 64, 64);
+        const auto switchDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (renderer.pendingStreaming() && std::chrono::steady_clock::now() < switchDeadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            renderer.draw(world, identity, 64, 64);
+        }
+        require(!renderer.pendingStreaming(), "root-switch streaming timed out");
+        pixels = surface.readPixels();
+        require(pixel(32, 32, 2) < 100, "old project mesh survived a root switch");
+        renderer.setAssetRoot(fixture.path);
+        require(renderer.modelBounds(modelAssets, "triangle.lemesh", low, high),
+                "model bounds not restored after root switch");
         world.get<MeshRenderer>(object).model = "triangle.lemesh";
         renderer.draw(world, identity, 64, 64);
         pixels = surface.readPixels();

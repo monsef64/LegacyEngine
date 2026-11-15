@@ -181,7 +181,7 @@ if transform then debug.log(transform.position.x) end
 
 ### addComponent
 
-`addComponent(gameObject, componentType) -> live component`
+`addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner`
 
 - `param gameObject GameObject`
 - `param componentType ComponentType`
@@ -1338,7 +1338,7 @@ object:findComponentInChildren(Camera)
 
 `addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation`
 
-- `addComponent(gameObject, componentType) -> live component`
+- `addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner`
 
 ```lua
 local object = self
@@ -3021,6 +3021,24 @@ animation:crossFade("Character_data/Animation_1.leanim", 0.3)
 ```lua
 local component = self:getComponent(Animation) or self:addComponent(Animation)
 component:reset()
+```
+
+## RenderingSettingsAPI
+
+### RenderingSettingsAPI.getGameFsrQuality
+
+`getGameFsrQuality():integer Returns the requested mode, not whether FSR is active`
+
+```lua
+debug.log("Requested Game FSR quality", Rendering.getGameFsrQuality())
+```
+
+### RenderingSettingsAPI.setGameFsrQuality
+
+`setGameFsrQuality(mode:integer) 0=Off, 1=Native AA, 2=Quality, 3=Balanced, 4=Performance, 5=Ultra Performance`
+
+```lua
+Rendering.setGameFsrQuality(2)
 ```
 
 ## Component fields and type tokens

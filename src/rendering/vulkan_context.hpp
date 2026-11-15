@@ -44,6 +44,10 @@ class VulkanContext {
     VkInstance instance() const {
         return instance_;
     }
+    // API version requested when creating the instance (not the physical device's maximum).
+    uint32_t apiVersion() const {
+        return apiVersion_;
+    }
     VkRenderPass renderPass() const {
         return renderPass_;
     }
@@ -102,6 +106,7 @@ class VulkanContext {
     SDL_Window* window_ = nullptr;
     bool vsync_ = true, recreate_ = true, failed_ = false, ownsDevice_ = true;
     VkInstance instance_ = VK_NULL_HANDLE;
+    uint32_t apiVersion_ = VK_API_VERSION_1_0;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     VkPhysicalDevice physical_ = VK_NULL_HANDLE;
     VkDevice device_ = VK_NULL_HANDLE;

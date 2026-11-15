@@ -19,6 +19,7 @@ class VulkanAssetPreviewRenderer {
         std::unique_ptr<VulkanSceneSurface> surface;
         std::unique_ptr<VulkanTexture> image;
         int lastUsed = 0;
+        bool waiting = false;
         AssetPreviewData data;
         std::unique_ptr<World> world;
         OrbitCamera camera;
@@ -303,7 +304,7 @@ class VulkanAssetPreviewRenderer {
                     slot.surface->enableSkybox(shaders_.skyVertex, shaders_.skyFragment);
                     rebuild = true;
                 }
-                if (rebuild) {
+                if (rebuild || slot.waiting) {
                     renderer_.setAssetRoot(assets.root);
                     renderer_.drawLitTo(
                         *slot.surface,
@@ -312,6 +313,7 @@ class VulkanAssetPreviewRenderer {
                         slot.data.width,
                         slot.data.height,
                         slot.camera.position());
+                    slot.waiting = renderer_.pendingStreaming();
                 }
                 slot.data.texture = gui_.texture(*slot.surface);
             } else if (textureAsset(path)) {

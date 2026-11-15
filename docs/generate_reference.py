@@ -164,6 +164,9 @@ def example(entry):
         return 'local camera = Camera.new("Player Camera")' if name == 'new' else 'local camera = Camera.getActive()\nif camera then debug.log(camera:getName()) end'
     if owner == 'LegacyDebug':
         return f'debug.{name}("Example message", self:getName())'
+    if owner == 'RenderingSettingsAPI':
+        return ('Rendering.setGameFsrQuality(2)' if name == 'setGameFsrQuality'
+                else 'debug.log("Requested Game FSR quality", Rendering.getGameFsrQuality())')
     if owner == 'GameObject':
         prefix, variable = 'local object = self', 'object'
     elif owner == 'CameraObject':

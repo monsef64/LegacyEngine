@@ -30,6 +30,17 @@ class VulkanSceneSurface {
         // Unlit, transparent line overlays may ignore depth (e.g. collider gizmos).
         bool depthAlways = false;
     };
+    // Opaque triangle motion in unjittered previous-minus-current UV units.
+    // For deforming geometry, previousMesh contains last frame's positions in
+    // matching vertex order. The default reuses mesh for rigid objects.
+    struct MotionDraw {
+        MeshHandle mesh;
+        MeshHandle previousMesh;
+        Mat4 rasterViewProjectionModel;
+        Mat4 currentViewProjectionModel;
+        Mat4 previousViewProjectionModel;
+        bool mirrored = false;
+    };
     struct SkyDraw {
         Mat4 viewProjection{}; // engine clip convention
         VulkanShaderLayout::Float4 tintOpacity{1, 1, 1, 1};
@@ -101,6 +112,8 @@ class VulkanSceneSurface {
         return family_;
     }
     bool meshIsLines(MeshHandle handle) const;
+    // Changes on geometry replacement or update; shared with other surfaces.
+    uint64_t meshRevision(MeshHandle handle) const;
     // Local-space bounds for editor selection and preview framing. Invalid,
     // destroyed and empty meshes return false.
     bool meshBounds(MeshHandle handle, Vec3& low, Vec3& high) const;
@@ -120,6 +133,25 @@ class VulkanSceneSurface {
                 const ShadowPlan* shadows = nullptr,
                 const std::vector<SkyDraw>& skies = {},
                 const RenderRegion* region = nullptr);
+    // Optional experimental motion pass. Does not enable FSR or change the
+    // normal color path. Only opaque triangle geometry is supported; animated
+    // vertex history, transparency and sky motion must be supplied by callers.
+    void enableMotionVectors(const std::vector<uint32_t>& vertexShader,
+                             const std::vector<uint32_t>& fragmentShader);
+    void renderMotionVectors(uint32_t width, uint32_t height, const std::vector<MotionDraw>& draws);
+    // Images remain valid until the next motion resize or destruction. After a
+    // successful pass, color is in SHADER_READ_ONLY_OPTIMAL and depth is in
+    // DEPTH_STENCIL_READ_ONLY_OPTIMAL. Queue ownership stays with this surface.
+    VkImage motionImage() const;
+    VkImageView motionImageView() const;
+    VkImage motionDepthImage() const;
+    VkImageView motionDepthImageView() const;
+    // RG32 float readback for diagnostics/tests. Waits for queue completion.
+    std::vector<float> readMotionVectors();
+    // Enable external transfer writes before this surface first allocates its
+    // images. Used by the optional Game upscaler; scene and preview targets do
+    // not need transfer-destination usage.
+    void enableTransferDestination();
     // Prepare an image at this extent before registering it with ImGui. The
     // scene may then be rendered at the same extent later in the UI frame.
     // Never change extent after an ImGui draw command has referenced the image.
@@ -132,6 +164,14 @@ class VulkanSceneSurface {
     }
     // RGBA8 top-to-bottom. Intended for tests; waits for the graphics queue.
     std::vector<uint8_t> readPixels();
+    // For an external compute consumer after a successful render. The image is
+    // R8G8B8A8_UNORM, sampled/transfer-src/color-attachment capable, and in
+    // SHADER_READ_ONLY_OPTIMAL. It belongs to this surface and remains valid
+    // only until resize or destruction. The caller must synchronize and restore
+    // its layout/ownership before the surface is used again.
+    VkImage colorImage() const {
+        return rendered_ && !failed_ ? color_ : VK_NULL_HANDLE;
+    }
     VkImageView imageView() const {
         return colorView_;
     }
@@ -156,6 +196,7 @@ class VulkanSceneSurface {
     struct Mesh {
         Buffer vertices;
         uint32_t count = 0;
+        uint64_t revision = 0;
         bool lines = false, alive = false;
         Vec3 low{}, high{};
     };
@@ -188,6 +229,8 @@ class VulkanSceneSurface {
     void resize(uint32_t width, uint32_t height);
     void destroyImages() noexcept;
     void cleanup() noexcept;
+    void cleanupMotion() noexcept;
+    struct Motion;
     Buffer makeBuffer(VkDeviceSize size, VkBufferUsageFlags usage);
     void destroyBuffer(Buffer& buffer) noexcept;
     uint32_t memoryType(uint32_t bits,
@@ -197,6 +240,7 @@ class VulkanSceneSurface {
     VkCommandBuffer beginCommands();
     void submitCommands();
 
+    Motion* motion_ = nullptr; // optional, destroyed before device resources
     VkPhysicalDevice physical_ = VK_NULL_HANDLE;
     VkDevice device_ = VK_NULL_HANDLE;
     VkQueue queue_ = VK_NULL_HANDLE;
@@ -233,7 +277,8 @@ class VulkanSceneSurface {
     VkFramebuffer framebuffer_ = VK_NULL_HANDLE;
     uint32_t width_ = 0, height_ = 0;
     uint64_t imageGeneration_ = 0;
-    bool rendered_ = false, failed_ = false;
+    bool rendered_ = false, failed_ = false, transferDestination_ = false;
     VulkanSceneSurface* meshOwner_ = nullptr; // non-owning; nullptr for an owner
     std::vector<Mesh> meshes_;
+    uint64_t nextMeshRevision_ = 0;
 };

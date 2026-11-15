@@ -8,7 +8,9 @@ license remains in the repository/package root `LICENSE`.
 | Component | Source/version used by this checkout | Notice |
 | --- | --- | --- |
 | SDL | release-3.4.20 (CMake default) | SDL3.txt |
-| ReactPhysics3D | v0.10.2 | ReactPhysics3D.txt |
+| Jolt Physics | v5.3.0 | Jolt.txt |
+| FidelityFX SDK (optional experimental Game FSR build) | v1.1.4 | AMD-FidelityFX.txt |
+| xplane-fsr3 Linux port (optional experimental Game FSR build) | fa51577c9bc2c3477e64dfdd358796aebb9ca45b | xplane-fsr3.txt |
 | Assimp | v5.4.3 | assimp.txt |
 | Dear ImGui | v1.92.5-docking | DearImGui.txt |
 | ImGuizmo | 105e4fde45e4e74aae8973d98750820ef7aca7e2 | ImGuizmo.txt |

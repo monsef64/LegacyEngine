@@ -4,10 +4,12 @@
 #include "editor/vulkan_preview_backend.hpp"
 #include <ImGuizmo.h>
 #include <SDL3/SDL.h>
+#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <imgui_internal.h>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 static void require(bool value, const char* text) {
@@ -148,6 +150,49 @@ int main(int argc, char** argv) {
         ImGui::End();
         gui.endFrame();
         require(model->readPixels() == pixels, "other preview replaced model image");
+        // A paused preview must redraw even when its caller requests caching,
+        // until the asynchronously decoded material becomes available.
+        const unsigned char greenTga[]{0, 0, 2, 0, 0, 0,  0,    0, 0,   0, 0,
+                                       0, 1, 0, 1, 0, 24, 0x20, 0, 255, 0};
+        {
+            std::ofstream out(fixture.root / "green.tga", std::ios::binary);
+            out.write(reinterpret_cast<const char*>(greenTga), sizeof(greenTga));
+        }
+        MaterialProperties greenMaterial;
+        greenMaterial.texture = "green.tga";
+        saveMaterial(assets, "green.mat", greenMaterial);
+        animationWorld.get<MeshRenderer>(object).material = "green.mat";
+        require(gui.beginFrame(), "streaming preview UI begin failed");
+        previews.image(EditorPreviewBackend::Slot::Animation,
+                       animationWorld,
+                       assets,
+                       vp,
+                       {0, 0, 3},
+                       80,
+                       60,
+                       true);
+        require(renderer.pendingStreaming(), "preview texture did not start streaming");
+        auto* pausedSurface = previews.surface(EditorPreviewBackend::Slot::Animation);
+        const auto beforeTexture = pausedSurface->readPixels();
+        gui.endFrame();
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (renderer.pendingStreaming() && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            require(gui.beginFrame(), "streaming preview continuation failed");
+            previews.image(EditorPreviewBackend::Slot::Animation,
+                           animationWorld,
+                           assets,
+                           vp,
+                           {0, 0, 3},
+                           80,
+                           60,
+                           false);
+            gui.endFrame();
+        }
+        require(!renderer.pendingStreaming(), "preview texture streaming timed out");
+        require(pausedSurface->readPixels() != beforeTexture,
+                "cached preview did not refresh after texture streaming");
+        animationWorld.get<MeshRenderer>(object).material.clear();
         saveAnimationClip(assets, "preview.leanim", AnimationClip{});
         AnimationWindow animation;
         animation.open(assets, "preview.leanim");

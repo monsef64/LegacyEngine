@@ -1,4 +1,5 @@
 #include "scripting/lua_console.hpp"
+#include "project/rendering_settings.hpp"
 #include "scripting/legacy_script.hpp"
 #include "scripting/lua_scene.hpp"
 
@@ -116,6 +117,32 @@ void LuaConsole::reset() {
         lua_setfield(state_, -2, names[i]);
     }
     lua_setglobal(state_, "debug");
+    lua_newtable(state_);
+    lua_pushcfunction(
+        state_, +[](lua_State* L) -> int {
+            if (!RenderingSettings::active) {
+                return luaL_error(L, "Rendering settings are unavailable");
+            }
+            lua_pushinteger(L, RenderingSettings::active->fsr3GameQuality);
+            return 1;
+        });
+    lua_setfield(state_, -2, "getGameFsrQuality");
+    lua_pushcfunction(
+        state_, +[](lua_State* L) -> int {
+            const lua_Integer quality = luaL_checkinteger(L, 1);
+            if (quality < 0 || quality > 5) {
+                return luaL_error(L, "Game FSR quality must be between 0 and 5");
+            }
+            if (!RenderingSettings::active) {
+                return luaL_error(L, "Rendering settings are unavailable");
+            }
+            if (!RenderingSettings::active->setGameFsrQuality(static_cast<int>(quality))) {
+                return luaL_error(L, "%s", RenderingSettings::active->error.c_str());
+            }
+            return 0;
+        });
+    lua_setfield(state_, -2, "setGameFsrQuality");
+    lua_setglobal(state_, "Rendering");
 }
 
 int LuaConsole::print(lua_State* state) {

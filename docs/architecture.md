@@ -3,7 +3,7 @@
 | --- | --- |
 | `src/app/` | Application entry point and editor/runtime orchestration |
 | `src/core/` | Math, ECS, engine components and transform hierarchy |
-| `src/physics/` | ReactPhysics3D integration and collider debug drawing |
+| `src/physics/` | Jolt Physics integration and collider debug drawing |
 | `src/rendering/` | Vulkan renderer, procedural meshes and viewport surfaces |
 | `src/scene/` | Editor camera and scene-camera calculations |
 | `src/audio/` | WAV/MP3 decoding, mixing, listener/spatial audio and previews |
