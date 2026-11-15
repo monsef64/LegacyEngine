@@ -20,6 +20,10 @@
     "title": "Editor workflow"
   },
   {
+    "file": "fsr3-integration.md",
+    "title": "Experimental Game FSR"
+  },
+  {
     "file": "lighting.md",
     "title": "Dynamic lighting and shadows"
   },
