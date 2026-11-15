@@ -1,13 +1,35 @@
-#include "physics/physics.hpp"
+// Jolt must precede every other Jolt header.
+#include <Jolt/Jolt.h>
+
 #include "models/collider_source.hpp"
 #include "models/mesh_simplify.hpp"
 #include "models/model_asset.hpp"
+#include "physics/physics.hpp"
 #include <set>
 #include <tuple>
 
 #include "core/components.hpp"
+#include "core/worker_pool.hpp"
 
-#include <reactphysics3d/reactphysics3d.h>
+#include <Jolt/Core/Factory.h>
+#include <Jolt/Core/JobSystemThreadPool.h>
+#include <Jolt/Core/TempAllocator.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyLockMulti.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/CollideShape.h>
+#include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
+#include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/EmptyShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/RegisterTypes.h>
 
 #include <algorithm>
 #include <cmath>
@@ -27,7 +49,7 @@ constexpr float kStepSeconds = 1.0f / 60.0f;
 // as this long, so that the simulation does not try to catch up all at once.
 constexpr float kLongestFrameSeconds = 0.25f;
 
-// ReactPhysics3D needs boxes with some thickness on every axis.
+// Jolt needs boxes with some thickness on every axis.
 constexpr float kSmallestBoxSize = 0.001f;
 
 // A mass too close to zero cannot be calculated with. Zero itself is fine: it
@@ -44,32 +66,21 @@ struct Pose {
     Quat rotation;
 };
 
-rp3d::Vector3 toRp3d(Vec3 v) {
-    return rp3d::Vector3(rp3d::decimal(v.x), rp3d::decimal(v.y), rp3d::decimal(v.z));
+JPH::Vec3 jvec(Vec3 v) {
+    return {v.x, v.y, v.z};
+}
+Vec3 vec(JPH::Vec3Arg v) {
+    return {v.GetX(), v.GetY(), v.GetZ()};
+}
+JPH::Quat jquat(Quat q) {
+    q = normalize(q);
+    return {q.x, q.y, q.z, q.w};
+}
+Quat quat(JPH::QuatArg q) {
+    return {q.GetX(), q.GetY(), q.GetZ(), q.GetW()};
 }
 
-rp3d::Transform toRp3d(const Pose& pose) {
-    const Quat& q = pose.rotation;
-    return rp3d::Transform(
-        toRp3d(pose.position),
-        rp3d::Quaternion(
-            rp3d::decimal(q.x), rp3d::decimal(q.y), rp3d::decimal(q.z), rp3d::decimal(q.w)));
-}
-
-Vec3 toVec3(const rp3d::Vector3& v) {
-    return {static_cast<float>(v.x), static_cast<float>(v.y), static_cast<float>(v.z)};
-}
-
-Pose toPose(const rp3d::Transform& transform) {
-    const rp3d::Quaternion& q = transform.getOrientation();
-    return {toVec3(transform.getPosition()),
-            {static_cast<float>(q.x),
-             static_cast<float>(q.y),
-             static_cast<float>(q.z),
-             static_cast<float>(q.w)}};
-}
-
-// ReactPhysics3D only accepts rotations of length 1.
+// Jolt only accepts rotations of length 1.
 Pose toPose(const Transform& transform) {
     return {transform.position, normalize(transform.rotation)};
 }
@@ -161,756 +172,634 @@ std::uint64_t keyOf(Entity entity) {
     return (static_cast<std::uint64_t>(entity.generation) << 32) | entity.index;
 }
 
-// A box anywhere in the world, turned any way.
-struct OrientedBox {
-    Vec3 center;
-    Vec3 axes[3];      // unit vectors along its edges
-    float halfSize[3]; // half its length along each of them
-};
-
-OrientedBox toOrientedBox(const Pose& pose, const Box& box) {
-    const Mat3 rotation = rotationMatrix(pose.rotation);
-    OrientedBox result;
-    for (int i = 0; i < 3; ++i) {
-        result.axes[i] = {rotation.m[i * 3], rotation.m[i * 3 + 1], rotation.m[i * 3 + 2]};
-    }
-    result.center = pose.position + result.axes[0] * box.center.x + result.axes[1] * box.center.y +
-                    result.axes[2] * box.center.z;
-    result.halfSize[0] = box.halfSize.x;
-    result.halfSize[1] = box.halfSize.y;
-    result.halfSize[2] = box.halfSize.z;
-    return result;
-}
-
-// Where a ray enters a box: how far along the ray, and through a side that
-// faces which way. `direction` is a unit vector. Returns false if the ray
-// misses the box or starts inside it.
-[[maybe_unused]] bool
-rayEnters(Vec3 origin, Vec3 direction, const OrientedBox& box, float& distance, Vec3& normal) {
-    // A box is what three slabs have in common, each one the space between
-    // two opposite sides. The ray is inside the box where it is inside all
-    // three slabs: from the last slab it enters to the first one it leaves.
-    const Vec3 offset = origin - box.center;
-    float enters = -INFINITY;
-    float leaves = INFINITY;
-    for (int i = 0; i < 3; ++i) {
-        const float position = dot(offset, box.axes[i]);
-        const float speed = dot(direction, box.axes[i]);
-        if (speed == 0.0f) {
-            if (std::abs(position) > box.halfSize[i]) {
-                return false; // it runs alongside this slab, outside it
-            }
-            continue;
-        }
-        const float one = (-box.halfSize[i] - position) / speed;
-        const float two = (box.halfSize[i] - position) / speed;
-        if (std::min(one, two) > enters) {
-            enters = std::min(one, two);
-            normal = box.axes[i] * (speed > 0.0f ? -1.0f : 1.0f);
-        }
-        leaves = std::min(leaves, std::max(one, two));
-    }
-    if (!(enters > 0.0f) || enters > leaves) {
-        return false;
-    }
-    distance = enters;
-    return true;
-}
-
-// Whether two boxes reach into each other or touch. The edges of the first one
-// lie along the world's axes.
-bool boxesMeet(Vec3 center, Vec3 halfSize, const OrientedBox& box) {
-    // Two boxes are apart exactly when they are apart as seen along one of 15
-    // lines: the three edge directions of each box, and the nine directions
-    // at right angles to an edge of each (the separating axis theorem).
-    static const Vec3 kWorldAxes[3] = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
-
-    const Vec3 offset = box.center - center;
-    const auto apartAlong = [&](Vec3 line) {
-        // How far the two boxes reach along the line, each from its centre,
-        // against how far apart their centres are along it.
-        const float reach = halfSize.x * std::abs(line.x) + halfSize.y * std::abs(line.y) +
-                            halfSize.z * std::abs(line.z) +
-                            box.halfSize[0] * std::abs(dot(box.axes[0], line)) +
-                            box.halfSize[1] * std::abs(dot(box.axes[1], line)) +
-                            box.halfSize[2] * std::abs(dot(box.axes[2], line));
-        return std::abs(dot(offset, line)) > reach;
-    };
-
-    for (int i = 0; i < 3; ++i) {
-        if (apartAlong(kWorldAxes[i]) || apartAlong(box.axes[i])) {
-            return false;
-        }
-    }
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            // Two edges that are as good as parallel have no direction at
-            // right angles to both that the lines above do not cover.
-            const Vec3 line = cross(kWorldAxes[i], box.axes[j]);
-            if (dot(line, line) > 1.0e-6f && apartAlong(line)) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
 } // namespace
 
 struct Physics::Impl {
-    // What the simulation holds for one entity.
-    struct Body {
-        rp3d::TriangleMesh* hull = nullptr;
-        bool hullInvalid = false;
-        Entity entity;
-        rp3d::RigidBody* body = nullptr;       // null while the entity is left out (see update())
-        rp3d::Collider* collider = nullptr;    // null while the entity has no BoxCollider
-        rp3d::CollisionShape* shape = nullptr; // the shape of `collider`
-
-        // The values of the entity's components that the simulation is in step
-        // with. A component that differs from them was changed by game code
-        // since the last update.
-        Vec3 position;
-        Quat rotation;
-        RigidBody rigidBody;
-        Box box;
-        bool hasBox = false;
-        bool dynamic = false; // the entity has a RigidBody
-
-        // Where the simulation had the body one step ago, and where it has it
-        // now. What is shown lies in between (see update()).
-        Pose previous;
-        Pose current;
-
-        bool visited = false;  // the entity still exists and still takes part
-        bool reported = false; // its unusable values have been reported
-        bool failed = false;   // the last step gave it unusable values (see update())
+    struct Runtime {
+        Runtime() {
+            JPH::RegisterDefaultAllocator();
+            JPH::Factory::sInstance = new JPH::Factory;
+            JPH::RegisterTypes();
+        }
+        ~Runtime() {
+            JPH::UnregisterTypes();
+            delete JPH::Factory::sInstance;
+            JPH::Factory::sInstance = nullptr;
+        }
     };
-
-    struct ContactListener final : rp3d::EventListener {
-        std::vector<Physics::TriggerEvent> events;
-        void onContact(const rp3d::CollisionCallback::CallbackData& data) override {
-            for (rp3d::uint32 i = 0; i < data.getNbContactPairs(); ++i) {
-                const auto pair = data.getContactPair(i);
-                const auto* a = static_cast<const Body*>(pair.getBody1()->getUserData());
-                const auto* b = static_cast<const Body*>(pair.getBody2()->getUserData());
-                if (!a || !b) {
-                    continue;
+    static Runtime& runtime() {
+        static Runtime value;
+        return value;
+    }
+    Runtime& runtime_ = runtime();
+    struct BroadLayers : JPH::BroadPhaseLayerInterface {
+        JPH::uint GetNumBroadPhaseLayers() const override {
+            return 2;
+        }
+        JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override {
+            return JPH::BroadPhaseLayer(layer);
+        }
+#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+        const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer layer) const override {
+            return layer.GetValue() ? "Moving" : "Static";
+        }
+#endif
+    } broad;
+    struct BroadFilter : JPH::ObjectVsBroadPhaseLayerFilter {
+        bool ShouldCollide(JPH::ObjectLayer layer, JPH::BroadPhaseLayer other) const override {
+            return layer != 0 || other.GetValue() != 0;
+        }
+    } broadFilter;
+    struct PairFilter : JPH::ObjectLayerPairFilter {
+        bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
+            return a != 0 || b != 0;
+        }
+    } pairFilter;
+    struct Pair {
+        Entity a, b;
+        bool sensor;
+    };
+    using ContactKey = std::tuple<unsigned, unsigned, unsigned, unsigned>;
+    struct Contacts : JPH::ContactListener {
+        std::mutex mutex;
+        std::map<ContactKey, Pair> live;
+        std::set<ContactKey> removed;
+        static ContactKey key(const JPH::SubShapeIDPair& pair) {
+            return {pair.GetBody1ID().GetIndexAndSequenceNumber(),
+                    pair.GetBody2ID().GetIndexAndSequenceNumber(),
+                    pair.GetSubShapeID1().GetValue(),
+                    pair.GetSubShapeID2().GetValue()};
+        }
+        static Entity entity(JPH::uint64 value) {
+            return {unsigned(value), unsigned(value >> 32)};
+        }
+        void OnContactAdded(const JPH::Body& a,
+                            const JPH::Body& b,
+                            const JPH::ContactManifold& manifold,
+                            JPH::ContactSettings&) override {
+            std::lock_guard<std::mutex> lock(mutex);
+            removed.erase({a.GetID().GetIndexAndSequenceNumber(),
+                           b.GetID().GetIndexAndSequenceNumber(),
+                           manifold.mSubShapeID1.GetValue(),
+                           manifold.mSubShapeID2.GetValue()});
+            live[{a.GetID().GetIndexAndSequenceNumber(),
+                  b.GetID().GetIndexAndSequenceNumber(),
+                  manifold.mSubShapeID1.GetValue(),
+                  manifold.mSubShapeID2.GetValue()}] = {
+                entity(a.GetUserData()), entity(b.GetUserData()), a.IsSensor() || b.IsSensor()};
+        }
+        void OnContactPersisted(const JPH::Body& a,
+                                const JPH::Body& b,
+                                const JPH::ContactManifold& m,
+                                JPH::ContactSettings& settings) override {
+            OnContactAdded(a, b, m, settings);
+        }
+        void OnContactRemoved(const JPH::SubShapeIDPair& pair) override {
+            std::lock_guard<std::mutex> lock(mutex);
+            removed.insert(key(pair));
+        }
+        void erase(JPH::BodyID id) {
+            for (auto it = live.begin(); it != live.end();) {
+                if (std::get<0>(it->first) == id.GetIndexAndSequenceNumber() ||
+                    std::get<1>(it->first) == id.GetIndexAndSequenceNumber()) {
+                    it = live.erase(it);
+                } else {
+                    ++it;
                 }
-                const auto type = pair.getEventType();
-                const int phase =
-                    type == rp3d::CollisionCallback::ContactPair::EventType::ContactStart  ? 0
-                    : type == rp3d::CollisionCallback::ContactPair::EventType::ContactStay ? 1
-                                                                                           : 2;
-                events.push_back({a->entity, b->entity, phase});
-                events.push_back({b->entity, a->entity, phase});
             }
         }
     } contacts;
-    rp3d::PhysicsCommon common;
-    rp3d::PhysicsWorld* world = nullptr;
-    rp3d::ConvexMesh* coneMesh = nullptr;
+    JPH::TempAllocatorImpl allocator{32 * 1024 * 1024};
+    // Jolt blocks until these jobs complete before ECS synchronization/event
+    // publication. Contacts serialize callbacks; workers never access the ECS.
+    JPH::JobSystemThreadPool jobs{2048, 8, int(backgroundWorkerCount())};
+    JPH::PhysicsSystem system;
+    struct Body {
+        Entity entity;
+        JPH::BodyID id;
+        Box box;
+        RigidBody rigid;
+        bool hasCollider = false, hasRigid = false, sensor = false, controller = false,
+             visited = false, failed = false;
+        Pose previous{}, current{};
+        Transform shown{};
+        JPH::EMotionType motion = JPH::EMotionType::Static;
+    };
+    std::map<std::uint64_t, Body> bodies;
+    std::map<std::pair<std::uint64_t, std::uint64_t>, Pair> pairs;
     AssetManager assets;
-    unsigned hullRevision = 0;
-    std::map<std::pair<std::string, int>, std::vector<Vec3>> hullPoints;
-
-    std::unordered_map<std::uint64_t, Body> bodies;
-    std::map<std::pair<std::uint64_t, std::uint64_t>, std::pair<Entity, Entity>> triggerPairs;
-    float pendingSeconds = 0.0f; // time that has passed but is not simulated yet
-
-    // ReactPhysics3D puts bodies that lie still to sleep: it leaves them out of
-    // its calculations until something bumps into them. A sleeping body does
-    // not notice that the thing it rests on was moved or taken away, so after
-    // a change of that kind every body is woken.
-    bool wakeAll = false;
-
+    float accumulated = 0;
+    bool needsWake_ = false;
     Impl() {
-        rp3d::PhysicsWorld::WorldSettings settings;
-        settings.gravity = rp3d::Vector3(0, rp3d::decimal(-9.81), 0); // metres per second squared
-        world = common.createPhysicsWorld(settings);
-        world->setEventListener(&contacts);
-        const auto vertices = coneHullVertices();
-        const rp3d::VertexArray array(vertices.data(),
-                                      sizeof(Vec3),
-                                      static_cast<rp3d::uint32>(vertices.size()),
-                                      rp3d::VertexArray::DataType::VERTEX_FLOAT_TYPE);
-        std::vector<rp3d::Message> messages;
-        coneMesh = common.createConvexMesh(array, messages);
+        system.Init(16384, 0, 65536, 16384, broad, broadFilter, pairFilter);
+        system.SetContactListener(&contacts);
+        system.SetGravity({0, -9.81f, 0});
     }
-
-    // `common` frees the world and everything in it when it is destroyed.
-
-    Body& bodyOf(Entity entity, const Transform& transform) {
-        const auto found = bodies.find(keyOf(entity));
-        if (found != bodies.end()) {
-            return found->second;
+    ~Impl() {
+        for (auto& entry : bodies) {
+            release(entry.second);
         }
-
-        Body body;
-        body.entity = entity;
-        body.position = transform.position;
-        body.rotation = transform.rotation;
-        body.current = toPose(transform);
-        body.previous = body.current;
-        return bodies.emplace(keyOf(entity), body).first->second;
     }
-
-    // Takes an entity's body out of the simulation.
     void release(Body& body) {
-        if (!body.body) {
-            return;
+        if (!body.id.IsInvalid()) {
+            needsWake_ = true;
+            contacts.erase(body.id);
+            system.GetBodyInterface().RemoveBody(body.id);
+            system.GetBodyInterface().DestroyBody(body.id);
+            body.id = JPH::BodyID();
         }
-        world->destroyRigidBody(body.body); // takes the collider with it
-        if (body.shape) {
-            switch (body.box.shape) {
-            case ColliderShape::Box:
-                common.destroyBoxShape(static_cast<rp3d::BoxShape*>(body.shape));
-                break;
-            case ColliderShape::Sphere:
-                common.destroySphereShape(static_cast<rp3d::SphereShape*>(body.shape));
-                break;
-            case ColliderShape::Capsule:
-                common.destroyCapsuleShape(static_cast<rp3d::CapsuleShape*>(body.shape));
-                break;
-            case ColliderShape::Mesh:
-                common.destroyConcaveMeshShape(static_cast<rp3d::ConcaveMeshShape*>(body.shape));
-                break;
-            case ColliderShape::Cone:
-                common.destroyConvexMeshShape(static_cast<rp3d::ConvexMeshShape*>(body.shape));
-                break;
-            }
-        }
-        if (body.hull) {
-            common.destroyTriangleMesh(body.hull);
-            body.hull = nullptr;
-        }
-        body.body = nullptr;
-        body.collider = nullptr;
-        body.shape = nullptr;
-        wakeAll = true;
     }
-
-    // Puts an entity's body into the simulation, made from scratch.
-    void build(Body& body, const Box* box, const RigidBody* rigidBody) {
-        release(body);
-        body.hullInvalid = false;
-        body.body = world->createRigidBody(toRp3d(body.current));
-        body.body->setUserData(&body);
-
-        body.hasBox = box != nullptr;
-        body.box = box ? *box : Box{};
-        if (box) {
-            const rp3d::Transform place(toRp3d(box->center), rp3d::Quaternion::identity());
-            switch (box->shape) {
-            case ColliderShape::Box:
-                body.shape = common.createBoxShape(toRp3d(box->halfSize));
-                break;
-            case ColliderShape::Sphere:
-                body.shape = common.createSphereShape(box->radius);
-                break;
-            case ColliderShape::Capsule:
-                body.shape = common.createCapsuleShape(box->radius, box->height);
-                break;
-            case ColliderShape::Mesh: {
-                try {
-                    const auto key = std::make_pair(box->model, box->meshDetail);
-                    if (hullRevision != modelAssetRevision) {
-                        hullPoints.clear();
-                        hullRevision = modelAssetRevision;
-                    }
-                    std::vector<Vec3> vertices;
-                    if (box->model.empty()) {
-                        throw std::runtime_error(
-                            "Mesh collider needs a .lemesh source or a MeshRenderer with a model asset; no box fallback is used");
-                    }
-                    auto found = hullPoints.find(key);
-                    if (found == hullPoints.end()) {
-                        found =
-                            hullPoints
-                                .emplace(key,
-                                         simplifyMeshTriangles(loadModelAsset(assets, box->model),
-                                                               box->meshDetail))
-                                .first;
-                    }
-                    for (auto v : found->second) {
-                        vertices.push_back(v * box->hullScale);
-                    }
-                    if (vertices.empty()) {
-                        throw std::runtime_error("Mesh collider has no non-degenerate triangles");
-                    }
-                    std::vector<unsigned> indices(vertices.size());
-                    for (unsigned i = 0; i < indices.size(); ++i) {
-                        indices[i] = i;
-                    }
-                    // Reverse winding after a mirrored scale.
-                    if (!box->model.empty() &&
-                        box->hullScale.x * box->hullScale.y * box->hullScale.z < 0) {
-                        for (std::size_t i = 0; i < indices.size(); i += 3) {
-                            std::swap(indices[i + 1], indices[i + 2]);
-                        }
-                    }
-                    const rp3d::TriangleVertexArray array(
-                        rp3d::uint32(vertices.size()),
-                        vertices.data(),
-                        sizeof(Vec3),
-                        rp3d::uint32(indices.size() / 3),
-                        indices.data(),
-                        3 * sizeof(unsigned),
-                        rp3d::TriangleVertexArray::VertexDataType::VERTEX_FLOAT_TYPE,
-                        rp3d::TriangleVertexArray::IndexDataType::INDEX_INTEGER_TYPE);
-                    std::vector<rp3d::Message> messages;
-                    body.hull = common.createTriangleMesh(array, messages);
-                    if (!body.hull) {
-                        throw std::runtime_error("Triangle mesh creation failed");
-                    }
-                    body.shape = common.createConcaveMeshShape(body.hull);
-                } catch (const std::exception& e) {
-                    std::fprintf(stderr, "Mesh collider: %s\n", e.what());
-                    release(body);
-                    body.hullInvalid = true;
-                    return;
+    static JPH::ShapeRefC checked(const JPH::ShapeSettings::ShapeResult& result) {
+        if (result.HasError()) {
+            throw std::runtime_error(result.GetError().c_str());
+        }
+        return result.Get();
+    }
+    JPH::ShapeRefC shape(const Box& box, bool collider) {
+        JPH::ShapeRefC result;
+        if (!collider) {
+            return new JPH::EmptyShape;
+        }
+        switch (box.shape) {
+        case ColliderShape::Box:
+            result = checked(
+                JPH::BoxShapeSettings(
+                    jvec(box.halfSize),
+                    std::min(.05f,
+                             std::min({box.halfSize.x, box.halfSize.y, box.halfSize.z}) * .5f))
+                    .Create());
+            break;
+        case ColliderShape::Sphere:
+            result = checked(JPH::SphereShapeSettings(box.radius).Create());
+            break;
+        case ColliderShape::Capsule:
+            result = checked(JPH::CapsuleShapeSettings(box.height * .5f, box.radius).Create());
+            break;
+        case ColliderShape::Cone: {
+            JPH::Array<JPH::Vec3> points;
+            points.push_back({0, box.height * .5f, 0});
+            for (int i = 0; i < 32; ++i) {
+                float angle = 2 * kPi * i / 32;
+                points.push_back({box.radius * std::cos(angle),
+                                  -box.height * .5f,
+                                  box.radius * std::sin(angle)});
+            }
+            result = checked(JPH::ConvexHullShapeSettings(points, 0).Create());
+            break;
+        }
+        case ColliderShape::Mesh: {
+            if (box.model.empty()) {
+                throw std::runtime_error(
+                    "Mesh collider requires a model asset; no convex/box fallback");
+            }
+            auto vertices =
+                simplifyMeshTriangles(loadModelAsset(assets, box.model), box.meshDetail);
+            JPH::TriangleList triangles;
+            for (std::size_t i = 0; i + 2 < vertices.size(); i += 3) {
+                auto a = vertices[i] * box.hullScale, b = vertices[i + 1] * box.hullScale,
+                     c = vertices[i + 2] * box.hullScale;
+                if (dot(cross(b - a, c - a), cross(b - a, c - a)) < 1e-16f) {
+                    continue;
                 }
-                break;
+                if (box.hullScale.x * box.hullScale.y * box.hullScale.z < 0) {
+                    std::swap(b, c);
+                }
+                triangles.emplace_back(jvec(a), jvec(b), jvec(c));
             }
-            case ColliderShape::Cone:
-                body.shape = common.createConvexMeshShape(
-                    coneMesh, {box->radius * 2, box->height, box->radius * 2});
-                break;
+            if (triangles.empty()) {
+                throw std::runtime_error("Mesh collider contains no usable triangles");
             }
-            body.collider = body.body->addCollider(body.shape, place);
-            body.collider->getMaterial().setFrictionCoefficient(box->friction);
-            body.collider->getMaterial().setBounciness(box->bounciness);
+            result = checked(JPH::MeshShapeSettings(triangles).Create());
+            break;
         }
-
-        // An entity without a RigidBody is an obstacle that never moves.
-        body.dynamic = rigidBody != nullptr;
-        body.rigidBody = rigidBody ? *rigidBody : RigidBody{};
-        if (rigidBody && (!box || box->shape != ColliderShape::Mesh)) {
-            applyMass(body);
-            body.body->enableGravity(rigidBody->useGravity);
-            body.body->setLinearVelocity(toRp3d(rigidBody->linearVelocity));
-            body.body->setAngularVelocity(toRp3d(rigidBody->angularVelocity));
-        } else {
-            body.body->setType(rp3d::BodyType::STATIC);
         }
-        wakeAll = true;
+        if (box.center != Vec3{}) {
+            result = checked(JPH::RotatedTranslatedShapeSettings(
+                                 jvec(box.center), JPH::Quat::sIdentity(), result)
+                                 .Create());
+        }
+        return result;
     }
-
-    void applyMass(Body& body) {
-        float mass = std::max(body.rigidBody.mass, 0.0f);
-        if (mass > 0.0f) {
-            mass = std::max(mass, kSmallestMass);
-        }
-        if (body.box.shape == ColliderShape::Mesh) {
-            body.body->setType(rp3d::BodyType::STATIC);
-            return;
-        }
-        if (body.collider) {
-            // ReactPhysics3D works out the mass, the centre of mass and the
-            // resistance to spinning from the shape of the collider and its
-            // density.
-            body.collider->getMaterial().setMassDensity(
-                mass / static_cast<rp3d::ConvexShape*>(body.shape)->getVolume());
-            body.body->updateMassPropertiesFromColliders();
-        } else {
-            body.body->setMass(mass);
-        }
-    }
-
-    // Takes over one number of a Transform if game code changed it: `written`
-    // is what the Transform holds and `shown` what the last update put there.
-    // Returns whether it did.
-    static bool adopt(float written, float shown, float& current, float& previous) {
-        if (written == shown && isUsable(current)) {
-            return false;
-        }
-        current = written;
-        previous = written; // nothing to blend: it did not travel there
-        return true;
-    }
-
-    // Brings the simulation in step with the entity's components.
-    void follow(Body& body,
-                const Transform& transform,
-                const BoxCollider* boxCollider,
-                const RigidBody* rigidBody) {
-        const bool dynamic = rigidBody != nullptr;
-        const bool hasBox = boxCollider != nullptr;
-        const Box box = hasBox ? toBox(*boxCollider, transform.scale) : Box{};
-        if (!body.body && body.hullInvalid && box.shape == body.box.shape &&
-            box.meshDetail == body.box.meshDetail && box.model == body.box.model &&
-            box.hullScale == body.box.hullScale && box.halfSize == body.box.halfSize &&
-            box.revision == body.box.revision) {
-            return;
-        }
-
-        bool moved = false;
-        if (!dynamic) {
-            // An obstacle is always exactly where its Transform says.
-            moved = transform.position != body.position || transform.rotation != body.rotation;
-            body.current = toPose(transform);
-            body.previous = body.current;
-        } else {
-            // Game code moved the entity: the body jumps there. Only what was
-            // changed is taken from the Transform, one number at a time. The
-            // rest of it is not where the simulation has the body: it shows
-            // the body on its way from one step to the next (see update()).
-            moved |= adopt(transform.position.x,
-                           body.position.x,
-                           body.current.position.x,
-                           body.previous.position.x);
-            moved |= adopt(transform.position.y,
-                           body.position.y,
-                           body.current.position.y,
-                           body.previous.position.y);
-            moved |= adopt(transform.position.z,
-                           body.position.z,
-                           body.current.position.z,
-                           body.previous.position.z);
-            if (transform.rotation != body.rotation || !isUsable(body.current.rotation)) {
-                body.current.rotation = normalize(transform.rotation);
-                body.previous.rotation = body.current.rotation;
-                moved = true;
-            }
-            if (!body.body) {
-                body.previous = body.current; // it joins here: no earlier step to blend from
-            }
-        }
-        body.position = transform.position;
-        body.rotation = transform.rotation;
-
-        // ReactPhysics3D 0.10.2 can crash when an obstacle is moved while a
-        // sleeping body rests on it, or when a sleeping body is turned into an
-        // obstacle (see issue 429 in its repository). A body made from scratch
-        // has no such history, so for the changes that would need those calls,
-        // and for a change of shape, the body is made again. They are rare.
-        if (!body.body || dynamic != body.dynamic || hasBox != body.hasBox ||
-            box.halfSize != body.box.halfSize || box.center != body.box.center ||
-            box.meshDetail != body.box.meshDetail || box.model != body.box.model ||
-            box.hullScale != body.box.hullScale || box.revision != body.box.revision ||
-            box.shape != body.box.shape || box.radius != body.box.radius ||
-            box.height != body.box.height || (moved && !dynamic)) {
-            build(body, hasBox ? &box : nullptr, rigidBody);
-            return;
-        }
-
-        // Everything else can be changed on the body as it is.
-        if (hasBox &&
-            (box.friction != body.box.friction || box.bounciness != body.box.bounciness)) {
-            body.collider->getMaterial().setFrictionCoefficient(box.friction);
-            body.collider->getMaterial().setBounciness(box.bounciness);
-            body.box = box;
-            wakeAll = true; // something asleep on a slope may now slide
-        }
-        if (!dynamic) {
-            return;
-        }
-
-        const bool massChanged = rigidBody->mass != body.rigidBody.mass;
-        if (moved || massChanged || rigidBody->useGravity != body.rigidBody.useGravity ||
-            rigidBody->linearVelocity != body.rigidBody.linearVelocity ||
-            rigidBody->angularVelocity != body.rigidBody.angularVelocity) {
-            body.body->setIsSleeping(false); // first: only a body that is awake takes changes well
-            body.rigidBody = *rigidBody;
-            if (massChanged) {
-                applyMass(body);
-            }
-            body.body->enableGravity(rigidBody->useGravity);
-            if (moved) {
-                body.body->setTransform(toRp3d(body.current));
-                wakeAll = true;
-            }
-            // Last: moving a body can alter its velocity inside ReactPhysics3D.
-            body.body->setLinearVelocity(toRp3d(rigidBody->linearVelocity));
-            body.body->setAngularVelocity(toRp3d(rigidBody->angularVelocity));
-        }
-    }
-};
-
-Physics::Physics() : impl_(std::make_unique<Impl>()) {}
-
-Physics::~Physics() = default;
-
-void Physics::update(World& world, float seconds, const std::function<void(float)>& beforeStep) {
-    Impl& impl = *impl_;
-    collisionEvents.clear();
-    impl.contacts.events.clear();
-
-    const auto synchronize = [&]() {
-        // 1. Pick up what game code did since the last update: new, changed and
-        //    removed components, and destroyed entities.
-        for (auto& entry : impl.bodies) {
+    void sync(World& world) {
+        for (auto& entry : bodies) {
             entry.second.visited = false;
         }
+        auto& api = system.GetBodyInterface();
         world.each<Transform>([&](Entity entity, Transform& transform) {
             if (!isActive(world, entity)) {
                 return;
             }
-            const auto* component = world.tryGet<BoxCollider>(entity);
-            const auto resolved =
-                component ? effectiveCollider(world, entity, *component) : Collider{};
-            const BoxCollider* boxCollider = component ? &resolved : nullptr;
-            const RigidBody* rigidBody = world.tryGet<RigidBody>(entity);
-            if (!boxCollider && !rigidBody) {
-                return; // takes no part in the physics
-            }
-            Impl::Body& body = impl.bodyOf(entity, transform);
-            body.visited = true;
-            if (isUsable(transform, boxCollider, rigidBody)) {
-                impl.follow(body, transform, boxCollider, rigidBody);
-                if (body.body) {
-                    body.body->setAngularLockAxisFactor(world.has<CharacterController>(entity)
-                                                            ? rp3d::Vector3(0, 0, 0)
-                                                            : rp3d::Vector3(1, 1, 1));
-                }
-                if (body.body) {
-                    if (body.collider) {
-                        const bool trigger = boxCollider && boxCollider->isTrigger;
-                        if (body.collider->getIsTrigger() != trigger) {
-                            body.collider->setIsTrigger(trigger);
-                            if (!trigger) {
-                                body.collider->setIsSimulationCollider(true);
-                            }
-                        }
-                    }
-                    if (rigidBody) {
-                        const auto desired = body.box.shape == ColliderShape::Mesh
-                                                 ? rp3d::BodyType::STATIC
-                                             : rigidBody->isKinematic ? rp3d::BodyType::KINEMATIC
-                                             : rigidBody->mass > 0    ? rp3d::BodyType::DYNAMIC
-                                                                      : rp3d::BodyType::STATIC;
-                        if (body.body->getType() != desired) {
-                            body.body->setType(desired);
-                        }
-                        body.body->setLinearDamping(std::max(0.f, rigidBody->drag));
-                        body.body->setAngularDamping(std::max(0.f, rigidBody->angularDrag));
-                    }
-                }
-                body.reported = false;
-            } else {
-                // Left out, and left alone, until game code has repaired it.
-                impl.release(body);
-                if (!body.reported) {
-                    std::fprintf(
-                        stderr,
-                        "Physics: entity %u is left out of the simulation: a number in its "
-                        "Transform, BoxCollider or RigidBody is NaN, infinite or beyond a "
-                        "million\n",
-                        static_cast<unsigned>(entity.index));
-                    body.reported = true;
-                }
-            }
-        });
-        for (auto entry = impl.bodies.begin(); entry != impl.bodies.end();) {
-            if (entry->second.visited) {
-                ++entry;
-            } else {
-                impl.release(entry->second);
-                entry = impl.bodies.erase(entry);
-            }
-        }
-        if (impl.wakeAll) {
-            for (auto& entry : impl.bodies) {
-                if (entry.second.body) {
-                    entry.second.body->setIsSleeping(false);
-                }
-            }
-            impl.wakeAll = false;
-        }
-    };
-    synchronize();
-
-    // 2. Simulate the time that has passed, one fixed step at a time. What is
-    //    left over, less than a step, waits for the next update.
-    if (seconds > 0.0f) { // also false for NaN
-        impl.pendingSeconds += std::min(seconds, kLongestFrameSeconds);
-    }
-    while (impl.pendingSeconds >= kStepSeconds) {
-        impl.pendingSeconds -= kStepSeconds;
-        if (beforeStep) {
-            beforeStep(kStepSeconds);
-            synchronize();
-        }
-        world.each<RigidBody>([&](Entity e, RigidBody& rb) {
-            auto found = impl.bodies.find(keyOf(e));
-            if (found == impl.bodies.end() || !found->second.body || rb.mass <= 0 ||
-                rb.isKinematic) {
+            const auto* source = world.tryGet<Collider>(entity);
+            const auto resolved = source ? effectiveCollider(world, entity, *source) : Collider{};
+            const auto* rigid = world.tryGet<RigidBody>(entity);
+            if ((!source && !rigid) || !isUsable(transform, source ? &resolved : nullptr, rigid)) {
                 return;
             }
-            auto* body = found->second.body;
-            if (rb.impulse != Vec3{}) {
-                body->setIsSleeping(false);
-                body->setLinearVelocity(body->getLinearVelocity() +
-                                        toRp3d(rb.impulse * (1 / rb.mass)));
-                rb.impulse = {};
+            auto& body = bodies[keyOf(entity)];
+            const bool fresh = body.id.IsInvalid();
+            body.entity = entity;
+            body.visited = true;
+            const Box box = source ? toBox(resolved, transform.scale) : Box{};
+            const bool sensor = source && resolved.isTrigger;
+            auto motion = rigid && rigid->isKinematic ? JPH::EMotionType::Kinematic
+                          : rigid && rigid->mass > 0  ? JPH::EMotionType::Dynamic
+                                                      : JPH::EMotionType::Static;
+            if (source && box.shape == ColliderShape::Mesh) {
+                motion = JPH::EMotionType::Static;
             }
-            if (rb.force != Vec3{}) {
-                body->setIsSleeping(false);
-                body->applyWorldForceAtCenterOfMass(toRp3d(rb.force));
-                rb.force = {};
+            if (sensor && box.shape != ColliderShape::Mesh && motion == JPH::EMotionType::Static) {
+                motion = JPH::EMotionType::Kinematic;
+            }
+            const bool controller = world.has<CharacterController>(entity);
+            const bool changed =
+                body.hasCollider != bool(source) || body.hasRigid != bool(rigid) ||
+                body.sensor != sensor || body.controller != controller || body.motion != motion ||
+                box.shape != body.box.shape || box.halfSize != body.box.halfSize ||
+                box.center != body.box.center || box.radius != body.box.radius ||
+                box.height != body.box.height || box.model != body.box.model ||
+                box.meshDetail != body.box.meshDetail || box.revision != body.box.revision ||
+                box.hullScale != body.box.hullScale || (rigid && rigid->mass != body.rigid.mass);
+            if (fresh && body.failed && !changed) {
+                return;
+            }
+            const bool rebuild = fresh || changed;
+            Pose pose = fresh ? toPose(transform) : body.current;
+            bool moved = fresh;
+            if (fresh || motion == JPH::EMotionType::Static) {
+                pose = toPose(transform);
+                moved = fresh || transform.position != body.shown.position ||
+                        transform.rotation != body.shown.rotation;
+            } else {
+                for (int axis = 0; axis < 3; ++axis) {
+                    float* p = axis == 0   ? &pose.position.x
+                               : axis == 1 ? &pose.position.y
+                                           : &pose.position.z;
+                    float t = axis == 0   ? transform.position.x
+                              : axis == 1 ? transform.position.y
+                                          : transform.position.z;
+                    float old = axis == 0   ? body.shown.position.x
+                                : axis == 1 ? body.shown.position.y
+                                            : body.shown.position.z;
+                    if (t != old) {
+                        *p = t;
+                        moved = true;
+                    }
+                }
+                if (transform.rotation != body.shown.rotation) {
+                    pose.rotation = normalize(transform.rotation);
+                    moved = true;
+                }
+            }
+            try {
+                if (rebuild) {
+                    release(body);
+                    const auto geometry = shape(box, source != nullptr);
+                    JPH::BodyCreationSettings settings(geometry,
+                                                       jvec(pose.position),
+                                                       jquat(pose.rotation),
+                                                       motion,
+                                                       motion == JPH::EMotionType::Static ? 0 : 1);
+                    settings.mUserData = keyOf(entity);
+                    settings.mIsSensor = sensor;
+                    settings.mCollideKinematicVsNonDynamic = sensor;
+                    settings.mAllowSleeping = !sensor;
+                    settings.mFriction = box.friction;
+                    settings.mRestitution = box.bounciness;
+                    if (controller) {
+                        settings.mAllowedDOFs = JPH::EAllowedDOFs::TranslationX |
+                                                JPH::EAllowedDOFs::TranslationY |
+                                                JPH::EAllowedDOFs::TranslationZ;
+                    }
+                    if (motion == JPH::EMotionType::Dynamic) {
+                        settings.mOverrideMassProperties =
+                            JPH::EOverrideMassProperties::MassAndInertiaProvided;
+                        auto mass = geometry->GetMassProperties();
+                        if (mass.mMass > 0) {
+                            mass.ScaleToMass(std::max(rigid->mass, kSmallestMass));
+                        } else {
+                            mass.SetMassAndInertiaOfSolidBox(JPH::Vec3::sReplicate(1),
+                                                             std::max(rigid->mass, kSmallestMass));
+                        }
+                        settings.mMassPropertiesOverride = mass;
+                    }
+                    body.id = api.CreateAndAddBody(settings,
+                                                   motion == JPH::EMotionType::Static
+                                                       ? JPH::EActivation::DontActivate
+                                                       : JPH::EActivation::Activate);
+                    if (body.id.IsInvalid()) {
+                        throw std::runtime_error("Jolt body capacity exhausted");
+                    }
+                    body.previous = body.current = pose;
+                } else if (moved) {
+                    api.SetPositionAndRotation(body.id,
+                                               jvec(pose.position),
+                                               jquat(pose.rotation),
+                                               JPH::EActivation::Activate);
+                    body.previous = body.current = pose;
+                }
+                if ((moved && motion == JPH::EMotionType::Static) ||
+                    box.friction != body.box.friction || box.bounciness != body.box.bounciness) {
+                    needsWake_ = true;
+                }
+                api.SetFriction(body.id, box.friction);
+                api.SetRestitution(body.id, box.bounciness);
+                if (rigid && motion != JPH::EMotionType::Static) {
+                    api.SetGravityFactor(body.id, rigid->useGravity ? 1 : 0);
+                    if (rebuild || rigid->linearVelocity != body.rigid.linearVelocity ||
+                        rigid->angularVelocity != body.rigid.angularVelocity) {
+                        api.SetLinearAndAngularVelocity(body.id,
+                                                        jvec(rigid->linearVelocity),
+                                                        controller ? JPH::Vec3::sZero()
+                                                                   : jvec(rigid->angularVelocity));
+                    }
+                    JPH::BodyLockWrite lock(system.GetBodyLockInterface(), body.id);
+                    if (lock.Succeeded()) {
+                        auto* properties = lock.GetBody().GetMotionProperties();
+                        properties->SetLinearDamping(rigid->drag);
+                        properties->SetAngularDamping(rigid->angularDrag);
+                    }
+                }
+                body.box = box;
+                body.hasCollider = source != nullptr;
+                body.hasRigid = rigid != nullptr;
+                body.sensor = sensor;
+                body.controller = controller;
+                body.motion = motion;
+                body.rigid = rigid ? *rigid : RigidBody{};
+                body.shown = transform;
+                body.failed = false;
+            } catch (const std::exception& error) {
+                release(body);
+                std::fprintf(stderr, "Jolt entity %u: %s\n", entity.index, error.what());
+                body.box = box;
+                body.hasCollider = source != nullptr;
+                body.hasRigid = rigid != nullptr;
+                body.sensor = sensor;
+                body.controller = controller;
+                body.motion = motion;
+                body.rigid = rigid ? *rigid : RigidBody{};
+                body.failed = true;
             }
         });
-        impl.world->update(kStepSeconds);
+        for (auto it = bodies.begin(); it != bodies.end();) {
+            if (!it->second.visited) {
+                release(it->second);
+                it = bodies.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        if (needsWake_) {
+            for (auto& entry : bodies) {
+                if (!entry.second.id.IsInvalid() &&
+                    entry.second.motion != JPH::EMotionType::Static) {
+                    api.ActivateBody(entry.second.id);
+                }
+            }
+            needsWake_ = false;
+        }
+    }
+    void events(std::vector<Physics::TriggerEvent>& triggers,
+                std::vector<Physics::TriggerEvent>& collisions) {
+        // Jolt removes cached contacts when bodies go to sleep. That is not
+        // a gameplay exit: retain sleeping pairs until woken or explicitly removed.
+        auto& bodyAPI = system.GetBodyInterface();
+        for (auto it = contacts.removed.begin(); it != contacts.removed.end();) {
+            const auto found = contacts.live.find(*it);
+            if (found == contacts.live.end()) {
+                it = contacts.removed.erase(it);
+                continue;
+            }
+            if (bodyAPI.IsActive(JPH::BodyID(std::get<0>(*it))) ||
+                bodyAPI.IsActive(JPH::BodyID(std::get<1>(*it)))) {
+                contacts.live.erase(found);
+                it = contacts.removed.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        decltype(pairs) now;
+        for (const auto& contact : contacts.live) {
+            auto pair = contact.second;
+            auto a = keyOf(pair.a), b = keyOf(pair.b);
+            if (a > b) {
+                std::swap(a, b);
+                std::swap(pair.a, pair.b);
+            }
+            now[{a, b}] = pair;
+        }
+        // Explicit trigger shape queries also cover stationary/static pairs,
+        // which rigid-body solvers normally omit from their active-contact pass.
+        for (const auto& entry : bodies) {
+            const auto& sensor = entry.second;
+            if (!sensor.sensor || sensor.id.IsInvalid()) {
+                continue;
+            }
+            struct ExcludeSelf : JPH::BodyFilter {
+                JPH::BodyID self;
+                bool mesh;
+                ExcludeSelf(JPH::BodyID id, bool isMesh) : self(id), mesh(isMesh) {}
+                bool ShouldCollide(const JPH::BodyID& id) const override {
+                    return id != self;
+                }
+                bool ShouldCollideLocked(const JPH::Body& body) const override {
+                    // Jolt has no mesh-vs-mesh narrow phase. Concave geometry is
+                    // retained, not silently replaced by a convex hull.
+                    return !mesh || !body.GetShape()->MustBeStatic();
+                }
+            } filter(sensor.id, sensor.box.shape == ColliderShape::Mesh);
+            const auto& api = system.GetBodyInterface();
+            const auto geometry = api.GetShape(sensor.id);
+            JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
+            JPH::CollideShapeSettings settings;
+            system.GetNarrowPhaseQuery().CollideShape(geometry,
+                                                      JPH::Vec3::sReplicate(1),
+                                                      api.GetCenterOfMassTransform(sensor.id),
+                                                      settings,
+                                                      JPH::RVec3::sZero(),
+                                                      collector,
+                                                      {},
+                                                      {},
+                                                      filter);
+            for (const auto& hit : collector.mHits) {
+                const auto entity = Contacts::entity(api.GetUserData(hit.mBodyID2));
+                auto a = keyOf(sensor.entity), b = keyOf(entity);
+                Pair pair{sensor.entity, entity, true};
+                if (a > b) {
+                    std::swap(a, b);
+                    std::swap(pair.a, pair.b);
+                }
+                now[{a, b}] = pair;
+            }
+        }
+        auto emit = [&](const Pair& pair, int phase) {
+            auto& target = pair.sensor ? triggers : collisions;
+            target.push_back({pair.a, pair.b, phase});
+            target.push_back({pair.b, pair.a, phase});
+        };
+        for (const auto& old : pairs) {
+            if (!now.count(old.first) || now.at(old.first).sensor != old.second.sensor) {
+                emit(old.second, 2);
+            }
+        }
+        for (const auto& pair : now) {
+            emit(pair.second,
+                 pairs.count(pair.first) && pairs.at(pair.first).sensor == pair.second.sensor ? 1
+                                                                                              : 0);
+        }
+        pairs = std::move(now);
+    }
+};
+
+Physics::Physics() : impl_(std::make_unique<Impl>()) {}
+Physics::~Physics() = default;
+void Physics::reset() {
+    const auto root = impl_->assets.root;
+    impl_ = std::make_unique<Impl>();
+    impl_->assets.root = root;
+    triggerEvents.clear();
+    collisionEvents.clear();
+}
+void Physics::setAssetRoot(const std::filesystem::path& root) {
+    if (impl_->assets.root != root) {
+        impl_->assets.root = root;
+        for (auto& entry : impl_->bodies) {
+            if (entry.second.box.shape == ColliderShape::Mesh) {
+                impl_->release(entry.second);
+            }
+        }
+    }
+}
+void Physics::update(World& world, float seconds, const std::function<void(float)>& beforeStep) {
+    auto& impl = *impl_;
+    auto& api = impl.system.GetBodyInterface();
+    collisionEvents.clear();
+    triggerEvents.clear();
+    impl.sync(world);
+    if (std::isfinite(seconds) && seconds > 0) {
+        impl.accumulated += std::min(seconds, kLongestFrameSeconds);
+    }
+    while (impl.accumulated >= kStepSeconds) {
+        if (beforeStep) {
+            beforeStep(kStepSeconds);
+            impl.sync(world);
+        }
         for (auto& entry : impl.bodies) {
-            Impl::Body& body = entry.second;
-            if (!body.body || !body.dynamic) {
+            auto& body = entry.second;
+            if (body.id.IsInvalid()) {
                 continue;
             }
             body.previous = body.current;
-            body.current = toPose(body.body->getTransform());
-            body.rigidBody.linearVelocity = toVec3(body.body->getLinearVelocity());
-            body.rigidBody.angularVelocity = toVec3(body.body->getAngularVelocity());
-
-            // The step took the body out of the range the simulation can
-            // work with: take it out at once, before it affects the bodies
-            // it touches.
-            if (!isUsable(body.current) || !isUsable(body.rigidBody.linearVelocity) ||
-                !isUsable(body.rigidBody.angularVelocity)) {
-                impl.release(body);
-                body.failed = true;
+            if (body.motion == JPH::EMotionType::Dynamic) {
+                auto& rigid = world.get<RigidBody>(body.entity);
+                if (isUsable(rigid.force) && rigid.force != Vec3{}) {
+                    api.AddForce(body.id, jvec(rigid.force));
+                }
+                if (isUsable(rigid.impulse) && rigid.impulse != Vec3{}) {
+                    api.AddImpulse(body.id, jvec(rigid.impulse));
+                }
+                rigid.force = {};
+                rigid.impulse = {};
             }
         }
-    }
-
-    // 3. Hand the results back to the components. The time that has passed is
-    //    rarely a whole number of steps, so showing the latest step as it is
-    //    would make the motion stutter. Each entity is shown on its way from
-    //    the previous step to the latest one instead, as far along as the
-    //    leftover time reaches into a step.
-    const float blend = impl.pendingSeconds / kStepSeconds;
-    for (auto& entry : impl.bodies) {
-        Impl::Body& body = entry.second;
-        if (!body.dynamic || !(body.body || body.failed)) {
-            continue;
+        const auto error = impl.system.Update(kStepSeconds, 1, &impl.allocator, &impl.jobs);
+        if (error != JPH::EPhysicsUpdateError::None) {
+            std::fprintf(stderr, "Jolt update capacity error: %u\n", unsigned(error));
         }
-        Transform& transform = world.get<Transform>(body.entity);
-        if (body.failed) {
-            // Shown as they are: the next update finds the entity unusable,
-            // says so, and leaves it out until game code has repaired it.
-            transform.position = body.current.position;
-            transform.rotation = body.current.rotation;
-            body.failed = false;
-        } else {
-            transform.position = lerp(body.previous.position, body.current.position, blend);
-            transform.rotation = nlerp(body.previous.rotation, body.current.rotation, blend);
-        }
-        body.position = transform.position;
-        body.rotation = transform.rotation;
-
-        RigidBody& rigidBody = world.get<RigidBody>(body.entity);
-        rigidBody.linearVelocity = body.rigidBody.linearVelocity;
-        rigidBody.angularVelocity = body.rigidBody.angularVelocity;
-    }
-    collisionEvents.swap(impl.contacts.events);
-    triggerEvents.clear();
-    if (seconds > 0) {
-        decltype(impl.triggerPairs) pairs;
-        for (auto a = impl.bodies.begin(); a != impl.bodies.end(); ++a) {
-            if (!a->second.body || !a->second.collider ||
-                !world.get<Collider>(a->second.entity).isTrigger) {
+        for (auto& entry : impl.bodies) {
+            auto& body = entry.second;
+            if (body.id.IsInvalid()) {
                 continue;
             }
-            for (auto b = impl.bodies.begin(); b != impl.bodies.end(); ++b) {
-                if (a == b || !b->second.body || !b->second.collider) {
+            body.current = {vec(api.GetPosition(body.id)), quat(api.GetRotation(body.id))};
+            if (body.hasRigid) {
+                body.rigid.linearVelocity = vec(api.GetLinearVelocity(body.id));
+                body.rigid.angularVelocity = vec(api.GetAngularVelocity(body.id));
+                if (!isUsable(body.current) || !isUsable(body.rigid.linearVelocity) ||
+                    !isUsable(body.rigid.angularVelocity)) {
+                    std::fprintf(
+                        stderr,
+                        "Jolt: entity %u produced an invalid state and was removed from simulation\n",
+                        body.entity.index);
+                    impl.release(body);
                     continue;
                 }
-                const auto key = std::minmax(a->first, b->first);
-                if (pairs.count(key)) {
-                    continue;
-                }
-                // Most trigger/body pairs are far apart. The exact overlap query
-                // builds a collision snapshot, so reject disjoint bounds first.
-                if (!a->second.collider->getWorldAABB().testCollision(
-                        b->second.collider->getWorldAABB())) {
-                    continue;
-                }
-                if (impl.world->testOverlap(a->second.body, b->second.body)) {
-                    auto x = a->second.entity, y = b->second.entity;
-                    pairs[key] = {x, y};
-                    const int phase = impl.triggerPairs.count(key) ? 1 : 0;
-                    triggerEvents.push_back({x, y, phase});
-                    triggerEvents.push_back({y, x, phase});
-                }
+                auto& output = world.get<RigidBody>(body.entity);
+                output.linearVelocity = body.rigid.linearVelocity;
+                output.angularVelocity = body.rigid.angularVelocity;
             }
         }
-        for (const auto& old : impl.triggerPairs) {
-            if (!pairs.count(old.first)) {
-                auto [x, y] = old.second;
-                triggerEvents.push_back({x, y, 2});
-                triggerEvents.push_back({y, x, 2});
-            }
+        impl.events(triggerEvents, collisionEvents);
+        impl.accumulated -= kStepSeconds;
+    }
+    const float blend = impl.accumulated / kStepSeconds;
+    for (auto& entry : impl.bodies) {
+        auto& body = entry.second;
+        if (body.id.IsInvalid() || !body.hasRigid) {
+            continue;
         }
-        impl.triggerPairs = std::move(pairs);
+        auto& transform = world.get<Transform>(body.entity);
+        transform.position =
+            body.previous.position + (body.current.position - body.previous.position) * blend;
+        transform.rotation = nlerp(body.previous.rotation, body.current.rotation, blend);
+        body.shown = transform;
+        auto& rigid = world.get<RigidBody>(body.entity);
+        rigid.linearVelocity = body.rigid.linearVelocity;
+        rigid.angularVelocity = body.rigid.angularVelocity;
     }
 }
-
 std::vector<RayHit> Physics::raycastAll(const Ray& ray,
-                                        float maxDistance,
+                                        float distance,
                                         const std::function<bool(Entity)>& filter) const {
     std::vector<RayHit> hits;
     const auto direction = normalize(ray.direction);
     if (!isUsable(ray.origin) || !isUsable(direction) || direction == Vec3{} ||
-        !std::isfinite(maxDistance) || maxDistance <= 0) {
+        !std::isfinite(distance) || distance <= 0) {
         return hits;
     }
-    // Let the physics broad phase prune distant colliders instead of ray-testing
-    // every body (especially expensive for each ray in a line-of-sight fan).
-    struct Callback final : rp3d::RaycastCallback {
-        std::vector<RayHit>& hits;
-        const std::function<bool(Entity)>& filter;
-        float range;
-        Callback(std::vector<RayHit>& h, const std::function<bool(Entity)>& f, float r)
-            : hits(h), filter(f), range(r) {}
-        rp3d::decimal notifyRaycastHit(const rp3d::RaycastInfo& info) override {
-            const auto* body = static_cast<const Impl::Body*>(info.body->getUserData());
-            if (body && (!filter || filter(body->entity))) {
-                hits.push_back({body->entity,
-                                toVec3(info.worldPoint),
-                                toVec3(info.worldNormal),
-                                float(info.hitFraction) * range});
-            }
-            return 1; // Keep all hits; ignored layers never clip the query.
+    distance = std::min(distance, kLargestNumber);
+    JPH::AllHitCollisionCollector<JPH::CastRayCollector> collector;
+    JPH::RayCastSettings settings;
+    settings.mTreatConvexAsSolid = false;
+    impl_->system.GetNarrowPhaseQuery().CastRay(
+        JPH::RRayCast(jvec(ray.origin), jvec(direction * distance)), settings, collector);
+    for (const auto& result : collector.mHits) {
+        JPH::BodyLockRead lock(impl_->system.GetBodyLockInterface(), result.mBodyID);
+        if (!lock.Succeeded()) {
+            continue;
         }
-    } callback(hits, filter, std::min(maxDistance, kLargestNumber));
-    impl_->world->raycast(
-        rp3d::Ray(toRp3d(ray.origin), toRp3d(ray.origin + direction * callback.range)), &callback);
+        const auto entity = Impl::Contacts::entity(lock.GetBody().GetUserData());
+        if (filter && !filter(entity)) {
+            continue;
+        }
+        const auto point = ray.origin + direction * (distance * result.mFraction);
+        hits.push_back(
+            {entity,
+             point,
+             vec(lock.GetBody().GetWorldSpaceSurfaceNormal(result.mSubShapeID2, jvec(point))),
+             distance * result.mFraction});
+    }
     std::sort(hits.begin(), hits.end(), [](const auto& a, const auto& b) {
         return a.distance < b.distance;
     });
+    std::set<std::uint64_t> seen;
+    hits.erase(
+        std::remove_if(hits.begin(),
+                       hits.end(),
+                       [&](const auto& hit) { return !seen.insert(keyOf(hit.entity)).second; }),
+        hits.end());
     return hits;
 }
 bool Physics::raycast(const Ray& ray,
                       float distance,
                       RayHit& hit,
                       const std::function<bool(Entity)>& filter) const {
-    const auto direction = normalize(ray.direction);
-    if (!isUsable(ray.origin) || !isUsable(direction) || direction == Vec3{} ||
-        !std::isfinite(distance) || distance <= 0) {
+    const auto hits = raycastAll(ray, distance, filter);
+    if (hits.empty()) {
         return false;
     }
-    struct Callback final : rp3d::RaycastCallback {
-        RayHit& hit;
-        const std::function<bool(Entity)>& filter;
-        float range;
-        bool found = false;
-        Callback(RayHit& h, const std::function<bool(Entity)>& f, float r)
-            : hit(h), filter(f), range(r) {}
-        rp3d::decimal notifyRaycastHit(const rp3d::RaycastInfo& info) override {
-            const auto* body = static_cast<const Impl::Body*>(info.body->getUserData());
-            if (!body || (filter && !filter(body->entity))) {
-                return -1;
-            }
-            hit = {body->entity,
-                   toVec3(info.worldPoint),
-                   toVec3(info.worldNormal),
-                   float(info.hitFraction) * range};
-            found = true;
-            return info.hitFraction; // Clip traversal to the closest accepted hit.
-        }
-    } callback(hit, filter, std::min(distance, kLargestNumber));
-    impl_->world->raycast(
-        rp3d::Ray(toRp3d(ray.origin), toRp3d(ray.origin + direction * callback.range)), &callback);
-    return callback.found;
+    hit = hits.front();
+    return true;
 }
 std::vector<RayHit>
 Physics::overlapSphere(Vec3 origin, float radius, const std::function<bool(Entity)>& filter) const {
@@ -918,89 +807,52 @@ Physics::overlapSphere(Vec3 origin, float radius, const std::function<bool(Entit
     if (!isUsable(origin) || !std::isfinite(radius) || radius <= 0 || radius > kLargestNumber) {
         return hits;
     }
-    auto* shape = impl_->common.createSphereShape(radius);
-    auto* probe = impl_->world->createRigidBody(toRp3d(Pose{origin, {}}));
-    probe->setType(rp3d::BodyType::STATIC);
-    probe->addCollider(shape, rp3d::Transform::identity());
-    for (const auto& entry : impl_->bodies) {
-        const auto& body = entry.second;
-        if (!body.body || !body.collider || (filter && !filter(body.entity))) {
+    const auto shape = Impl::checked(JPH::SphereShapeSettings(radius).Create());
+    JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
+    JPH::CollideShapeSettings settings;
+    impl_->system.GetNarrowPhaseQuery().CollideShape(shape,
+                                                     JPH::Vec3::sReplicate(1),
+                                                     JPH::RMat44::sTranslation(jvec(origin)),
+                                                     settings,
+                                                     JPH::RVec3::sZero(),
+                                                     collector);
+    std::set<std::uint64_t> seen;
+    for (const auto& contact : collector.mHits) {
+        JPH::BodyLockRead lock(impl_->system.GetBodyLockInterface(), contact.mBodyID2);
+        if (!lock.Succeeded()) {
             continue;
         }
-        if (impl_->world->testOverlap(probe, body.body)) {
-            Vec3 point = origin, normal{};
-            float distance = 0;
-            const auto delta =
-                toVec3(body.collider->getLocalToWorldTransform().getPosition()) - origin;
-            rp3d::RaycastInfo info;
-            if (dot(delta, delta) > 1e-8f &&
-                body.collider->raycast(
-                    rp3d::Ray(toRp3d(origin),
-                              toRp3d(origin +
-                                     normalize(delta) * (radius + std::sqrt(dot(delta, delta))))),
-                    info)) {
-                point = toVec3(info.worldPoint);
-                normal = toVec3(info.worldNormal);
-                distance = std::sqrt(dot(point - origin, point - origin));
-            }
-            hits.push_back({body.entity, point, normal, distance});
+        const auto entity = Impl::Contacts::entity(lock.GetBody().GetUserData());
+        if ((filter && !filter(entity)) || !seen.insert(keyOf(entity)).second) {
+            continue;
         }
+        const auto point = vec(contact.mContactPointOn2);
+        const auto delta = point - origin;
+        hits.push_back({entity,
+                        point,
+                        vec(-contact.mPenetrationAxis.NormalizedOr(JPH::Vec3::sAxisY())),
+                        std::sqrt(dot(delta, delta))});
     }
-    impl_->world->destroyRigidBody(probe);
-    impl_->common.destroySphereShape(shape);
     std::sort(hits.begin(), hits.end(), [](const auto& a, const auto& b) {
         return a.distance < b.distance;
     });
     return hits;
 }
-
 bool Physics::checkBox(Vec3 center, Vec3 size) const {
     if (!isUsable(center) || !isUsable(size)) {
         return false;
     }
-    const Vec3 halfSize = {
-        std::abs(size.x) * 0.5f, std::abs(size.y) * 0.5f, std::abs(size.z) * 0.5f};
-
-    for (const auto& entry : impl_->bodies) {
-        const Impl::Body& body = entry.second;
-        if (body.body && body.hasBox && body.box.shape != ColliderShape::Box) {
-            // Use the actual curved collider, not its bounding box.
-            auto* shape = impl_->common.createBoxShape(toRp3d(Vec3{std::max(halfSize.x, 0.0005f),
-                                                                   std::max(halfSize.y, 0.0005f),
-                                                                   std::max(halfSize.z, 0.0005f)}));
-            auto* probe = impl_->world->createRigidBody(toRp3d(Pose{center, {}}));
-            probe->setType(rp3d::BodyType::STATIC);
-            probe->addCollider(shape, rp3d::Transform::identity());
-            const bool overlaps = impl_->world->testOverlap(probe, body.body);
-            impl_->world->destroyRigidBody(probe);
-            impl_->common.destroyBoxShape(shape);
-            if (overlaps) {
-                return true;
-            }
-            continue;
-        }
-        if (body.body && body.hasBox &&
-            boxesMeet(center, halfSize, toOrientedBox(body.current, body.box))) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void Physics::setAssetRoot(const std::filesystem::path& root) {
-    if (impl_->assets.root != root) {
-        impl_->assets.root = root;
-        impl_->hullPoints.clear();
-        for (auto& entry : impl_->bodies) {
-            if (entry.second.box.shape == ColliderShape::Mesh) {
-                impl_->release(entry.second);
-                entry.second.hullInvalid = false;
-            }
-        }
-    }
-}
-void Physics::reset() {
-    impl_ = std::make_unique<Impl>();
-    triggerEvents.clear();
-    collisionEvents.clear();
+    auto half = Vec3{std::max(std::abs(size.x) * .5f, .0005f),
+                     std::max(std::abs(size.y) * .5f, .0005f),
+                     std::max(std::abs(size.z) * .5f, .0005f)};
+    const auto shape = Impl::checked(JPH::BoxShapeSettings(jvec(half), 0).Create());
+    JPH::AnyHitCollisionCollector<JPH::CollideShapeCollector> collector;
+    JPH::CollideShapeSettings settings;
+    impl_->system.GetNarrowPhaseQuery().CollideShape(shape,
+                                                     JPH::Vec3::sReplicate(1),
+                                                     JPH::RMat44::sTranslation(jvec(center)),
+                                                     settings,
+                                                     JPH::RVec3::sZero(),
+                                                     collector);
+    return collector.HadHit();
 }

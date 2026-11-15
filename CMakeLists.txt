@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16...3.31)
+cmake_minimum_required(VERSION 3.20...3.31)
 
 project(LegacyEngine LANGUAGES C CXX)
 
@@ -45,51 +45,30 @@ else()
   FetchContent_MakeAvailable(SDL3)
 endif()
 
-# --- ReactPhysics3D (physics) -----------------------------------------------
-#
-# Always downloaded and linked statically. It is fetched as an archive rather
-# than with git: the archive is a fraction of the size, and it leaves out the
-# git submodules, which only the demo program of ReactPhysics3D needs.
+# --- Jolt physics (static, portable CPU baseline) ----------------------------
+set(BUILD_SHARED_LIBS OFF)
+set(GENERATE_DEBUG_SYMBOLS OFF CACHE BOOL "" FORCE)
+set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
+set(CPP_RTTI_ENABLED ON CACHE BOOL "" FORCE)
+set(USE_SSE4_1 OFF CACHE BOOL "" FORCE)
+set(USE_SSE4_2 OFF CACHE BOOL "" FORCE)
+set(USE_F16C OFF CACHE BOOL "" FORCE)
+set(USE_LZCNT OFF CACHE BOOL "" FORCE)
+set(USE_TZCNT OFF CACHE BOOL "" FORCE)
+set(ENABLE_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(USE_AVX OFF CACHE BOOL "" FORCE)
+set(USE_AVX2 OFF CACHE BOOL "" FORCE)
+set(USE_AVX512 OFF CACHE BOOL "" FORCE)
+set(USE_FMADD OFF CACHE BOOL "" FORCE)
+set(JPH_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+set(JPH_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(jolt
+  URL https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.3.0.tar.gz
+  SOURCE_SUBDIR Build)
+FetchContent_MakeAvailable(jolt)
 
-set(LEGACY_REACTPHYSICS3D_TAG "v0.10.2" CACHE STRING "ReactPhysics3D git tag to download")
-
-message(STATUS "LegacyEngine: downloading ReactPhysics3D ${LEGACY_REACTPHYSICS3D_TAG}")
-FetchContent_Declare(
-  ReactPhysics3D
-  URL https://github.com/DanielChappuis/reactphysics3d/archive/refs/tags/${LEGACY_REACTPHYSICS3D_TAG}.tar.gz
-)
-set(BUILD_SHARED_LIBS OFF) # ReactPhysics3D follows this variable
-FetchContent_MakeAvailable(ReactPhysics3D)
-
-# ReactPhysics3D 0.10.2 uses std::chrono::system_clock::to_time_t in
-# DefaultLogger.h/.cpp without including <chrono>. Some standard libraries
-# provide it transitively, but MSVC does not. Repair the downloaded header so
-# both the dependency and its consumers receive the required declaration.
-# Keep this idempotent for existing build directories and newer upstream tags.
-set(rp3d_logger_header "${reactphysics3d_SOURCE_DIR}/include/reactphysics3d/utils/DefaultLogger.h")
-file(READ "${rp3d_logger_header}" rp3d_logger_source)
-if(NOT rp3d_logger_source MATCHES "#include[ \t]*[<\"]chrono[>\"]")
-  string(REPLACE "#include <ctime>"
-    "#include <ctime>\n#include <chrono> // LegacyEngine compatibility fix: explicit clock declarations"
-    rp3d_logger_fixed "${rp3d_logger_source}")
-  if(rp3d_logger_fixed STREQUAL rp3d_logger_source)
-    message(FATAL_ERROR "ReactPhysics3D logger changed: review the missing <chrono> compatibility fix")
-  endif()
-  file(WRITE "${rp3d_logger_header}" "${rp3d_logger_fixed}")
-endif()
-
-# The warnings of its code are not ours to fix: none while it is compiled, and
-# none from its headers when our code includes them.
-if(MSVC)
-  target_compile_options(reactphysics3d PRIVATE /w)
-else()
-  target_compile_options(reactphysics3d PRIVATE -w)
-endif()
-get_target_property(reactphysics3d_includes reactphysics3d INTERFACE_INCLUDE_DIRECTORIES)
-set_target_properties(reactphysics3d PROPERTIES
-  INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${reactphysics3d_includes}")
-
-# --- Assimp: static model import, all supported source formats ----------------
+# --- Assimp: static OBJ and glTF-only model import --------------------------
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
@@ -97,7 +76,15 @@ set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
 set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT ON CACHE BOOL "" FORCE)
+get_cmake_property(legacy_cache_variables CACHE_VARIABLES)
+foreach(variable IN LISTS legacy_cache_variables)
+  if(variable MATCHES "^ASSIMP_BUILD_.*_IMPORTER$" AND NOT variable MATCHES "^ASSIMP_BUILD_(OBJ|GLTF)_IMPORTER$")
+    set(${variable} OFF CACHE BOOL "" FORCE)
+  endif()
+endforeach()
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_BLEND_IMPORTER OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(assimp
   URL https://github.com/assimp/assimp/archive/refs/tags/v5.4.3.tar.gz)
@@ -174,7 +161,7 @@ target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3)
 
 add_library(legacy_thumbnails STATIC src/assets/texture_preview.cpp)
 target_include_directories(legacy_thumbnails PUBLIC src PRIVATE third_party/stb)
-target_link_libraries(legacy_thumbnails PUBLIC SDL3::SDL3 glad)
+target_link_libraries(legacy_thumbnails PUBLIC SDL3::SDL3 glad Threads::Threads)
 target_link_libraries(legacy_imgui PUBLIC legacy_thumbnails)
 
 # SIMD parser with a compatibility DOM bridge (no second text parse).
@@ -216,7 +203,7 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf"
 string(REGEX REPLACE "(..)" "0x\\1," LEGACY_ICON_BYTES "${LEGACY_ICON_HEX}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma once\ninline const unsigned char editorIconData[] = {${LEGACY_ICON_BYTES}};\n")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
@@ -231,7 +218,7 @@ include(CTest)
 if(BUILD_TESTING)
   add_executable(shape_tests tests/shapes.cpp src/rendering/mesh.cpp src/physics/physics.cpp)
   target_include_directories(shape_tests PRIVATE src)
-  target_link_libraries(shape_tests PRIVATE ReactPhysics3D::reactphysics3d)
+  target_link_libraries(shape_tests PRIVATE Jolt)
   add_test(NAME shapes COMMAND shape_tests)
 endif()
 
@@ -264,7 +251,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(lua_scene_tests tests/lua_scene.cpp src/physics/physics.cpp)
-  target_link_libraries(lua_scene_tests PRIVATE lua_console ReactPhysics3D::reactphysics3d)
+  target_link_libraries(lua_scene_tests PRIVATE lua_console Jolt)
   add_test(NAME lua_scene COMMAND lua_scene_tests)
   set_tests_properties(lua_scene PROPERTIES TIMEOUT 15)
 endif()
@@ -272,14 +259,14 @@ endif()
 if(BUILD_TESTING)
   add_executable(create_hierarchy_tests tests/create_hierarchy.cpp src/physics/physics.cpp src/rendering/mesh.cpp)
   target_include_directories(create_hierarchy_tests PRIVATE src)
-  target_link_libraries(create_hierarchy_tests PRIVATE legacy_imgui ReactPhysics3D::reactphysics3d)
+  target_link_libraries(create_hierarchy_tests PRIVATE legacy_imgui Jolt)
   add_test(NAME create_hierarchy COMMAND create_hierarchy_tests)
 endif()
 
 if(BUILD_TESTING)
   add_executable(editor_layout_tests tests/editor_layout.cpp src/physics/physics.cpp)
   target_include_directories(editor_layout_tests PRIVATE src)
-  target_link_libraries(editor_layout_tests PRIVATE imguizmo ReactPhysics3D::reactphysics3d)
+  target_link_libraries(editor_layout_tests PRIVATE imguizmo Jolt)
   add_test(NAME editor_layout COMMAND editor_layout_tests)
 endif()
 
@@ -299,7 +286,7 @@ endif()
 if(BUILD_TESTING)
   add_executable(play_mode_tests tests/play_mode.cpp src/physics/physics.cpp)
   target_include_directories(play_mode_tests PRIVATE src)
-  target_link_libraries(play_mode_tests PRIVATE legacy_imgui ReactPhysics3D::reactphysics3d)
+  target_link_libraries(play_mode_tests PRIVATE legacy_imgui Jolt)
   if(MSVC)
     target_compile_options(play_mode_tests PRIVATE /UNDEBUG)
   else()

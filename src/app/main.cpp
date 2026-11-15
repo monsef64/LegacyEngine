@@ -1160,7 +1160,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 "About LegacyEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::TextUnformatted("LegacyEngine");
             ImGui::TextUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
-            ImGui::TextUnformatted("SDL3 / OpenGL / Dear ImGui / ReactPhysics3D");
+            ImGui::TextUnformatted("SDL3 / OpenGL / Dear ImGui / Jolt");
             if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                 ImGui::CloseCurrentPopup();
             }

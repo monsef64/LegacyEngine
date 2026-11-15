@@ -40,7 +40,7 @@ See [LegacyScript guide](scripting.md), [input/audio details](audio-input.md),
   Up targets the object that received Down, even if released outside it.
 - Audio callbacks target scripts attached to the AudioSource owner. Finished means natural
   primary-clip completion, not pause, explicit stop, fade-out stop or one-shot completion.
-- `waitForSeconds` and `wait(audio.onAudioFinished)` suspend lifecycle/object callbacks only.
+- `waitForSeconds` and `wait(secondsOrAudioEvent)` suspend the current lifecycle/object callback or independent task only.
   Do not use them at file top-level, in custom event listeners or onDestroy. Each callback
   has at most one pending invocation. Other callbacks keep running; Play pause or object
   deactivation freezes timers, and Stop cancels waits. Audio waits observe the next event,
@@ -61,8 +61,9 @@ engine functions; this reference covers the engine-owned API.
 | --- | --- | --- |
 | `onMouseDown/Up/Enter/Exit/Over()` | Global function in the target object’s attached script, or `object.onMouseDown = function() ... end` | Active Collider and Game camera |
 | `onAudioStarted/Finished/Paused/Resumed/Stopped()` | Global function in the AudioSource owner’s attached script, or object callback | AudioSource on that owner |
-| `waitForSeconds(seconds)` | Inside a running lifecycle/object callback | Finite 0–86400 seconds |
-| `wait(audio.onAudioFinished)` | Inside a running lifecycle/object callback | Live AudioSource; next event only |
+| `task(function() ... end)` | Inside a running lifecycle/object callback or task | Independent waiting block; shared 128-task cap |
+| `waitForSeconds(seconds)` / `wait(seconds)` | Inside a running lifecycle/object callback or task | Finite 0–86400 seconds |
+| `wait(audio.onAudioFinished)` | Inside a running lifecycle/object callback or task | Live AudioSource; next event only |
 
 AudioSource event properties are opaque `AudioEvent` tokens. Define the callback as
 `function onAudioFinished() ... end`; pass `audio.onAudioFinished` to `wait` without
@@ -70,7 +71,7 @@ parentheses. Do not assign a function to the AudioSource event property.
 
 Waits are not supported at file top-level, in custom/level event listeners, or in
 `onDestroy`. Play pause and object inactivity freeze timer progress. The engine allows
-at most 128 pending callbacks per runtime and coalesces repeated invocations of the
+at most 128 live callbacks/tasks per runtime and coalesces repeated invocations of the
 same waiting callback. Shutdown/reset cancels continuations; variables survive a pause.
 
 ```lua
@@ -1066,6 +1067,32 @@ function onAudioStopped()
 end
 ```
 
+### task
+
+`task(function() ... end)` starts a cooperative block immediately and lets its
+caller continue when that block waits or finishes. Use it inside a lifecycle/object
+callback or another task; not at file top-level, in custom/level event listeners or
+onDestroy. It returns no handle/results. Closures capture locals normally.
+
+```lua
+function onStart()
+    if self:isActive() then
+        task(function()
+            wait(2)
+            debug.log("Delayed block")
+        end)
+    end
+    debug.log("Immediate remainder of callback")
+end
+```
+
+Plain `if`/loop/do blocks do not automatically run asynchronously. Tasks share the
+runtime's 128-live-task limit and memory/instruction budgets. Pause/inactivity
+freeze their waits; owner destruction and Stop/reset cancel pending tasks. An
+unbounded loop without waits still consumes the caller's execution budget.
+See [independent waiting blocks](scripting.md#independent-waiting-blocks-with-task)
+for the guarded-update pattern and cancellation caveats.
+
 ### waitForSeconds
 
 `waitForSeconds(seconds) - suspend this callback, not the engine`
@@ -1084,11 +1111,11 @@ end
 
 ### wait
 
-`wait(audioSource.onAudioFinished) - resume on the next audio event`
+`wait(seconds) / wait(audioSource.onAudioFinished) - suspend the current callback/task`
 
-Takes an opaque AudioEvent token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the AudioSource cancels its continuation.
+Takes finite seconds in [0, 86400] (same as waitForSeconds), or an opaque AudioEvent token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the AudioSource cancels its continuation.
 
-- `param event AudioEvent`
+- `param secondsOrEvent number|AudioEvent`
 
 ```lua
 function onStart()

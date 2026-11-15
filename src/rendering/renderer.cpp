@@ -1,6 +1,7 @@
 #include "rendering/renderer.hpp"
 #include "audio/audio_gizmo.hpp"
 #include "core/profiler.hpp"
+#include "core/worker_pool.hpp"
 #include "lighting/cascades.hpp"
 #include "lighting/lighting.hpp"
 #include "models/mesh_simplify.hpp"
@@ -164,6 +165,8 @@ bool Renderer::init() {
 }
 
 void Renderer::clearModelCache() {
+    pendingModels_.clear();
+    failedModels_.clear();
     gpuSkinning_.clear();
     for (const auto& entry : modelMeshes_) {
         if (entry.second.id < meshes_.size()) {
@@ -179,6 +182,8 @@ void Renderer::clearModelCache() {
     modelError.clear();
 }
 void Renderer::shutdown() {
+    pendingModels_.clear();
+    failedModels_.clear();
     gpuSkinning_.shutdown();
     editorGrid_ = {};
     gridCells_ = 0;
@@ -268,6 +273,88 @@ MeshHandle Renderer::createMesh(const MeshData& data) {
     return {static_cast<std::uint32_t>(meshes_.size() - 1)};
 }
 
+// Decode/decompress/pose the bind mesh with a private document cache on a CPU
+// worker. Only this render-thread completion path publishes cache entries/GL IDs.
+void Renderer::pumpModels() {
+    for (auto it = pendingModels_.begin(); it != pendingModels_.end(); ++it) {
+        if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            continue;
+        }
+        const auto path = it->first;
+        auto future = std::move(it->second);
+        pendingModels_.erase(it);
+        try {
+            auto result = future.get();
+            // Explicit editor bounds requests may have loaded it in the meantime.
+            if (!modelMeshes_.count(path)) {
+                modelMeshes_.emplace(path, createMesh(result.mesh));
+            }
+            for (auto& document : result.documents) {
+                modelDocuments_.emplace(document.first, std::move(document.second));
+            }
+            failedModels_.erase(path);
+        } catch (const std::exception& error) {
+            modelError = path + ": " + error.what();
+            if (failedModels_.size() >= 256 && !failedModels_.count(path)) {
+                failedModels_.erase(failedModels_.begin());
+            }
+            failedModels_[path] = std::chrono::steady_clock::now();
+        }
+        break; // At most one mesh upload per draw; never drain a completion burst.
+    }
+}
+bool Renderer::requestModel(const std::string& path) {
+    if (modelMeshes_.count(path)) {
+        return true;
+    }
+    if (pendingModels_.count(path) || pendingModels_.size() >= 2) {
+        return false;
+    }
+    const auto failure = failedModels_.find(path);
+    if (failure != failedModels_.end() &&
+        std::chrono::steady_clock::now() - failure->second < std::chrono::seconds(2)) {
+        return false;
+    }
+    auto request = WorkerPool::shared().submit([assets = materialAssets_, path] {
+        StreamedModel result;
+        result.mesh = loadModelAsset(assets, path, 0, -1, 0, &result.documents);
+        return result;
+    });
+    if (request) {
+        pendingModels_.emplace(path, std::move(*request));
+    }
+    return false;
+}
+MeshHandle Renderer::cloneModelMesh(MeshHandle source) {
+    GpuMesh mesh = meshes_.at(source.id);
+    const auto original = mesh.vertexBuffer;
+    glGenVertexArrays(1, &mesh.vertexArray);
+    glGenBuffers(1, &mesh.vertexBuffer);
+    glBindVertexArray(mesh.vertexArray);
+    glBindBuffer(GL_COPY_READ_BUFFER, original);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, mesh.vertexBuffer);
+    const auto bytes = GLsizeiptr(mesh.vertexCount) * sizeof(Vertex);
+    glBufferData(GL_COPY_WRITE_BUFFER, bytes, nullptr, GL_DYNAMIC_DRAW);
+    glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, bytes);
+    glBindBuffer(GL_ARRAY_BUFFER, mesh.vertexBuffer);
+    for (int attribute = 0; attribute < 3; ++attribute) {
+        glEnableVertexAttribArray(attribute);
+        glVertexAttribPointer(attribute,
+                              attribute == 2 ? 2 : 3,
+                              GL_FLOAT,
+                              GL_FALSE,
+                              sizeof(Vertex),
+                              reinterpret_cast<void*>(attribute == 0   ? offsetof(Vertex, position)
+                                                      : attribute == 1 ? offsetof(Vertex, normal)
+                                                                       : offsetof(Vertex, u)));
+    }
+    glBindVertexArray(0);
+    glBindBuffer(GL_COPY_READ_BUFFER, 0);
+    glBindBuffer(GL_COPY_WRITE_BUFFER, 0);
+    meshes_.push_back(mesh);
+    return {std::uint32_t(meshes_.size() - 1)};
+}
+
 void Renderer::draw(World& world,
                     const Mat4& viewProjection,
                     int width,
@@ -280,10 +367,15 @@ void Renderer::draw(World& world,
         clearModelCache();
         modelRevision_ = modelAssetRevision;
     }
+    pumpModels();
     gpuSkinning_.beginDraw();
     // Resolve persistent asset references before shadow and visible-mesh gathering.
     world.each<MeshRenderer>([&](Entity entity, MeshRenderer& mesh) {
-        if (mesh.model.empty()) {
+        if (mesh.model.empty() || !isActive(world, entity)) {
+            return;
+        }
+        if (!requestModel(mesh.model)) {
+            mesh.mesh = {}; // Pending assets are skipped, never replaced by a wrong primitive.
             return;
         }
         const Animation* animation = nullptr;
@@ -316,12 +408,8 @@ void Renderer::draw(World& world,
                 const auto& part =
                     cachedModelDocument(materialAssets_, mesh.model, &modelDocuments_);
                 if (found == modelMeshes_.end()) {
-                    found =
-                        modelMeshes_
-                            .emplace(key,
-                                     createMesh(loadModelAsset(
-                                         materialAssets_, mesh.model, 0, -1, 0, &modelDocuments_)))
-                            .first;
+                    found = modelMeshes_.emplace(key, cloneModelMesh(modelMeshes_.at(mesh.model)))
+                                .first;
                 }
                 auto& gpu = meshes_[found->second.id];
                 if (part.at("version") == 2) {
@@ -370,12 +458,6 @@ void Renderer::draw(World& world,
                                       gpu.high,
                                       gpu.radius);
                 }
-            } else if (found == modelMeshes_.end()) {
-                found = modelMeshes_
-                            .emplace(key,
-                                     createMesh(loadModelAsset(
-                                         materialAssets_, mesh.model, 0, -1, 0, &modelDocuments_)))
-                            .first;
             }
             mesh.mesh = found->second;
         } catch (const std::exception& e) {

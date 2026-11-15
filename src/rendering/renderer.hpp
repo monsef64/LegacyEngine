@@ -14,12 +14,16 @@
 #include "rendering/skybox_renderer.hpp"
 #include "scene/editor_grid.hpp"
 
+#include <future>
 #include <map>
 #include <vector>
 
 class Renderer {
   public:
     std::string materialError, modelError;
+    bool streaming() const {
+        return !pendingModels_.empty() || materialTextures_.streaming();
+    }
     void setShadowSettings(ShadowSettings settings) {
         if (settings.valid()) {
             shadowSettings_ = settings;
@@ -191,6 +195,15 @@ class Renderer {
     std::vector<ShadowCaster> shadowCasters_;
     std::vector<Lighting::Light> lights_;
 
+    struct StreamedModel {
+        MeshData mesh;
+        std::map<std::string, Json> documents;
+    };
+    std::map<std::string, std::future<StreamedModel>> pendingModels_;
+    std::map<std::string, std::chrono::steady_clock::time_point> failedModels_;
+    void pumpModels();
+    bool requestModel(const std::string& path);
+    MeshHandle cloneModelMesh(MeshHandle source);
     void clearModelCache();
     unsigned modelRevision_ = 0;
     std::map<std::string, MeshHandle> modelMeshes_;

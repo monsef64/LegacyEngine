@@ -43,7 +43,8 @@ class AnimationWindow {
     std::unique_ptr<World> base_, preview_;
     SceneSurface surface_;
     OrbitCamera camera_;
-    bool previewDirty_ = true, previewRendered_ = false, lastResetPose_ = false;
+    bool previewDirty_ = true, previewRendered_ = false, lastResetPose_ = false,
+         previewStreaming_ = false;
     float lastPreviewTime_ = -1;
     std::array<float, 7> lastCamera_{};
     unsigned previewRevision_ = ~0u;
@@ -124,7 +125,7 @@ class AnimationWindow {
                                                camera_.target.z,
                                                camera_.fieldOfView};
         if (poseChanged || !previewRendered_ || cameraState != lastCamera_ ||
-            previewRevision_ != modelAssetRevision) {
+            previewRevision_ != modelAssetRevision || previewStreaming_ || renderer.streaming()) {
             GLint draw = 0, read = 0, viewport[4];
             glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
             glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
@@ -151,6 +152,7 @@ class AnimationWindow {
             }
 
             previewRendered_ = true;
+            previewStreaming_ = renderer.streaming();
             lastCamera_ = cameraState;
             previewRevision_ = modelAssetRevision;
         }

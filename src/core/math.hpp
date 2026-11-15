@@ -9,6 +9,11 @@
 #pragma once
 
 #include <cmath>
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+#include <emmintrin.h>
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#include <arm_neon.h>
+#endif
 
 constexpr float kPi = 3.14159265358979f;
 constexpr float radians(float degrees) {
@@ -138,6 +143,27 @@ struct Mat4 {
 inline Mat4 multiply(const Mat4& a, const Mat4& b) // a * b
 {
     Mat4 result{};
+    // Four rows per SIMD lane group. Unaligned loads preserve the plain Mat4
+    // ABI; no AVX requirement, fast-math or fused reassociation is introduced.
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+    for (int column = 0; column < 4; ++column) {
+        __m128 sum = _mm_setzero_ps();
+        for (int k = 0; k < 4; ++k) {
+            sum = _mm_add_ps(
+                sum, _mm_mul_ps(_mm_loadu_ps(a.m + k * 4), _mm_set1_ps(b.m[column * 4 + k])));
+        }
+        _mm_storeu_ps(result.m + column * 4, sum);
+    }
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    for (int column = 0; column < 4; ++column) {
+        float32x4_t sum = vdupq_n_f32(0);
+        for (int k = 0; k < 4; ++k) {
+            sum =
+                vaddq_f32(sum, vmulq_f32(vld1q_f32(a.m + k * 4), vdupq_n_f32(b.m[column * 4 + k])));
+        }
+        vst1q_f32(result.m + column * 4, sum);
+    }
+#else
     for (int column = 0; column < 4; ++column) {
         for (int row = 0; row < 4; ++row) {
             for (int k = 0; k < 4; ++k) {
@@ -145,6 +171,7 @@ inline Mat4 multiply(const Mat4& a, const Mat4& b) // a * b
             }
         }
     }
+#endif
     return result;
 }
 

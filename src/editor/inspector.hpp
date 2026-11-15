@@ -1299,8 +1299,19 @@ inline void drawInspector(World& world,
                 if (!world.has<MeshRenderer>(selected) && ImGui::MenuItem("MeshRenderer")) {
                     world.add(selected, MeshRenderer{meshes[0]});
                 }
-                if (!world.has<Collider>(selected) && ImGui::MenuItem("Collider")) {
-                    world.add(selected, Collider{});
+                if (ImGui::BeginMenu("Collider", !world.has<Collider>(selected))) {
+                    const char* names[]{"Box", "Sphere", "Capsule", "Cone", "Mesh"};
+                    for (int shape = 0; shape < 5; ++shape) {
+                        if (ImGui::MenuItem(names[shape])) {
+                            if (!world.has<Transform>(selected)) {
+                                world.add(selected, Transform{});
+                            }
+                            Collider collider;
+                            collider.shape = static_cast<ColliderShape>(shape);
+                            world.add(selected, collider);
+                        }
+                    }
+                    ImGui::EndMenu();
                 }
                 if (!world.has<RigidBody>(selected) && ImGui::MenuItem("RigidBody")) {
                     world.add(selected, RigidBody{});

@@ -17,6 +17,7 @@ class AssetPreviewRenderer {
     struct Slot {
         SceneSurface surface;
         int lastUsed = 0;
+        bool streaming = false;
         AssetPreviewData data;
         std::unique_ptr<World> world;
         OrbitCamera camera;
@@ -251,7 +252,7 @@ class AssetPreviewRenderer {
         const auto key = assets.root.generic_string() + "/" + path;
         const bool changed = slot.key != key || slot.revision != modelAssetRevision;
         try {
-            bool rebuild = changed;
+            bool rebuild = changed || (slot.streaming && textureAsset(path));
             if (changed || now - slot.checked > std::chrono::milliseconds(500)) {
                 slot.checked = now;
                 const auto stamp = std::filesystem::last_write_time(assets.resolve(path));
@@ -266,7 +267,7 @@ class AssetPreviewRenderer {
                     slot.data.width = slot.data.height = 64;
                 }
             }
-            if (slot.world && rebuild) {
+            if (slot.world && (rebuild || slot.streaming || renderer_.streaming())) {
                 GLint drawFramebuffer = 0, readFramebuffer = 0, viewport[4], scissor[4];
                 glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFramebuffer);
                 glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer);
@@ -304,10 +305,12 @@ class AssetPreviewRenderer {
                     throw;
                 }
             }
+            slot.streaming = textures_.streaming() || renderer_.streaming();
         } catch (const std::exception& error) {
             slot.key = key;
             slot.revision = modelAssetRevision;
             slot.world.reset();
+            slot.streaming = false;
             slot.data = {};
             slot.data.error = error.what();
         }
