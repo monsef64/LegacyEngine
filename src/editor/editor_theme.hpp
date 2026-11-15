@@ -4,7 +4,7 @@
 #include "editor_icons.hpp"
 #include <imgui.h>
 
-// Apply once after context creation. The SDL/OpenGL backends bake fonts at the
+// Apply once after context creation. The SDL/Vulkan backends bake fonts at the
 // current framebuffer density (including when moving between DPI displays).
 inline void applyEditorTheme() {
     ImGuiIO& io = ImGui::GetIO();

@@ -190,12 +190,15 @@ inline std::vector<Mat4> modelGlobalPose(const Json& root,
     }
     return global;
 }
-inline void poseModelMesh(
-    MeshData& mesh, const Json& part, const Json& root, int animation = -1, float time = 0) {
-    if (!root.contains("nodes") || !part.contains("node")) {
+// Applies an already evaluated global pose. Using the same evaluated pose as
+// GPU skinning preserves crossfades and skeleton residual transforms.
+inline void poseModelMeshGlobal(MeshData& mesh,
+                                const Json& part,
+                                const std::vector<Mat4>& global,
+                                bool skinWeights) {
+    if (!part.contains("node")) {
         return;
     }
-    auto global = modelGlobalPose(root, animation, time);
     int node = part.at("node");
     if (node < 0 || std::size_t(node) >= global.size()) {
         throw std::runtime_error("Invalid mesh node");
@@ -206,7 +209,7 @@ inline void poseModelMesh(
     // animation == -1 incorrectly poses the mesh during import, thumbnail
     // generation, bounds/collider loading and Model Preview's Reset state.
     // Place the original geometry using its mesh node, without bone weights.
-    if (animation < 0) {
+    if (!skinWeights) {
         for (auto& vertex : mesh.vertices) {
             vertex.position = modelPoint(global[node], vertex.position);
             vertex.normal = normalize(modelNormal(global[node], vertex.normal));
@@ -243,6 +246,9 @@ inline void poseModelMesh(
             p = p + modelPoint(skin[b], v.position) * weight;
             n = n + modelNormal(skin[b], v.normal) * weight;
             total += weight;
+            if (!std::isfinite(total)) {
+                throw std::runtime_error("Bone weight sum overflow");
+            }
         }
         if (total > 0) {
             v.position = p * (1 / total);
@@ -252,4 +258,12 @@ inline void poseModelMesh(
             v.normal = normalize(modelNormal(global[node], v.normal));
         }
     }
+}
+inline void poseModelMesh(
+    MeshData& mesh, const Json& part, const Json& root, int animation = -1, float time = 0) {
+    if (!root.contains("nodes") || !part.contains("node")) {
+        return;
+    }
+    const auto global = modelGlobalPose(root, animation, time);
+    poseModelMeshGlobal(mesh, part, global, animation >= 0);
 }

@@ -3,7 +3,7 @@
 // World conventions:
 //   * 1 unit = 1 metre
 //   * +Y is up, the ground is the XZ plane (y = 0)
-//   * right-handed coordinates (the OpenGL convention)
+//   * right-handed coordinates
 //   * angles are in radians
 
 #pragma once
@@ -124,7 +124,7 @@ inline Quat nlerp(Quat a, Quat b, float t) {
 // Matrices
 // ---------------------------------------------------------------------------
 
-// Matrices are stored column by column, which is the layout OpenGL expects:
+// Matrices are stored column by column:
 // element (row, column) of a Mat4 lives at m[column * 4 + row], and of a Mat3
 // at m[column * 3 + row].
 struct Mat3 {

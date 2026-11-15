@@ -15,7 +15,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
-# --- SDL3 (window, input, OpenGL context) -----------------------------------
+# --- SDL3 (window and input) -------------------------------------------------
 #
 # An installed SDL3 is used when there is one. Otherwise, or when
 # LEGACY_VENDORED_SDL is ON, SDL3 is downloaded and linked statically, which
@@ -35,6 +35,8 @@ else()
   set(SDL_SHARED OFF CACHE BOOL "" FORCE)
   set(SDL_STATIC ON CACHE BOOL "" FORCE)
   set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+  set(SDL_OPENGL OFF CACHE BOOL "" FORCE)
+  set(SDL_OPENGLES OFF CACHE BOOL "" FORCE)
 
   FetchContent_Declare(
     SDL3
@@ -115,14 +117,7 @@ add_library(legacy_models STATIC src/models/model_import.cpp)
 target_include_directories(legacy_models PUBLIC src)
 target_link_libraries(legacy_models PUBLIC assimp::assimp legacy_json)
 
-# --- GLAD (OpenGL function loader) ------------------------------------------
-#
-# Generated code, see third_party/glad/README.md.
-
-add_library(glad STATIC third_party/glad/src/gl.c)
-target_include_directories(glad SYSTEM PUBLIC third_party/glad/include)
-
-# --- Dear ImGui (SDL3 + OpenGL3 backends) -----------------------------------
+# --- Dear ImGui core and platform backend ------------------------------------
 FetchContent_Declare(imgui
   GIT_REPOSITORY https://github.com/ocornut/imgui.git
   GIT_TAG v1.92.5-docking
@@ -131,11 +126,9 @@ FetchContent_MakeAvailable(imgui)
 add_library(legacy_imgui STATIC
   ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
+  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp)
 target_include_directories(legacy_imgui SYSTEM PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
-target_link_libraries(legacy_imgui PUBLIC SDL3::SDL3 ${CMAKE_DL_LIBS})
-
+target_link_libraries(legacy_imgui PUBLIC SDL3::SDL3)
 # --- ImGuizmo (transform handles, pinned for reproducible builds) -----------
 FetchContent_Declare(imguizmo
   GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
@@ -172,10 +165,10 @@ add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_s
 target_include_directories(lua_console PUBLIC src)
 target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3)
 
-add_library(legacy_thumbnails STATIC src/assets/texture_preview.cpp)
-target_include_directories(legacy_thumbnails PUBLIC src PRIVATE third_party/stb)
-target_link_libraries(legacy_thumbnails PUBLIC SDL3::SDL3 glad)
-target_link_libraries(legacy_imgui PUBLIC legacy_thumbnails)
+# CPU thumbnail decoding is graphics-API independent.
+add_library(legacy_thumbnail_data STATIC src/assets/texture_thumbnail.cpp)
+target_include_directories(legacy_thumbnail_data PUBLIC src PRIVATE third_party/stb)
+target_link_libraries(legacy_imgui PUBLIC legacy_thumbnail_data)
 
 # SIMD parser with a compatibility DOM bridge (no second text parse).
 add_library(legacy_simdjson STATIC third_party/simdjson/simdjson.cpp)
@@ -190,17 +183,12 @@ target_link_libraries(legacy_levels PUBLIC legacy_json Threads::Threads)
 target_link_libraries(lua_console PUBLIC legacy_levels)
 target_link_libraries(legacy_imgui PUBLIC legacy_json)
 
-add_library(legacy_material_textures STATIC src/rendering/material_textures.cpp src/rendering/skybox_renderer.cpp)
-target_include_directories(legacy_material_textures PUBLIC src PRIVATE third_party/stb)
-target_link_libraries(legacy_material_textures PUBLIC legacy_thumbnails)
-
 # --- LegacyEngine -----------------------------------------------------------
 
 add_executable(LegacyEngine
   src/app/main.cpp
   src/rendering/mesh.cpp
   src/physics/physics.cpp
-  src/rendering/renderer.cpp
   src/editor/transform_editor.cpp
   src/editor/script_editor.cpp
 )
@@ -216,7 +204,8 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf"
 string(REGEX REPLACE "(..)" "0x\\1," LEGACY_ICON_BYTES "${LEGACY_ICON_HEX}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma once\ninline const unsigned char editorIconData[] = {${LEGACY_ICON_BYTES}};\n")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 ReactPhysics3D::reactphysics3d imguizmo lua_console legacy_models)
+target_include_directories(LegacyEngine PRIVATE third_party/stb)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
@@ -228,10 +217,187 @@ else()
 endif()
 
 include(CTest)
+option(LEGACY_TEST_EDITOR_SMOKE "Run the Vulkan editor's 120-frame graphical smoke test in CTest" OFF)
+if(BUILD_TESTING AND LEGACY_TEST_EDITOR_SMOKE)
+  add_test(NAME vulkan_editor_smoke COMMAND LegacyEngine --smoke-test)
+  set_tests_properties(vulkan_editor_smoke PROPERTIES TIMEOUT 180)
+endif()
+
+# The production editor requires the Vulkan context and compiled shaders.
+set(LEGACY_BUILD_VULKAN_PROTOTYPE ON)
+set(LEGACY_BUILD_VULKAN_SHADERS ON)
+if(LEGACY_BUILD_VULKAN_PROTOTYPE OR LEGACY_BUILD_VULKAN_SHADERS)
+  find_package(Vulkan REQUIRED)
+endif()
+if(LEGACY_BUILD_VULKAN_PROTOTYPE)
+  add_library(legacy_vulkan_context STATIC src/rendering/vulkan_context.cpp)
+  target_include_directories(legacy_vulkan_context PUBLIC src)
+  target_link_libraries(legacy_vulkan_context PUBLIC SDL3::SDL3 Vulkan::Vulkan)
+  add_executable(vulkan_presentation_smoke tests/vulkan_smoke.cpp)
+  target_link_libraries(vulkan_presentation_smoke PRIVATE legacy_vulkan_context)
+  if(BUILD_TESTING)
+    add_executable(vulkan_context_mock_tests tests/vulkan_context_mock.cpp src/rendering/vulkan_context.cpp)
+    target_include_directories(vulkan_context_mock_tests PRIVATE src ${Vulkan_INCLUDE_DIRS})
+    # Include SDL headers but use fake SDL and Vulkan symbols, without linking
+    # either runtime. This exercises the context's lifecycle without a GPU.
+    target_include_directories(vulkan_context_mock_tests SYSTEM PRIVATE $<TARGET_PROPERTY:SDL3::SDL3,INTERFACE_INCLUDE_DIRECTORIES>)
+    if(MSVC)
+      target_compile_options(vulkan_context_mock_tests PRIVATE /UNDEBUG)
+    else()
+      target_compile_options(vulkan_context_mock_tests PRIVATE -UNDEBUG)
+    endif()
+    add_test(NAME vulkan_context_mock COMMAND vulkan_context_mock_tests)
+  endif()
+endif()
+
+if(LEGACY_BUILD_VULKAN_SHADERS)
+  find_program(LEGACY_GLSLANG NAMES glslangValidator glslang
+    HINTS "$ENV{VULKAN_SDK}/bin" "$ENV{VULKAN_SDK}/Bin")
+  if(NOT LEGACY_GLSLANG)
+    message(FATAL_ERROR "Vulkan shader builds require glslangValidator or glslang")
+  endif()
+  set(legacy_vulkan_shader_outputs)
+  foreach(shader IN ITEMS lit.vert lit.frag unlit.vert unlit.frag shadow.vert skybox.vert skybox.frag skinning.comp)
+    set(source "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/${shader}")
+    set(output "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/${shader}.spv")
+    add_custom_command(OUTPUT "${output}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders"
+      COMMAND "${LEGACY_GLSLANG}" -V --target-env vulkan1.0 "${source}" -o "${output}"
+      DEPENDS "${source}"
+      VERBATIM)
+    list(APPEND legacy_vulkan_shader_outputs "${output}")
+  endforeach()
+  # Preview surfaces use the same direct lighting without a shadow atlas.
+  set(legacy_vulkan_lit_no_shadow "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/lit_noshadow.frag.spv")
+  add_custom_command(OUTPUT "${legacy_vulkan_lit_no_shadow}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders"
+    COMMAND "${LEGACY_GLSLANG}" -V --target-env vulkan1.0 -DLEGACY_NO_SHADOW=1
+      "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/lit.frag" -o "${legacy_vulkan_lit_no_shadow}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/lit.frag"
+    VERBATIM)
+  list(APPEND legacy_vulkan_shader_outputs "${legacy_vulkan_lit_no_shadow}")
+  add_custom_target(vulkan_shaders ALL DEPENDS ${legacy_vulkan_shader_outputs})
+  if(BUILD_TESTING)
+    add_executable(vulkan_skinning_compute_tests tests/vulkan_skinning_compute.cpp)
+    target_include_directories(vulkan_skinning_compute_tests PRIVATE src)
+    target_link_libraries(vulkan_skinning_compute_tests PRIVATE Vulkan::Vulkan)
+    add_dependencies(vulkan_skinning_compute_tests vulkan_shaders)
+    add_test(NAME vulkan_skinning_compute COMMAND vulkan_skinning_compute_tests
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/skinning.comp.spv")
+    set_tests_properties(vulkan_skinning_compute PROPERTIES SKIP_RETURN_CODE 77)
+    foreach(pipeline IN ITEMS lit unlit skybox)
+      add_test(NAME vulkan_shader_link_${pipeline} COMMAND "${LEGACY_GLSLANG}" -V -l
+        "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/${pipeline}.vert"
+        "${CMAKE_CURRENT_SOURCE_DIR}/data/shaders/vulkan/${pipeline}.frag"
+        -o "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/test-link-${pipeline}.spv")
+    endforeach()
+  endif()
+endif()
+
+if(LEGACY_BUILD_VULKAN_PROTOTYPE AND LEGACY_BUILD_VULKAN_SHADERS)
+  add_library(legacy_vulkan_scene STATIC src/rendering/mesh.cpp src/rendering/vulkan_scene_surface.cpp src/rendering/vulkan_scene_shadows.cpp src/rendering/vulkan_scene_sky.cpp src/rendering/vulkan_texture.cpp src/rendering/vulkan_material_textures.cpp src/rendering/vulkan_skybox_cache.cpp)
+  target_include_directories(legacy_vulkan_scene PUBLIC src PRIVATE third_party/stb)
+  target_link_libraries(legacy_vulkan_scene PUBLIC Vulkan::Vulkan legacy_json legacy_thumbnail_data)
+  # Share one ImGui core between the editor, ImGuizmo and Vulkan backend.
+  add_library(legacy_vulkan_imgui STATIC
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
+    src/rendering/vulkan_imgui.cpp)
+  target_include_directories(legacy_vulkan_imgui PUBLIC src)
+  target_link_libraries(legacy_vulkan_imgui PUBLIC legacy_imgui Vulkan::Vulkan legacy_vulkan_context legacy_vulkan_scene)
+  add_library(legacy_vulkan_thumbnails STATIC src/assets/vulkan_thumbnail_cache.cpp)
+  target_include_directories(legacy_vulkan_thumbnails PUBLIC src)
+  target_link_libraries(legacy_vulkan_thumbnails PUBLIC legacy_vulkan_imgui legacy_thumbnail_data)
+  target_link_libraries(LegacyEngine PRIVATE legacy_vulkan_thumbnails)
+  add_dependencies(LegacyEngine vulkan_shaders)
+  # Re-link and refresh the runtime copy when only a shader changes.
+  set_property(TARGET LegacyEngine APPEND PROPERTY LINK_DEPENDS ${legacy_vulkan_shader_outputs})
+  add_custom_command(TARGET LegacyEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:LegacyEngine>/data/shaders/vulkan/compiled"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${legacy_vulkan_shader_outputs}
+      "$<TARGET_FILE_DIR:LegacyEngine>/data/shaders/vulkan/compiled"
+    VERBATIM)
+  if(BUILD_TESTING)
+    add_executable(vulkan_scene_render_tests tests/vulkan_scene_render.cpp)
+    target_link_libraries(vulkan_scene_render_tests PRIVATE legacy_vulkan_scene legacy_vulkan_context)
+    add_dependencies(vulkan_scene_render_tests vulkan_shaders)
+    add_test(NAME vulkan_scene_render COMMAND vulkan_scene_render_tests
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv")
+    set_tests_properties(vulkan_scene_render PROPERTIES SKIP_RETURN_CODE 77)
+    add_executable(vulkan_lit_render_tests tests/vulkan_lit_render.cpp)
+    target_link_libraries(vulkan_lit_render_tests PRIVATE legacy_vulkan_scene legacy_vulkan_context)
+    add_dependencies(vulkan_lit_render_tests vulkan_shaders)
+    add_test(NAME vulkan_lit_render COMMAND vulkan_lit_render_tests
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/lit.vert.spv"
+      "${legacy_vulkan_lit_no_shadow}")
+    set_tests_properties(vulkan_lit_render PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+    add_executable(vulkan_shadow_render_tests tests/vulkan_shadow_render.cpp)
+    target_link_libraries(vulkan_shadow_render_tests PRIVATE legacy_vulkan_scene legacy_vulkan_context)
+    add_dependencies(vulkan_shadow_render_tests vulkan_shaders)
+    add_test(NAME vulkan_shadow_render COMMAND vulkan_shadow_render_tests
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/lit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/lit.frag.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/shadow.vert.spv")
+    set_tests_properties(vulkan_shadow_render PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+    add_executable(vulkan_sky_render_tests tests/vulkan_sky_render.cpp)
+    target_link_libraries(vulkan_sky_render_tests PRIVATE legacy_vulkan_scene legacy_vulkan_context)
+    add_dependencies(vulkan_sky_render_tests vulkan_shaders)
+    add_test(NAME vulkan_sky_render COMMAND vulkan_sky_render_tests
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/skybox.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/skybox.frag.spv")
+    set_tests_properties(vulkan_sky_render PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+    add_executable(vulkan_overlay_render_tests tests/vulkan_overlay_render.cpp)
+    target_link_libraries(vulkan_overlay_render_tests PRIVATE legacy_vulkan_scene legacy_vulkan_context)
+    add_dependencies(vulkan_overlay_render_tests vulkan_shaders)
+    add_test(NAME vulkan_overlay_render COMMAND vulkan_overlay_render_tests
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/lit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/lit_noshadow.frag.spv")
+    set_tests_properties(vulkan_overlay_render PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+    add_executable(vulkan_imgui_render_tests tests/vulkan_imgui_render.cpp)
+    target_link_libraries(vulkan_imgui_render_tests PRIVATE legacy_vulkan_thumbnails)
+    add_dependencies(vulkan_imgui_render_tests vulkan_shaders)
+    add_test(NAME vulkan_imgui_render COMMAND vulkan_imgui_render_tests
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv")
+    set_tests_properties(vulkan_imgui_render PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+    add_executable(vulkan_editor_preview_tests tests/vulkan_editor_preview.cpp)
+    target_link_libraries(vulkan_editor_preview_tests PRIVATE legacy_vulkan_thumbnails imguizmo legacy_audio legacy_models)
+    target_include_directories(vulkan_editor_preview_tests PRIVATE third_party/stb)
+    add_dependencies(vulkan_editor_preview_tests vulkan_shaders)
+    add_test(NAME vulkan_editor_preview COMMAND vulkan_editor_preview_tests
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/unlit.frag.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/lit.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/lit_noshadow.frag.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/skybox.vert.spv"
+      "${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders/skybox.frag.spv")
+    set_tests_properties(vulkan_editor_preview PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+  endif()
+endif()
+
+if(BUILD_TESTING)
+  add_executable(vulkan_clip_tests tests/vulkan_clip.cpp)
+  target_include_directories(vulkan_clip_tests PRIVATE src)
+  if(MSVC)
+    target_compile_options(vulkan_clip_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(vulkan_clip_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME vulkan_clip COMMAND vulkan_clip_tests)
+endif()
+
 if(BUILD_TESTING)
   add_executable(shape_tests tests/shapes.cpp src/rendering/mesh.cpp src/physics/physics.cpp)
   target_include_directories(shape_tests PRIVATE src)
-  target_link_libraries(shape_tests PRIVATE ReactPhysics3D::reactphysics3d)
+  target_link_libraries(shape_tests PRIVATE ReactPhysics3D::reactphysics3d legacy_json)
   add_test(NAME shapes COMMAND shape_tests)
 endif()
 
@@ -358,7 +524,7 @@ endif()
 if(BUILD_TESTING)
   add_executable(asset_trash_tests tests/asset_trash.cpp src/editor/script_editor.cpp)
   target_include_directories(asset_trash_tests PRIVATE src)
-  target_link_libraries(asset_trash_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(asset_trash_tests PRIVATE lua_console legacy_imgui legacy_models)
   if(MSVC)
     target_compile_options(asset_trash_tests PRIVATE /UNDEBUG)
   else()
@@ -394,7 +560,7 @@ endif()
 if(BUILD_TESTING)
   add_executable(editor_polish_tests tests/editor_polish.cpp src/rendering/mesh.cpp src/editor/script_editor.cpp)
   target_include_directories(editor_polish_tests PRIVATE src)
-  target_link_libraries(editor_polish_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(editor_polish_tests PRIVATE lua_console legacy_imgui legacy_models)
   if(MSVC)
     target_compile_options(editor_polish_tests PRIVATE /UNDEBUG)
   else()
@@ -440,18 +606,12 @@ endif()
 if(BUILD_TESTING)
   add_executable(lighting_tests tests/lighting.cpp src/rendering/mesh.cpp)
   target_link_libraries(lighting_tests PRIVATE lua_console legacy_imgui)
-  add_executable(lighting_render_tests tests/lighting_render.cpp src/rendering/renderer.cpp src/rendering/mesh.cpp)
-  target_link_libraries(lighting_render_tests PRIVATE SDL3::SDL3 glad lua_console legacy_thumbnails legacy_material_textures)
-  target_include_directories(lighting_render_tests PRIVATE src)
-  foreach(test_target lighting_tests lighting_render_tests)
-    if(MSVC)
-      target_compile_options(${test_target} PRIVATE /UNDEBUG)
-    else()
-      target_compile_options(${test_target} PRIVATE -UNDEBUG)
-    endif()
-  endforeach()
+  if(MSVC)
+    target_compile_options(lighting_tests PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(lighting_tests PRIVATE -UNDEBUG)
+  endif()
   add_test(NAME lighting COMMAND lighting_tests)
-  # lighting_render_tests needs a real GL context; run it manually under Xvfb.
 endif()
 
 # Standalone project tests do not otherwise link an engine subsystem.
@@ -462,7 +622,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(asset_thumbnail_tests tests/asset_thumbnails.cpp)
-  target_link_libraries(asset_thumbnail_tests PRIVATE legacy_thumbnails legacy_json)
+  target_link_libraries(asset_thumbnail_tests PRIVATE legacy_thumbnail_data legacy_json)
   if(MSVC)
     target_compile_options(asset_thumbnail_tests PRIVATE /UNDEBUG)
   else()
@@ -514,12 +674,18 @@ if(BUILD_TESTING)
 endif()
 
 # Engine-owned GLSL lives in data/, beside release binaries and test executables.
+# Remove obsolete shader copies from incremental build directories.
+set(legacy_obsolete_shaders lit.frag lit.vert skinning.vert skybox.frag skybox.vert unlit.frag unlit.vert)
+set(legacy_obsolete_build_shaders
+  "${CMAKE_CURRENT_BINARY_DIR}/data/license/glad.txt"
+  "${CMAKE_CURRENT_BINARY_DIR}/data/license/Khronos.txt")
+foreach(shader IN LISTS legacy_obsolete_shaders)
+  list(APPEND legacy_obsolete_build_shaders "${CMAKE_CURRENT_BINARY_DIR}/data/shaders/${shader}")
+endforeach()
 add_custom_target(engine_data ALL
-  COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${CMAKE_CURRENT_BINARY_DIR}/data")
+  COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${CMAKE_CURRENT_BINARY_DIR}/data"
+  COMMAND ${CMAKE_COMMAND} -E remove -f ${legacy_obsolete_build_shaders})
 add_dependencies(LegacyEngine engine_data)
-if(BUILD_TESTING)
-  add_dependencies(lighting_render_tests engine_data)
-endif()
 
 if(BUILD_TESTING)
   add_executable(level_tests tests/levels.cpp)
@@ -535,10 +701,17 @@ if(BUILD_TESTING)
 endif()
 
 # Multi-config generators place executables in a configuration subdirectory.
-foreach(runtime_target LegacyEngine lighting_render_tests level_tests)
+foreach(runtime_target LegacyEngine level_tests)
   if(TARGET ${runtime_target})
+    set(legacy_obsolete_runtime_shaders
+      "$<TARGET_FILE_DIR:${runtime_target}>/data/license/glad.txt"
+      "$<TARGET_FILE_DIR:${runtime_target}>/data/license/Khronos.txt")
+    foreach(shader IN LISTS legacy_obsolete_shaders)
+      list(APPEND legacy_obsolete_runtime_shaders "$<TARGET_FILE_DIR:${runtime_target}>/data/shaders/${shader}")
+    endforeach()
     add_custom_command(TARGET ${runtime_target} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "$<TARGET_FILE_DIR:${runtime_target}>/data")
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "$<TARGET_FILE_DIR:${runtime_target}>/data"
+      COMMAND ${CMAKE_COMMAND} -E remove -f ${legacy_obsolete_runtime_shaders})
   endif()
 endforeach()
 

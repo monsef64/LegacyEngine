@@ -6,7 +6,7 @@
 #include <vector>
 
 struct AssetPreviewData {
-    unsigned texture = 0;
+    ImTextureID texture = ImTextureID_Invalid;
     int width = 384, height = 256;
     bool flip = false;
     std::string text, error;
@@ -26,7 +26,7 @@ drawAssetPreview(const AssetManager& assets, const std::string& path, float widt
     if (preview.texture) {
         const float ratio = float(preview.height) / std::max(1, preview.width);
         const float imageWidth = width * std::min(1.f, 1.5f / std::max(.001f, ratio));
-        ImGui::Image(static_cast<ImTextureID>(preview.texture),
+        ImGui::Image(preview.texture,
                      ImVec2(imageWidth, imageWidth * ratio),
                      preview.flip ? ImVec2(0, 1) : ImVec2(0, 0),
                      preview.flip ? ImVec2(1, 0) : ImVec2(1, 1));

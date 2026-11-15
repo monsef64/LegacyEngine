@@ -22,7 +22,8 @@ def main():
         parser.error(f"Expected clang-format {VERSION}, got {version.strip()}")
     sources = sorted(p for folder in ("src", "benchmarks") for p in (ROOT / folder).rglob("*")
                      if p.suffix in {".cpp", ".hpp"})
-    shaders = sorted((ROOT / "data" / "shaders").glob("*"))
+    shaders = sorted(p for p in (ROOT / "data" / "shaders").rglob("*")
+                     if p.is_file() and p.suffix in {".vert", ".frag", ".comp"})
     mode = ["--dry-run", "--Werror"] if args.check else ["-i"]
     for files, extra in ((sources, []), (shaders, ["--assume-filename=shader.cpp"])):
         result = subprocess.run([formatter, "--style=file", *mode, *extra, *map(str, files)], cwd=ROOT)

@@ -21,7 +21,8 @@ hierarchy, physics (including fixed-update scripts), camera updates, audio/pose
 sync, Scene rendering, Game rendering, ImGui submission, presentation/vsync wait,
 and other frame work. Renderer rows break out light/shadow setup, skyboxes and
 surfaces/gizmos; these are **nested** inside Scene/Game timings, not additional
-frame costs. The timings include synchronous driver work but **do not measure GPU
+frame costs. Vulkan submission and its synchronous wait are attributed to the
+surfaces/gizmos row, not divided by GPU pass. The timings include synchronous driver work but **do not measure GPU
 execution time**, the audio device callback, or individual functions/scripts.
 Vsync can dominate the Present row. Asset decoding performed during a frame is
 included in the calling section. Sampling is disabled while the profiler is
@@ -29,11 +30,10 @@ closed; histories are bounded, session-only, and do not dirty the project.
 
 ## VSync and rendering cost
 
-**Project > Project Settings > Rendering > Enable VSync** changes the OpenGL
-swap interval and persists it in the project's `Settings/Rendering.json`.
-New projects default to VSync on. Driver overrides can still affect presentation;
-the panel shows the interval reported by SDL and reports failures rather than
-silently treating an unsupported request as successful.
+**Project > Project Settings > Rendering > Enable VSync** requests a Vulkan
+presentation mode and persists the setting in `Settings/Rendering.json`. New
+projects default to VSync on. The swapchain selects an available presentation
+mode; driver behavior can affect the actual timing.
 
 Disable VSync when comparing uncapped performance, then use **Debug > Profiler**
 to compare Scene, Game, light/shadow setup and presentation wait. Both visible

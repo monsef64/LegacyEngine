@@ -1,7 +1,6 @@
 #pragma once
+#include "editor/preview_backend.hpp"
 #include "models/model_asset.hpp"
-#include "rendering/renderer.hpp"
-#include "rendering/scene_surface.hpp"
 #include "scene/camera.hpp"
 #include <array>
 
@@ -11,7 +10,6 @@ class ModelPreviewWindow {
     Json document_;
     std::string path_, error_;
     std::filesystem::path root_;
-    SceneSurface surface_;
     OrbitCamera camera_;
     int clip_ = 0;
     float time_ = 0, fadeSeconds_ = .25f, fadeElapsed_ = 0, fadeDuration_ = 0, sourceDuration_ = 1;
@@ -28,7 +26,7 @@ class ModelPreviewWindow {
 
   public:
     bool visible = false;
-    void open(const AssetManager& assets, const std::string& path, Renderer& renderer) {
+    void open(const AssetManager& assets, const std::string& path, EditorPreviewBackend& renderer) {
         visible = true;
         if (world_ && root_ == assets.root && path_ == path &&
             openedRevision_ == modelAssetRevision) {
@@ -111,7 +109,7 @@ class ModelPreviewWindow {
             world_.reset();
         }
     }
-    void draw(const AssetManager& assets, Renderer& renderer, float dt) {
+    void draw(const AssetManager& assets, EditorPreviewBackend& renderer, float dt) {
         if (!visible) {
             return;
         }
@@ -174,38 +172,30 @@ class ModelPreviewWindow {
                                                  bind_ ? 1.f : 0.f,
                                                  float(modelAssetRevision),
                                                  float(fadeDuration_)};
-                if (!rendered_ || view != lastView_) {
-                    GLint draw = 0, read = 0, viewport[4];
-                    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
-                    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
-                    glGetIntegerv(GL_VIEWPORT, viewport);
-                    try {
-                        surface_.resize(720, 405);
-                        glBindFramebuffer(GL_FRAMEBUFFER, surface_.framebuffer);
-                        renderer.setAssetRoot(assets.root);
-                        renderer.draw(*world_,
-                                      camera_.viewProjection(720.f / 405),
-                                      720,
-                                      405,
-                                      camera_.position(),
-                                      0,
-                                      0,
-                                      false);
-                    } catch (const std::exception& e) {
-                        error_ = e.what();
-                    }
-                    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
-                    glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
-                    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+                const bool needsRedraw = !rendered_ || view != lastView_;
+                EditorPreviewBackend::Image preview;
+                try {
+                    preview = renderer.image(EditorPreviewBackend::Slot::Model,
+                                             *world_,
+                                             assets,
+                                             camera_.viewProjection(720.f / 405),
+                                             camera_.position(),
+                                             720,
+                                             405,
+                                             needsRedraw);
                     rendered_ = true;
                     lastView_ = view;
+                } catch (const std::exception& e) {
+                    error_ = e.what();
                 }
                 float width = std::max(1.f, ImGui::GetContentRegionAvail().x);
-                ImGui::Image(static_cast<ImTextureID>(surface_.texture),
-                             ImVec2(width, width * 405 / 720),
-                             ImVec2(0, 1),
-                             ImVec2(1, 0));
-                if (ImGui::IsItemHovered()) {
+                if (preview.texture != ImTextureID_Invalid) {
+                    ImGui::Image(preview.texture,
+                                 ImVec2(width, width * 405 / 720),
+                                 preview.flip ? ImVec2(0, 1) : ImVec2(0, 0),
+                                 preview.flip ? ImVec2(1, 0) : ImVec2(1, 1));
+                }
+                if (preview.texture != ImTextureID_Invalid && ImGui::IsItemHovered()) {
                     if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
                         camera_.orbit(camera_.target,
                                       ImGui::GetIO().MouseDelta.x,

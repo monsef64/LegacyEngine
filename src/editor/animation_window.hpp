@@ -2,10 +2,9 @@
 #include "animation/animation_clip.hpp"
 #include "editor/asset_picker.hpp"
 #include "editor/editor_history.hpp"
+#include "editor/preview_backend.hpp"
 #include "models/model_asset.hpp"
 #include "prefabs/prefab.hpp"
-#include "rendering/renderer.hpp"
-#include "rendering/scene_surface.hpp"
 #include "scene/camera.hpp"
 #include <array>
 #include <cstdio>
@@ -41,13 +40,15 @@ class AnimationWindow {
     char newPath_[512] = "Animations/NewAnimation.leanim", target_[1024]{};
     Entity owner_, previewOwner_;
     std::unique_ptr<World> base_, preview_;
-    SceneSurface surface_;
     OrbitCamera camera_;
     bool previewDirty_ = true, previewRendered_ = false, lastResetPose_ = false;
     float lastPreviewTime_ = -1;
     std::array<float, 7> lastCamera_{};
     unsigned previewRevision_ = ~0u;
-    void rebuild(World& world, Entity owner, const AssetManager& assets, Renderer& renderer) {
+    void rebuild(World& world,
+                 Entity owner,
+                 const AssetManager& assets,
+                 EditorPreviewBackend& renderer) {
         base_ = std::make_unique<World>();
         previewOwner_ = Prefabs::clone(world, owner, *base_);
         owner_ = owner;
@@ -101,7 +102,7 @@ class AnimationWindow {
         previewDirty_ = true;
         previewRendered_ = false;
     }
-    void render(Renderer& renderer, const AssetManager& assets, float width) {
+    void render(EditorPreviewBackend& renderer, const AssetManager& assets, float width) {
         if (!preview_ || !base_) {
             return;
         }
@@ -123,42 +124,30 @@ class AnimationWindow {
                                                camera_.target.y,
                                                camera_.target.z,
                                                camera_.fieldOfView};
-        if (poseChanged || !previewRendered_ || cameraState != lastCamera_ ||
-            previewRevision_ != modelAssetRevision) {
-            GLint draw = 0, read = 0, viewport[4];
-            glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
-            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
-            glGetIntegerv(GL_VIEWPORT, viewport);
-            auto restore = [&] {
-                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
-                glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
-                glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
-            };
-            try {
-                surface_.resize(480, 270);
-                glBindFramebuffer(GL_FRAMEBUFFER, surface_.framebuffer);
-                renderer.setAssetRoot(assets.root);
-                const auto vp = multiply(perspective(camera_.fieldOfView,
-                                                     480.f / 270,
-                                                     .01f,
-                                                     std::max(200.f, camera_.distance * 10)),
-                                         lookAt(camera_.position(), camera_.target, camera_.up()));
-                renderer.draw(*preview_, vp, 480, 270, camera_.position(), 0, 0, false);
-                restore();
-            } catch (...) {
-                restore();
-                throw;
-            }
-
-            previewRendered_ = true;
-            lastCamera_ = cameraState;
-            previewRevision_ = modelAssetRevision;
+        const bool needsRedraw = poseChanged || !previewRendered_ || cameraState != lastCamera_ ||
+                                 previewRevision_ != modelAssetRevision;
+        const auto vp = multiply(
+            perspective(
+                camera_.fieldOfView, 480.f / 270, .01f, std::max(200.f, camera_.distance * 10)),
+            lookAt(camera_.position(), camera_.target, camera_.up()));
+        const auto image = renderer.image(EditorPreviewBackend::Slot::Animation,
+                                          *preview_,
+                                          assets,
+                                          vp,
+                                          camera_.position(),
+                                          480,
+                                          270,
+                                          needsRedraw);
+        previewRendered_ = true;
+        lastCamera_ = cameraState;
+        previewRevision_ = modelAssetRevision;
+        if (image.texture != ImTextureID_Invalid) {
+            ImGui::Image(image.texture,
+                         ImVec2(width, width * 270 / 480),
+                         image.flip ? ImVec2(0, 1) : ImVec2(0, 0),
+                         image.flip ? ImVec2(1, 0) : ImVec2(1, 1));
         }
-        ImGui::Image(static_cast<ImTextureID>(surface_.texture),
-                     ImVec2(width, width * 270 / 480),
-                     ImVec2(0, 1),
-                     ImVec2(1, 0));
-        if (ImGui::IsItemHovered()) {
+        if (image.texture != ImTextureID_Invalid && ImGui::IsItemHovered()) {
             if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
                 camera_.look(ImGui::GetIO().MouseDelta.x, ImGui::GetIO().MouseDelta.y);
             }
@@ -420,7 +409,7 @@ class AnimationWindow {
     void draw(World& world,
               Entity selected,
               const AssetManager& assets,
-              Renderer& renderer,
+              EditorPreviewBackend& renderer,
               EditorHistory& history,
               bool editMode,
               float dt) {

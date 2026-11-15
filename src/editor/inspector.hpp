@@ -1,7 +1,7 @@
 #pragma once
 #include "animation/animation_clip.hpp"
 #include "assets/cubemap.hpp"
-#include "assets/texture_preview.hpp"
+#include "assets/texture_thumbnail.hpp"
 #include "audio/audio_clip.hpp"
 #include "editor/asset_picker.hpp"
 #include "editor/asset_preview_ui.hpp"

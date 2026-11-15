@@ -13,7 +13,6 @@ license remains in the repository/package root `LICENSE`.
 | Dear ImGui | v1.92.5-docking | DearImGui.txt |
 | ImGuizmo | 105e4fde45e4e74aae8973d98750820ef7aca7e2 | ImGuizmo.txt |
 | Lua | v5.4.8 | Lua.txt |
-| glad and generated OpenGL/Khronos headers | glad 2.0.8 | glad.txt, Khronos.txt, Apache-2.0.txt |
 | miniaudio | vendored `third_party/miniaudio` | miniaudio.txt |
 | simdjson | vendored 3.12.3 | simdjson.txt |
 | nlohmann/json | vendored `third_party/json` | nlohmann-json.txt |
@@ -32,9 +31,8 @@ yuv2rgb license. HIDAPI offers a choice of licenses; including its GPL alternati
 text does not mean that alternative has been selected for the engine.
 
 The upstream notice texts are preserved. A few source-embedded license comments
-(Lua, Khronos, pugixml, MiniZip, miniz, Open3DGC, and Assimp's stb_image) are extracted
-without rewriting their terms. Apache-2.0.txt provides the full Apache license text
-also referenced by glad.
+(Lua, pugixml, MiniZip, miniz, Open3DGC, and Assimp's stb_image) are extracted
+without rewriting their terms. Apache-2.0.txt provides the full Apache license text for simdjson.
 
 ## Refreshing
 

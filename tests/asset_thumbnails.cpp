@@ -1,4 +1,4 @@
-#include "assets/texture_preview.hpp"
+#include "assets/texture_thumbnail.hpp"
 #include "project/json_io.hpp"
 #include <cassert>
 #include <fstream>

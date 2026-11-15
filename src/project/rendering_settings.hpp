@@ -2,23 +2,28 @@
 #include "assets/assets.hpp"
 #include "lighting/shadow_settings.hpp"
 #include "project/json_io.hpp"
-#include <SDL3/SDL.h>
+#include <functional>
 struct RenderingSettings {
     bool visible = false, vsync = true;
     ShadowSettings shadows;
     std::string error;
     std::filesystem::path root;
+    // The editor installs its presentation backend; settings and project
+    // serialization do not depend on the presentation context.
+    std::function<void(bool)> applyVsync;
+    std::function<std::string()> presentationStatus;
     static std::filesystem::path file(const AssetManager& assets) {
         return (assets.root.filename() == "Assets" ? assets.root.parent_path() : assets.root) /
                "Settings" / "Rendering.json";
     }
     void apply() {
-        if (!SDL_GL_SetSwapInterval(vsync ? 1 : 0)) {
-            error = std::string("Cannot change VSync: ") + SDL_GetError();
-            SDL_LogWarn(SDL_LOG_CATEGORY_RENDER, "%s", error.c_str());
-        } else {
+        try {
+            if (applyVsync) {
+                applyVsync(vsync);
+            }
             error.clear();
-            SDL_Log("VSync %s", vsync ? "enabled" : "disabled");
+        } catch (const std::exception& e) {
+            error = std::string("Cannot change VSync: ") + e.what();
         }
     }
     void load(const AssetManager& assets) {

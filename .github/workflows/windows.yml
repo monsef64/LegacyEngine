@@ -31,6 +31,9 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-vulkan-headers
+            mingw-w64-ucrt-x86_64-vulkan-loader
+            mingw-w64-ucrt-x86_64-glslang
       - name: Configure x64 Release
         run: >-
           cmake -S . -B build -G Ninja
@@ -47,6 +50,9 @@ jobs:
           mkdir -p package/LegacyEngine
           cp build/LegacyEngine.exe package/LegacyEngine/
           cp -R data package/LegacyEngine/data
+          mkdir -p package/LegacyEngine/data/shaders/vulkan/compiled
+          cp build/data/shaders/vulkan/compiled/*.spv package/LegacyEngine/data/shaders/vulkan/compiled/
+          test -s package/LegacyEngine/data/shaders/vulkan/compiled/lit.frag.spv
           cp LICENSE package/LegacyEngine/
           # ldd lists transitive dependencies too. Bundle MinGW runtime DLLs,
           # but leave Windows system DLLs to the operating system.

@@ -1,6 +1,6 @@
 # LegacyEngine
 
-A C++17 3D editor built with SDL3, OpenGL, Dear ImGui, ReactPhysics3D, miniaudio and Lua 5.4.
+A C++17 3D editor built with SDL3, Vulkan, Dear ImGui, ReactPhysics3D, miniaudio and Lua 5.4.
 LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lua.
 
 ![LegacyEngine editor](docs/screenshot.png)
@@ -15,7 +15,7 @@ LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lu
 
 ## Build
 
-Requires a C++17 compiler, CMake 3.16+, Git and desktop/OpenGL development libraries.
+Requires a C++17 compiler, CMake 3.16+, Git, Vulkan headers and loader, `glslangValidator`, and platform window/audio development libraries.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -24,7 +24,7 @@ ctest --test-dir build --output-on-failure
 ./build/LegacyEngine
 ```
 
-A graphical session and OpenGL 3.3 driver are required. See the
+A graphical session and Vulkan-capable driver are required. See the
 [build guide](docs/building.md) for dependencies and graphical tests.
 
 ## Documentation and downloads
@@ -52,5 +52,5 @@ Create and switch project-owned levels through **Project > Levels**. LegacyScrip
 supports `loadLevel`, `loadLevelAsync`, `unloadLevel`, `restartLevel`,
 `getCurrentLevel`, `setCurrentLevel`, `nextLevel` and `previousLevel`; see
 [Levels](docs/projects.md#levels) for deferred-transition behavior.
-Toggle VSync in **Project > Project Settings > Rendering**. Engine GLSL lives in
-`data/shaders/`; keep the packaged `data/` directory beside the executable.
+Toggle VSync in **Project > Project Settings > Rendering**. Vulkan shader sources live in
+`data/shaders/vulkan/`; keep the packaged `data/` directory, including compiled SPIR-V, beside the executable.

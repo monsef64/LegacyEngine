@@ -40,8 +40,7 @@ light:setShadows(true)
 -- Move/rotate lamp or change light properties from onUpdate for dynamic lighting.
 ```
 
-The renderer uses a bounded OpenGL 3.3 forward-lighting path rather than introducing
-a second rendering framework. Its cost controls are:
+The Vulkan renderer uses a bounded forward-lighting path. Its cost controls are:
 
 - Up to **16 active lights per view**, directional lights first, then local lights
   prioritized by distance relative to range; off-frustum local lights are culled.
@@ -50,8 +49,7 @@ a second rendering framework. Its cost controls are:
   four layers, single-map directional/spot shadows one, and point shadows six faces. Shadow
   budgets follow the same priority order; excess lights still illuminate without
   shadows. Disable shadows on fill lights to reserve budget for key lights.
-- Shadow-caster sphere/frustum culling, cached mesh bounds/uniform locations, and
-  model matrices prepared once per view. Wire geometry does not cast shadows.
+- Shadow-caster sphere/frustum culling and cached mesh bounds. Wire geometry does not cast shadows.
 - Per-light quality: Off skips shadow passes. Low uses quarter resolution (minimum 64²) with one bilinear
   comparison lookup, Medium uses half resolution with a weighted 3×3 tent (four bilinear
   lookups), and High uses full project resolution with a weighted 5×5 tent (nine bilinear lookups).
@@ -73,8 +71,7 @@ Tent PCF smooths jagged edges; it does not recover geometry smaller than a shado
 texel or simulate contact-hardening area-light shadows. Large directional coverage
 can still lose detail, and point-shadow face boundaries are clamped rather than
 filtered across faces. Use tighter coverage or High quality where detail matters.
-The optional local graphical regression executable checks all three light types with real OpenGL pixel comparisons for shadow
-toggles, moving casters and moving lights; no hardware FPS claim is implied.
+The Vulkan lighting and shadow regression tests use pixel readback on available Vulkan devices; no hardware FPS claim is implied.
 
 ## Hard and soft shadows
 

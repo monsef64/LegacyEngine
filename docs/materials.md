@@ -8,7 +8,7 @@ folder, use numeric duplicate suffixes, and persist as readable JSON.
 Expand **Material properties** in MeshRenderer to edit the shared asset:
 - **Diffuse** (default): color, albedo texture, UV tiling and specular.
 - **Diffuse Bumped**: the same controls plus a tangent-space **Normal map** and
-  normal strength. Use OpenGL-style (+Y/green-up) normal maps; this is normal
+  normal strength. Use +Y (green-up) normal maps; this is normal
   mapping, not grayscale height/displacement mapping.
 - **Diffuse Transparent**: Diffuse lighting with the albedo texture's alpha channel.
   Choose this for PNG/TGA images with transparent or semi-transparent pixels.
