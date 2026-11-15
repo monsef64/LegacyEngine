@@ -96,7 +96,7 @@ jobs:
           echo "::error::Both Ubuntu mirrors failed within their time limits. See the APT output above."
           exit 1
 
-      # SDL, ReactPhysics3D, libstdc++ and libgcc are linked statically so that
+      # SDL, Jolt, libstdc++ and libgcc are linked statically so that
       # the binary runs without any of them installed.
       - name: Configure
         run: |

@@ -17,7 +17,7 @@ class ModelPreviewWindow {
     float time_ = 0, fadeSeconds_ = .25f, fadeElapsed_ = 0, fadeDuration_ = 0, sourceDuration_ = 1;
     bool blendClips_ = true;
     std::array<float, 12> lastView_{};
-    bool rendered_ = false;
+    bool rendered_ = false, streaming_ = false;
     unsigned openedRevision_ = ~0u;
     bool playing_ = false, loop_ = true, bind_ = true;
 
@@ -174,7 +174,7 @@ class ModelPreviewWindow {
                                                  bind_ ? 1.f : 0.f,
                                                  float(modelAssetRevision),
                                                  float(fadeDuration_)};
-                if (!rendered_ || view != lastView_) {
+                if (!rendered_ || view != lastView_ || streaming_ || renderer.streaming()) {
                     GLint draw = 0, read = 0, viewport[4];
                     glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
                     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
@@ -198,6 +198,7 @@ class ModelPreviewWindow {
                     glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
                     glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
                     rendered_ = true;
+                    streaming_ = renderer.streaming();
                     lastView_ = view;
                 }
                 float width = std::max(1.f, ImGui::GetContentRegionAvail().x);

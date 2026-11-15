@@ -57,6 +57,7 @@ class LuaScene {
     void resume(Task& task, int arguments);
     void advanceTasks(float dt);
     static int waitAPI(lua_State* state);
+    static int taskAPI(lua_State* state);
     lua_State* state_;
     World& world_;
     AssetManager assets_;

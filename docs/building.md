@@ -1,6 +1,6 @@
 # Build and test
-Requires a C++17 compiler, CMake 3.16+, Git and platform development libraries.
-CMake fetches SDL3 (if not installed), ReactPhysics3D, Dear ImGui, ImGuizmo and Lua.
+Requires a C++17 compiler, CMake 3.20+, Git and platform development libraries.
+CMake fetches SDL3 (if not installed), Jolt, Dear ImGui, ImGuizmo and Lua.
 GLAD, Roboto/Font Awesome fonts, miniaudio, simdjson, nlohmann/json and stb_image
 are included under `third_party/`.
 

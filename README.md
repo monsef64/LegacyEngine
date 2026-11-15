@@ -1,6 +1,6 @@
 # LegacyEngine
 
-A C++17 3D editor built with SDL3, OpenGL, Dear ImGui, ReactPhysics3D, miniaudio and Lua 5.4.
+A C++17 3D editor built with SDL3, OpenGL, Dear ImGui, Jolt, miniaudio and Lua 5.4.
 LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lua.
 
 ![LegacyEngine editor](docs/screenshot.png)
@@ -54,3 +54,6 @@ supports `loadLevel`, `loadLevelAsync`, `unloadLevel`, `restartLevel`,
 [Levels](docs/projects.md#levels) for deferred-transition behavior.
 Toggle VSync in **Project > Project Settings > Rendering**. Engine GLSL lives in
 `data/shaders/`; keep the packaged `data/` directory beside the executable.
+
+Model source imports support OBJ and glTF/GLB (including skeletal glTF animations).
+See [Jolt migration and manual checks](docs/manual/jolt-and-model-imports.md) for physics details.

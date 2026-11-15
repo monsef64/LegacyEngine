@@ -184,12 +184,16 @@
     "signature": "sky:setCubemap(projectRelativeCubemapPath) - select a .cubemap asset"
   },
   {
+    "name": "task",
+    "signature": "task(function() ... end) - run an independent cooperative block; waits pause only that task; call inside lifecycle/object callbacks or tasks"
+  },
+  {
     "name": "waitForSeconds",
     "signature": "waitForSeconds(seconds) - suspend this callback, not the engine"
   },
   {
     "name": "wait",
-    "signature": "wait(audioSource.onAudioFinished) - resume on the next audio event"
+    "signature": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event"
   },
   {
     "name": "isActive",
@@ -669,7 +673,7 @@
   },
   {
     "name": "addComponent",
-    "signature": "addComponent(gameObject, componentType) -> live component"
+    "signature": "addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner"
   },
   {
     "name": "removeComponent",

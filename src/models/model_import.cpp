@@ -23,19 +23,16 @@ std::string modelImportExtensions() {
     return result;
 }
 bool importableModel(const std::filesystem::path& path) {
-    if (AssetManager::extension(path) == ".blend") {
-        return false;
-    }
-    Assimp::Importer importer;
-    return importer.IsExtensionSupported(AssetManager::extension(path));
+    const auto extension = AssetManager::extension(path);
+    return extension == ".obj" || extension == ".gltf" || extension == ".glb";
 }
 std::string importModel(AssetManager& assets,
                         const std::filesystem::path& source,
                         const std::string& folder,
                         bool publishRevision) {
-    if (AssetManager::extension(source) == ".blend") {
+    if (!importableModel(source.string())) {
         throw std::runtime_error(
-            "Blender files are not supported; export to glTF, FBX, or OBJ first");
+            "Supported model formats: OBJ, glTF and GLB (including skeletal glTF animations)");
     }
     if (!std::filesystem::is_regular_file(source) ||
         std::filesystem::file_size(source) > 256 * 1024 * 1024) {

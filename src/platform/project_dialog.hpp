@@ -54,18 +54,14 @@ class ProjectDialog {
             state_->busy = true;
         }
         static const std::string extensions = modelImportExtensions();
-        static const SDL_DialogFileFilter filters[]{
-            {"3D Models (all Assimp formats)", extensions.c_str()},
-            {"glTF / GLB", "gltf;glb"},
-            {"FBX", "fbx"},
-            {"Wavefront OBJ", "obj"},
-            {"Collada", "dae"},
-            {"STL / PLY", "stl;ply"},
-            {"LegacyEngine Mesh", "lemesh"},
-            {"Scripts", "ls;lua"},
-            {"Images", "png;jpg;jpeg;bmp;tga;hdr"},
-            {"Audio", "wav;mp3;ogg;flac"},
-            {"All files", "*"}};
+        static const SDL_DialogFileFilter filters[]{{"3D Models (OBJ / glTF)", extensions.c_str()},
+                                                    {"glTF / GLB", "gltf;glb"},
+                                                    {"Wavefront OBJ", "obj"},
+                                                    {"LegacyEngine Mesh", "lemesh"},
+                                                    {"Scripts", "ls;lua"},
+                                                    {"Images", "png;jpg;jpeg;bmp;tga;hdr"},
+                                                    {"Audio", "wav;mp3;ogg;flac"},
+                                                    {"All files", "*"}};
         SDL_ShowOpenFileDialog(callback,
                                new Request{state_, false},
                                window,

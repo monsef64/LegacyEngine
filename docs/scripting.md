@@ -149,7 +149,7 @@ Use `self:setActive(false)` and `object:isActive()` to control/query activity.
 Reactivation must come from another active script or Inspector. A paused script
 keeps its variables and resumes rather than rerunning onStart.
 
-Waits are non-blocking and only supported inside lifecycle/object callbacks, not
+Waits are non-blocking and only supported inside lifecycle/object callbacks or their `task` blocks, not
 at file top-level, inside custom/level event listeners, or in onDestroy. Each
 callback can have one pending invocation; other callbacks still run. Seconds are
 playing-time seconds (0–86400, zero waits until the next update). Pause and
@@ -351,3 +351,56 @@ Invalid transitions report the error via `animation.error` and preserve playback
 Model Preview has **Blend clip changes** and a duration slider. Change the animation
 while playing to preview a fade. Inspector runtime controls also include a
 cross-fade target asset and duration. Blend progress is transient, not serialized.
+
+
+## Independent waiting blocks with task
+
+A normal Lua `if`, `do` or loop is not a separate coroutine. Calling a wait directly
+inside it still pauses the **current callback**, including code after that block.
+Wrap the independent work in `task(function() ... end)` to pause only that task:
+
+```lua
+function onStart()
+    local shouldRun = true
+    if shouldRun then
+        task(function()
+            wait(2) -- same as waitForSeconds(2)
+            debug.log("This block continues after two playing seconds")
+        end)
+    end
+    debug.log("This runs immediately, without waiting for the task")
+end
+```
+
+`task` starts immediately and runs until its first wait or completion. The caller
+then continues. Nested tasks are supported; closures keep their captured locals.
+It takes one function, returns no results/handle, and does not create OS threads.
+CPU-heavy code before a wait still runs synchronously and is instruction-limited.
+Use separate tasks for independent waits, including `wait(audio.onAudioFinished)`.
+
+Tasks inherit their callback's owner/activity lifecycle. Play pause and inactive
+owners freeze timer progress; destroying the owner or Stop/reset cancels pending
+work. Removed audio sources cancel tasks waiting on those sources. Tasks and
+callbacks share the runtime's 128-live-task cap and memory/instruction budgets;
+errors use normal script error reporting. Tasks are not allowed at file top-level,
+in custom/level listeners or during onDestroy/shutdown.
+
+Do not spawn an unbounded task every `onUpdate`. Guard a repeating action:
+
+```lua
+local busy = false
+function onUpdate(dt)
+    if not busy then
+        busy = true
+        task(function()
+            waitForSeconds(1)
+            debug.log("Delayed action")
+            busy = false
+        end)
+    end
+    -- Other update logic keeps running while the guarded task waits.
+end
+```
+
+Choose `onStart` for one-off work. If a task is canceled, code after its wait
+(including clearing `busy`) does not run; reset your application state when needed.

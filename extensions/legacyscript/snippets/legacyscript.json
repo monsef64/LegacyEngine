@@ -46,5 +46,15 @@
       "@export ${1:target} ${2|GameObject,AudioSource,AudioListener,Transform,RigidBody,Collider,Camera,Skybox,Texture,AudioClip,Asset,number,boolean,string|} ${3}"
     ],
     "description": "Declare an Inspector-assigned LegacyScript field"
+  },
+  "Independent waiting task": {
+    "prefix": "task",
+    "body": [
+      "task(function()",
+      "    waitForSeconds(${1:1})",
+      "    $0",
+      "end)"
+    ],
+    "description": "Independent cooperative block: waits pause only this task, not its caller"
   }
 }

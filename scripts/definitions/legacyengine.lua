@@ -524,12 +524,18 @@ function onAudioStopped() end
 ---@field onAudioResumed AudioEvent
 ---@field onAudioStopped AudioEvent
 
----Suspend this lifecycle callback without blocking the engine. Not supported at top-level/onDestroy/custom event listeners.
+---Start an independent cooperative block now; waits suspend only that block.
+---Call from a lifecycle/object callback or another task, not top-level/onDestroy/custom event listeners.
+---Returns no handle/results. Pause/inactivity freeze waits; Stop/owner destruction cancels them.
+---@param block fun()
+function task(block) end
+
+---Suspend this lifecycle callback/task without blocking the engine. Not supported at top-level/onDestroy/custom event listeners.
 ---@param seconds number Finite seconds from 0 to 86400; zero resumes on next update
 function waitForSeconds(seconds) end
----Resume after the next occurrence of an AudioSource event; past events do not count.
----@param event AudioEvent
-function wait(event) end
+---Wait for playing-time seconds or the next AudioSource event; past events do not count.
+---@param secondsOrEvent number|AudioEvent Finite 0..86400 seconds or a live audio event token
+function wait(secondsOrEvent) end
 
 ---Instantiate a prefab asset or copy a GameObject subtree. Returns the new root.
 ---@param source string|GameObject Project-relative .prefab path or live object

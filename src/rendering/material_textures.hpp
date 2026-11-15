@@ -1,5 +1,6 @@
 #pragma once
 #include "assets/assets.hpp"
+#include <future>
 #include <map>
 class MaterialTextureCache {
     struct Entry {
@@ -12,6 +13,16 @@ class MaterialTextureCache {
     };
     std::map<std::string, std::pair<std::chrono::steady_clock::time_point, std::string>> failures_;
     std::map<std::string, Entry> entries_;
+    struct Decoded {
+        std::vector<unsigned char> pixels;
+        int width = 0, height = 0;
+        std::filesystem::file_time_type stamp{};
+        std::uintmax_t size = 0;
+        bool unchanged = false;
+    };
+    std::map<std::string, std::future<Decoded>> pending_;
+    unsigned uploads_ = 0;
+    bool waiting_ = false;
     std::size_t bytes_ = 0;
     std::uint64_t frame_ = 0;
 
@@ -20,8 +31,13 @@ class MaterialTextureCache {
         clear();
     }
     void clear();
+    bool streaming() const {
+        return waiting_ || !pending_.empty();
+    }
     void beginFrame() {
         ++frame_;
+        uploads_ = 0;
+        waiting_ = false;
     }
     unsigned get(const AssetManager& assets, const std::string& path, std::string& error);
 };

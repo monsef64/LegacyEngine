@@ -464,6 +464,9 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushcclosure(L, spawnAPI, 1);
     lua_setglobal(L, "spawn");
     lua_pushlightuserdata(L, this);
+    lua_pushcclosure(L, taskAPI, 1);
+    lua_setglobal(L, "task");
+    lua_pushlightuserdata(L, this);
     lua_pushcclosure(L, destroyAPI, 1);
     lua_setglobal(L, "destroy");
     lua_pushlightuserdata(L, this);
@@ -1771,12 +1774,43 @@ void LuaScene::advanceTasks(float dt) {
         }
     }
 }
+int LuaScene::taskAPI(lua_State* L) {
+    auto& scene = *static_cast<LuaScene*>(lua_touserdata(L, lua_upvalueindex(1)));
+    if (!scene.currentTask_ || scene.stopping_ || scene.currentTask_->callback == "onDestroy") {
+        return luaL_error(
+            L,
+            "task requires a running lifecycle/object callback or task, not top-level/listener/shutdown code");
+    }
+    luaL_checktype(L, 1, LUA_TFUNCTION);
+    if (scene.tasks_.size() >= 128) {
+        return luaL_error(L, "Too many running/waiting tasks (maximum 128)");
+    }
+    // Capture owner and callback binding before resume changes currentTask_.
+    // Registry ownership keeps the closure/upvalues alive after its parent ends.
+    const Entity owner = scene.currentTask_->owner;
+    const int objectReference = scene.currentTask_->objectReference;
+    auto* thread = lua_newthread(L);
+    const int reference = luaL_ref(L, LUA_REGISTRYINDEX);
+    lua_pushvalue(L, 1);
+    lua_xmove(L, thread, 1);
+    scene.tasks_.push_back({thread, reference, objectReference, "<task>"});
+    auto current = std::prev(scene.tasks_.end());
+    current->owner = owner;
+    // Run up to the first wait now, then let the caller continue. This is
+    // cooperative scheduling on the script thread, not an OS background thread.
+    scene.resume(*current, 0);
+    if (current->seconds < 0) {
+        luaL_unref(L, LUA_REGISTRYINDEX, current->reference);
+        scene.tasks_.erase(current);
+    }
+    return 0;
+}
 int LuaScene::waitAPI(lua_State* L) {
     auto& scene = *static_cast<LuaScene*>(lua_touserdata(L, lua_upvalueindex(1)));
     if (!scene.currentTask_ || scene.stopping_ || scene.currentTask_->callback == "onDestroy") {
         return luaL_error(L, "wait is only supported inside running lifecycle/object callbacks");
     }
-    if (lua_toboolean(L, lua_upvalueindex(2))) {
+    if (lua_toboolean(L, lua_upvalueindex(2)) || lua_type(L, 1) == LUA_TNUMBER) {
         float seconds = number(L, 1);
         if (seconds < 0 || seconds > 86400) {
             return luaL_error(L, "Wait seconds must be between 0 and 86400");
