@@ -57,6 +57,15 @@ int main() {
     ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;
     io.DisplaySize=ImVec2(1000,700);io.DeltaTime=1.0f/60;io.Fonts->Build();
     AssetBrowser browser;browser.assets.root=temp;ScriptEditor editor;assert(editor.source().empty());
+    bool cleared=false,started=false;
+    const ImTextureID descriptor=static_cast<ImTextureID>(0x1234567887654321ull);
+    browser.thumbnailSource = {[&](const AssetManager&){started=true;},
+        [&](const AssetManager&, const std::string&){return descriptor;}, [&]{cleared=true;}};
+    browser.beginThumbnails(browser.assets); assert(started);
+    assert(browser.textureThumbnail(browser.assets,"image.png")==descriptor);
+    browser.clearThumbnails(); assert(cleared);
+    AssetPreviewData preview; preview.texture=descriptor; assert(preview.texture==descriptor);
+    browser.thumbnailSource={};
     int request=-1;EditorRect hierarchy{500,20,400,500};
     bool focusHierarchy=false,focusAssets=false;
     auto frame=[&] {

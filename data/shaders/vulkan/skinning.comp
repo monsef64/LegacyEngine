@@ -1,0 +1,58 @@
+#version 450
+// Vulkan compute skinning. Scalar fields preserve the
+// engine Vertex's packed eight-float layout under std430.
+layout(local_size_x = 64) in;
+struct Vertex {
+    float px;
+    float py;
+    float pz;
+    float nx;
+    float ny;
+    float nz;
+    float u;
+    float v;
+};
+layout(set = 0, binding = 0, std430) readonly buffer InputVertices {
+    Vertex inputVertices[];
+};
+layout(set = 0, binding = 1, std430) readonly buffer Ranges {
+    uvec2 ranges[];
+};
+layout(set = 0, binding = 2, std430) readonly buffer Influences {
+    vec2 influences[];
+};
+// Alternating position and normal matrices, as in the existing CPU palette.
+layout(set = 0, binding = 3, std430) readonly buffer Palette {
+    mat4 matrices[];
+};
+layout(set = 0, binding = 4, std430) writeonly buffer OutputVertices {
+    Vertex outputVertices[];
+};
+layout(push_constant) uniform Parameters {
+    uint count;
+    float scale;
+}
+params;
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= params.count) {
+        return;
+    }
+    Vertex src = inputVertices[index];
+    vec3 position = vec3(src.px, src.py, src.pz);
+    vec3 normal = vec3(src.nx, src.ny, src.nz);
+    vec3 p = vec3(0), n = vec3(0);
+    float total = 0;
+    uvec2 range = ranges[index];
+    for (uint i = 0; i < range.y; ++i) {
+        vec2 influence = influences[range.x + i];
+        uint bone = uint(influence.x);
+        float weight = influence.y;
+        p += (matrices[bone * 2] * vec4(position, 1)).xyz * weight;
+        n += mat3(matrices[bone * 2 + 1]) * normal * weight;
+        total += weight;
+    }
+    p = p / max(total, 1e-20) * params.scale;
+    n = length(n) > 1e-12 ? normalize(n) : vec3(0, 1, 0);
+    outputVertices[index] = Vertex(p.x, p.y, p.z, n.x, n.y, n.z, src.u, src.v);
+}

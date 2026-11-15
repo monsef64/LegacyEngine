@@ -313,13 +313,10 @@ the dropdown; Play/Pause/Stop/Reset and the time slider operate on an isolated p
 Stop rewinds the selected clip, while Reset returns to bind pose. Right-drag looks around
 and the wheel zooms. Use the asset context menu **Instantiate in level** to place a model.
 
-Skinning runs on the GPU using OpenGL 3.3 transform feedback. Rest vertices and all
-bone influences stay in static GPU buffers; the CPU samples/blends node poses and
-uploads only a matrix palette. Lit, unlit, transparent and shadow passes consume
-the same GPU-skinned vertex buffer. Bounds are conservative palette-transformed
-source bounds; no vertex readback is required. Asset-cache invalidation and renderer
-shutdown release skinning buffers. Hardware texture-buffer limits are checked.
-CPU bind-pose evaluation remains available for import bounds and static colliders.
+The runtime evaluates and blends poses on the CPU, skins mesh vertices, and
+uploads the resulting geometry to Vulkan buffers for the lit, unlit and shadow
+passes. A Vulkan compute skinning shader is tested separately but is not yet
+used by the runtime. Static colliders do not follow animated vertices.
 Morph-target animation, retargeting and animated physics colliders remain unsupported.
 
 ### Clip blending

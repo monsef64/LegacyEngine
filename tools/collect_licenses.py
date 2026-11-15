@@ -34,13 +34,12 @@ def comments(source, target):
 
 
 for folder, filename, target in [
-    ('fontawesome', 'LICENSE.txt', 'FontAwesome.txt'), ('glad', 'LICENSE', 'glad.txt'),
+    ('fontawesome', 'LICENSE.txt', 'FontAwesome.txt'),
     ('json', 'LICENSE.MIT', 'nlohmann-json.txt'), ('miniaudio', 'LICENSE', 'miniaudio.txt'),
     ('roboto', 'LICENSE', 'Roboto.txt'), ('simdjson', 'LICENSE', 'simdjson.txt'),
     ('stb', 'LICENSE', 'stb.txt')]:
     copy(ROOT / 'third_party' / folder / filename, target)
-comments(ROOT / 'third_party/glad/include/KHR/khrplatform.h', 'Khronos.txt')
-# simdjson distributes the complete Apache-2.0 text, also referenced by glad.
+# simdjson distributes the complete Apache-2.0 text.
 copy(ROOT / 'third_party/simdjson/LICENSE', 'Apache-2.0.txt')
 for folder, filename, target in [
     ('sdl3', 'LICENSE.txt', 'SDL3.txt'), ('reactphysics3d', 'LICENSE', 'ReactPhysics3D.txt'),

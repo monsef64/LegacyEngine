@@ -10,7 +10,7 @@ corrupt compression is rejected. Meshes should be edited through the editor, not
 as text. Fast compression (Zstandard level 3) avoids expensive maximum-compression work.
 
 The Assets import action and dropped files use one background worker. That worker
-owns its AssetManager and Assimp importer; it does not access ImGui, OpenGL, the
+owns its AssetManager and Assimp importer; it does not access ImGui, Vulkan, the
 scene world or editor caches. Results/cache invalidation are applied on the main
 thread. Additional imports are rejected while a job runs rather than starting
 unbounded jobs. Asset edits, project save/switch/autosave and application exit are

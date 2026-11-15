@@ -4,7 +4,7 @@
 | `src/app/` | Application entry point and editor/runtime orchestration |
 | `src/core/` | Math, ECS, engine components and transform hierarchy |
 | `src/physics/` | ReactPhysics3D integration and collider debug drawing |
-| `src/rendering/` | OpenGL renderer, procedural meshes and viewport surfaces |
+| `src/rendering/` | Vulkan renderer, procedural meshes and viewport surfaces |
 | `src/scene/` | Editor camera and scene-camera calculations |
 | `src/audio/` | WAV/MP3 decoding, mixing, listener/spatial audio and previews |
 | `src/input/` | Shared keyboard, mouse and gamepad snapshots |
@@ -42,7 +42,7 @@ support, not Lua or ImGui. The scripting adapter depends on this service, not th
 other way around. File formats and frame-boundary transition behavior are unchanged.
 
 `src/core/frustum.hpp` contains reusable view-frustum math, independent of lights
-and OpenGL. Rendering and light collection normalize planes once per view rather
+and graphics APIs. Rendering and light collection normalize planes once per view rather
 than per tested sphere.
 
 ## Hot-path traversal and scratch storage
@@ -54,18 +54,12 @@ pool creation. It passes const component references and caches pool lookups.
 **Do not structurally mutate the World through another alias during this traversal.**
 This is an explicit iterator contract, not a thread-safety guarantee.
 
-The renderer uses read-only traversal and owns reusable light, shadow-caster and
-transparent-draw buffers. Capacity survives across frames and Scene/Game views;
-entries are rebuilt for every view, so transform/light/material edits stay live.
-Transparent packets borrow MeshRenderer references only during drawing, avoiding
-copies of their asset-path strings. Their explicit insertion-order tie-break keeps
-equal-depth ordering deterministic without `stable_sort`'s temporary buffer.
-Meshes are frustum-culled before resolving materials. Shadow casters are still
-collected independently: offscreen objects can cast visible shadows.
-
-These are targeted CPU/allocation changes, not a rewrite of the renderer or a
-claim about GPU execution time or overall FPS. Scratch capacity is retained at
-its high-water mark until the renderer is destroyed.
+The Vulkan renderer traverses scene components read-only and builds draw lists
+for each view. It caches model meshes, materials and textures, sorts transparent
+geometry by distance, and builds shadow passes for eligible lights. Current
+rendering serializes work on the graphics queue and uses CPU skinning before
+uploading animated vertices; profile the whole editor before drawing conclusions
+from the CPU-only light-collection benchmark below.
 
 ## Reproduce the CPU allocation benchmark
 

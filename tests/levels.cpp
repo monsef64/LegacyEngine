@@ -6,11 +6,17 @@
 #include <thread>
 int main(){
     auto root=std::filesystem::temp_directory_path()/("legacy-levels-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-    for(const char* file:{"lit.vert","lit.frag","unlit.vert","unlit.frag","skybox.vert","skybox.frag"})assert(loadShaderData(file).find("#version 330 core")!=std::string::npos);
+    for(const char* file:{"vulkan/lit.vert","vulkan/lit.frag","vulkan/unlit.vert","vulkan/unlit.frag","vulkan/skybox.vert","vulkan/skybox.frag","vulkan/shadow.vert","vulkan/skinning.comp"})assert(loadShaderData(file).find("#version 450")!=std::string::npos);
     AssetManager assets;assets.root=root/"Assets";RenderingSettings settings;settings.vsync=false;settings.save(assets);
     assert(RenderingSettings::file(assets)==root/"Settings/Rendering.json");assert(readJsonFile(RenderingSettings::file(assets),4096)["vsync"]==false);
     settings.shadows={1,2048};settings.save(assets);
-    RenderingSettings loaded;loaded.load(assets);assert(loaded.shadows.mode==1 && loaded.shadows.resolution==2048);
+    RenderingSettings loaded;bool vsyncApplied=true;int applications=0;
+    loaded.applyVsync=[&](bool enabled){vsyncApplied=enabled;++applications;};
+    loaded.load(assets);assert(loaded.shadows.mode==1 && loaded.shadows.resolution==2048);
+    assert(applications==1 && !vsyncApplied && loaded.error.empty());
+    loaded.applyVsync=[](bool){throw std::runtime_error("presentation failure");};
+    loaded.apply();assert(loaded.error.find("presentation failure")!=std::string::npos);
+    loaded.applyVsync=[&](bool enabled){vsyncApplied=enabled;++applications;};
     writeJsonFile(RenderingSettings::file(assets),Json{{"version",1},{"vsync",true}});
     loaded.root.clear();loaded.load(assets);assert(loaded.shadows.mode==0 && loaded.shadows.resolution==1024);
     writeJsonFile(RenderingSettings::file(assets),Json{{"version",2},{"vsync",true},{"shadowMode",0},{"shadowResolution",999}});

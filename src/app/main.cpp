@@ -4,15 +4,15 @@
 // World conventions:
 //   * 1 unit = 1 metre
 //   * +Y is up, the ground is the XZ plane (y = 0)
-//   * right-handed coordinates (the OpenGL convention)
+//   * right-handed coordinates
 
 #include "animation/animation_system.hpp"
+#include "assets/vulkan_browser_thumbnails.hpp"
 #include "audio/audio_system.hpp"
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include "editor/animation_window.hpp"
 #include "editor/asset_browser.hpp"
-#include "editor/asset_preview_renderer.hpp"
 #include "editor/create_menu.hpp"
 #include "editor/dock_workspace.hpp"
 #include "editor/editor_history.hpp"
@@ -30,6 +30,8 @@
 #include "editor/scene_orientation.hpp"
 #include "editor/script_editor.hpp"
 #include "editor/transform_editor.hpp"
+#include "editor/vulkan_asset_preview_renderer.hpp"
+#include "editor/vulkan_preview_backend.hpp"
 #include "gameplay/first_person.hpp"
 #include "gameplay/raycast.hpp"
 #include "levels/level_system.hpp"
@@ -44,8 +46,9 @@
 #include "project/project_io.hpp"
 #include "project/rendering_settings.hpp"
 #include "rendering/mesh.hpp"
-#include "rendering/renderer.hpp"
-#include "rendering/scene_surface.hpp"
+#include "rendering/vulkan_camera_region.hpp"
+#include "rendering/vulkan_editor_overlays.hpp"
+#include "rendering/vulkan_scene_renderer.hpp"
 #include "scene/camera.hpp"
 #include "scene/scene_camera.hpp"
 #include "scene/skybox_transition.hpp"
@@ -55,14 +58,15 @@
 #include <SDL3/SDL_main.h>
 
 #include <imgui.h>
-#include <imgui_impl_opengl3.h>
-#include <imgui_impl_sdl3.h>
 
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <fstream>
 #include <iterator>
+#include <memory>
+#include <vector>
 
 // ---------------------------------------------------------------------------
 // Scene description
@@ -164,35 +168,58 @@ findRoom(const Physics& physics, Vec3 center, ColliderShape shape = ColliderShap
 // Window
 // ---------------------------------------------------------------------------
 
-// Creates the window together with an OpenGL 3.3 core context. On failure both
-// outputs are null and SDL_GetError() describes the problem.
-static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& context) {
-    SDL_GL_ResetAttributes();
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, multisamples > 0 ? 1 : 0);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, multisamples);
-
-    window = SDL_CreateWindow("LegacyEngine",
-                              1280,
-                              720,
-                              SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED |
-                                  SDL_WINDOW_HIGH_PIXEL_DENSITY);
-    context = window ? SDL_GL_CreateContext(window) : nullptr;
-    if (!context && window) {
-        SDL_DestroyWindow(window);
-        window = nullptr;
+// Shaders are compiled at build time and installed next to the executable.
+static std::vector<uint32_t> loadVulkanShader(const char* name) {
+    const char* base = SDL_GetBasePath();
+    if (!base) {
+        throw std::runtime_error("Cannot locate the executable directory");
     }
+    const auto path = std::filesystem::path(base) / "data/shaders/vulkan/compiled" / name;
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    if (!stream) {
+        throw std::runtime_error("Cannot open Vulkan shader: " + path.string());
+    }
+    const auto size = stream.tellg();
+    if (size <= 0 || size > 4 * 1024 * 1024 || size % 4 != 0) {
+        throw std::runtime_error("Invalid Vulkan shader: " + path.string());
+    }
+    std::vector<uint32_t> words(static_cast<std::size_t>(size) / 4);
+    stream.seekg(0);
+    if (!stream.read(reinterpret_cast<char*>(words.data()), size) || words[0] != 0x07230203) {
+        throw std::runtime_error("Invalid Vulkan shader: " + path.string());
+    }
+    return words;
 }
 
 // ---------------------------------------------------------------------------
 // The scene and the main loop
 // ---------------------------------------------------------------------------
 
-static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
+static bool hasVisibleGeometry(VulkanSceneSurface& surface) {
+    const auto pixels = surface.readPixels();
+    if (pixels.size() < 8) {
+        return false;
+    }
+    std::size_t different = 0;
+    for (std::size_t i = 4; i + 2 < pixels.size(); i += 4) {
+        if (pixels[i] != pixels[0] || pixels[i + 1] != pixels[1] || pixels[i + 2] != pixels[2]) {
+            if (++different >= 50) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static bool run(SDL_Window* window,
+                VulkanContext& context,
+                VulkanSceneSurface& sceneSurface,
+                VulkanSceneRenderer& renderer,
+                VulkanImGui& gui,
+                const VulkanEditorPreviewBackend::Shaders& shaders,
+                const std::vector<uint32_t>& litFragment,
+                const std::vector<uint32_t>& shadowVertex,
+                bool smokeTest) {
     World world;
     Physics physics;
     LayerSettings layerSettings;
@@ -235,20 +262,63 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     float cameraBoost = 3.0f;
     float cameraSpeed = 5.0f;
     Entity selectedEntity;
+    if (smokeTest) {
+        selectedEntity = activeCamera(world);
+    }
     ScriptEditor scripts;
     scripts.bindWorld(world, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
     EditorHistory history(world);
     PlayMode playMode;
     ObjectClipboard clipboard;
     AssetBrowser browser;
+    VulkanBrowserThumbnails browserThumbnails(browser.thumbnailSource, context, gui);
     ScriptComponents componentScripts;
     AudioSystem audio;
     AnimationSystem animations;
+    VulkanEditorPreviewBackend editorPreviews(sceneSurface, renderer, gui, shaders);
     AnimationWindow animationWindow;
     ModelPreviewWindow modelPreviewWindow;
-    SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
-    AssetPreviewRenderer assetPreviews(
-        renderer, {gridMesh, planeMesh, cubeMesh, sphereMesh, capsuleMesh, coneMesh});
+    VulkanSceneSurface gameSurface(context.physicalDevice(),
+                                   context.device(),
+                                   context.graphicsQueue(),
+                                   context.graphicsFamily(),
+                                   shaders.unlitVertex,
+                                   shaders.unlitFragment,
+                                   &sceneSurface);
+    VulkanSceneSurface cameraPreviewSurface(context.physicalDevice(),
+                                            context.device(),
+                                            context.graphicsQueue(),
+                                            context.graphicsFamily(),
+                                            shaders.unlitVertex,
+                                            shaders.unlitFragment,
+                                            &sceneSurface);
+    for (auto* surface : {&gameSurface, &cameraPreviewSurface}) {
+        surface->enableLighting(shaders.litVertex, litFragment, shadowVertex);
+        surface->enableSkybox(shaders.skyVertex, shaders.skyFragment);
+    }
+    struct SurfaceRegistrations {
+        VulkanImGui& gui;
+        VulkanSceneSurface& scene;
+        VulkanSceneSurface& game;
+        VulkanSceneSurface& camera;
+        ~SurfaceRegistrations() {
+            gui.cancelFrame();
+            try {
+                gui.forget(scene);
+                gui.forget(game);
+                gui.forget(camera);
+            } catch (...) {
+            }
+        }
+    } registrations{gui, sceneSurface, gameSurface, cameraPreviewSurface};
+    VulkanEditorOverlays overlays(sceneSurface);
+    VulkanAssetPreviewRenderer assetPreviews(
+        sceneSurface,
+        renderer,
+        gui,
+        context,
+        shaders,
+        {gridMesh, planeMesh, cubeMesh, sphereMesh, capsuleMesh, coneMesh});
     EditorRect sceneRect{};
     bool sceneHovered = false, resetWorkspace = false;
     Entity editSelection;
@@ -269,6 +339,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     levels.setRoot(browser.assets.root);
     LevelSystem::active = &levels;
     RenderingSettings renderingSettings;
+    renderingSettings.applyVsync = [&](bool enabled) { context.setVsync(enabled); };
+    renderingSettings.presentationStatus = [&] {
+        return renderingSettings.vsync ? std::string("Vulkan VSync requested")
+                                       : std::string("Vulkan non-VSync requested");
+    };
     std::string editLevelName, editSource, editScriptPath, embeddedLegacySource, editLegacySource;
     OrbitCamera editCamera;
     EditorHistory editHistory(world);
@@ -285,8 +360,19 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     EngineLog::Errors terminalErrors;
     bool gameHovered = false, gameFocused = false, focusGame = false;
     std::optional<EditorSettings> settingsGesture;
-    bool separateGame = false;
+    bool separateGame = smokeTest;
     SDL_Window* gameWindow = nullptr;
+    std::unique_ptr<VulkanContext> gameContext;
+    struct GameWindowGuard {
+        SDL_Window*& window;
+        std::unique_ptr<VulkanContext>& context;
+        ~GameWindowGuard() {
+            context.reset();
+            if (window) {
+                SDL_DestroyWindow(window);
+            }
+        }
+    } gameWindowGuard{gameWindow, gameContext};
     auto toggleGameFullscreen = [&]() {
         if (!gameWindow) {
             return;
@@ -314,6 +400,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
 
     bool cameraLooking = false, orientationInteracting = false;
     unsigned renderedFrames = 0;
+    unsigned smokeScene = 0, smokeGame = 0, smokeEmbeddedGame = 0, smokeCamera = 0,
+             smokeSecondary = 0;
+    bool smokeFailed = false;
     constexpr unsigned smokeFrames = 120;
     std::optional<Vec3> lastOrbitPivot;
     while (running) {
@@ -395,10 +484,20 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         input.beginFrame();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED ||
+                event.type == SDL_EVENT_WINDOW_RESTORED) {
+                if (event.window.windowID == SDL_GetWindowID(window)) {
+                    context.requestResize();
+                } else if (gameWindow && event.window.windowID == SDL_GetWindowID(gameWindow) &&
+                           gameContext) {
+                    gameContext->requestResize();
+                }
+            }
             if (gameWindow && event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
                 event.window.windowID == SDL_GetWindowID(gameWindow)) {
                 input.releaseMouse();
                 input.window = window;
+                gameContext.reset();
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
                 continue;
@@ -450,7 +549,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 SDL_SetWindowMouseGrab(window, false);
                 SDL_SetWindowMouseRect(window, nullptr);
             }
-            ImGui_ImplSDL3_ProcessEvent(&event);
+            gui.processEvent(event);
             input.event(event);
             const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                                     event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
@@ -594,10 +693,39 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
 
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplSDL3_NewFrame();
-        ImGui::NewFrame();
+        browserThumbnails.prepare(browser.assets);
+        assetPreviews.prepare(browser.assets);
+        // Restore the editor to show its unsaved-changes confirmation rather
+        // than silently discarding a pending close while minimized.
+        if (exitRequested && (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)) {
+            if (!SDL_RestoreWindow(window)) {
+                SDL_LogWarn(
+                    SDL_LOG_CATEGORY_APPLICATION, "Could not restore window: %s", SDL_GetError());
+            }
+        }
+        if (!gui.beginFrame(gameWindow && gameContext && playMode.active())) {
+            SDL_Delay(16);
+            continue;
+        }
         ImGuizmo::BeginFrame();
+        if (smokeTest && renderedFrames == 3) {
+            ImGui::SetWindowFocus("Game");
+        }
+        if (smokeTest && renderedFrames == 12) {
+            ImGui::SetWindowFocus("Scene");
+        }
+        if (smokeTest && renderedFrames == 70) {
+            context.requestResize();
+            if (gameContext) {
+                gameContext->requestResize();
+            }
+            renderingSettings.vsync = false;
+            renderingSettings.apply();
+        }
+        if (smokeTest && renderedFrames == 72) {
+            renderingSettings.vsync = true;
+            renderingSettings.apply();
+        }
         bool openProject = false, saveProject = false, saveAsProject = false;
         const bool projectEnabled = !browser.importing() && !prefabLevel && !levels.busy() &&
                                     !playMode.active() && !editor.dragging() &&
@@ -1087,9 +1215,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 ImGui::TextWrapped(
                     "CSM uses four directional cascades. Point/spot lights retain PCF. Light quality scales the project resolution; Off disables that light's shadows.");
-                int interval = 0;
-                if (SDL_GL_GetSwapInterval(&interval)) {
-                    ImGui::Text("Driver swap interval: %d", interval);
+                if (renderingSettings.presentationStatus) {
+                    const auto status = renderingSettings.presentationStatus();
+                    if (!status.empty()) {
+                        ImGui::TextUnformatted(status.c_str());
+                    }
                 }
                 ImGui::TextWrapped(
                     "Disable VSync to measure uncapped performance. Use Debug > Profiler to distinguish rendering cost from presentation wait.");
@@ -1160,7 +1290,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 "About LegacyEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::TextUnformatted("LegacyEngine");
             ImGui::TextUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
-            ImGui::TextUnformatted("SDL3 / OpenGL / Dear ImGui / ReactPhysics3D");
+            ImGui::TextUnformatted("SDL3 / Vulkan / Dear ImGui / ReactPhysics3D");
             if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                 ImGui::CloseCurrentPopup();
             }
@@ -1245,7 +1375,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         const bool playbackKeys = !ImGui::GetIO().WantTextInput && !editor.dragging() &&
                                   !projectDialog.pending() && !browser.dialog.pending();
         const bool playKey =
-            playbackKeys && ImGui::Shortcut(ImGuiKey_F5, ImGuiInputFlags_RouteGlobal);
+            (smokeTest && renderedFrames == 35) ||
+            (playbackKeys && ImGui::Shortcut(ImGuiKey_F5, ImGuiInputFlags_RouteGlobal));
         const bool pauseKey =
             playbackKeys && ImGui::Shortcut(ImGuiKey_F6, ImGuiInputFlags_RouteGlobal);
         const bool stopKey =
@@ -1276,9 +1407,18 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 focusGame = true;
                 if (separateGame && !gameWindow) {
                     gameWindow = SDL_CreateWindow(
-                        "Game", 960, 540, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+                        "Game", 960, 540, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
                     if (!gameWindow) {
                         projectError = SDL_GetError();
+                    } else {
+                        try {
+                            gameContext = std::make_unique<VulkanContext>(
+                                gameWindow, context, renderingSettings.vsync);
+                        } catch (const std::exception& error) {
+                            projectError = error.what();
+                            SDL_DestroyWindow(gameWindow);
+                            gameWindow = nullptr;
+                        }
                     }
                 }
                 panelOpen[6] = true;
@@ -1324,6 +1464,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (gameWindow) {
                 input.releaseMouse();
                 input.window = window;
+                gameContext.reset();
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
             }
@@ -1411,16 +1552,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
 
         if (!browser.previewModelRequest.empty()) {
             modelPreviewWindow.open(
-                browser.assets, std::exchange(browser.previewModelRequest, {}), renderer);
+                browser.assets, std::exchange(browser.previewModelRequest, {}), editorPreviews);
         }
-        modelPreviewWindow.draw(browser.assets, renderer, ImGui::GetIO().DeltaTime);
+        modelPreviewWindow.draw(browser.assets, editorPreviews, ImGui::GetIO().DeltaTime);
         if (!browser.editAnimationRequest.empty()) {
             animationWindow.open(browser.assets, std::exchange(browser.editAnimationRequest, {}));
         }
         animationWindow.draw(world,
                              selectedEntity,
                              browser.assets,
-                             renderer,
+                             editorPreviews,
                              history,
                              editAllowed,
                              ImGui::GetIO().DeltaTime);
@@ -1682,9 +1823,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                                                   : "Undo input settings");
                             });
         }
-        terminalErrors.report("Skybox", renderer.skyboxError());
+        terminalErrors.report("Skybox", renderer.skyboxError);
         terminalErrors.report("Material", renderer.materialError);
-        terminalErrors.report("Model", renderer.modelError);
+        terminalErrors.report("Shadow", renderer.shadowError);
         terminalErrors.report("Audio", audio.error);
         terminalErrors.report("Assets", browser.assets.error);
         terminalErrors.report("Asset preview", browser.preview.error);
@@ -1725,11 +1866,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 int dw = 0, dh = 0;
                 SDL_GetWindowSizeInPixels(window, &dw, &dh);
                 auto pixels = scenePixels(sceneRect, windowWidth, windowHeight, dw, dh);
-                sceneSurface.resize(pixels.width, pixels.height);
-                ImGui::Image(static_cast<ImTextureID>(sceneSurface.texture),
-                             ImVec2(sceneRect.width, sceneRect.height),
-                             ImVec2(0, 1),
-                             ImVec2(1, 0));
+                sceneSurface.prepare(pixels.width, pixels.height);
+                ImGui::Image(gui.texture(sceneSurface), ImVec2(sceneRect.width, sceneRect.height));
                 if (world.has<Camera>(selectedEntity) && world.has<Transform>(selectedEntity)) {
                     const auto& selectedCamera = world.get<Camera>(selectedEntity);
                     const float aspect = std::clamp(selectedCamera.aspect, .25f, 4.f);
@@ -1739,7 +1877,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         height = sceneRect.height * .4f;
                         width = height * aspect;
                     }
-                    cameraPreviewSurface.resize(std::max(1, int(width)), std::max(1, int(height)));
+                    cameraPreviewSurface.prepare(std::max(1, int(width)), std::max(1, int(height)));
                     const ImVec2 a(sceneRect.x + sceneRect.width - width - 10,
                                    sceneRect.y + sceneRect.height - height - 10),
                         b(a.x + width, a.y + height);
@@ -1747,11 +1885,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                                  ImVec2(b.x + 2, b.y + 2),
                                                  IM_COL32(24, 24, 24, 245));
                     sceneDrawList->AddText(ImVec2(a.x, a.y - 18), IM_COL32_WHITE, "Camera preview");
-                    sceneDrawList->AddImage(static_cast<ImTextureID>(cameraPreviewSurface.texture),
-                                            a,
-                                            b,
-                                            ImVec2(0, 1),
-                                            ImVec2(1, 0));
+                    sceneDrawList->AddImage(gui.texture(cameraPreviewSurface), a, b);
                 }
                 sceneHovered =
                     ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && ImGui::IsItemHovered();
@@ -1793,7 +1927,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                 !browser.dialog.pending() && !orientationInteracting &&
                                 !cameraLooking && !(SDL_GetModState() & SDL_KMOD_ALT),
                             camera,
-                            static_cast<float>(sceneSurface.width) / sceneSurface.height,
+                            static_cast<float>(sceneSurface.width()) / sceneSurface.height(),
                             &sceneRect,
                             sceneDrawList,
                             &browser.assets);
@@ -1832,17 +1966,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     size.y = std::max(size.y, 1.0f);
                     int dw = 0, dh = 0;
                     SDL_GetWindowSizeInPixels(window, &dw, &dh);
-                    gameSurface.resize(static_cast<int>(size.x * dw / std::max(windowWidth, 1)),
-                                       static_cast<int>(size.y * dh / std::max(windowHeight, 1)));
+                    gameSurface.prepare(static_cast<int>(size.x * dw / std::max(windowWidth, 1)),
+                                        static_cast<int>(size.y * dh / std::max(windowHeight, 1)));
                     world.each<Camera>([&](Entity, Camera& c) {
-                        c.aspect = static_cast<float>(gameSurface.width) / gameSurface.height;
+                        c.aspect = static_cast<float>(gameSurface.width()) / gameSurface.height();
                     });
                     gameImageOrigin = ImGui::GetCursorScreenPos();
                     gameImageSize = size;
-                    ImGui::Image(static_cast<ImTextureID>(gameSurface.texture),
-                                 size,
-                                 ImVec2(0, 1),
-                                 ImVec2(1, 0));
+                    ImGui::Image(gui.texture(gameSurface), size);
                     gameVisible = true;
                     if (showFPS) {
                         const auto a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
@@ -1928,7 +2059,21 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (renderedFrames == 0) {
             ImGui::SetWindowFocus("Assets");
         }
-        ImGui::Render();
+        ImTextureID gameTexture = ImTextureID_Invalid;
+        if (gameWindow && playMode.active()) {
+            int gw = 0, gh = 0;
+            SDL_GetWindowSizeInPixels(gameWindow, &gw, &gh);
+            gameSurface.prepare(std::max(1, gw), std::max(1, gh));
+            gameVisible = true;
+            const auto active = activeCamera(world);
+            if (active != Entity{}) {
+                world.get<Camera>(active).aspect = float(std::max(1, gw)) / std::max(1, gh);
+            }
+        }
+        if (gameWindow && gameVisible) {
+            gameTexture = gui.texture(gameSurface);
+        }
+        gui.renderFrame();
         finishEditorTheme(ImGui::GetDrawData());
         profiler.checkpoint(ProfilePart::Editor);
 
@@ -1956,16 +2101,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         speed * std::min(seconds, 0.1f));
         }
         profiler.checkpoint(ProfilePart::Other);
-        if (gameWindow && playMode.active()) {
-            int gw = 0, gh = 0;
-            SDL_GetWindowSizeInPixels(gameWindow, &gw, &gh);
-            gameSurface.resize(std::max(1, gw), std::max(1, gh));
-            gameVisible = true;
-            const auto active = activeCamera(world);
-            if (active != Entity{}) {
-                world.get<Camera>(active).aspect = float(std::max(1, gw)) / std::max(1, gh);
-            }
-        }
         if (playMode.playing()) {
             Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
             scripts.update(std::min(seconds, 0.25f));
@@ -2101,50 +2236,63 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         scripts.console().setAssetRoot(browser.assets.root);
         renderer.setShadowSettings(renderingSettings.shadows);
         renderer.setAssetRoot(browser.assets.root);
-        if (width > 0 && height > 0) {
+        if ((width > 0 && height > 0) || gameWindow) {
+            overlays.setAssetRoot(browser.assets.root);
             if (sceneVisible) {
-                glBindFramebuffer(GL_FRAMEBUFFER, sceneSurface.framebuffer);
-                const float aspect = static_cast<float>(sceneSurface.width) / sceneSurface.height;
-                const Mat4 viewProjection = camera.viewProjection(aspect);
-                renderer.draw(world,
-                              viewProjection,
-                              sceneSurface.width,
-                              sceneSurface.height,
-                              camera.position());
-                renderer.drawEditorGrid(browser.settings.grid, viewProjection);
-                if (browser.settings.alwaysShowColliders) {
-                    world.each<Transform, Collider>(
-                        [&](Entity e, const Transform& t, const Collider& c) {
-                            if (e != selectedEntity) {
-                                renderer.drawCollider(
-                                    t, effectiveCollider(world, e, c), viewProjection, .25f);
+                try {
+                    const float aspect = float(sceneSurface.width()) / sceneSurface.height();
+                    const Mat4 vp = camera.viewProjection(aspect);
+                    overlays.begin(vp);
+                    overlays.audioIcons(world);
+                    overlays.grid(browser.settings.grid);
+                    if (browser.settings.alwaysShowColliders) {
+                        world.each<Transform, Collider>(
+                            [&](Entity e, const Transform& t, const Collider& c) {
+                                if (e != selectedEntity) {
+                                    overlays.collider(t, effectiveCollider(world, e, c), .25f);
+                                }
+                            });
+                    }
+                    if (world.alive(selectedEntity)) {
+                        const auto* transform = world.tryGet<Transform>(selectedEntity);
+                        const auto* collider = world.tryGet<Collider>(selectedEntity);
+                        if (transform && collider) {
+                            overlays.collider(*transform,
+                                              effectiveCollider(world, selectedEntity, *collider));
+                        }
+                        if (transform) {
+                            if (const auto* query = world.tryGet<Raycast>(selectedEntity)) {
+                                overlays.raycast(*transform, *query);
                             }
-                        });
-                }
-                if (world.alive(selectedEntity)) {
-                    const auto* transform = world.tryGet<Transform>(selectedEntity);
-                    const auto* collider = world.tryGet<Collider>(selectedEntity);
-                    if (transform && collider) {
-                        renderer.drawCollider(*transform,
-                                              effectiveCollider(world, selectedEntity, *collider),
-                                              viewProjection);
-                    }
-                    if (transform) {
-                        if (const auto* query = world.tryGet<Raycast>(selectedEntity)) {
-                            renderer.drawRaycast(*transform, *query, viewProjection);
+                            if (const auto* source = world.tryGet<AudioSource>(selectedEntity)) {
+                                overlays.audioSource(*transform, *source);
+                            }
+                            if (const auto* selectedCamera = world.tryGet<Camera>(selectedEntity)) {
+                                overlays.camera(*transform, *selectedCamera);
+                            }
                         }
+                    } else {
+                        selectedEntity = {};
                     }
-                    const auto* audioSource = world.tryGet<AudioSource>(selectedEntity);
-                    if (transform && audioSource) {
-                        renderer.drawAudioSource(*transform, *audioSource, viewProjection);
-                    }
-                    if (transform) {
-                        if (const auto* selectedCamera = world.tryGet<Camera>(selectedEntity)) {
-                            renderer.drawCamera(*transform, *selectedCamera, viewProjection);
+                    renderer.drawLitTo(sceneSurface,
+                                       world,
+                                       vp,
+                                       sceneSurface.width(),
+                                       sceneSurface.height(),
+                                       camera.position(),
+                                       overlays.draws());
+                    if (smokeTest) {
+                        if (!smokeScene && !hasVisibleGeometry(sceneSurface)) {
+                            throw std::runtime_error("Smoke test: Scene image is empty");
                         }
+                        ++smokeScene;
                     }
-                } else {
-                    selectedEntity = {};
+                    terminalErrors.report("Scene rendering", "");
+                } catch (const std::exception& error) {
+                    terminalErrors.report("Scene rendering", error.what());
+                    if (smokeTest) {
+                        smokeFailed = true;
+                    }
                 }
             }
             profiler.checkpoint(ProfilePart::Scene);
@@ -2153,117 +2301,95 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 auto previewCamera = world.get<Camera>(selectedEntity);
                 const auto& pose = world.get<Transform>(selectedEntity);
                 previewCamera.aspect =
-                    float(cameraPreviewSurface.width) / std::max(1, cameraPreviewSurface.height);
-                glBindFramebuffer(GL_FRAMEBUFFER, cameraPreviewSurface.framebuffer);
+                    float(cameraPreviewSurface.width()) / cameraPreviewSurface.height();
                 try {
-                    renderer.draw(world,
-                                  cameraMatrix(pose, previewCamera),
-                                  cameraPreviewSurface.width,
-                                  cameraPreviewSurface.height,
-                                  cameraEye(pose, previewCamera),
-                                  0,
-                                  0,
-                                  false);
+                    renderer.drawLitTo(cameraPreviewSurface,
+                                       world,
+                                       cameraMatrix(pose, previewCamera),
+                                       cameraPreviewSurface.width(),
+                                       cameraPreviewSurface.height(),
+                                       cameraEye(pose, previewCamera));
+                    if (smokeTest) {
+                        ++smokeCamera;
+                    }
+                    terminalErrors.report("Camera preview", "");
                 } catch (const std::exception& error) {
                     terminalErrors.report("Camera preview", error.what());
+                    if (smokeTest) {
+                        smokeFailed = true;
+                    }
                 }
             }
-            if (gameVisible && activeCamera(world) != Entity{}) {
-                const auto e = activeCamera(world);
-                const auto& c = world.get<Camera>(e);
-                const auto& t = world.get<Transform>(e);
-                glBindFramebuffer(GL_FRAMEBUFFER, gameSurface.framebuffer);
+            if (gameVisible) {
                 try {
-                    const int x = static_cast<int>(c.viewportX * gameSurface.width),
-                              y = static_cast<int>((1 - c.viewportY - c.viewportHeight) *
-                                                   gameSurface.height);
-                    const auto gameVP = cameraMatrix(t, c);
-                    renderer.draw(
-                        world,
-                        gameVP,
-                        std::max(1, static_cast<int>(c.viewportWidth * gameSurface.width)),
-                        std::max(1, static_cast<int>(c.viewportHeight * gameSurface.height)),
-                        cameraEye(t, c),
-                        x,
-                        y,
-                        false);
-                    if (showGameColliders) {
-                        world.each<Transform, Collider>([&](Entity entity,
-                                                            const Transform& transform,
-                                                            const Collider& collider) {
-                            renderer.drawCollider(
-                                transform, effectiveCollider(world, entity, collider), gameVP);
-                        });
+                    const auto e = activeCamera(world);
+                    if (e == Entity{}) {
+                        gameSurface.render(gameSurface.width(), gameSurface.height(), {});
+                    } else {
+                        const auto& c = world.get<Camera>(e);
+                        const auto& t = world.get<Transform>(e);
+                        const auto vp = cameraMatrix(t, c);
+                        const auto region =
+                            vulkanCameraRegion(c, gameSurface.width(), gameSurface.height());
+                        overlays.begin(vp);
+                        if (showGameColliders) {
+                            world.each<Transform, Collider>([&](Entity entity,
+                                                                const Transform& transform,
+                                                                const Collider& collider) {
+                                overlays.collider(transform,
+                                                  effectiveCollider(world, entity, collider));
+                            });
+                        }
+                        renderer.drawLitTo(gameSurface,
+                                           world,
+                                           vp,
+                                           gameSurface.width(),
+                                           gameSurface.height(),
+                                           cameraEye(t, c),
+                                           overlays.draws(),
+                                           &region);
+                        if (smokeTest) {
+                            if (!smokeGame && !hasVisibleGeometry(gameSurface)) {
+                                throw std::runtime_error("Smoke test: Game image is empty");
+                            }
+                            ++smokeGame;
+                            if (!gameWindow) {
+                                ++smokeEmbeddedGame;
+                            }
+                        }
                     }
                     terminalErrors.report("Game rendering", "");
                 } catch (const std::exception& error) {
                     terminalErrors.report("Game rendering", error.what());
-                    glClearColor(.1f, .1f, .1f, 1);
-                    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                }
-            }
-            if (gameVisible && activeCamera(world) == Entity{}) {
-                glBindFramebuffer(GL_FRAMEBUFFER, gameSurface.framebuffer);
-                glDisable(GL_SCISSOR_TEST);
-                glClearColor(.1f, .1f, .1f, 1);
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            }
-            if (gameWindow && gameVisible) {
-                auto context = SDL_GL_GetCurrentContext();
-                if (SDL_GL_MakeCurrent(gameWindow, context)) {
-                    int w = 1, h = 1;
-                    SDL_GetWindowSizeInPixels(gameWindow, &w, &h);
-                    glDisable(GL_SCISSOR_TEST);
-                    glBindFramebuffer(GL_READ_FRAMEBUFFER, gameSurface.framebuffer);
-                    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-                    glBlitFramebuffer(0,
-                                      0,
-                                      gameSurface.width,
-                                      gameSurface.height,
-                                      0,
-                                      0,
-                                      w,
-                                      h,
-                                      GL_COLOR_BUFFER_BIT,
-                                      GL_LINEAR);
-                    if (showFPS) {
-                        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                        ImDrawList overlay(ImGui::GetDrawListSharedData());
-                        overlay._ResetForNewFrame();
-                        overlay.PushClipRect(ImVec2(0, 0), ImVec2(float(w), float(h)));
-                        overlay.PushTexture(ImGui::GetIO().Fonts->TexRef);
-                        char label[64];
-                        std::snprintf(label, sizeof(label), "FPS: %.0f", ImGui::GetIO().Framerate);
-                        const auto text = ImGui::CalcTextSize(label);
-                        overlay.AddRectFilled(
-                            ImVec2(4, 4), ImVec2(text.x + 16, text.y + 16), IM_COL32(0, 0, 0, 180));
-                        overlay.AddText(ImVec2(8, 8), IM_COL32_WHITE, label);
-                        overlay.PopTexture();
-                        overlay.PopClipRect();
-                        ImDrawData data;
-                        data.Valid = true;
-                        data.DisplayPos = ImVec2(0, 0);
-                        data.DisplaySize = ImVec2(float(w), float(h));
-                        data.FramebufferScale = ImVec2(1, 1);
-                        data.Textures = ImGui::GetDrawData()->Textures;
-                        data.AddDrawList(&overlay);
-                        ImGui_ImplOpenGL3_RenderDrawData(&data);
+                    if (smokeTest) {
+                        smokeFailed = true;
                     }
-                    SDL_GL_SwapWindow(gameWindow);
-                    SDL_GL_MakeCurrent(window, context);
-                } else {
-                    terminalErrors.report("Game window", SDL_GetError());
                 }
             }
             profiler.checkpoint(ProfilePart::Game);
-            glBindFramebuffer(GL_FRAMEBUFFER, 0);
-            glViewport(0, 0, width, height);
-            glDisable(GL_SCISSOR_TEST);
-            glClearColor(.07f, .08f, .10f, 1);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-            profiler.checkpoint(ProfilePart::UI);
         }
+        gui.endFrame();
+        if (gameWindow && gameContext && gameVisible && gameTexture != ImTextureID_Invalid) {
+            try {
+                gameContext->setVsync(renderingSettings.vsync);
+                char label[64]{};
+                if (showFPS) {
+                    std::snprintf(label, sizeof(label), "FPS: %.0f", ImGui::GetIO().Framerate);
+                }
+                if (gui.presentSecondary(*gameContext, gameTexture, label) ==
+                        VulkanContext::FrameResult::Presented &&
+                    smokeTest) {
+                    ++smokeSecondary;
+                }
+                terminalErrors.report("Game window", "");
+            } catch (const std::exception& error) {
+                terminalErrors.report("Game window", error.what());
+                if (smokeTest) {
+                    smokeFailed = true;
+                }
+            }
+        }
+        profiler.checkpoint(ProfilePart::UI);
 
         // Compare persisted content, not history depth: Undo back to the saved
         // state clears the marker, while Lua/camera edits also mark it dirty.
@@ -2299,6 +2425,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (gameWindow) {
                     input.releaseMouse();
                     input.window = window;
+                    gameContext.reset();
                     SDL_DestroyWindow(gameWindow);
                     gameWindow = nullptr;
                 }
@@ -2424,7 +2551,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             lastWindowTitle = title;
         }
         profiler.checkpoint(ProfilePart::Other);
-        SDL_GL_SwapWindow(window);
         profiler.checkpoint(ProfilePart::Present);
         profiler.end();
         if (width > 0 && height > 0) {
@@ -2443,11 +2569,22 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     if (gameWindow) {
         input.releaseMouse();
         input.window = window;
+        gameContext.reset();
         SDL_DestroyWindow(gameWindow);
+        gameWindow = nullptr;
     }
     scripts.shutdown();
     input.releaseMouse();
-    return (!smokeTest || renderedFrames >= smokeFrames);
+    if (smokeTest) {
+        SDL_Log("Vulkan smoke coverage: scene=%u game=%u embedded=%u camera=%u secondary=%u",
+                smokeScene,
+                smokeGame,
+                smokeEmbeddedGame,
+                smokeCamera,
+                smokeSecondary);
+    }
+    return !smokeTest || (renderedFrames >= smokeFrames && !smokeFailed && smokeScene &&
+                          smokeGame && smokeEmbeddedGame && smokeCamera && smokeSecondary);
 }
 
 int engineMain(int argc, char** argv) {
@@ -2467,69 +2604,64 @@ int engineMain(int argc, char** argv) {
         return 1;
     }
 
-    // Prefer 4x anti-aliasing so the grid lines look smooth, but not every
-    // driver offers it: fall back to a plain framebuffer.
-    SDL_Window* window = nullptr;
-    SDL_GLContext context = nullptr;
-    createWindow(4, window, context);
-    if (!context) {
-        createWindow(0, window, context);
-    }
-    if (!context) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
-                     "Could not create an OpenGL 3.3 window: %s",
-                     SDL_GetError());
-        SDL_Quit();
+    struct SDLGuard {
+        ~SDLGuard() {
+            SDL_Quit();
+        }
+    } sdlGuard;
+    auto window = std::unique_ptr<SDL_Window, void (*)(SDL_Window*)>(
+        SDL_CreateWindow("LegacyEngine",
+                         1280,
+                         720,
+                         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED |
+                             SDL_WINDOW_HIGH_PIXEL_DENSITY),
+        SDL_DestroyWindow);
+    if (!window) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION, "Could not create Vulkan window: %s", SDL_GetError());
         return 1;
     }
-
-    SDL_GL_SetSwapInterval(1); // vsync, where the driver allows it
-
-    // If the renderer cannot start, the reason is already logged: skip the
-    // loop and exit with an error.
-    SDL_Log("Initializing renderer");
-    Renderer renderer;
-    const bool rendererReady = renderer.init();
-    bool runSucceeded = false;
-    if (rendererReady) {
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        ImGui::GetIO().ConfigDebugHighlightIdConflicts = false;
-        GImGui->ErrorCallback = +[](ImGuiContext*, void*, const char* message) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "ImGui: %s", message);
-        };
-        ImGui::GetIO().ConfigErrorRecoveryEnableTooltip = false;
-        ImGui::GetIO().ConfigErrorRecoveryEnableAssert = false;
-        ImGui::GetIO().ConfigErrorRecoveryEnableDebugLog = true;
-        dockedEditor = true;
-        ImGui::GetIO().IniFilename = "legacy-layout.ini";
-        applyEditorTheme();
-        if (!ImGui_ImplSDL3_InitForOpenGL(window, context) ||
-            !ImGui_ImplOpenGL3_Init("#version 330 core")) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not initialise Dear ImGui");
-            ImGui::DestroyContext();
-            renderer.shutdown();
-            SDL_GL_DestroyContext(context);
-            SDL_DestroyWindow(window);
-            SDL_Quit();
-            return 1;
-        }
-        SDL_Log("Editor started");
-        runSucceeded = run(window, renderer, smokeTest);
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplSDL3_Shutdown();
-        ImGui::DestroyContext();
-        renderer.shutdown();
-    }
-
-    SDL_GL_DestroyContext(context);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    SDL_Log("Initializing Vulkan renderer");
+    VulkanContext context(window.get());
+    VulkanEditorPreviewBackend::Shaders shaders{loadVulkanShader("unlit.vert.spv"),
+                                                loadVulkanShader("unlit.frag.spv"),
+                                                loadVulkanShader("lit.vert.spv"),
+                                                loadVulkanShader("lit_noshadow.frag.spv"),
+                                                loadVulkanShader("skybox.vert.spv"),
+                                                loadVulkanShader("skybox.frag.spv")};
+    const auto litFragment = loadVulkanShader("lit.frag.spv");
+    const auto shadowVertex = loadVulkanShader("shadow.vert.spv");
+    VulkanSceneSurface scene(context.physicalDevice(),
+                             context.device(),
+                             context.graphicsQueue(),
+                             context.graphicsFamily(),
+                             shaders.unlitVertex,
+                             shaders.unlitFragment);
+    scene.enableLighting(shaders.litVertex, litFragment, shadowVertex);
+    scene.enableSkybox(shaders.skyVertex, shaders.skyFragment);
+    VulkanSceneRenderer renderer(scene);
+    IMGUI_CHECKVERSION();
+    auto imgui = std::unique_ptr<ImGuiContext, void (*)(ImGuiContext*)>(ImGui::CreateContext(),
+                                                                        ImGui::DestroyContext);
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    ImGui::GetIO().ConfigDebugHighlightIdConflicts = false;
+    GImGui->ErrorCallback = +[](ImGuiContext*, void*, const char* message) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "ImGui: %s", message);
+    };
+    ImGui::GetIO().ConfigErrorRecoveryEnableTooltip = false;
+    ImGui::GetIO().ConfigErrorRecoveryEnableAssert = false;
+    ImGui::GetIO().ConfigErrorRecoveryEnableDebugLog = true;
+    dockedEditor = true;
+    ImGui::GetIO().IniFilename = smokeTest ? nullptr : "legacy-layout.ini";
+    applyEditorTheme();
+    VulkanImGui gui(window.get(), context);
+    SDL_Log("Editor started");
+    const bool runSucceeded = run(
+        window.get(), context, scene, renderer, gui, shaders, litFragment, shadowVertex, smokeTest);
     if (smokeTest && runSucceeded) {
         SDL_Log("Smoke test passed: rendered 120 frames and shut down cleanly");
     }
-    return rendererReady && runSucceeded ? 0 : 1;
+    return runSucceeded ? 0 : 1;
 }
 
 int main(int argc, char** argv) {

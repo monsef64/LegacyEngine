@@ -26,13 +26,13 @@ These are manual checks, not automated tests. Build success alone does not verif
 - Check animated visuals/shadows in Scene and Game; colliders intentionally remain static.
 
 ## Platforms
-- Linux OpenGL editor and Windows MinGW-w64 builds/interactive runs need separate verification.
+- Linux and Windows Vulkan editor builds and interactive runs need separate verification.
 
-## GPU skinning and blending
-- On an OpenGL 3.3 device, verify the skinning shader compiles and links at first playback.
+## Skinning and blending
+- Verify CPU-skinned geometry is uploaded and rendered correctly on a Vulkan device.
 - Verify Scene/Game, transparent/unlit materials and cascaded shadows all use the animated pose.
 - Check nonuniform/negative bone scale, unweighted vertices, meshes with more than four influences, and multiple independent instances.
-- Profile playback: only palette uploads should be dynamic; no per-frame CPU vertex deformation/readback.
+- Profile playback, including CPU deformation and vertex uploads.
 - Cross-fade between walk/run/idle clips with 0, 0.25 and longer durations; verify local rotations do not collapse.
 - Interrupt a fade with another transition: the pose must remain continuous.
 - Pause/resume mid-fade; stop/reset mid-fade; loop during a fade and verify event semantics.

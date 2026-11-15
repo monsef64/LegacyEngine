@@ -1,9 +1,10 @@
 #pragma once
 #include "assets/assets.hpp"
 #include "assets/cubemap.hpp"
-#include "assets/texture_preview.hpp"
+#include "assets/texture_thumbnail.hpp"
 #include "audio/audio_preview.hpp"
 #include "editor/asset_preview_ui.hpp"
+#include "editor/asset_thumbnail_source.hpp"
 #include "editor/editor_history.hpp"
 #include "editor/editor_layout.hpp"
 #include "editor/editor_settings.hpp"
@@ -52,11 +53,11 @@ inline const char* assetIcon(const std::string& path, bool folder = false) {
 inline void fileBadge(const std::string& path,
                       ImVec2 pos,
                       bool folder = false,
-                      unsigned thumbnail = 0,
+                      ImTextureID thumbnail = ImTextureID_Invalid,
                       float size = 32) {
     auto* draw = ImGui::GetWindowDrawList();
     if (thumbnail) {
-        draw->AddImage(static_cast<ImTextureID>(thumbnail),
+        draw->AddImage(thumbnail,
                        ImVec2(pos.x, pos.y),
                        ImVec2(pos.x + size, pos.y + size),
                        modelAsset(path) ? ImVec2(0, 1) : ImVec2(0, 0),
@@ -73,7 +74,9 @@ inline void fileBadge(const std::string& path,
                   IM_COL32(160, 185, 215, 255),
                   icon);
 }
-inline void fileIcon(const std::string& path, bool folder = false, unsigned thumbnail = 0) {
+inline void fileIcon(const std::string& path,
+                     bool folder = false,
+                     ImTextureID thumbnail = ImTextureID_Invalid) {
     auto pos = ImGui::GetCursorScreenPos();
     ImGui::Dummy(ImVec2(36, 32));
     fileBadge(path, pos, folder, thumbnail);
@@ -115,7 +118,23 @@ class AssetBrowser {
     ProjectDialog dialog;
     ImGuiTextFilter search;
     AudioPreview preview;
-    TexturePreviewCache thumbnails;
+    // The owning editor supplies the graphics backend. Texture IDs are ImGui
+    // handles, not GL names: Vulkan descriptor sets can be 64-bit.
+    AssetThumbnailSource thumbnailSource;
+    void clearThumbnails() {
+        if (thumbnailSource.clear) {
+            thumbnailSource.clear();
+        }
+    }
+    void beginThumbnails(const AssetManager& manager) {
+        if (thumbnailSource.beginFrame) {
+            thumbnailSource.beginFrame(manager);
+        }
+    }
+    ImTextureID textureThumbnail(const AssetManager& manager, const std::string& path) {
+        return thumbnailSource.texture ? thumbnailSource.texture(manager, path)
+                                       : ImTextureID_Invalid;
+    }
     struct ImportResult {
         std::filesystem::path root;
         std::string selected, error;
@@ -136,7 +155,7 @@ class AssetBrowser {
                 selected = result.selected;
                 expandedModels_.insert(selected);
                 assets.error = result.error;
-                thumbnails.clear();
+                clearThumbnails();
             }
         } catch (const std::exception& e) {
             assets.error = std::string("Import failed: ") + e.what();
@@ -387,7 +406,7 @@ class AssetBrowser {
         remap(openedScript);
         remap(currentFolder);
         preview.stop();
-        thumbnails.clear();
+        clearThumbnails();
         movedAsset = {selected, relative};
         selected = relative;
         ++modelAssetRevision;
@@ -492,12 +511,12 @@ class AssetBrowser {
             selected = copied;
             ++modelAssetRevision;
         }
-        thumbnails.clear();
+        clearThumbnails();
         assets.error.clear();
     }
     void setRoot(const std::filesystem::path& root) {
         preview.stop();
-        thumbnails.clear();
+        clearThumbnails();
         clipboardPath_.clear();
         modelGroups_.clear();
         expandedModels_.clear();
@@ -524,13 +543,13 @@ class AssetBrowser {
         }
         preview.update();
         if (thumbnailRevision_ != modelAssetRevision) {
-            thumbnails.clear();
+            clearThumbnails();
             thumbnailRevision_ = modelAssetRevision;
         }
         if (!selected.empty() && !std::filesystem::exists(assets.resolve(selected))) {
             selected.clear();
         }
-        thumbnails.beginFrame(assets);
+        beginThumbnails(assets);
         if (dockedEditor && !panelOpen[5]) {
             return;
         }
@@ -762,9 +781,9 @@ class AssetBrowser {
                                          : iconSize_ + 4));
                         const auto itemMin = ImGui::GetItemRectMin(),
                                    itemMax = ImGui::GetItemRectMax();
-                        unsigned thumbnail = folderItem || !ImGui::IsItemVisible()
-                                                 ? 0
-                                                 : thumbnails.texture(assets, file);
+                        ImTextureID thumbnail = folderItem || !ImGui::IsItemVisible()
+                                                    ? ImTextureID_Invalid
+                                                    : textureThumbnail(assets, file);
                         if (!folderItem && modelAsset(file) && ImGui::IsItemVisible() &&
                             assetPreview) {
                             thumbnail = assetPreview(assets, file, 2).texture;
@@ -1191,7 +1210,7 @@ class AssetBrowser {
                             }
                             selected.clear();
                             preview.stop();
-                            thumbnails.clear();
+                            clearThumbnails();
                         } else {
                             assets.error = history->error;
                         }

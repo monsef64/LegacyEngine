@@ -1,4 +1,4 @@
-// Optional CPU microbenchmark: isolates light collection, not OpenGL or total FPS.
+// Optional CPU microbenchmark: isolates light collection, not GPU rendering or total FPS.
 #include "lighting/lighting.hpp"
 #include <chrono>
 #include <cstdlib>

@@ -30,8 +30,11 @@ inline bool visibleSphere(const Mat4& vp, Vec3 center, float radius) {
 }
 using Frustum = ViewFrustum; // Compatibility for existing lighting clients.
 // Caller-owned scratch storage avoids allocation churn across viewport renders.
-inline void
-gather(World& world, const Mat4& vp, Vec3 eye, std::vector<Light>& lights, bool cascaded = false) {
+inline void gather(const World& world,
+                   const Mat4& vp,
+                   Vec3 eye,
+                   std::vector<Light>& lights,
+                   bool cascaded = false) {
     lights.clear();
     const Frustum frustum(vp);
     auto collect = [&](int type, Entity e, const LightSettings& l, const Transform& t) {
@@ -81,7 +84,7 @@ gather(World& world, const Mat4& vp, Vec3 eye, std::vector<Light>& lights, bool 
         }
     }
 }
-inline std::vector<Light> gather(World& world, const Mat4& vp, Vec3 eye) {
+inline std::vector<Light> gather(const World& world, const Mat4& vp, Vec3 eye) {
     std::vector<Light> lights;
     gather(world, vp, eye, lights);
     return lights;
