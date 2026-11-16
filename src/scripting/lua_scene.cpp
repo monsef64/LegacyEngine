@@ -2144,7 +2144,7 @@ void LuaScene::resume(Task& task, int arguments) {
         luaL_traceback(main, task.thread, lua_tostring(task.thread, -1), 1);
         error_(lua_tostring(main, -1));
         lua_pop(main, 1);
-        active_ = false;
+        // Isolate callback failure; future callbacks and other objects still run.
     }
     if (status != LUA_YIELD) {
         task.seconds = -1;
@@ -2155,7 +2155,6 @@ void LuaScene::call(
     const char* name, int reference, float dt, bool delta, Entity other, bool colliderArgument) {
     if (tasks_.size() >= 128) {
         error_("Too many waiting callbacks");
-        active_ = false;
         return;
     }
     for (const auto& task : tasks_) {

@@ -1,5 +1,6 @@
 #pragma once
 #include "editor/editor_palette.hpp"
+#include "editor/value_context.hpp"
 #include "scene/editor_grid.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -176,23 +177,24 @@ struct EditorSettings {
             ImVec2(std::min(360.0f, area.x), std::min(380.0f, area.y)), area);
         if (ImGui::Begin("Editor Settings", &visible, ImGuiWindowFlags_NoDocking)) {
             ImGui::SetNextItemWidth(-120);
-            if (ImGui::Combo(
+            if (EditorValues::Combo(
                     "Theme", &theme, "Legacy Dark\0Grey\0Unity 5 Classic\0Unity Dark Classic\0")) {
                 applyEditorPalette(theme);
                 save();
             }
-            if (ImGui::Checkbox("Always Show Colliders", &alwaysShowColliders)) {
+            if (EditorValues::Checkbox("Always Show Colliders", &alwaysShowColliders)) {
                 save();
             }
-            if (ImGui::SliderFloat("Raycast line thickness", &raycastThickness, 1, 8, "%.1f px")) {
+            if (EditorValues::SliderFloat(
+                    "Raycast line thickness", &raycastThickness, 1, 8, "%.1f px")) {
                 save();
             }
-            if (ImGui::SliderInt("FPS limit (VSync off)", &maxFps, 0, 240, "%d")) {
+            if (EditorValues::SliderInt("FPS limit (VSync off)", &maxFps, 0, 240, "%d")) {
                 save();
             }
             ImGui::TextDisabled(
                 "VSync takes priority. Limit 0 = uncapped; background target = 30 FPS.");
-            if (ImGui::InputInt("Autosave delay (seconds)", &autosaveSeconds)) {
+            if (EditorValues::InputInt("Autosave delay (seconds)", &autosaveSeconds)) {
                 autosaveSeconds = std::clamp(autosaveSeconds, 0, 3600);
                 save();
             }
@@ -200,12 +202,12 @@ struct EditorSettings {
                 "0 disables autosave. Only previously saved projects are autosaved.");
             ImGui::SeparatorText("Scene Grid");
             auto next = grid;
-            bool changed = ImGui::Checkbox("Show grid", &next.visible);
-            changed |= ImGui::Combo("Plane", &next.plane, "XZ\0XY\0YZ\0");
+            bool changed = EditorValues::Checkbox("Show grid", &next.visible);
+            changed |= EditorValues::Combo("Plane", &next.plane, "XZ\0XY\0YZ\0");
             changed |= ImGui::DragInt("Cells", &next.cells, 1, 2, 512);
-            changed |= ImGui::DragFloat("Spacing", &next.spacing, .05f, .01f, 1000);
+            changed |= EditorValues::DragFloat("Spacing", &next.spacing, .05f, .01f, 1000);
             changed |= ImGui::DragFloat3("Grid position (X/Y/Z)", &next.position.x, .05f);
-            changed |= ImGui::ColorEdit3("Grid color", &next.color.x);
+            changed |= EditorValues::ColorEdit3("Grid color", &next.color.x);
             if (changed && next.valid()) {
                 grid = next;
                 save();
@@ -213,7 +215,7 @@ struct EditorSettings {
             ImGui::SeparatorText("Editor");
             int choice = external ? 1 : 0;
             ImGui::SetNextItemWidth(-120);
-            if (ImGui::Combo("Code editor", &choice, "Internal\0External (VS Code)\0")) {
+            if (EditorValues::Combo("Code editor", &choice, "Internal\0External (VS Code)\0")) {
                 external = choice == 1;
                 save();
                 if (external) {

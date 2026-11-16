@@ -404,7 +404,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             input.releaseMouse();
         }
         input.enabled = ((SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) || externalFocus) &&
-                        playMode.playing() && (gameFocused || externalFocus || input.mouseLocked) &&
+                        playMode.playing() && !cameraLooking &&
+                        (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || input.mouseLocked) &&
                         !inputSettings.visible;
         input.mouseEnabled = externalFocus || gameHovered || sceneHovered || input.mouseLocked;
@@ -514,7 +515,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             case SDL_EVENT_KEY_DOWN:
                 break; // Escape is reserved for UI cancellation, never application exit.
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                if (event.button.button == SDL_BUTTON_RIGHT && !playMode.active() && sceneHovered &&
+                if (event.button.button == SDL_BUTTON_RIGHT && sceneHovered &&
                     layout.scene.contains(event.button.x, event.button.y) &&
                     !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
                     cameraLooking = input.lockSceneCursor();
@@ -534,7 +535,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 // Right-drag looks around from the camera's position. Left-drag
                 // cancels a click but never moves the camera or selects.
-                if (!playMode.active() && sceneHovered && !editor.dragging() &&
+                if (sceneHovered && !editor.dragging() &&
                     (event.motion.state & SDL_BUTTON_LMASK) && (SDL_GetModState() & SDL_KMOD_ALT) &&
                     !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) {
                     clicking = false;
@@ -589,7 +590,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
-                if (!playMode.active() && (sceneHovered || cameraLooking) &&
+                if ((sceneHovered || cameraLooking) &&
                     !cameraModifiersHeld(SDL_GetModState()) && !ImGui::GetIO().WantTextInput) {
                     if (cameraLooking) {
                         if (SDL_GetModState() & SDL_KMOD_SHIFT) {

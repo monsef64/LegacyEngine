@@ -128,6 +128,10 @@ void ScriptEditor::draw(const EditorLayout* layout,
             }
             ImGui::BeginDisabled(!fileOpen());
             const auto sourceID = ImGui::GetID("##source");
+            const float gutter = ImGui::CalcTextSize("00000").x + 12;
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                                ImVec2(ImGui::GetStyle().FramePadding.x + gutter,
+                                       ImGui::GetStyle().FramePadding.y));
             // Render native selection/caret/scrollbars, but not a second copy of glyphs.
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0, 0, 0, 0));
             if (ImGui::InputTextMultiline("##source",
@@ -141,6 +145,7 @@ void ScriptEditor::draw(const EditorLayout* layout,
                 fileDirty_ = true;
             }
             ImGui::PopStyleColor();
+            ImGui::PopStyleVar();
             // One colored glyph layer; ImGui retains editing, caret, selection and undo.
             auto* parent = ImGui::GetCurrentWindow();
             for (auto* child : parent->DC.ChildWindows) {
@@ -148,7 +153,8 @@ void ScriptEditor::draw(const EditorLayout* layout,
                     auto* state = ImGui::GetInputTextState(sourceID);
                     // Use current scroll, including InputText's same-frame caret-follow
                     // adjustment (CursorStartPos still contains the pre-adjustment value).
-                    const auto padding = ImGui::GetStyle().FramePadding;
+                    const auto padding = ImVec2(ImGui::GetStyle().FramePadding.x + gutter,
+                                                ImGui::GetStyle().FramePadding.y);
                     ImVec2 origin(child->Pos.x + child->WindowPadding.x + child->DecoOuterSizeX1 +
                                       child->DC.ColumnsOffset.x - child->Scroll.x + padding.x,
                                   child->Pos.y + child->WindowPadding.y + child->DecoOuterSizeY1 -
@@ -158,7 +164,34 @@ void ScriptEditor::draw(const EditorLayout* layout,
                     }
                     auto* draw = child->DrawList;
                     draw->PushClipRect(child->InnerClipRect.Min, child->InnerClipRect.Max, true);
+                    draw->AddRectFilled(
+                        child->InnerClipRect.Min,
+                        ImVec2(child->InnerClipRect.Min.x + gutter, child->InnerClipRect.Max.y),
+                        IM_COL32(25, 29, 35, 255));
                     std::string_view text(source_.data());
+                    int line = 1;
+                    float lineY = origin.y;
+                    for (std::size_t i = 0; i <= text.size(); ++i) {
+                        if (i == 0 || text[i - 1] == '\n') {
+                            if (lineY + ImGui::GetFontSize() >= child->InnerClipRect.Min.y &&
+                                lineY <= child->InnerClipRect.Max.y) {
+                                char number[24];
+                                std::snprintf(number, sizeof(number), "%d", line);
+                                draw->AddText({child->InnerClipRect.Min.x + gutter -
+                                                   ImGui::CalcTextSize(number).x - 6,
+                                               lineY},
+                                              IM_COL32(125, 140, 155, 255),
+                                              number);
+                            }
+                            ++line;
+                            lineY += ImGui::GetFontSize();
+                        }
+                    }
+                    draw->PopClipRect();
+                    draw->PushClipRect(
+                        ImVec2(child->InnerClipRect.Min.x + gutter, child->InnerClipRect.Min.y),
+                        child->InnerClipRect.Max,
+                        true);
                     ImU32 colors[]{ImGui::GetColorU32(ImGuiCol_Text),
                                    IM_COL32(195, 140, 245, 255),
                                    IM_COL32(210, 180, 125, 255),

@@ -2,6 +2,7 @@
 #include "editor/asset_picker.hpp"
 #include "editor/editor_history.hpp"
 #include "editor/editor_layout.hpp"
+#include "editor/value_context.hpp"
 #include "scene/scene_camera.hpp"
 #include "terrain/terrain_tools.hpp"
 #include <imgui.h>
@@ -108,19 +109,19 @@ class Editor {
         if (ImGui::Begin("Terrain tools", &visible_)) {
             ImGui::BeginDisabled(!editable);
             auto& terrain = world.get<Terrain>(selected);
-            ImGui::Checkbox("Enable Scene brush", &enabled_);
-            ImGui::Combo("Tool", &tool_, "Raise\0Lower\0Smooth\0Flatten\0Paint\0");
+            EditorValues::Checkbox("Enable Scene brush", &enabled_);
+            EditorValues::Combo("Tool", &tool_, "Raise\0Lower\0Smooth\0Flatten\0Paint\0");
             drawBrushGrid();
-            ImGui::DragFloat(
+            EditorValues::DragFloat(
                 "Brush radius", &radius_, .1f, .1f, 500, "%.1f m", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::DragFloat(
+            EditorValues::DragFloat(
                 "Strength", &strength_, .1f, .01f, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::SliderFloat("Falloff", &falloff_, 0, 1);
+            EditorValues::SliderFloat("Falloff", &falloff_, 0, 1);
             if (tool_ == 3) {
-                ImGui::DragFloat("Flatten height", &flatten_, .1f, -10000, 10000);
+                EditorValues::DragFloat("Flatten height", &flatten_, .1f, -10000, 10000);
             }
             if (tool_ == 4) {
-                ImGui::SliderInt("Paint layer", &layer_, 0, 3);
+                EditorValues::SliderInt("Paint layer", &layer_, 0, 3);
             }
             ImGui::TextWrapped(
                 "Left-drag Scene to sculpt/paint. Alt navigation and right-drag remain camera controls. Release commits one undo step and updates collision.");
@@ -196,16 +197,16 @@ class Editor {
                             "Normal map", edited.normalMap, &assets, [](const std::string& p) {
                                 return materialTexturePath(p);
                             });
-                        changed |=
-                            ImGui::SliderFloat("Normal strength", &edited.normalStrength, 0, 4);
-                        changed |= ImGui::ColorEdit3("Tint", &edited.color.x);
-                        changed |= ImGui::DragFloat("Tiles across terrain",
-                                                    &edited.tiling,
-                                                    .1f,
-                                                    .01f,
-                                                    1000,
-                                                    "%.1f",
-                                                    ImGuiSliderFlags_AlwaysClamp);
+                        changed |= EditorValues::SliderFloat(
+                            "Normal strength", &edited.normalStrength, 0, 4);
+                        changed |= EditorValues::ColorEdit3("Tint", &edited.color.x);
+                        changed |= EditorValues::DragFloat("Tiles across terrain",
+                                                           &edited.tiling,
+                                                           .1f,
+                                                           .01f,
+                                                           1000,
+                                                           "%.1f",
+                                                           ImGuiSliderFlags_AlwaysClamp);
                         if (changed) {
                             writable(terrain);
                             terrain.data->layers[i] = edited;
@@ -220,14 +221,14 @@ class Editor {
                 assetPicker("Heightmap", heightmap_, &assets, [](const std::string& p) {
                     return materialTexturePath(p);
                 });
-                ImGui::DragFloat("Height range",
-                                 &importScale_,
-                                 .5f,
-                                 0,
-                                 10000,
-                                 "%.1f m",
-                                 ImGuiSliderFlags_AlwaysClamp);
-                ImGui::DragFloat("Height offset", &importOffset_, .1f, -10000, 10000);
+                EditorValues::DragFloat("Height range",
+                                        &importScale_,
+                                        .5f,
+                                        0,
+                                        10000,
+                                        "%.1f m",
+                                        ImGuiSliderFlags_AlwaysClamp);
+                EditorValues::DragFloat("Height offset", &importOffset_, .1f, -10000, 10000);
                 if (ImGui::Button("Import heightmap") && !heightmap_.empty()) {
                     try {
                         finish(world, selected, history);
@@ -243,8 +244,8 @@ class Editor {
                     "8/16-bit images, up to 4096 pixels. Bilinearly resampled to this terrain grid. Image top maps to terrain Z=0.");
             }
             if (ImGui::CollapsingHeader("New flat terrain")) {
-                ImGui::Combo("Resolution", &resolution_, "65\0 129\0 257\0");
-                ImGui::DragFloat(
+                EditorValues::Combo("Resolution", &resolution_, "65\0 129\0 257\0");
+                EditorValues::DragFloat(
                     "Terrain size", &size_, 1, 1, 10000, "%.1f m", ImGuiSliderFlags_AlwaysClamp);
                 if (ImGui::Button("Replace with flat terrain")) {
                     finish(world, selected, history);

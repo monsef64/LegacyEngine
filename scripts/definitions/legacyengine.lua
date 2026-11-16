@@ -823,6 +823,12 @@ LightShafts = {}
 ---@field chromaticAberration boolean
 ---@field antiAliasing boolean FXAA
 ---@field ambientOcclusion boolean Six-tap SSAO
+---@field nightVision boolean Green or infrared-style luminance visualization
+---@field nausea boolean Animated screen distortion
+---@field nightVisionMode number 0 = green, 1 = infrared-style (not physical heat)
+---@field nightVisionIntensity number 0..1
+---@field nauseaIntensity number 0..1
+---@field nauseaSpeed number 0..5
 ---@field bloomIntensity number 0..4
 ---@field bloomThreshold number 0..8
 ---@field exposure number -5..5 stops
