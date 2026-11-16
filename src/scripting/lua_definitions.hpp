@@ -7,6 +7,8 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"Laser",
+     "Laser - local -Z collider-clipped beam; enabled, color, intensity, range, width, glowWidth, impactSize; hit, endPosition and hitNormal are read-only"},
     {"ParticleSystem",
      "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles); configurable emission, shape, motion, color, size and sprite sheet; particleCount/isPlaying/paused/time read-only"},
     {"Animation",
@@ -97,7 +99,8 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"AudioClip", "AudioClip(projectRelativeAudioPath) -> AudioClip path"},
     {"DirectionalLight", "DirectionalLight - dynamic directional illumination and shadows"},
     {"PointLight", "PointLight - dynamic omnidirectional light with range and six shadow faces"},
-    {"SpotLight", "SpotLight - dynamic cone light with innerAngle and outerAngle in degrees"},
+    {"SpotLight",
+     "SpotLight - cone light with innerAngle/outerAngle in degrees; cookie is a project-relative projected RGB/alpha image, empty disables"},
     {"Texture", "Texture - export-only image or HDR asset path; @export image Texture"},
     {"AudioListener",
      "AudioListener - receives sound at its GameObject world position; pause() disables reception, start() enables it"},
@@ -119,7 +122,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"setDistance", "audio:setDistance(distance) -> maximum audible distance (3D)"},
     {"isPlaying", "audio:isPlaying() -> boolean"},
     {"playOneShot", "audio:playOneShot(AudioClip) - overlapping nonlooping clip"},
-    {"lockCursor", "lockCursor() -> boolean; relative motion, cursor hidden"},
+    {"lockCursor", "lockCursor() -> boolean; viewport-confined motion, cursor hidden"},
     {"unlockCursor", "unlockCursor() -> boolean"},
     {"hideCursor", "hideCursor() -> boolean"},
     {"showCursor", "showCursor() -> boolean"},

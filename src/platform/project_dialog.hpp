@@ -18,6 +18,12 @@ class ProjectDialog {
         std::lock_guard<std::mutex> lock(state_->mutex);
         return state_->busy;
     }
+    void openRecent(const std::string& path) {
+        std::lock_guard<std::mutex> lock(state_->mutex);
+        if (!state_->busy) {
+            state_->result = Result{false, path, {}};
+        }
+    }
     void show(SDL_Window* window, bool saving, const std::string& path) {
         {
             std::lock_guard<std::mutex> lock(state_->mutex);

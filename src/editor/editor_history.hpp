@@ -1,5 +1,6 @@
 #pragma once
 #include "core/hierarchy.hpp"
+#include "effects/laser_io.hpp"
 #include "particles/particle_io.hpp"
 #include <deque>
 #include <functional>
@@ -77,6 +78,7 @@ inline std::string sceneSignature(World& world) {
                 fields(entry.fields);
             }
         });
+        component(e, Laser{}, [&](const Laser& l) { result += Lasers::settings(l).dump(); });
         auto light = [&](const LightSettings& l) {
             vec(l.color);
             scalar(l.intensity);
@@ -88,6 +90,8 @@ inline std::string sceneSignature(World& world) {
             scalar(l.shadowDistance);
             scalar(l.shadowBias);
             scalar(l.shadowQuality);
+            scalar(l.cookie.size());
+            result += l.cookie;
         };
         component(e, DirectionalLight{}, light);
         component(e, PointLight{}, light);

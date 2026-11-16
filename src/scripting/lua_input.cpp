@@ -37,14 +37,11 @@ int inputCall(lua_State* L) {
     if (op >= 18) {
         if (op == 22) {
             lua_pushboolean(L,
-                            input && input->window &&
-                                !SDL_GetWindowRelativeMouseMode(input->window) &&
-                                SDL_CursorVisible());
+                            input && input->window && !input->mouseLocked && SDL_CursorVisible());
             return 1;
         }
         if (op == 23) {
-            lua_pushboolean(
-                L, input && input->window && SDL_GetWindowRelativeMouseMode(input->window));
+            lua_pushboolean(L, input && input->mouseLocked);
             return 1;
         }
         bool ok = false;

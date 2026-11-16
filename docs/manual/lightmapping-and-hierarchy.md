@@ -25,12 +25,10 @@
    those assets when distributing the level. Failed/cancelled/unaccepted output
    is cleaned up. Runtime texture uploads use the existing asynchronous cache.
 6. Rebake after changing static lights, transforms, model imports or geometry.
-   New bakes carry a static-scene fingerprint. Moving/rotating/scaling a static
-   mesh, changing static light settings, changing active/static flags, or adding/
-   removing static meshes/lights makes all affected scene bake assignments stale.
-   The renderer ignores stale maps and restores realtime lighting/shadows; maps
-   remain assigned so undoing the edit can recover the matching bake. Imported
-   file-content changes still require a manual rebake (not fingerprinted).
+   Bakes are persistent authored snapshots: moving static geometry leaves its
+   baked shadow in the old location until an explicit rebake. Other static light,
+   cookie, material or geometry edits also require rebaking; they no longer
+   globally discard assignments. Imported file-content changes require a rebake.
    Clear level assignments removes references, not files: old atlases remain
    available to undo, other saved levels and backups. Remove unused bake folders
    manually only after confirming no saved scene references them.

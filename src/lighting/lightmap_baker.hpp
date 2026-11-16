@@ -1,6 +1,7 @@
 #pragma once
 #include "assets/assets.hpp"
 #include "core/hierarchy.hpp"
+#include "lighting/cookie_image.hpp"
 #include "lighting/lightmap_state.hpp"
 #include "models/model_asset.hpp"
 #include "project/project_io.hpp"
@@ -28,6 +29,8 @@ struct Light {
     LightSettings settings;
     Vec3 position, direction;
     int type;
+    Vec3 right{1, 0, 0}, up{0, 1, 0};
+    std::shared_ptr<Lighting::CookieImage> cookie;
 };
 struct Progress {
     std::atomic<bool> cancel{false};
@@ -249,6 +252,17 @@ inline Vec3 directLighting(Vec3 position,
     Vec3 irradiance{};
     for (const auto& light : lights) {
         auto direction = light.direction * -1.f;
+        Vec3 cookie{1, 1, 1};
+        if (light.type == 2 && light.cookie) {
+            const Vec3 delta = position - light.position;
+            const float depth = dot(delta, light.direction);
+            if (depth <= .0001f) {
+                continue;
+            }
+            const float factor = .5f / (depth * std::tan(radians(light.settings.outerAngle)));
+            cookie = light.cookie->sample(dot(delta, light.right) * factor + .5f,
+                                          dot(delta, light.up) * factor + .5f);
+        }
         float attenuation = 1, distance = 1e30f;
         if (light.type) {
             auto delta = light.position - position;
@@ -276,7 +290,8 @@ inline Vec3 directLighting(Vec3 position,
             bvh.blocked(position + n * bias, direction, distance - bias, face)) {
             continue;
         }
-        irradiance = irradiance + light.settings.color * (light.settings.intensity * diffuse);
+        irradiance =
+            irradiance + light.settings.color * cookie * (light.settings.intensity * diffuse);
     }
     return irradiance;
 }
@@ -385,12 +400,13 @@ geometry(const Object& o, const AssetManager& assets, const ProjectIO::Meshes& m
     throw std::runtime_error("Unsupported custom mesh; import as a model before baking");
 }
 inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
-                                    const std::vector<Light>& lights,
+                                    const std::vector<Light>& sourceLights,
                                     const AssetManager& assets,
                                     const ProjectIO::Meshes& meshes,
                                     Settings settings,
                                     const std::shared_ptr<Progress>& progress,
                                     const std::string& staticState) {
+    auto lights = sourceLights;
     if (objects.empty() || lights.empty() || lights.size() > 128 ||
         (settings.tile != 8 && settings.tile != 16 && settings.tile != 32) ||
         settings.bounces < 0 || settings.bounces > 4 || settings.samples < 4 ||
@@ -398,6 +414,17 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
         settings.maxDistance < 1 || settings.maxDistance > 1000 || !std::isfinite(settings.bias) ||
         settings.bias < .0001f || settings.bias > .1f) {
         throw std::runtime_error("Bake needs objects, 1-128 static lights and valid settings");
+    }
+    std::map<std::string, std::shared_ptr<Lighting::CookieImage>> cookieImages;
+    for (auto& light : lights) {
+        check(*progress);
+        if (light.type == 2 && !light.settings.cookie.empty()) {
+            auto& image = cookieImages[light.settings.cookie];
+            if (!image) {
+                image = Lighting::CookieImage::load(assets, light.settings.cookie);
+            }
+            light.cookie = image;
+        }
     }
     std::vector<Triangle> triangles;
     struct Range {
@@ -426,13 +453,12 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
             }
         }
         const int maxTile = 2048 / grid;
-        const int tile = std::max(
-            settings.tile,
-            std::min(maxTile, int(std::min(2048.f, std::ceil(longest * settings.tile))) + 5));
-        if (grid * tile > 2048) {
-            throw std::runtime_error(
-                "Per-object atlas exceeds 2048 pixels; lower quality or split the model");
+        if (maxTile < 2) {
+            throw std::runtime_error("Model exceeds bake triangle budget");
         }
+        // Degrade chart density gracefully instead of rejecting high-poly models.
+        const int tile =
+            std::clamp(int(std::min(2048.f, std::ceil(longest * settings.tile))) + 5, 2, maxTile);
         pixels += std::size_t(grid * tile) * std::size_t(grid * tile);
         if (pixels > 32 * 1024 * 1024 || triangles.size() + count > 500000) {
             throw std::runtime_error(
@@ -504,8 +530,9 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
             for (int y = 0; y < tile; ++y) {
                 check(*progress);
                 for (int x = 0; x < tile; ++x) {
-                    float u = std::clamp((x - 2.f) / (tile - 5.f), 0.f, 1.f),
-                          v = std::clamp((y - 2.f) / (tile - 5.f), 0.f, 1.f);
+                    const float gutter = tile >= 6 ? 2.5f : .5f, span = tile - 2 * gutter;
+                    float u = std::clamp((x + .5f - gutter) / span, 0.f, 1.f),
+                          v = std::clamp((y + .5f - gutter) / span, 0.f, 1.f);
                     if (u + v > 1) {
                         float sum = u + v;
                         u /= sum;
@@ -583,7 +610,7 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
     }
     check(*progress);
     Json manifest = {{"format", "LegacyEngineLightmapBake"},
-                     {"version", 3},
+                     {"version", 4},
                      {"indirectBounces", settings.bounces},
                      {"indirectSamples", settings.samples},
                      {"indirectMaxDistance", settings.maxDistance},
@@ -597,10 +624,16 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
                      {"encoding", "sqrt(rgb/16)"},
                      {"objects", Json::array()}};
     for (const auto& a : result->assignments) {
+        const auto object = std::find_if(
+            objects.begin(), objects.end(), [&](const auto& o) { return o.entity == a.entity; });
+        const auto& t = object->transform;
         manifest["objects"].push_back(
             {{"entityIndex", a.entity.index},
              {"atlas", a.path},
              {"grid", a.grid},
+             {"position", Json::array({t.position.x, t.position.y, t.position.z})},
+             {"rotation", Json::array({t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w})},
+             {"scale", Json::array({t.scale.x, t.scale.y, t.scale.z})},
              {"indirect", settings.bounces > 0 ? indirectAtlas(a.path) : std::string{}}});
     }
     writeJsonFile(result->directory / "bake.json", manifest);

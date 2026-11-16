@@ -100,6 +100,11 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(Raycast{});
     component(Animation{});
     component(ParticleSystem{});
+    if (const auto* original = sourceWorld.tryGet<Laser>(source)) {
+        Laser laser;
+        static_cast<LaserSettings&>(laser) = *original;
+        world.add(copy, laser);
+    }
     component(ObjectLayer{});
     component(InspectorOrder{});
     if (auto* animation = world.tryGet<Animation>(copy)) {

@@ -128,7 +128,7 @@ class ValidationCache {
     std::filesystem::path root_;
 
   public:
-    bool valid(const AssetManager& assets, const MeshRenderer& mesh, const std::string& state) {
+    bool valid(const AssetManager& assets, const MeshRenderer& mesh, const std::string& /*state*/) {
         if (mesh.lightmap.empty() || mesh.lightmapGrid <= 0) {
             return false;
         }
@@ -153,8 +153,10 @@ class ValidationCache {
                 const auto manifest = readJsonFile(
                     assets.resolve((parent / "bake.json").generic_string()), 4 * 1024 * 1024);
                 if (manifest.at("format") == "LegacyEngineLightmapBake" &&
-                    manifest.at("version") == 3) {
-                    const auto state = manifest.at("staticState").get<std::string>();
+                    (manifest.at("version") == 3 || manifest.at("version") == 4)) {
+                    // A bake is an authored snapshot, not a live scene cache. Keep
+                    // its shadows/GI until an explicit rebake or atlas reassignment.
+                    // Moving static geometry must not discard every receiver's bake.
                     std::map<std::string, int> atlases;
                     for (const auto& object : manifest.at("objects")) {
                         atlases.emplace(object.at("atlas").get<std::string>(),
@@ -164,7 +166,7 @@ class ValidationCache {
                         entry.indirect.emplace(object.at("atlas").get<std::string>(),
                                                object.at("indirect").get<std::string>());
                     }
-                    entry.state = state;
+                    entry.state = "persistent";
                     entry.atlases = std::move(atlases);
                 }
             } catch (const std::exception&) {
@@ -174,7 +176,7 @@ class ValidationCache {
             }
         }
         const auto atlas = entry.atlases.find(mesh.lightmap);
-        return entry.state == state && atlas != entry.atlases.end() &&
+        return !entry.state.empty() && atlas != entry.atlases.end() &&
                atlas->second == mesh.lightmapGrid;
     }
     std::string

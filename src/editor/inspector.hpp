@@ -10,6 +10,7 @@
 #include "editor/level_objects.hpp"
 #include "editor/rotation_editor.hpp"
 #include "editor/transform_edit.hpp"
+#include "effects/laser_io.hpp"
 #include "materials/material_io.hpp"
 #include "models/model_asset.hpp"
 #include "project/layers.hpp"
@@ -31,24 +32,44 @@ inline bool editVector(const char* label,
     float v[]{value.x, value.y, value.z};
     bool changed = false;
     const char* axes[]{"X", "Y", "Z"};
-    if (ImGui::BeginTable("##Vector", 4, ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("Label",
-                                ImGuiTableColumnFlags_WidthFixed,
-                                std::min(110.f, ImGui::GetContentRegionAvail().x * .3f));
-        for (int i = 0; i < 3; ++i) {
-            ImGui::TableSetupColumn(axes[i], ImGuiTableColumnFlags_WidthStretch);
-        }
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        ImGui::AlignTextToFramePadding();
+    const bool narrow = ImGui::GetContentRegionAvail().x < 340;
+    if (narrow) {
         ImGui::TextUnformatted(label);
+    }
+    if (ImGui::BeginTable("##Vector",
+                          narrow ? 2 : 4,
+                          ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoHostExtendX)) {
+        if (narrow) {
+            ImGui::TableSetupColumn("Axis", ImGuiTableColumnFlags_WidthFixed, 18);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+        } else {
+            ImGui::TableSetupColumn("Label",
+                                    ImGuiTableColumnFlags_WidthFixed,
+                                    std::min(100.f, ImGui::GetContentRegionAvail().x * .25f));
+            for (int i = 0; i < 3; ++i) {
+                ImGui::TableSetupColumn(axes[i], ImGuiTableColumnFlags_WidthStretch);
+            }
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(label);
+        }
         for (int i = 0; i < 3; ++i) {
-            ImGui::TableSetColumnIndex(i + 1);
+            if (narrow) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+            } else {
+                ImGui::TableSetColumnIndex(i + 1);
+            }
             ImGui::AlignTextToFramePadding();
             ImGui::TextUnformatted(axes[i]);
-            ImGui::SameLine();
+            if (narrow) {
+                ImGui::TableSetColumnIndex(1);
+            } else {
+                ImGui::SameLine();
+            }
             ImGui::PushID(i);
-            ImGui::SetNextItemWidth(-1);
+            ImGui::SetNextItemWidth(std::max(12.f, ImGui::GetContentRegionAvail().x));
             changed |= ImGui::DragFloat(
                 "##axis", &v[i], speed, minimum, maximum, "%.3f", ImGuiSliderFlags_AlwaysClamp);
             ImGui::PopID();
@@ -157,6 +178,7 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
             "velocity",
             "gravity",
             "drag"});
+    fields("Physics", {"collision", "restitution", "collisionFriction"});
     fields("Appearance",
            {"lifetimeMin",
             "lifetimeMax",
@@ -244,8 +266,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Transform>) {
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
                       !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) &&
-                      !world.has<SpotLight>(entity) && !world.has<CharacterController>(entity) &&
-                      !world.has<FPSCamera>(entity);
+                      !world.has<SpotLight>(entity) && !world.has<Laser>(entity) &&
+                      !world.has<CharacterController>(entity) && !world.has<FPSCamera>(entity);
         }
         if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
             allowed = !world.has<CharacterController>(entity);
@@ -313,6 +335,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, ParticleSystem>) {
             type = 17;
         }
+        if constexpr (std::is_same_v<T, Laser>) {
+            type = 18;
+        }
         EditorComponentPayload payload{entity, type};
         ImGui::SetDragDropPayload("EDITOR_COMPONENT", &payload, sizeof(payload));
         ImGui::TextUnformatted(name);
@@ -339,8 +364,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "FPSCamera",
                                 "Raycast",
                                 "Animation",
-                                "ParticleSystem"};
-            for (int i = 0; i < 18; ++i) {
+                                "ParticleSystem",
+                                "Laser"};
+            for (int i = 0; i < 19; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -352,7 +378,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                         : world.add(
                               entity,
                               InspectorOrder{
-                                  {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17}});
+                                  {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18}});
                 auto from = std::find(order.types.begin(), order.types.end(), source.type);
                 if (from != order.types.end()) {
                     order.types.erase(from);
@@ -389,7 +415,8 @@ inline void drawScriptExports(World& world,
                                  "FPSCamera",
                                  "Raycast",
                                  "Animation",
-                                 "ParticleSystem"};
+                                 "ParticleSystem",
+                                 "Laser"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -448,7 +475,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 18 &&
+                        if (target.type >= 0 && target.type < 19 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -659,11 +686,11 @@ inline void drawInspector(World& world,
                 ImGui::EndCombo();
             }
             ImGui::Separator();
-            auto ordered =
-                world.has<InspectorOrder>(selected)
-                    ? world.get<InspectorOrder>(selected).types
-                    : std::vector<int>{0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17};
-            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17}) {
+            auto ordered = world.has<InspectorOrder>(selected)
+                               ? world.get<InspectorOrder>(selected).types
+                               : std::vector<int>{
+                                     0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18};
+            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -1089,6 +1116,29 @@ inline void drawInspector(World& world,
                         camera->targetEntity = {};
                     }
                 }
+                if (componentID == 18) {
+                    if (auto* laser = world.tryGet<Laser>(selected);
+                        laser && componentHeader<Laser>(world, selected, "Laser")) {
+                        LaserSettings edited = *laser;
+                        ImGui::Checkbox("Enabled", &edited.enabled);
+                        ImGui::ColorEdit3("Beam color", &edited.color.x);
+                        ImGui::DragFloat("Beam intensity", &edited.intensity, .05f, 0, 100);
+                        ImGui::DragFloat("Beam range", &edited.range, .1f, .01f, 10000);
+                        ImGui::DragFloat("Core width", &edited.width, .001f, .001f, 10, "%.3f");
+                        edited.glowWidth = std::max(edited.width, edited.glowWidth);
+                        ImGui::DragFloat(
+                            "Glow width", &edited.glowWidth, .005f, edited.width, 100, "%.3f");
+                        ImGui::DragFloat(
+                            "Impact size", &edited.impactSize, .005f, .001f, 100, "%.3f");
+                        try {
+                            Lasers::parse(Lasers::settings(edited));
+                            static_cast<LaserSettings&>(*laser) = edited;
+                        } catch (const std::exception&) {
+                        }
+                        ImGui::TextWrapped(
+                            "Local -Z beam stops at the first active collider (excluding itself). Additive glow is depth-tested; no damage or forces are applied.");
+                    }
+                }
                 auto lightInspector = [&](auto tag, const char* title, int kind) {
                     using T = decltype(tag);
                     auto* light = world.tryGet<T>(selected);
@@ -1104,6 +1154,26 @@ inline void drawInspector(World& world,
                         ImGui::DragFloat("Range", &edited.range, .1f, .1f, 10000);
                     }
                     if (kind == 2) {
+                        assetPicker("Cookie", edited.cookie, assets, [](const std::string& path) {
+                            return validLightCookie(path);
+                        });
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                                const std::string path = static_cast<const char*>(payload->Data);
+                                if (validLightCookie(path)) {
+                                    edited.cookie = path;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                        if (!edited.cookie.empty()) {
+                            ImGui::SameLine();
+                            if (ImGui::SmallButton("Clear cookie")) {
+                                edited.cookie.clear();
+                            }
+                        }
+                        ImGui::TextWrapped(
+                            "Cookie RGB times alpha modulates the cone. Local X/Y orient the projection; rotate the light to roll the image.");
                         ImGui::DragFloat(
                             "Inner angle", &edited.innerAngle, .1f, 0, edited.outerAngle - .1f);
                         ImGui::DragFloat(
@@ -1411,6 +1481,12 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<Laser>(selected) && ImGui::MenuItem("Laser")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, Laser{});
+                }
                 if (!world.has<ParticleSystem>(selected) && ImGui::MenuItem("Particle System")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});
@@ -1426,9 +1502,18 @@ inline void drawInspector(World& world,
                     }
                     world.add(selected, Raycast{});
                 }
-                if (!world.has<CharacterController>(selected) &&
-                    ImGui::MenuItem("CharacterController")) {
-                    addCharacterController(world, selected);
+                if (ImGui::BeginMenu("Physics")) {
+                    if (!world.has<RigidBody>(selected) && ImGui::MenuItem("Rigidbody")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
+                        world.add(selected, RigidBody{});
+                    }
+                    if (!world.has<CharacterController>(selected) &&
+                        ImGui::MenuItem("Character Controller")) {
+                        addCharacterController(world, selected);
+                    }
+                    ImGui::EndMenu();
                 }
                 if (!world.has<FPSCamera>(selected) && ImGui::MenuItem("FPSCamera")) {
                     addFPSCamera(world, selected);
@@ -1445,15 +1530,20 @@ inline void drawInspector(World& world,
                         world.add(selected, SpotLight{});
                     }
                 }
-                if (!world.has<AudioListener>(selected) && world.has<Transform>(selected) &&
-                    ImGui::MenuItem("AudioListener")) {
-                    world.add(selected, AudioListener{});
+                if (ImGui::BeginMenu("Audio")) {
+                    if (!world.has<AudioSource>(selected) && ImGui::MenuItem("Audio Source")) {
+                        world.add(selected, AudioSource{});
+                    }
+                    if (!world.has<AudioListener>(selected) && ImGui::MenuItem("Audio Listener")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
+                        world.add(selected, AudioListener{});
+                    }
+                    ImGui::EndMenu();
                 }
                 if (!world.has<Skybox>(selected) && ImGui::MenuItem("Skybox")) {
                     world.add(selected, Skybox{});
-                }
-                if (!world.has<AudioSource>(selected) && ImGui::MenuItem("AudioSource")) {
-                    world.add(selected, AudioSource{});
                 }
                 if (!world.has<Transform>(selected) && ImGui::MenuItem("Transform")) {
                     world.add(selected, Transform{});
@@ -1474,9 +1564,6 @@ inline void drawInspector(World& world,
                         }
                     }
                     ImGui::EndMenu();
-                }
-                if (!world.has<RigidBody>(selected) && ImGui::MenuItem("RigidBody")) {
-                    world.add(selected, RigidBody{});
                 }
                 if (!world.has<Camera>(selected) && world.has<Transform>(selected) &&
                     ImGui::MenuItem("Camera")) {

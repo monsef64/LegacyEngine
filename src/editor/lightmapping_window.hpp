@@ -126,7 +126,11 @@ class LightmappingWindow {
         std::vector<Lightmapping::Light> lights;
         auto collect = [&](int type, Entity e, const LightSettings& l, const Transform& t) {
             if (t.isStatic && isActive(world, e) && l.enabled && l.intensity > 0 && validLight(l)) {
-                lights.push_back({l, t.position, rotateVector(t.rotation, {0, 0, -1}), type});
+                Lightmapping::Light light{
+                    l, t.position, rotateVector(normalize(t.rotation), {0, 0, -1}), type};
+                light.right = rotateVector(normalize(t.rotation), {1, 0, 0});
+                light.up = rotateVector(normalize(t.rotation), {0, 1, 0});
+                lights.push_back(std::move(light));
             }
         };
         world.eachReadOnly<DirectionalLight, Transform>(

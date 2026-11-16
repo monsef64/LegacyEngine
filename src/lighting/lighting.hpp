@@ -13,6 +13,7 @@ struct Light {
     int type = 0, shadowLayer = -1; // directional=0, point=1, spot=2
     float priority = 0;
     int shadowCount = 1;
+    Vec3 right{1, 0, 0}, up{0, 1, 0};
 };
 // Conservative sphere/frustum test. The same test culls lights and shadow casters.
 inline bool visibleSphere(const Mat4& vp, Vec3 center, float radius) {
@@ -45,6 +46,8 @@ gather(World& world, const Mat4& vp, Vec3 eye, std::vector<Light>& lights, bool 
         }
         auto r = rotationMatrix(normalize(t.rotation));
         Light light{e, l, t.position, normalize(Vec3{-r.m[6], -r.m[7], -r.m[8]}), type};
+        light.right = {r.m[0], r.m[1], r.m[2]};
+        light.up = {r.m[3], r.m[4], r.m[5]};
         const auto delta = t.position - eye;
         light.priority = type == 0 ? -1.0f : dot(delta, delta) / std::max(.01f, l.range * l.range);
         lights.push_back(light);

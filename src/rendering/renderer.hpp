@@ -5,6 +5,8 @@
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include "core/math.hpp"
+#include "effects/laser_renderer.hpp"
+#include "lighting/cookie_atlas.hpp"
 #include "lighting/lighting.hpp"
 #include "lighting/lightmap_state.hpp"
 #include "lighting/shadow_settings.hpp"
@@ -150,6 +152,9 @@ class Renderer {
     MaterialAssetCache materialCache_;
     MaterialTextureCache materialTextures_;
     ParticleRenderer particles_;
+    LaserRenderer lasers_;
+    CookieAtlas cookies_;
+    int cookieSampler_ = -1, cookieRight_[16]{}, cookieUp_[16]{};
     Lightmapping::ValidationCache lightmapValidation_;
     int litTransparent_ = -1;
     int litTexture_ = -1, litNormalTexture_ = -1, litHasTexture_ = -1, litBumped_ = -1,

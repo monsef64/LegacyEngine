@@ -9,6 +9,10 @@ class ComponentClipboard {
     template <class T> void copy(World& world, Entity entity) {
         if constexpr (std::is_same_v<T, Transform>) {
             value_ = localTransform(world, entity);
+        } else if constexpr (std::is_same_v<T, Laser>) {
+            Laser copy;
+            static_cast<LaserSettings&>(copy) = world.get<T>(entity);
+            value_ = copy;
         } else if constexpr (std::is_same_v<T, ParticleSystem>) {
             ParticleSystem copy;
             static_cast<ParticleSettings&>(copy) = world.get<T>(entity);
@@ -29,6 +33,13 @@ class ComponentClipboard {
             setLocalTransform(world, entity, *value);
         } else {
             world.get<T>(entity) = *value;
+            if constexpr (std::is_same_v<T, Laser>) {
+                auto& l = world.get<T>(entity);
+                l.ready = false;
+                l.hit = false;
+                l.end = {};
+                l.hitNormal = {0, 1, 0};
+            }
             if constexpr (std::is_same_v<T, ParticleSystem>) {
                 auto& p = world.get<T>(entity);
                 p.stop();

@@ -6,7 +6,7 @@
   a Transform (added automatically). Choose **Fire**, **Smoke** or **Sparkles**
   from the component's Preset dropdown. Selecting a preset resets its settings.
 - The selected emitter previews in the Scene viewport in Edit mode. A small
-  bottom-right **Particle Effect** panel provides Play/Pause/Resume, Stop,
+  bottom-right **Particle Preview** panel provides Play/Pause/Resume, Stop,
   Restart, playback speed (0.05–4x), cycle time and live count. It disappears when
   another object is selected or the Scene view is hidden/too small. Runtime
   controls are disabled in this editor panel while Play mode is active.
@@ -81,16 +81,16 @@ CPU simulation updates once per application frame, never once per viewport.
 Instanced OpenGL billboards use depth testing without depth writes. Alpha
 particles sort back-to-front within each emitter; different emitters and other
 transparent objects are not globally sorted. Additive blending is available only
-for particles; this does not change animation blending.
+for particles and laser effects; this does not change animation blending.
 
 Limits: 10000 live particles per emitter, 50000 globally / per rendered view,
 rate <=10000/sec, lifetime <=120 sec, dt capped at 0.1 sec. These bounds prevent
 unbounded catch-up/allocation but are not an FPS guarantee. High counts and large
-smoke quads can be fill-rate expensive. This is a billboard system, not collision,
+smoke quads can be fill-rate expensive. This is a billboard system, not rigid-body,
 mesh-particle, trails, subemitter or arbitrary curve/noise simulation. Particle
 rendering does not participate in lightmap baking.
 
-Legacy text schema is version 22 / JSON version 16; older supported scenes load
+Current legacy text schema is version 23 / JSON version 17; older supported scenes load
 without particle components. New particle settings are stored as validated JSON.
 
 ## Manual checks (no automated tests added or run)
@@ -116,3 +116,22 @@ without particle components. New particle settings are stored as validated JSON.
 8. Stress the emitter/global budgets and compare frame times with alpha smoke and
    additive sparks. Verify visuals and Windows MinGW-w64 manually; Linux compile/
    link validation does not establish shader execution, image quality or FPS.
+
+## Optional collisions
+
+Enable **Physics > Collision** in the particle Inspector. Particle centres sweep
+against active physics colliders, excluding the emitter itself. Restitution
+controls bounce (0–1) and collision friction controls tangential velocity loss
+(0–1). These settings persist and are available through the existing Lua
+settings API as `collision`, `restitution`, and `collisionFriction`.
+
+Both local- and world-space particles are supported. Collisions are point-ray
+sweeps, not sphere sweeps; billboard edges may intersect geometry. There is at
+most one response per particle per simulation step, no particle-particle
+collision or force applied to rigid bodies. Rays starting inside colliders follow
+the existing physics query limitations. Enable selectively on dense effects.
+
+Manual checks: launch sparks at Box, Sphere and concave colliders; vary bounce
+and friction; move/rotate/scale local-space emitters; exclude the emitter collider;
+compare Collision off/on; save/reload and undo settings. Verify Scene preview and
+Play mode, including moving colliders. No automated tests were added or run.

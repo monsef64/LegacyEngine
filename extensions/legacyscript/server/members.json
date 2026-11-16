@@ -10,12 +10,12 @@
   "GameObject": {
     "name": "string",
     "parent": "GameObject|nil",
-    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
-    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
-    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
-    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
-    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil",
-    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation",
+    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil",
+    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil",
+    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil",
+    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil",
+    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil",
+    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser",
     "removeComponent": "fun(componentType:ComponentType)",
     "onAnimationFinish": "fun()|nil",
     "onAnimationStart": "fun()|nil",
@@ -235,6 +235,7 @@
     "setSpotAngles": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
   },
   "SpotLight": {
+    "cookie": "string Project-relative PNG/JPG/JPEG/TGA/BMP; empty disables projection",
     "color": "Vec3",
     "intensity": "number",
     "enabled": "boolean",
@@ -384,6 +385,9 @@
     "loop": "boolean",
     "playOnAwake": "boolean",
     "localSpace": "boolean",
+    "collision": "boolean Optional swept-point collider physics",
+    "restitution": "number Bounce 0..1",
+    "collisionFriction": "number Tangential velocity loss 0..1",
     "maxParticles": "integer",
     "burstCount": "integer",
     "shape": "integer",
@@ -418,5 +422,17 @@
     "angularVelocity": "number",
     "frameRate": "number",
     "texture": "string Empty selects bundled sprite; otherwise project-relative image"
+  },
+  "Laser": {
+    "enabled": "boolean",
+    "color": "Vec3 Assign a complete RGB vector table (copy on read)",
+    "intensity": "number 0..100",
+    "range": "number 0.01..10000 metres",
+    "width": "number Core diameter 0.001..10 metres",
+    "glowWidth": "number Outer diameter; at least width, at most 100 metres",
+    "impactSize": "number Impact disc diameter 0.001..100 metres",
+    "hit": "boolean Read-only; latest simulation query hit a collider",
+    "endPosition": "Vec3 Read-only; latest beam endpoint in world space",
+    "hitNormal": "Vec3 Read-only; valid only when hit is true"
   }
 }

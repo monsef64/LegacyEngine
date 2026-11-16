@@ -7,16 +7,16 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
----@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
----@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
----@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
----@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation
+---@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onAnimationFinish fun()|nil
 ---@field onAnimationStart fun()|nil
@@ -94,7 +94,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -395,6 +395,7 @@ DirectionalLight = nil
 PointLight = nil
 
 ---@class SpotLight
+---@field cookie string Project-relative PNG/JPG/JPEG/TGA/BMP; empty disables projection
 ---@field color Vec3
 ---@field intensity number
 ---@field enabled boolean
@@ -739,6 +740,9 @@ Animation = {}
 ---@field loop boolean
 ---@field playOnAwake boolean
 ---@field localSpace boolean
+---@field collision boolean Optional swept-point collider physics
+---@field restitution number Bounce 0..1
+---@field collisionFriction number Tangential velocity loss 0..1
 ---@field maxParticles integer
 ---@field burstCount integer
 ---@field shape integer
@@ -774,3 +778,17 @@ Animation = {}
 ---@field frameRate number
 ---@field texture string Empty selects bundled sprite; otherwise project-relative image
 ParticleSystem = {}
+
+---@class Laser
+---@field enabled boolean
+---@field color Vec3 Assign a complete RGB vector table (copy on read)
+---@field intensity number 0..100
+---@field range number 0.01..10000 metres
+---@field width number Core diameter 0.001..10 metres
+---@field glowWidth number Outer diameter; at least width, at most 100 metres
+---@field impactSize number Impact disc diameter 0.001..100 metres
+---@field hit boolean Read-only; latest simulation query hit a collider
+---@field endPosition Vec3 Read-only; latest beam endpoint in world space
+---@field hitNormal Vec3 Read-only; valid only when hit is true
+---@type ComponentToken
+Laser = {}
