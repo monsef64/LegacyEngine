@@ -154,6 +154,8 @@ jobs:
 
           mkdir -p "$package"
           cp build/LegacyEngine "$package/"
+          # Keep symbols in build/ for diagnosis, not in the shipped executable.
+          strip --strip-unneeded "$package/LegacyEngine"
           cp LICENSE "$package/"
           cp -r build/docs "$package/docs"
           test -s "$package/docs/scripting-reference.html"

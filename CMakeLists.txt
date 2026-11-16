@@ -13,6 +13,17 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Preserve every feature while allowing the linker to discard unreachable code
+# inside static dependency objects. Debug builds retain their normal layout.
+option(LEGACY_SMALL_RELEASE "Remove unused code/data from optimized GNU/Clang builds" ON)
+if(LEGACY_SMALL_RELEASE AND NOT MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND
+   (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+  add_compile_options(
+    "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-ffunction-sections>"
+    "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-fdata-sections>")
+  add_link_options("$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-Wl,--gc-sections>")
+endif()
+
 include(FetchContent)
 
 # --- SDL3 (window, input, OpenGL context) -----------------------------------

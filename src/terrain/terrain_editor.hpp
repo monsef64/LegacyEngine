@@ -9,10 +9,57 @@ namespace Terrains {
 class Editor {
     Entity selected_{}, stroke_{};
     bool visible_ = true, enabled_ = false;
-    int tool_ = 0, layer_ = 0, resolution_ = 1;
+    int tool_ = 0, layer_ = 0, resolution_ = 1, brushShape_ = 0;
     float radius_ = 5, strength_ = 5, falloff_ = .5f, flatten_ = 0, size_ = 128, importScale_ = 50,
           importOffset_ = 0;
     std::string source_, heightmap_, error_;
+
+    void drawBrushGrid() {
+        ImGui::Text("Brush: %s", brushNames[brushShape_]);
+        // Responsive horizontal/vertical thumbnail grid, scrollable on narrow panels.
+        constexpr float cell = 54;
+        int columns = std::clamp(int(ImGui::GetContentRegionAvail().x / (cell + 6)), 1, 5);
+        if (ImGui::BeginChild("Brush shapes", ImVec2(0, 190), true)) {
+            for (int i = 0; i < int(brushNames.size()); ++i) {
+                ImGui::PushID(i);
+                if (i % columns) {
+                    ImGui::SameLine(0, 6);
+                }
+                auto origin = ImGui::GetCursorScreenPos();
+                if (ImGui::InvisibleButton("Brush", ImVec2(cell, cell))) {
+                    brushShape_ = i;
+                }
+                bool hovered = ImGui::IsItemHovered();
+                auto* draw = ImGui::GetWindowDrawList();
+                draw->AddRectFilled(
+                    origin, {origin.x + cell, origin.y + cell}, IM_COL32(18, 21, 25, 255), 4);
+                constexpr int pixels = 24;
+                constexpr float spacing = (cell - 6) / pixels;
+                for (int z = 0; z < pixels; ++z) {
+                    for (int x = 0; x < pixels; ++x) {
+                        float value =
+                            brushMask(i, (x + .5f) / pixels * 2 - 1, (z + .5f) / pixels * 2 - 1);
+                        int gray = int(value * 255);
+                        auto a = ImVec2(origin.x + 3 + x * spacing, origin.y + 3 + z * spacing);
+                        draw->AddRectFilled(
+                            a, {a.x + spacing, a.y + spacing}, IM_COL32(gray, gray, gray, 255));
+                    }
+                }
+                draw->AddRect(origin,
+                              {origin.x + cell, origin.y + cell},
+                              i == brushShape_ ? IM_COL32(255, 210, 65, 255)
+                                               : IM_COL32(75, 80, 85, 255),
+                              4,
+                              0,
+                              i == brushShape_ ? 2 : 1);
+                if (hovered) {
+                    ImGui::SetTooltip("%d. %s", i + 1, brushNames[i]);
+                }
+                ImGui::PopID();
+            }
+        }
+        ImGui::EndChild();
+    }
 
   public:
     bool active(World& world, Entity selected) const {
@@ -63,6 +110,7 @@ class Editor {
             auto& terrain = world.get<Terrain>(selected);
             ImGui::Checkbox("Enable Scene brush", &enabled_);
             ImGui::Combo("Tool", &tool_, "Raise\0Lower\0Smooth\0Flatten\0Paint\0");
+            drawBrushGrid();
             ImGui::DragFloat(
                 "Brush radius", &radius_, .1f, .1f, 500, "%.1f m", ImGuiSliderFlags_AlwaysClamp);
             ImGui::DragFloat(
@@ -288,7 +336,7 @@ class Editor {
         };
         ring(radius_, IM_COL32(10, 10, 10, 220), 4);
         ring(radius_, IM_COL32(255, 210, 65, 255), 2);
-        if (falloff_ > 0) {
+        if (brushShape_ == 0 && falloff_ > 0) {
             ring(radius_ * std::sqrt(1 - std::pow(.5f, 1 / (falloff_ * 4))),
                  IM_COL32(255, 230, 130, 190),
                  1);
@@ -342,7 +390,8 @@ class Editor {
               falloff_,
               flatten_,
               layer_,
-              std::clamp(dt, 0.f, .05f));
+              std::clamp(dt, 0.f, .05f),
+              brushShape_);
     }
 };
 } // namespace Terrains

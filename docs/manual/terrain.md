@@ -98,3 +98,32 @@ vertical walls and caves require separate meshes.
 
 Linux compilation does not validate GLSL, Windows/MinGW execution or these visual
 and physics checks. Existing manual performance/particle guides remain applicable.
+
+
+## Built-in brush shape grid
+
+Terrain tools includes 15 procedurally generated brush masks with grayscale
+thumbnails: Soft round, Hard round, Bell, Plateau, Cone, Square, Diamond,
+Horizontal ridge, Vertical ridge, Diagonal ridge, Ring, Twin peaks, Crater rim,
+Rocky and Dunes. The responsive grid displays up to five columns and scrolls
+vertically in narrow panels. Click a thumbnail to select it; gold outlines mark
+the selection and hovering shows its name. Radius, strength and falloff still
+apply, and every shape works with Raise, Lower, Smooth, Flatten and Paint.
+Crater rim is a positive ring mask: use Lower separately for a depressed center.
+These are built-in mathematical masks, not external image dependencies or random
+per-stroke assets. Soft round is the default and retains the previous brush feel.
+The outer Scene ring shows the radius of every mask; the inner half-strength
+circle is shown only for Soft round, where that circular guide is accurate.
+
+Manual checks (no automated tests added/run):
+- Select each of the 15 thumbnails, sculpt on a sufficiently dense terrain and
+  check the distinct footprint. A brush smaller than the grid spacing cannot
+  express detailed shapes; increase radius or terrain resolution.
+- Compare horizontal, vertical and diagonal ridges; paint with Ring, Rocky and
+  Dunes. Check smoothing and flattening respect the chosen mask rather than a
+  plain circle. Hold the brush stationary and confirm deterministic results.
+- Resize Terrain tools to narrow and wide layouts; scroll to reach all brushes,
+  verify selected borders/tooltips, and confirm clicking thumbnails doesn't sculpt.
+- Undo/redo one stroke with each tool and verify collision updates on release.
+  Brush selection is an editor session setting; authored heights/paint are saved
+  in the terrain asset as before.

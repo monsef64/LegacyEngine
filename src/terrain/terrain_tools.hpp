@@ -1,6 +1,7 @@
 #pragma once
 #include "../../third_party/stb/stb_image.h"
 #include "core/hierarchy.hpp"
+#include "terrain/terrain_brushes.hpp"
 #include "terrain/terrain_io.hpp"
 namespace Terrains {
 inline void writable(Terrain& t) {
@@ -101,7 +102,8 @@ inline void brush(Terrain& terrain,
                   float falloff,
                   float height,
                   int layer,
-                  float dt) {
+                  float dt,
+                  int shape = 0) {
     writable(terrain);
     auto& d = *terrain.data;
     const int n = d.resolution;
@@ -125,7 +127,7 @@ inline void brush(Terrain& terrain,
             if (r2 > 1) {
                 continue;
             }
-            float weight = std::pow(std::max(0.f, 1 - r2), falloff * 4),
+            float weight = brushWeight(shape, dx / radius, dz / radius, falloff),
                   amount = strength * dt * weight;
             auto i = z * n + x;
             if (tool == 4) {

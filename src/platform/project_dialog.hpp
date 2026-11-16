@@ -5,6 +5,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <vector>
 
 // SDL may invoke file-dialog callbacks on a different thread, or after the
 // editor closes. Requests own shared state; only the main thread touches ECS/UI.
@@ -13,6 +14,7 @@ class ProjectDialog {
     struct Result {
         bool saving = false;
         std::string path, error;
+        std::vector<std::string> paths;
     };
     bool pending() const {
         std::lock_guard<std::mutex> lock(state_->mutex);
@@ -69,12 +71,12 @@ class ProjectDialog {
                                                     {"Audio", "wav;mp3;ogg;flac"},
                                                     {"All files", "*"}};
         SDL_ShowOpenFileDialog(callback,
-                               new Request{state_, false},
+                               new Request{state_, false, true},
                                window,
                                filters,
                                static_cast<int>(sizeof(filters) / sizeof(filters[0])),
                                nullptr,
-                               false);
+                               true);
     }
     void showImportDirectory(SDL_Window* window) {
         {
@@ -106,6 +108,7 @@ class ProjectDialog {
     struct Request {
         std::shared_ptr<State> state;
         bool saving;
+        bool multiple = false;
     };
     std::shared_ptr<State> state_ = std::make_shared<State>();
     static void SDLCALL callback(void* userdata, const char* const* files, int) {
@@ -119,6 +122,11 @@ class ProjectDialog {
             }
         } else if (files[0]) {
             result.path = files[0]; // Empty list means user cancelled.
+            if (request->multiple) {
+                for (std::size_t i = 0; files[i]; ++i) {
+                    result.paths.emplace_back(files[i]);
+                }
+            }
         }
         std::lock_guard<std::mutex> lock(request->state->mutex);
         request->state->result = std::move(result);
