@@ -161,6 +161,7 @@ class Renderer {
     int cascadeCountLocations_[16]{}, cascadeSplitLocations_[16]{}, shadowViewLocation_ = -1;
     int lightCountLocation_ = -1, shadowSamplerLocation_ = -1;
     int lightLocations_[16][4]{}, shadowMatrixLocations_[12]{};
+    int lightmapLocation_ = -1, lightmapGridLocation_ = -1, lightBakedLocations_[16]{};
     unsigned int shadowTexture_ = 0, shadowFramebuffer_ = 0;
     void prepareLighting(World& world, const Mat4& viewProjection, Vec3 cameraPosition);
     MeshHandle audioModel_;

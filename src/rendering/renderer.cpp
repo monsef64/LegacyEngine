@@ -109,11 +109,15 @@ bool Renderer::init() {
     litNormalMatrix_ = glGetUniformLocation(litProgram_, "uNormalMatrix");
     litColor_ = glGetUniformLocation(litProgram_, "uColor");
 
+    lightmapLocation_ = glGetUniformLocation(litProgram_, "uLightmap");
+    lightmapGridLocation_ = glGetUniformLocation(litProgram_, "uLightmapGrid");
     lightCountLocation_ = glGetUniformLocation(litProgram_, "uLightCount");
     shadowSamplerLocation_ = glGetUniformLocation(litProgram_, "uShadowTexture");
     softShadowLocation_ = glGetUniformLocation(litProgram_, "uSoftShadows");
     shadowViewLocation_ = glGetUniformLocation(litProgram_, "uShadowView");
     for (int i = 0; i < 16; ++i) {
+        lightBakedLocations_[i] =
+            glGetUniformLocation(litProgram_, ("uLightBaked[" + std::to_string(i) + "]").c_str());
         cascadeCountLocations_[i] =
             glGetUniformLocation(litProgram_, ("uCascadeCount[" + std::to_string(i) + "]").c_str());
         cascadeSplitLocations_[i] = glGetUniformLocation(
@@ -573,6 +577,16 @@ void Renderer::draw(World& world,
             glBindTexture(GL_TEXTURE_2D, normal);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, checkerTexture_);
+            const auto lightmap =
+                transform.isStatic && renderer.lightmapGrid > 0
+                    ? materialTextures_.get(materialAssets_, renderer.lightmap, materialError)
+                    : 0;
+            glActiveTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_2D, lightmap);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, checkerTexture_);
+            glUniform1i(lightmapLocation_, 4);
+            glUniform1i(lightmapGridLocation_, lightmap ? renderer.lightmapGrid : 0);
             glUniform1i(litTransparent_, material.shader == 2);
             glUniform1i(litTexture_, 2);
             glUniform1i(litNormalTexture_, 3);
@@ -944,6 +958,8 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
     for (std::size_t i = 0; i < lights.size(); ++i) {
         const auto& l = lights[i];
         const auto& s = l.settings;
+        const auto* lightTransform = world.tryGet<Transform>(l.entity);
+        glUniform1i(lightBakedLocations_[i], lightTransform && lightTransform->isStatic);
         const bool csm = l.type == 0 && l.shadowCount == 4 && l.shadowLayer >= 0;
         glUniform1i(cascadeCountLocations_[i], csm ? 4 : 1);
         const auto& splits = cascades[i].splits;

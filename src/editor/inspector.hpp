@@ -28,22 +28,32 @@ inline bool editVector(const char* label,
                        float minimum = -1000000,
                        float maximum = 1000000) {
     ImGui::PushID(label);
-    ImGui::TextUnformatted(label);
     float v[]{value.x, value.y, value.z};
     bool changed = false;
     const char* axes[]{"X", "Y", "Z"};
-    const float axisWidth = std::max(20.0f, (ImGui::GetContentRegionAvail().x - 90) / 3);
-    for (int i = 0; i < 3; ++i) {
-        if (i) {
-            ImGui::SameLine();
+    if (ImGui::BeginTable("##Vector", 4, ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::TableSetupColumn("Label",
+                                ImGuiTableColumnFlags_WidthFixed,
+                                std::min(110.f, ImGui::GetContentRegionAvail().x * .3f));
+        for (int i = 0; i < 3; ++i) {
+            ImGui::TableSetupColumn(axes[i], ImGuiTableColumnFlags_WidthStretch);
         }
-        ImGui::TextUnformatted(axes[i]);
-        ImGui::SameLine();
-        ImGui::PushID(i);
-        ImGui::SetNextItemWidth(axisWidth);
-        changed |= ImGui::DragFloat(
-            "##axis", &v[i], speed, minimum, maximum, "%.3f", ImGuiSliderFlags_AlwaysClamp);
-        ImGui::PopID();
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(label);
+        for (int i = 0; i < 3; ++i) {
+            ImGui::TableSetColumnIndex(i + 1);
+            ImGui::AlignTextToFramePadding();
+            ImGui::TextUnformatted(axes[i]);
+            ImGui::SameLine();
+            ImGui::PushID(i);
+            ImGui::SetNextItemWidth(-1);
+            changed |= ImGui::DragFloat(
+                "##axis", &v[i], speed, minimum, maximum, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
     }
     ImGui::PopID();
     if (!changed) {
@@ -472,23 +482,26 @@ inline void drawInspector(World& world,
             ImGui::PushID(static_cast<int>(selected.index));
             ImGui::BeginDisabled(editingGizmo);
             const float available = ImGui::GetContentRegionAvail().x;
-            const float checkWidth = ImGui::GetFrameHeight();
-            const float gap = ImGui::GetStyle().ItemSpacing.x;
-            const float layerWidth = std::max(40.f, std::min(150.f, available * .32f));
+            bool objectActive =
+                !world.has<ObjectActivity>(selected) || world.get<ObjectActivity>(selected).enabled;
+            if (ImGui::Checkbox("##Active", &objectActive)) {
+                setObjectActive(world, selected, objectActive);
+            }
+            ImGui::SameLine();
             auto* objectName = world.tryGet<ObjectName>(selected);
             char name[257];
             std::snprintf(name, sizeof(name), "%s", objectName ? objectName->value.c_str() : "");
-            ImGui::SetNextItemWidth(std::max(30.f, available - layerWidth - checkWidth - 2 * gap));
+            ImGui::SetNextItemWidth(std::max(30.f, available - ImGui::GetFrameHeight() - 100.f));
             if (ImGui::InputText("##Name", name, sizeof(name))) {
                 world.add(selected, ObjectName{name});
             }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("GameObject name");
-            }
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(layerWidth);
+            if (auto* t = world.tryGet<Transform>(selected)) {
+                ImGui::Checkbox("Static", &t->isStatic);
+            }
             int layer = LayerSettings::effective(world, selected);
-            if (ImGui::BeginCombo("##Layer", LayerSettings::names[layer].c_str())) {
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::BeginCombo("##Layer", ("Layer   " + LayerSettings::names[layer]).c_str())) {
                 for (int i = 0; i < 32; ++i) {
                     if (!LayerSettings::names[i].empty() &&
                         ImGui::Selectable(LayerSettings::names[i].c_str(), layer == i)) {
@@ -497,18 +510,7 @@ inline void drawInspector(World& world,
                 }
                 ImGui::EndCombo();
             }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("GameObject layer");
-            }
-            ImGui::SameLine();
-            bool objectActive =
-                !world.has<ObjectActivity>(selected) || world.get<ObjectActivity>(selected).enabled;
-            if (ImGui::Checkbox("##Active", &objectActive)) {
-                setObjectActive(world, selected, objectActive);
-            }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Active");
-            }
+            ImGui::Separator();
             auto ordered =
                 world.has<InspectorOrder>(selected)
                     ? world.get<InspectorOrder>(selected).types

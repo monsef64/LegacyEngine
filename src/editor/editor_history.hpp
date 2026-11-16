@@ -23,6 +23,7 @@ inline std::string sceneSignature(World& world) {
         scalar(t.rotation.z);
         scalar(t.rotation.w);
         vec(t.scale);
+        scalar(t.isStatic);
     };
     auto component = [&](Entity e, auto value, auto write) {
         using T = decltype(value);
@@ -176,6 +177,9 @@ inline std::string sceneSignature(World& world) {
             }
             scalar(m.model.size());
             result += m.model;
+            scalar(m.lightmap.size());
+            result += m.lightmap;
+            scalar(m.lightmapGrid);
             vec(m.color);
             scalar(m.checkerboard);
             scalar(m.specular);

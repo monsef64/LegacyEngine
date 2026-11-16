@@ -11,6 +11,9 @@ out vec3 vNormal;
 out vec3 vWorldPosition;
 out vec2 vCheckerUV;
 out vec2 vUV;
+out vec2 vLightmapUV;
+uniform int uLightmapGrid;
+uniform sampler2D uLightmap;
 
 void main() {
     vNormal = uNormalMatrix * aNormal;
@@ -18,5 +21,12 @@ void main() {
     // A 2x2 repeat covers 2 metres: each texel is one checker square.
     vCheckerUV = aPosition.xz * 0.5;
     vUV = aUV;
+    vLightmapUV = vec2(0);
+    if (uLightmapGrid > 0) {
+        int triangle = gl_VertexID / 3, corner = gl_VertexID % 3;
+        float tile = float(textureSize(uLightmap, 0).x / uLightmapGrid);
+        vec2 local = corner == 0 ? vec2(2.5) : (corner == 1 ? vec2(tile - 2.5, 2.5) : vec2(2.5, tile - 2.5));
+        vLightmapUV = (vec2(triangle % uLightmapGrid, triangle / uLightmapGrid) * tile + local) / vec2(textureSize(uLightmap, 0));
+    }
     gl_Position = uModelViewProjection * vec4(aPosition, 1.0);
 }

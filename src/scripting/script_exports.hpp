@@ -127,6 +127,7 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(CharacterController);
     EXPORT_COMPONENT(FPSCamera);
     EXPORT_COMPONENT(Raycast);
+    EXPORT_COMPONENT(Animation);
 #undef EXPORT_COMPONENT
     return false;
 }

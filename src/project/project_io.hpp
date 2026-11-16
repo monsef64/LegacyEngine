@@ -68,7 +68,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 20\n";
+    out << std::setprecision(9) << "LegacyEngineProject 21\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -116,6 +116,7 @@ inline std::string encodeLegacy(World& world,
         }
         if (auto* t = world.tryGet<Transform>(e)) {
             writeTransform(out, *t);
+            out << t->isStatic << ' ';
         }
         if (auto* m = world.tryGet<MeshRenderer>(e)) {
             int mesh = -1;
@@ -135,9 +136,14 @@ inline std::string encodeLegacy(World& world,
             out << m->checkerboard << ' ' << m->specular << ' ';
             require(m->material.empty() || materialAsset(m->material));
             require(m->materialOverrides <= 127 && validMaterial(m->materialValues));
+            require(m->lightmapGrid >= 0 && m->lightmapGrid <= 2048 &&
+                    (m->lightmap.empty() ||
+                     (materialPathValid(m->lightmap) &&
+                      std::filesystem::path(m->lightmap).extension() == ".tga")));
             out << std::quoted(m->material) << ' ' << m->materialOverrides << ' '
                 << std::quoted(materialJson(m->materialValues).dump()) << ' '
-                << std::quoted(m->model) << ' ';
+                << std::quoted(m->model) << ' ' << std::quoted(m->lightmap) << ' '
+                << m->lightmapGrid << ' ';
         }
         if (auto* c = world.tryGet<Collider>(e)) {
             writeVec(out, c->size);
@@ -279,7 +285,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 20));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 21));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -356,7 +362,11 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             result.world.add(e, ObjectName{name});
         }
         if (mask & 2) {
-            result.world.add(e, readTransform(in));
+            auto t = readTransform(in);
+            if (version >= 21) {
+                in >> t.isStatic;
+            }
+            result.world.add(e, t);
         }
         if (mask & 4) {
             int mesh = -1;
@@ -379,6 +389,13 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                 require(m.model.empty() ||
                         (materialPathValid(m.model) &&
                          std::filesystem::path(m.model).extension() == ".lemesh"));
+            }
+            if (version >= 21) {
+                in >> std::quoted(m.lightmap) >> m.lightmapGrid;
+                require(m.lightmapGrid >= 0 && m.lightmapGrid <= 2048 &&
+                        (m.lightmap.empty() ||
+                         (materialPathValid(m.lightmap) &&
+                          std::filesystem::path(m.lightmap).extension() == ".tga")));
             }
             result.world.add(e, m);
         }
