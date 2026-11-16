@@ -1,6 +1,7 @@
 #pragma once
 #include "assets/assets.hpp"
 #include "core/hierarchy.hpp"
+#include "lighting/lightmap_state.hpp"
 #include "models/model_asset.hpp"
 #include "project/project_io.hpp"
 #include "scene/editor_grid.hpp"
@@ -200,7 +201,8 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
                                     const AssetManager& assets,
                                     const ProjectIO::Meshes& meshes,
                                     Settings settings,
-                                    const std::shared_ptr<Progress>& progress) {
+                                    const std::shared_ptr<Progress>& progress,
+                                    const std::string& staticState) {
     if (objects.empty() || lights.empty() || lights.size() > 128 ||
         (settings.tile != 8 && settings.tile != 16 && settings.tile != 32) ||
         !std::isfinite(settings.bias) || settings.bias < .0001f || settings.bias > .1f) {
@@ -209,7 +211,7 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
     std::vector<Triangle> triangles;
     struct Range {
         std::size_t first, count;
-        int grid;
+        int grid, tile;
         Entity entity;
     };
     std::vector<Range> ranges;
@@ -222,16 +224,30 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
             throw std::runtime_error("Mesh has no triangles");
         }
         const int grid = int(std::ceil(std::sqrt(double(count))));
-        if (grid * settings.tile > 2048) {
+        // A two-triangle floor needs world-space density, not 16 pixels for 16 metres.
+        float longest = 0;
+        for (std::size_t i = 0; i < count; ++i) {
+            for (int c = 0; c < 3; ++c) {
+                const auto d = (data.vertices[i * 3 + c].position -
+                                data.vertices[i * 3 + (c + 1) % 3].position) *
+                               o.transform.scale;
+                longest = std::max(longest, std::sqrt(dot(d, d)));
+            }
+        }
+        const int maxTile = 2048 / grid;
+        const int tile = std::max(
+            settings.tile,
+            std::min(maxTile, int(std::min(2048.f, std::ceil(longest * settings.tile))) + 5));
+        if (grid * tile > 2048) {
             throw std::runtime_error(
                 "Per-object atlas exceeds 2048 pixels; lower quality or split the model");
         }
-        pixels += std::size_t(grid * settings.tile) * std::size_t(grid * settings.tile);
+        pixels += std::size_t(grid * tile) * std::size_t(grid * tile);
         if (pixels > 32 * 1024 * 1024 || triangles.size() + count > 500000) {
             throw std::runtime_error(
                 "Bake exceeds 32M texel / 500k triangle budget; split the level or lower quality");
         }
-        ranges.push_back({triangles.size(), count, grid, o.entity});
+        ranges.push_back({triangles.size(), count, grid, tile, o.entity});
         const auto& t = o.transform;
         auto normals = normalMatrix(t.rotation, t.scale);
         for (std::size_t i = 0; i < count; ++i) {
@@ -268,7 +284,7 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
     }
     progress->phase = 1;
     for (const auto& range : ranges) {
-        const int tile = settings.tile, size = range.grid * tile;
+        const int tile = range.tile, size = range.grid * tile;
         std::vector<unsigned char> image(std::size_t(size) * size * 3, 0);
         for (std::size_t face = 0; face < range.count; ++face) {
             check(*progress);
@@ -363,8 +379,10 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
     }
     check(*progress);
     Json manifest = {{"format", "LegacyEngineLightmapBake"},
-                     {"version", 1},
-                     {"triangleChartSize", settings.tile},
+                     {"version", 2},
+                     {"staticState", staticState},
+                     {"texelsPerMetre", settings.tile},
+                     {"minimumChartSize", settings.tile},
                      {"rayBias", settings.bias},
                      {"staticLights", lights.size()},
                      {"triangles", triangles.size()},
