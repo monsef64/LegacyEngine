@@ -207,6 +207,7 @@ void Renderer::clearModelCache() {
 void Renderer::shutdown() {
     particles_.shutdown();
     terrainRenderer_.shutdown();
+    cameraEffects_.shutdown();
     editorLines_.shutdown();
     lasers_.shutdown();
     shafts_.shutdown();
@@ -391,7 +392,16 @@ void Renderer::draw(World& world,
                     Vec3 cameraPosition,
                     int x,
                     int y,
-                    bool editorView) {
+                    bool editorView,
+                    const CameraEffects* effects,
+                    std::uint64_t cameraKey) {
+    if (effects && CameraFx::mask(*effects) && CameraFx::valid(*effects)) {
+        cameraEffects_.render(
+            *effects, width, height, x, y, viewProjection, cameraPosition, cameraKey, [&] {
+                draw(world, viewProjection, width, height, cameraPosition, 0, 0, editorView);
+            });
+        return;
+    }
     if (modelRevision_ != modelAssetRevision) {
         clearModelCache();
         modelRevision_ = modelAssetRevision;

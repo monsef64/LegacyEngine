@@ -274,8 +274,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
                       !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) &&
                       !world.has<SpotLight>(entity) && !world.has<Laser>(entity) &&
-                      !world.has<Terrain>(entity) && !world.has<LightShafts>(entity) &&
-                      !world.has<CharacterController>(entity) && !world.has<FPSCamera>(entity);
+                      !world.has<CameraEffects>(entity) && !world.has<Terrain>(entity) &&
+                      !world.has<LightShafts>(entity) && !world.has<CharacterController>(entity) &&
+                      !world.has<FPSCamera>(entity);
         }
         if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
             allowed = !world.has<CharacterController>(entity);
@@ -346,6 +347,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Laser>) {
             type = 18;
         }
+        if constexpr (std::is_same_v<T, CameraEffects>) {
+            type = 21;
+        }
         if constexpr (std::is_same_v<T, Terrain>) {
             type = 20;
         }
@@ -367,8 +371,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                 "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
                 "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
                 "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
-                "Terrain"};
-            for (int i = 0; i < 21; ++i) {
+                "Terrain",       "CameraEffects"};
+            for (int i = 0; i < 22; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -435,7 +439,8 @@ inline void drawScriptExports(World& world,
         "ObjectName",    "LuaScript",           "Camera",     "AudioSource",
         "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
         "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
-        "Animation",     "ParticleSystem",      "Laser",      "LightShafts"};
+        "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
+        "Terrain",       "CameraEffects"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -494,7 +499,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 20 &&
+                        if (target.type >= 0 && target.type < 22 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -709,9 +714,10 @@ inline void drawInspector(World& world,
             ImGui::Separator();
             auto ordered = world.has<InspectorOrder>(selected)
                                ? world.get<InspectorOrder>(selected).types
-                               : std::vector<int>{0, 3, 2,  1,  6,  9,  10, 11, 12, 8,
-                                                  7, 5, 13, 14, 15, 16, 17, 18, 19, 20};
-            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19, 20}) {
+                               : std::vector<int>{0, 3,  2,  1,  6,  9,  10, 11, 12, 8, 7,
+                                                  5, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+            for (int id :
+                 {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19, 20, 21}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -1135,6 +1141,23 @@ inline void drawInspector(World& world,
                         camera->tracking = false;
                         camera->following = false;
                         camera->targetEntity = {};
+                    }
+                }
+                if (componentID == 21) {
+                    if (auto* fx = world.tryGet<CameraEffects>(selected);
+                        fx && componentHeader<CameraEffects>(world, selected, "CameraEffects")) {
+                        if (!world.has<Camera>(selected)) {
+                            ImGui::TextWrapped("Add Camera to this object to use effects.");
+                        }
+                        for (const auto& f : CameraFx::boolFields) {
+                            ImGui::Checkbox(f.label, &(fx->*f.member));
+                        }
+                        ImGui::Separator();
+                        for (const auto& f : CameraFx::floatFields) {
+                            ImGui::SliderFloat(f.label, &(fx->*f.member), f.low, f.high, "%.3f");
+                        }
+                        ImGui::TextWrapped(
+                            "Fast OpenGL screen-space effects. Motion blur is camera-only. AO/DOF use opaque depth; transparent surfaces do not write it. AA is FXAA-style, not TAA/MSAA.");
                     }
                 }
                 if (componentID == 20) {
@@ -1569,6 +1592,9 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("CameraEffects")) {
+                    world.add(selected, CameraEffects{});
+                }
                 if (!world.has<Terrain>(selected) && ImGui::MenuItem("Terrain")) {
                     world.add(selected, Terrain{});
                     Terrains::openTools = true;

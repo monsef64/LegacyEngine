@@ -12,6 +12,7 @@
 struct EditorSettings {
     bool external = false, visible = false, alwaysShowColliders = false;
     int theme = 0;
+    float scrollZoomSpeed = 1.f;
     float raycastThickness = 2.f; // viewport pixels; editor gizmo only
     int maxFps = 120;             // zero disables foreground cap; background still sleeps
     int autosaveSeconds = 120;    // zero disables autosave
@@ -70,6 +71,10 @@ struct EditorSettings {
             if (in >> fps) {
                 maxFps = std::clamp(fps, 0, 240);
             }
+            float zoom;
+            if (in >> zoom && std::isfinite(zoom)) {
+                scrollZoomSpeed = std::clamp(zoom, .1f, 5.f);
+            }
         }
         if (ImGui::GetCurrentContext()) {
             applyEditorPalette(theme);
@@ -78,11 +83,11 @@ struct EditorSettings {
     std::string signature() const {
         std::ostringstream out;
         out.precision(9);
-        out << raycastThickness << ':' << maxFps << ':' << autosaveSeconds << ':' << external
-            << theme << alwaysShowColliders << grid.visible << ':' << grid.cells << ':'
-            << grid.plane << ':' << grid.spacing << ':' << grid.position.x << ':' << grid.position.y
-            << ':' << grid.position.z << ':' << grid.color.x << ':' << grid.color.y << ':'
-            << grid.color.z;
+        out << scrollZoomSpeed << ':' << raycastThickness << ':' << maxFps << ':' << autosaveSeconds
+            << ':' << external << theme << alwaysShowColliders << grid.visible << ':' << grid.cells
+            << ':' << grid.plane << ':' << grid.spacing << ':' << grid.position.x << ':'
+            << grid.position.y << ':' << grid.position.z << ':' << grid.color.x << ':'
+            << grid.color.y << ':' << grid.color.z;
         return out.str();
     }
     void save() {
@@ -94,7 +99,7 @@ struct EditorSettings {
                 << ' ' << grid.position.x << ' ' << grid.position.y << ' ' << grid.position.z << ' '
                 << grid.color.x << ' ' << grid.color.y << ' ' << grid.color.z << '\n'
                 << autosaveSeconds << '\n'
-                << raycastThickness << ' ' << maxFps;
+                << raycastThickness << ' ' << maxFps << ' ' << scrollZoomSpeed;
         }
     }
     bool openExternal(const std::filesystem::path& folder, bool isFile = false) {

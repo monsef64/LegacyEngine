@@ -12,7 +12,8 @@ inline bool exportReferenceType(const std::string& type) {
            type == "AudioListener" || type == "DirectionalLight" || type == "PointLight" ||
            type == "SpotLight" || type == "Skybox" || type == "CharacterController" ||
            type == "FPSCamera" || type == "Raycast" || type == "Animation" ||
-           type == "ParticleSystem" || type == "Laser" || type == "LightShafts";
+           type == "ParticleSystem" || type == "Laser" || type == "LightShafts" ||
+           type == "CameraEffects";
 }
 inline bool exportAssetType(const std::string& type) {
     return type == "Asset" || type == "AudioClip" || type == "Texture";
@@ -132,6 +133,7 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(ParticleSystem);
     EXPORT_COMPONENT(Laser);
     EXPORT_COMPONENT(LightShafts);
+    EXPORT_COMPONENT(CameraEffects);
 #undef EXPORT_COMPONENT
     return false;
 }

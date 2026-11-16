@@ -7,6 +7,8 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"CameraEffects",
+     "CameraEffects - optional OpenGL camera post effects; enabled, bloom, colorGrading, vignette, depthOfField, motionBlur, filmGrain, chromaticAberration, antiAliasing, ambientOcclusion; bloomIntensity, bloomThreshold, exposure, contrast, saturation, temperature, vignetteIntensity, focusDistance, focusRange, dofStrength, motionStrength, grainIntensity, aberrationStrength, aoIntensity, aoRadius. All effects default off; motion blur is camera-only; antiAliasing uses FXAA-style filtering."},
     {"LightShafts",
      "LightShafts - fast visual shaft; enabled, direction, height, width, endWidth, color, intensity, density, falloff, streaks, fade, nearFade, useBakedTexture and texture"},
     {"Laser",

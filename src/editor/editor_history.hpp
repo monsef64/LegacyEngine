@@ -1,5 +1,6 @@
 #pragma once
 #include "core/hierarchy.hpp"
+#include "effects/camera_effects_io.hpp"
 #include "effects/laser_io.hpp"
 #include "effects/light_shafts_io.hpp"
 #include "particles/particle_io.hpp"
@@ -122,6 +123,14 @@ inline std::string sceneSignature(World& world) {
         });
         component(
             e, LightShafts{}, [&](const LightShafts& s) { result += Shafts::settings(s).dump(); });
+        component(e, CameraEffects{}, [&](const CameraEffects& c) {
+            for (const auto& f : CameraFx::boolFields) {
+                scalar(c.*f.member);
+            }
+            for (const auto& f : CameraFx::floatFields) {
+                scalar(c.*f.member);
+            }
+        });
         scalar(world.has<Terrain>(e));
         if (const auto* terrain = world.tryGet<Terrain>(e)) {
             const auto& t = *terrain;
