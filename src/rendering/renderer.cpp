@@ -109,6 +109,8 @@ bool Renderer::init() {
     litNormalMatrix_ = glGetUniformLocation(litProgram_, "uNormalMatrix");
     litColor_ = glGetUniformLocation(litProgram_, "uColor");
 
+    indirectLocation_ = glGetUniformLocation(litProgram_, "uIndirectLightmap");
+    hasIndirectLocation_ = glGetUniformLocation(litProgram_, "uHasIndirectLightmap");
     lightmapLocation_ = glGetUniformLocation(litProgram_, "uLightmap");
     lightmapGridLocation_ = glGetUniformLocation(litProgram_, "uLightmapGrid");
     lightCountLocation_ = glGetUniformLocation(litProgram_, "uLightCount");
@@ -545,7 +547,8 @@ void Renderer::draw(World& world,
     world.eachReadOnly<MeshRenderer>([&](Entity, const MeshRenderer& mesh) {
         hasLightmaps |= !mesh.lightmap.empty() && mesh.lightmapGrid > 0;
     });
-    const auto staticState = hasLightmaps ? Lightmapping::staticState(world) : std::string{};
+    const auto staticState =
+        hasLightmaps ? Lightmapping::staticState(world, materialAssets_) : std::string{};
     // All callers cull first, before resolving materials or building draw packets.
     auto drawMesh = [&](const Transform& transform,
                         const MeshRenderer& renderer,
@@ -587,10 +590,19 @@ void Renderer::draw(World& world,
                         lightmapValidation_.valid(materialAssets_, renderer, staticState)
                     ? materialTextures_.get(materialAssets_, renderer.lightmap, materialError)
                     : 0;
+            const auto indirectPath =
+                lightmap ? lightmapValidation_.indirect(materialAssets_, renderer, staticState)
+                         : std::string{};
+            const auto indirect =
+                materialTextures_.get(materialAssets_, indirectPath, materialError);
+            glActiveTexture(GL_TEXTURE5);
+            glBindTexture(GL_TEXTURE_2D, indirect);
             glActiveTexture(GL_TEXTURE4);
             glBindTexture(GL_TEXTURE_2D, lightmap);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, checkerTexture_);
+            glUniform1i(indirectLocation_, 5);
+            glUniform1i(hasIndirectLocation_, lightmap && indirect);
             glUniform1i(lightmapLocation_, 4);
             glUniform1i(lightmapGridLocation_, lightmap ? renderer.lightmapGrid : 0);
             glUniform1i(litTransparent_, material.shader == 2);
