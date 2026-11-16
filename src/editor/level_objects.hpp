@@ -77,6 +77,9 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
         using T = decltype(value);
         if (auto* original = sourceWorld.tryGet<T>(source)) {
             T data = *original;
+            if constexpr (std::is_base_of_v<LightSettings, T>) {
+                data.bake.clear();
+            }
             world.add(copy, data);
         }
     };
@@ -100,6 +103,7 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(Raycast{});
     component(Animation{});
     component(ParticleSystem{});
+    component(LightShafts{});
     if (const auto* original = sourceWorld.tryGet<Laser>(source)) {
         Laser laser;
         static_cast<LaserSettings&>(laser) = *original;
@@ -330,7 +334,8 @@ inline bool drawLevelObjects(World& world,
                              bool* focused = nullptr,
                              int* createRequest = nullptr,
                              const char* levelName = "Untitled",
-                             bool* renameLevel = nullptr) {
+                             bool* renameLevel = nullptr,
+                             Entity* createParent = nullptr) {
     if (focused) {
         *focused = false;
     }
@@ -352,13 +357,31 @@ inline bool drawLevelObjects(World& world,
         if (focused) {
             *focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         }
+        static std::unordered_set<std::uint64_t> collapsed;
+        if (createRequest) {
+            ImGui::BeginDisabled(!selectionEnabled);
+            if (ImGui::Button(world.alive(selected) ? "Create child..." : "Create...")) {
+                ImGui::OpenPopup("Hierarchy create");
+            }
+            if (ImGui::BeginPopup("Hierarchy create")) {
+                int item = drawCreateItems();
+                if (item >= 0) {
+                    *createRequest = item;
+                    collapsed.erase(hierarchyKey(selected));
+                    if (createParent) {
+                        *createParent = selected;
+                    }
+                }
+                ImGui::EndPopup();
+            }
+            ImGui::EndDisabled();
+        }
         static Entity renameTarget;
         static char renameName[256]{};
         static bool renameFocus = false;
         bool renameRequested = false;
         const auto objects = levelObjects(world);
         syncHierarchySelection(world, selected);
-        static std::unordered_set<std::uint64_t> collapsed;
         static std::vector<Entity> previousRows;
         std::vector<Entity> drawnRows;
         auto reparentDrop = [&](Entity child, Entity parent) {
@@ -506,6 +529,17 @@ inline bool drawLevelObjects(World& world,
                     selected = object.entity;
                     hierarchyPrimary = selected;
                     changed = true;
+                }
+                if (createRequest && ImGui::BeginMenu("Create child")) {
+                    int item = drawCreateItems();
+                    if (item >= 0) {
+                        *createRequest = item;
+                        collapsed.erase(hierarchyKey(object.entity));
+                        if (createParent) {
+                            *createParent = object.entity;
+                        }
+                    }
+                    ImGui::EndMenu();
                 }
                 ImGui::TextUnformatted(object.name.c_str());
                 ImGui::Separator();

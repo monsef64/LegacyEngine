@@ -122,6 +122,11 @@ bool Renderer::init() {
             glGetUniformLocation(litProgram_, ("uCookieUp[" + std::to_string(i) + "]").c_str());
     }
     shadowSamplerLocation_ = glGetUniformLocation(litProgram_, "uShadowTexture");
+    bakedSoft_ = glGetUniformLocation(litProgram_, "uBakedSoft");
+    for (int i = 0; i < 16; ++i) {
+        dynamicShadow_[i] = glGetUniformLocation(
+            litProgram_, ("uDynamicShadowBase[" + std::to_string(i) + "]").c_str());
+    }
     softShadowLocation_ = glGetUniformLocation(litProgram_, "uSoftShadows");
     shadowViewLocation_ = glGetUniformLocation(litProgram_, "uShadowView");
     for (int i = 0; i < 16; ++i) {
@@ -145,6 +150,11 @@ bool Renderer::init() {
             glGetUniformLocation(litProgram_, ("uShadowMatrix[" + std::to_string(i) + "]").c_str());
     }
 
+    litReflective_ = glGetUniformLocation(litProgram_, "uReflective");
+    environmentCube_ = glGetUniformLocation(litProgram_, "uEnvironmentCube");
+    environmentPanorama_ = glGetUniformLocation(litProgram_, "uEnvironmentPanorama");
+    environmentType_ = glGetUniformLocation(litProgram_, "uEnvironmentType");
+    environmentColor_ = glGetUniformLocation(litProgram_, "uEnvironmentColor");
     litTransparent_ = glGetUniformLocation(litProgram_, "uTransparent");
     litTexture_ = glGetUniformLocation(litProgram_, "uMaterialTexture");
     litNormalTexture_ = glGetUniformLocation(litProgram_, "uNormalTexture");
@@ -197,6 +207,7 @@ void Renderer::clearModelCache() {
 void Renderer::shutdown() {
     particles_.shutdown();
     lasers_.shutdown();
+    shafts_.shutdown();
     cookies_.shutdown();
     pendingModels_.clear();
     failedModels_.clear();
@@ -516,6 +527,19 @@ void Renderer::draw(World& world,
     }
     ProfileScope surfaces(ProfilePart::Surfaces);
     glUseProgram(litProgram_);
+    const Skybox* environment = activeSky ? (skyFade ? &skyFade->from : activeSky) : nullptr;
+    glUniform1i(environmentCube_, 7);
+    glUniform1i(environmentPanorama_, 8);
+    const auto environmentTexture = environment ? skyboxRenderer_.texture() : 0;
+    glUniform1i(environmentType_, environmentTexture ? environment->type : -1);
+    const Vec3 environmentColor = environment ? environment->color : Vec3{1, 1, 1};
+    glUniform3f(environmentColor_, environmentColor.x, environmentColor.y, environmentColor.z);
+    glActiveTexture(GL_TEXTURE7);
+    glBindTexture(GL_TEXTURE_CUBE_MAP,
+                  environment && environment->type == 0 ? environmentTexture : 0);
+    glActiveTexture(GL_TEXTURE8);
+    glBindTexture(GL_TEXTURE_2D, environment && environment->type == 1 ? environmentTexture : 0);
+    glActiveTexture(GL_TEXTURE0);
     glUniform3f(litCameraPosition_, cameraPosition.x, cameraPosition.y, cameraPosition.z);
     glUniform1i(litCheckerTexture_, 0);
     glActiveTexture(GL_TEXTURE1);
@@ -615,6 +639,18 @@ void Renderer::draw(World& world,
             glUniform1i(hasIndirectLocation_, lightmap && indirect);
             glUniform1i(lightmapLocation_, 4);
             glUniform1i(lightmapGridLocation_, lightmap ? renderer.lightmapGrid : 0);
+            glUniform1i(bakedSoft_, lightmap && lightmapValidation_.softDirect(renderer));
+            const auto manifest =
+                (std::filesystem::path(renderer.lightmap).parent_path() / "bake.json")
+                    .generic_string();
+            for (std::size_t i = 0; i < lights_.size(); ++i) {
+                const auto& l = lights_[i].settings;
+                glUniform1i(lightBakedLocations_[i],
+                            lightmap && l.mode == 1 &&
+                                (l.bake == manifest ||
+                                 (l.bake == "@legacy" && lightmapValidation_.legacy(renderer))));
+            }
+            glUniform1i(litReflective_, material.shader == 3);
             glUniform1i(litTransparent_, material.shader == 2);
             glUniform1i(litTexture_, 2);
             glUniform1i(litNormalTexture_, 3);
@@ -665,6 +701,7 @@ void Renderer::draw(World& world,
         glDisable(GL_BLEND);
     }
     transparent.clear(); // Do not retain ECS references beyond this view.
+    shafts_.draw(world, materialAssets_, viewProjection, cameraPosition);
     lasers_.draw(world, viewProjection, cameraPosition);
     particles_.draw(world, materialAssets_, viewProjection, cameraPosition, editorView);
     if (editorView) {
@@ -909,8 +946,28 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
                      t.position,
                      mesh.radius *
                          std::max({std::abs(t.scale.x), std::abs(t.scale.y), std::abs(t.scale.z)}),
-                     t.scale.x * t.scale.y * t.scale.z < 0});
+                     t.scale.x * t.scale.y * t.scale.z < 0,
+                     !t.isStatic || world.has<Animation>(e) ||
+                         (world.has<RigidBody>(e) && world.get<RigidBody>(e).mass > 0) ||
+                         world.has<CharacterController>(e)});
             });
+    }
+    // Use spare layers for dynamic-only occluders over soft direct bakes.
+    // Reapplying the full (hard-centre) static shadow would destroy the penumbra.
+    int usedLayers = 0;
+    for (const auto& l : lights) {
+        if (l.shadowLayer >= 0) {
+            usedLayers = std::max(usedLayers, l.shadowLayer + l.shadowCount);
+        }
+    }
+    if (std::any_of(casters.begin(), casters.end(), [](const auto& c) { return c.dynamic; })) {
+        for (auto& l : lights) {
+            if (l.shadowLayer >= 0 && l.settings.mode == 1 && !l.settings.bake.empty() &&
+                usedLayers + l.shadowCount <= Lighting::maxShadowLayers) {
+                l.dynamicShadowLayer = usedLayers;
+                usedLayers += l.shadowCount;
+            }
+        }
     }
     std::array<Mat4, Lighting::maxShadowLayers> matrices{};
     if (needsShadows) {
@@ -922,7 +979,7 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
             SDL_LogError(SDL_LOG_CATEGORY_RENDER,
                          "Shadow framebuffer incomplete; rendering lights without shadows");
             for (auto& l : lights) {
-                l.shadowLayer = -1;
+                l.shadowLayer = l.dynamicShadowLayer = -1;
             }
         }
         glUseProgram(unlitProgram_);
@@ -930,12 +987,16 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
         glPolygonOffset(2, 4);
         for (std::size_t lightIndex = 0; lightIndex < lights.size(); ++lightIndex) {
             const auto& light = lights[lightIndex];
-            if (light.shadowLayer >= 0) {
+            for (int pass = 0; pass < 2; ++pass) {
+                const int base = pass == 0 ? light.shadowLayer : light.dynamicShadowLayer;
+                if (base < 0) {
+                    continue;
+                }
                 for (int face = 0; face < light.shadowCount; ++face) {
                     const int resolution =
                         shadowSettings_.lightResolution(light.settings.shadowQuality);
                     glViewport(0, 0, resolution, resolution);
-                    const int layer = light.shadowLayer + face;
+                    const int layer = base + face;
                     const Mat4 vp =
                         light.type == 0 && light.shadowCount == 4
                             ? cascades[lightIndex].matrices[face]
@@ -946,6 +1007,9 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
                     glClear(GL_DEPTH_BUFFER_BIT);
                     const ViewFrustum shadowFrustum(vp);
                     for (const auto& caster : casters) {
+                        if (pass == 1 && !caster.dynamic) {
+                            continue;
+                        }
                         if (!shadowFrustum.visible(caster.position, caster.radius)) {
                             continue;
                         }
@@ -1000,8 +1064,8 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
                     l.right.z,
                     cookieEnabled[i] ? 1.f / std::tan(radians(s.outerAngle)) : 0.f);
         glUniform3f(cookieUp_[i], l.up.x, l.up.y, l.up.z);
-        const auto* lightTransform = world.tryGet<Transform>(l.entity);
-        glUniform1i(lightBakedLocations_[i], lightTransform && lightTransform->isStatic);
+        glUniform1i(dynamicShadow_[i], l.dynamicShadowLayer);
+        glUniform1i(lightBakedLocations_[i], false); // receiver/bake-specific, set per draw
         const bool csm = l.type == 0 && l.shadowCount == 4 && l.shadowLayer >= 0;
         glUniform1i(cascadeCountLocations_[i], csm ? 4 : 1);
         const auto& splits = cascades[i].splits;

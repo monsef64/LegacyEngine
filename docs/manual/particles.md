@@ -90,7 +90,7 @@ smoke quads can be fill-rate expensive. This is a billboard system, not rigid-bo
 mesh-particle, trails, subemitter or arbitrary curve/noise simulation. Particle
 rendering does not participate in lightmap baking.
 
-Current legacy text schema is version 23 / JSON version 17; older supported scenes load
+Current legacy text schema is version 24 / JSON version 18; older supported scenes load
 without particle components. New particle settings are stored as validated JSON.
 
 ## Manual checks (no automated tests added or run)

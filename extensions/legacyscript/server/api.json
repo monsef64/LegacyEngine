@@ -1,5 +1,9 @@
 [
   {
+    "name": "LightShafts",
+    "signature": "LightShafts - fast visual shaft; enabled, direction, height, width, endWidth, color, intensity, density, falloff, streaks, fade, nearFade, useBakedTexture and texture"
+  },
+  {
     "name": "Laser",
     "signature": "Laser - local -Z collider-clipped beam; enabled, color, intensity, range, width, glowWidth, impactSize; hit, endPosition and hitNormal are read-only"
   },
@@ -769,7 +773,7 @@
   },
   {
     "name": "setMaterialShader",
-    "signature": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent')"
+    "signature": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"
   },
   {
     "name": "setMaterialNormalStrength",

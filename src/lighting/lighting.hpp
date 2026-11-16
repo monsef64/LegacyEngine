@@ -13,6 +13,7 @@ struct Light {
     int type = 0, shadowLayer = -1; // directional=0, point=1, spot=2
     float priority = 0;
     int shadowCount = 1;
+    int dynamicShadowLayer = -1;
     Vec3 right{1, 0, 0}, up{0, 1, 0};
 };
 // Conservative sphere/frustum test. The same test culls lights and shadow casters.

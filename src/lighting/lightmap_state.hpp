@@ -50,9 +50,6 @@ inline std::string staticState(World& world, const AssetManager& assets) {
     static thread_local std::vector<std::uint64_t> records;
     records.clear();
     world.eachReadOnly<Transform>([&](Entity e, const Transform& t) {
-        if (!t.isStatic) {
-            return;
-        }
         // Match the previous fingerprint's fields, excluding runtime GPU handles
         // for model assets. Record sorting keeps it independent of entity IDs.
         Hash pose;
@@ -63,7 +60,7 @@ inline std::string staticState(World& world, const AssetManager& assets) {
         pose.number(t.rotation.w);
         pose.vec(t.scale);
         pose.scalar(isActive(world, e));
-        if (const auto* mesh = world.tryGet<MeshRenderer>(e)) {
+        if (const auto* mesh = world.tryGet<MeshRenderer>(e); mesh && t.isStatic) {
             auto h = pose;
             h.scalar(1);
             h.text(mesh->model);
@@ -88,8 +85,12 @@ inline std::string staticState(World& world, const AssetManager& assets) {
             records.push_back(h.value);
         }
         auto light = [&](unsigned type, const LightSettings& l) {
+            if (l.mode != 1) {
+                return;
+            }
             auto h = pose;
             h.scalar(type);
+            h.number(l.softness);
             h.vec(l.color);
             h.number(l.intensity);
             h.scalar(l.enabled);
@@ -121,6 +122,7 @@ class ValidationCache {
     struct Entry {
         std::chrono::steady_clock::time_point checked{};
         std::string state;
+        int version = 0;
         std::map<std::string, int> atlases;
         std::map<std::string, std::string> indirect;
     };
@@ -153,7 +155,8 @@ class ValidationCache {
                 const auto manifest = readJsonFile(
                     assets.resolve((parent / "bake.json").generic_string()), 4 * 1024 * 1024);
                 if (manifest.at("format") == "LegacyEngineLightmapBake" &&
-                    (manifest.at("version") == 3 || manifest.at("version") == 4)) {
+                    (manifest.at("version") == 3 || manifest.at("version") == 4 ||
+                     manifest.at("version") == 5)) {
                     // A bake is an authored snapshot, not a live scene cache. Keep
                     // its shadows/GI until an explicit rebake or atlas reassignment.
                     // Moving static geometry must not discard every receiver's bake.
@@ -166,6 +169,7 @@ class ValidationCache {
                         entry.indirect.emplace(object.at("atlas").get<std::string>(),
                                                object.at("indirect").get<std::string>());
                     }
+                    entry.version = manifest.at("version").get<int>();
                     entry.state = "persistent";
                     entry.atlases = std::move(atlases);
                 }
@@ -178,6 +182,16 @@ class ValidationCache {
         const auto atlas = entry.atlases.find(mesh.lightmap);
         return !entry.state.empty() && atlas != entry.atlases.end() &&
                atlas->second == mesh.lightmapGrid;
+    }
+    bool softDirect(const MeshRenderer& mesh) const {
+        const auto it =
+            entries_.find(std::filesystem::path(mesh.lightmap).parent_path().generic_string());
+        return it != entries_.end() && it->second.version >= 5;
+    }
+    bool legacy(const MeshRenderer& mesh) const {
+        const auto it =
+            entries_.find(std::filesystem::path(mesh.lightmap).parent_path().generic_string());
+        return it != entries_.end() && it->second.version > 0 && it->second.version < 5;
     }
     std::string
     indirect(const AssetManager& assets, const MeshRenderer& mesh, const std::string& state) {

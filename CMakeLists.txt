@@ -168,6 +168,7 @@ target_link_libraries(legacy_imgui PUBLIC legacy_thumbnails)
 add_library(legacy_simdjson STATIC third_party/simdjson/simdjson.cpp)
 target_include_directories(legacy_simdjson SYSTEM PUBLIC third_party/simdjson)
 add_library(legacy_json STATIC src/project/json_io.cpp)
+target_sources(legacy_json PRIVATE src/assets/image_write.cpp)
 target_include_directories(legacy_json PUBLIC src PRIVATE ${assimp_SOURCE_DIR}/contrib/zlib ${assimp_BINARY_DIR}/contrib/zlib)
 target_link_libraries(legacy_json PRIVATE legacy_simdjson zlibstatic libzstd_static)
 # Level storage/transitions have no dependency on Lua or the editor.

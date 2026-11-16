@@ -89,6 +89,21 @@ class LightmappingWindow {
                         r.lightmap = assignment.path;
                         r.lightmapGrid = assignment.grid;
                     }
+                    const auto manifest =
+                        (result->directory / "bake.json")
+                            .lexically_relative(std::filesystem::weakly_canonical(assets.root))
+                            .generic_string();
+                    for (const auto& [entity, type] : result->lights) {
+                        if (type == 0) {
+                            world.get<DirectionalLight>(entity).bake = manifest;
+                        }
+                        if (type == 1) {
+                            world.get<PointLight>(entity).bake = manifest;
+                        }
+                        if (type == 2) {
+                            world.get<SpotLight>(entity).bake = manifest;
+                        }
+                    }
                     result->keep = true;
                     history.commit(world, selection);
                     status_ = "Bake complete. Save the level to persist its lightmap assignments.";
@@ -125,9 +140,11 @@ class LightmappingWindow {
             });
         std::vector<Lightmapping::Light> lights;
         auto collect = [&](int type, Entity e, const LightSettings& l, const Transform& t) {
-            if (t.isStatic && isActive(world, e) && l.enabled && l.intensity > 0 && validLight(l)) {
+            if (l.mode == 1 && isActive(world, e) && l.enabled && l.intensity > 0 &&
+                validLight(l)) {
                 Lightmapping::Light light{
                     l, t.position, rotateVector(normalize(t.rotation), {0, 0, -1}), type};
+                light.entity = e;
                 light.right = rotateVector(normalize(t.rotation), {1, 0, 0});
                 light.up = rotateVector(normalize(t.rotation), {0, 1, 0});
                 lights.push_back(std::move(light));
@@ -169,16 +186,10 @@ class LightmappingWindow {
                          .1f,
                          "%.4f",
                          ImGuiSliderFlags_AlwaysClamp);
-        ImGui::SliderInt("Indirect bounces", &settings_.bounces, 0, 4);
-        ImGui::SliderInt("GI samples / texel", &settings_.samples, 4, 256);
-        ImGui::DragFloat("GI ray distance",
-                         &settings_.maxDistance,
-                         1.f,
-                         1.f,
-                         1000.f,
-                         "%.1f m",
-                         ImGuiSliderFlags_AlwaysClamp);
-        ImGui::Checkbox("Denoise indirect lighting", &settings_.denoise);
+        settings_.bounces = 0;
+        ImGui::SliderInt("Soft shadow samples", &settings_.samples, 4, 128);
+        ImGui::TextWrapped(
+            "Baked direct lighting only. Set light Source radius / Sun angular softness to soften shadows. Zero gives hard shadows. Atlases use lossless PNG compression.");
         if (ImGui::Button("Bake level") && !objects.empty() && !lights.empty() &&
             !assets.root.empty()) {
             try {
@@ -218,6 +229,10 @@ class LightmappingWindow {
                 r.lightmap.clear();
                 r.lightmapGrid = 0;
             });
+            auto clear = [](Entity, auto& l) { l.bake.clear(); };
+            world.each<DirectionalLight>(clear);
+            world.each<PointLight>(clear);
+            world.each<SpotLight>(clear);
             history.commit(world, selection);
             status_ =
                 "Assignments cleared. Existing atlas files remain for undo and other saved levels.";

@@ -5,7 +5,8 @@
 #include <filesystem>
 #include <string>
 struct MaterialProperties {
-    int shader = 0; // 0 Diffuse, 1 Diffuse Bumped, 2 Diffuse Transparent (texture alpha)
+    int shader = 0; // 0 Diffuse, 1 Diffuse Bumped, 2 Diffuse Transparent (texture alpha), 3 Diffuse
+                    // Reflection
     Vec3 color{1, 1, 1};
     std::string texture, normalMap;
     float normalStrength = 1, tilingX = 1, tilingY = 1, specular = 0;
@@ -46,7 +47,7 @@ inline bool materialTexturePath(const std::string& path) {
 }
 inline bool validMaterial(const MaterialProperties& p) {
     auto color = [](float x) { return std::isfinite(x) && x >= 0 && x <= 100; };
-    return (p.shader >= 0 && p.shader <= 2) && color(p.color.x) && color(p.color.y) &&
+    return (p.shader >= 0 && p.shader <= 3) && color(p.color.x) && color(p.color.y) &&
            color(p.color.z) && materialTexturePath(p.texture) && materialTexturePath(p.normalMap) &&
            std::isfinite(p.normalStrength) && p.normalStrength >= 0 && p.normalStrength <= 4 &&
            std::isfinite(p.tilingX) && std::isfinite(p.tilingY) && std::abs(p.tilingX) >= .001f &&

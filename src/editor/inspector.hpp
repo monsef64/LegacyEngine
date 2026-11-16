@@ -11,6 +11,7 @@
 #include "editor/rotation_editor.hpp"
 #include "editor/transform_edit.hpp"
 #include "effects/laser_io.hpp"
+#include "effects/light_shafts_io.hpp"
 #include "materials/material_io.hpp"
 #include "models/model_asset.hpp"
 #include "project/layers.hpp"
@@ -258,6 +259,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             if constexpr (std::is_same_v<T, Transform>) {
                 setLocalTransform(world, entity, Transform{});
             } else {
+                if constexpr (std::is_base_of_v<LightSettings, T>) {
+                    detachLightBake(world, world.get<T>(entity));
+                }
                 world.get<T>(entity) = defaults;
             }
         }
@@ -267,7 +271,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
                       !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) &&
                       !world.has<SpotLight>(entity) && !world.has<Laser>(entity) &&
-                      !world.has<CharacterController>(entity) && !world.has<FPSCamera>(entity);
+                      !world.has<LightShafts>(entity) && !world.has<CharacterController>(entity) &&
+                      !world.has<FPSCamera>(entity);
         }
         if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
             allowed = !world.has<CharacterController>(entity);
@@ -338,6 +343,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Laser>) {
             type = 18;
         }
+        if constexpr (std::is_same_v<T, LightShafts>) {
+            type = 19;
+        }
         EditorComponentPayload payload{entity, type};
         ImGui::SetDragDropPayload("EDITOR_COMPONENT", &payload, sizeof(payload));
         ImGui::TextUnformatted(name);
@@ -347,38 +355,39 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if (const auto* payload = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
             const auto source = *static_cast<const EditorComponentPayload*>(payload->Data);
             int target = -1;
-            const char* names[]{"Transform",
-                                "RigidBody",
-                                "Collider",
-                                "MeshRenderer",
-                                "ObjectName",
-                                "LegacyScripts",
-                                "Camera",
-                                "AudioSource",
-                                "AudioListener",
-                                "DirectionalLight",
-                                "PointLight",
-                                "SpotLight",
-                                "Skybox",
-                                "CharacterController",
-                                "FPSCamera",
-                                "Raycast",
-                                "Animation",
-                                "ParticleSystem",
-                                "Laser"};
-            for (int i = 0; i < 19; ++i) {
+            const char* names[]{
+                "Transform",     "RigidBody",           "Collider",   "MeshRenderer",
+                "ObjectName",    "LegacyScripts",       "Camera",     "AudioSource",
+                "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
+                "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
+                "Animation",     "ParticleSystem",      "Laser",      "LightShafts"};
+            for (int i = 0; i < 20; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
             }
             if (source.entity == entity && target >= 0 && source.type != target) {
-                auto& order =
-                    world.has<InspectorOrder>(entity)
-                        ? world.get<InspectorOrder>(entity)
-                        : world.add(
-                              entity,
-                              InspectorOrder{
-                                  {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18}});
+                auto& order = world.has<InspectorOrder>(entity) ? world.get<InspectorOrder>(entity)
+                                                                : world.add(entity,
+                                                                            InspectorOrder{{0,
+                                                                                            3,
+                                                                                            2,
+                                                                                            1,
+                                                                                            6,
+                                                                                            9,
+                                                                                            10,
+                                                                                            11,
+                                                                                            12,
+                                                                                            8,
+                                                                                            7,
+                                                                                            5,
+                                                                                            13,
+                                                                                            14,
+                                                                                            15,
+                                                                                            16,
+                                                                                            17,
+                                                                                            18,
+                                                                                            19}});
                 auto from = std::find(order.types.begin(), order.types.end(), source.type);
                 if (from != order.types.end()) {
                     order.types.erase(from);
@@ -390,33 +399,36 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         ImGui::EndDragDropTarget();
     }
     if (remove) {
+        if constexpr (std::is_base_of_v<LightSettings, T>) {
+            detachLightBake(world, world.get<T>(entity));
+        }
         world.remove<T>(entity);
         return false;
+    }
+    if (open) {
+        ImGui::PushID(name);
+        if (ImGui::SmallButton("Copy values")) {
+            componentClipboard.copy<T>(world, entity);
+        }
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!componentClipboard.matches<T>());
+        if (ImGui::SmallButton("Paste values")) {
+            componentClipboard.paste<T>(world, entity);
+        }
+        ImGui::EndDisabled();
+        ImGui::PopID();
     }
     return open;
 }
 inline void drawScriptExports(World& world,
                               std::vector<ScriptField>& fields,
                               const AssetManager* assets = nullptr) {
-    const char* componentTypes[]{"Transform",
-                                 "RigidBody",
-                                 "Collider",
-                                 "MeshRenderer",
-                                 "ObjectName",
-                                 "LuaScript",
-                                 "Camera",
-                                 "AudioSource",
-                                 "AudioListener",
-                                 "DirectionalLight",
-                                 "PointLight",
-                                 "SpotLight",
-                                 "Skybox",
-                                 "CharacterController",
-                                 "FPSCamera",
-                                 "Raycast",
-                                 "Animation",
-                                 "ParticleSystem",
-                                 "Laser"};
+    const char* componentTypes[]{
+        "Transform",     "RigidBody",           "Collider",   "MeshRenderer",
+        "ObjectName",    "LuaScript",           "Camera",     "AudioSource",
+        "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
+        "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
+        "Animation",     "ParticleSystem",      "Laser",      "LightShafts"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -475,7 +487,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 19 &&
+                        if (target.type >= 0 && target.type < 20 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -503,8 +515,10 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
     try {
         auto edited = loadMaterial(assets, path);
         bool changed = false;
-        changed |= ImGui::Combo(
-            "Shader", &edited.shader, "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0");
+        changed |=
+            ImGui::Combo("Shader",
+                         &edited.shader,
+                         "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0");
         changed |= ImGui::ColorEdit3("Color", &edited.color.x);
         auto texture = [&](const char* label, std::string& value) {
             bool result = assetPicker(label, value, &assets, [](const std::string& file) {
@@ -686,11 +700,12 @@ inline void drawInspector(World& world,
                 ImGui::EndCombo();
             }
             ImGui::Separator();
-            auto ordered = world.has<InspectorOrder>(selected)
-                               ? world.get<InspectorOrder>(selected).types
-                               : std::vector<int>{
-                                     0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18};
-            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18}) {
+            auto ordered =
+                world.has<InspectorOrder>(selected)
+                    ? world.get<InspectorOrder>(selected).types
+                    : std::vector<int>{
+                          0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19};
+            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -918,7 +933,7 @@ inline void drawInspector(World& world,
                                     changed |= ImGui::Combo(
                                         "Shader",
                                         &edited.shader,
-                                        "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0");
+                                        "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0");
                                     changed |= ImGui::ColorEdit3("Material color", &edited.color.x);
                                     auto textureField = [&](const char* label, std::string& path) {
                                         ImGui::PushID(label);
@@ -1116,6 +1131,48 @@ inline void drawInspector(World& world,
                         camera->targetEntity = {};
                     }
                 }
+                if (componentID == 19) {
+                    if (auto* shaft = world.tryGet<LightShafts>(selected);
+                        shaft && componentHeader<LightShafts>(world, selected, "LightShafts")) {
+                        auto edited = *shaft;
+                        ImGui::Checkbox("Enabled", &edited.enabled);
+                        editVector("Local direction", edited.direction);
+                        ImGui::ColorEdit3("Shaft color", &edited.color.x);
+                        ImGui::DragFloat("Height", &edited.height, .1f, .01f, 1000);
+                        ImGui::DragFloat("Start width", &edited.width, .01f, .001f, 100);
+                        ImGui::DragFloat("End width", &edited.endWidth, .05f, .001f, 500);
+                        ImGui::DragFloat("Shaft intensity", &edited.intensity, .02f, 0, 100);
+                        ImGui::SliderFloat("Density", &edited.density, 0, 1);
+                        ImGui::SliderFloat("Edge falloff", &edited.falloff, .1f, 8);
+                        ImGui::SliderFloat("Streaks", &edited.streaks, 0, 64);
+                        ImGui::SliderFloat("Start fade", &edited.fade, .01f, 1);
+                        ImGui::DragFloat("Camera near fade", &edited.nearFade, .05f, .01f, 100);
+                        ImGui::Checkbox("Use baked profile texture", &edited.useBakedTexture);
+                        assetPicker("Profile texture",
+                                    edited.texture,
+                                    assets,
+                                    [](const std::string& p) { return materialTexturePath(p); });
+                        static std::string shaftError;
+                        if (assets && ImGui::Button("Bake profile to PNG")) {
+                            try {
+                                edited.texture = Shafts::bake(*assets, selected, edited);
+                                edited.useBakedTexture = true;
+                                shaftError.clear();
+                            } catch (const std::exception& e) {
+                                shaftError = e.what();
+                            }
+                        }
+                        if (!shaftError.empty()) {
+                            ImGui::TextWrapped("%s", shaftError.c_str());
+                        }
+                        ImGui::TextWrapped(
+                            "Fast depth-tested visual shaft, not raymarched lighting. Profile baking caches edge/streak/fade shading only, not scene occlusion. Rebake after changing profile controls.");
+                        try {
+                            *shaft = Shafts::parse(Shafts::settings(edited));
+                        } catch (const std::exception&) {
+                        }
+                    }
+                }
                 if (componentID == 18) {
                     if (auto* laser = world.tryGet<Laser>(selected);
                         laser && componentHeader<Laser>(world, selected, "Laser")) {
@@ -1147,6 +1204,14 @@ inline void drawInspector(World& world,
                     }
                     T edited = *light;
                     ImGui::PushID(title);
+                    if (ImGui::Combo("Mode", &edited.mode, "Dynamic\0Static\0")) {
+                        detachLightBake(world, *light);
+                        edited.bake.clear();
+                    }
+                    ImGui::TextDisabled(edited.mode == 0 ? "Realtime light"
+                                        : edited.bake.empty()
+                                            ? "Not baked: realtime fallback"
+                                            : "Baked snapshot (rebake after edits)");
                     ImGui::Checkbox("Enabled", &edited.enabled);
                     ImGui::ColorEdit3("Color", &edited.color.x);
                     ImGui::DragFloat("Intensity", &edited.intensity, .05f, 0, 1000);
@@ -1179,6 +1244,12 @@ inline void drawInspector(World& world,
                         ImGui::DragFloat(
                             "Outer angle", &edited.outerAngle, .1f, edited.innerAngle + .1f, 85);
                     }
+                    ImGui::DragFloat(kind == 0 ? "Sun angular softness" : "Source radius",
+                                     &edited.softness,
+                                     .01f,
+                                     0,
+                                     10,
+                                     "%.3f");
                     ImGui::Checkbox("Cast dynamic shadows", &edited.shadows);
                     ImGui::Combo("Shadow quality",
                                  &edited.shadowQuality,
@@ -1481,6 +1552,12 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<LightShafts>(selected) && ImGui::MenuItem("LightShafts")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, LightShafts{});
+                }
                 if (!world.has<Laser>(selected) && ImGui::MenuItem("Laser")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});

@@ -2,6 +2,22 @@
 #include "core/hierarchy.hpp"
 #include <any>
 
+// A baked atlas combines multiple lights, so a mode change must detach that
+// atlas as a whole rather than leave stale light plus realtime light doubled.
+inline void detachLightBake(World& world, const LightSettings& light) {
+    if (light.bake.empty()) {
+        return;
+    }
+    world.each<MeshRenderer>([&](Entity, MeshRenderer& mesh) {
+        const auto manifest =
+            (std::filesystem::path(mesh.lightmap).parent_path() / "bake.json").generic_string();
+        if (!mesh.lightmap.empty() && (light.bake == "@legacy" || manifest == light.bake)) {
+            mesh.lightmap.clear();
+            mesh.lightmapGrid = 0;
+        }
+    });
+}
+
 // One owned value snapshot, not a pointer to the source component. Copying a new
 // type replaces the previous clipboard; only exactly matching types can paste.
 class ComponentClipboard {
@@ -32,7 +48,13 @@ class ComponentClipboard {
         if constexpr (std::is_same_v<T, Transform>) {
             setLocalTransform(world, entity, *value);
         } else {
+            if constexpr (std::is_base_of_v<LightSettings, T>) {
+                detachLightBake(world, world.get<T>(entity));
+            }
             world.get<T>(entity) = *value;
+            if constexpr (std::is_base_of_v<LightSettings, T>) {
+                world.get<T>(entity).bake.clear();
+            }
             if constexpr (std::is_same_v<T, Laser>) {
                 auto& l = world.get<T>(entity);
                 l.ready = false;
