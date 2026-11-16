@@ -45,7 +45,8 @@ const char* types[]{"Transform",     "RigidBody",           "Collider",   "MeshR
                     "ObjectName",    "LuaScript",           "Camera",     "AudioSource",
                     "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
                     "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
-                    "Animation",     "ParticleSystem",      "Laser",      "LightShafts"};
+                    "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
+                    "CameraEffects"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -54,7 +55,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 20; ++i) {
+    for (int i = 0; i < 21; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -100,6 +101,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<CharacterController>(h.entity);
     case 14:
         return h.world->has<FPSCamera>(h.entity);
+    case 20:
+        return h.world->has<CameraEffects>(h.entity);
     case 19:
         return h.world->has<LightShafts>(h.entity);
     case 18:
@@ -440,7 +443,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 20; ++i) {
+    for (int i = 0; i < 21; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -651,6 +654,9 @@ int LuaScene::api(lua_State* L) {
             self.world_.each<CharacterController>(
                 [&](Entity e, CharacterController&) { collect(e); });
             break;
+        case 20:
+            self.world_.each<CameraEffects>([&](Entity e, CameraEffects&) { collect(e); });
+            break;
         case 19:
             self.world_.each<LightShafts>([&](Entity e, LightShafts&) { collect(e); });
             break;
@@ -808,6 +814,9 @@ int LuaScene::api(lua_State* L) {
         case 13:
             self.world_.remove<CharacterController>(h.entity);
             break;
+        case 20:
+            self.world_.remove<CameraEffects>(h.entity);
+            break;
         case 19:
             self.world_.remove<LightShafts>(h.entity);
             break;
@@ -872,6 +881,9 @@ int LuaScene::api(lua_State* L) {
             break;
         case 13:
             addCharacterController(self.world_, h.entity);
+            break;
+        case 20:
+            self.world_.add(h.entity, CameraEffects{});
             break;
         case 19:
             if (!self.world_.has<Transform>(h.entity)) {
@@ -1145,7 +1157,7 @@ int LuaScene::componentIndex(lua_State* L) {
         return objectIndex(L);
     }
     // Component aliases resolve on the same owner, without storing raw pointers.
-    for (int type = 0; type < 20; ++type) {
+    for (int type = 0; type < 21; ++type) {
         std::string alias = type == 14 ? "fpsCamera" : types[type];
         alias[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(alias[0])));
         if (!std::strcmp(key, alias.c_str())) {
@@ -1168,6 +1180,22 @@ int LuaScene::componentIndex(lua_State* L) {
             lua_pushnil(L);
         }
         return 1;
+    }
+    if (c.type == 20) {
+        const auto& fx = c.object.world->get<CameraEffects>(c.object.entity);
+        for (const auto& f : CameraFx::boolFields) {
+            if (!std::strcmp(key, f.name)) {
+                lua_pushboolean(L, fx.*f.member);
+                return 1;
+            }
+        }
+        for (const auto& f : CameraFx::floatFields) {
+            if (!std::strcmp(key, f.name)) {
+                lua_pushnumber(L, fx.*f.member);
+                return 1;
+            }
+        }
+        return luaL_error(L, "Unknown CameraEffects property: %s", key);
     }
     if (c.type == 19) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, 19)) {
@@ -1595,6 +1623,31 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 20) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 20)) {
+            return luaL_error(L, "CameraEffects no longer exists");
+        }
+        auto& fx = c.object.world->get<CameraEffects>(c.object.entity);
+        const char* key = luaL_checkstring(L, 2);
+        for (const auto& f : CameraFx::boolFields) {
+            if (!std::strcmp(key, f.name)) {
+                luaL_checktype(L, 3, LUA_TBOOLEAN);
+                fx.*f.member = bool(lua_toboolean(L, 3));
+                return 0;
+            }
+        }
+        for (const auto& f : CameraFx::floatFields) {
+            if (!std::strcmp(key, f.name)) {
+                double value = luaL_checknumber(L, 3);
+                if (!std::isfinite(value) || value < f.low || value > f.high) {
+                    return luaL_error(L, "CameraEffects property outside supported range: %s", key);
+                }
+                fx.*f.member = float(value);
+                return 0;
+            }
+        }
+        return luaL_error(L, "Unknown CameraEffects property: %s", key);
+    }
     if (c.type == 19) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, 19)) {
             return luaL_error(L, "LightShafts no longer exists");
@@ -2965,7 +3018,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 20; ++type) {
+                for (; type < 21; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }

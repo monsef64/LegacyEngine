@@ -599,7 +599,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                 cameraSpeed * std::pow(1.2f, event.wheel.y), .1f, 500.0f);
                         }
                     } else {
-                        camera.zoom(event.wheel.y);
+                        camera.zoom(event.wheel.y * browser.settings.scrollZoomSpeed);
                         camera.pan(-event.wheel.x);
                     }
                 }
@@ -1823,13 +1823,18 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 3));
                 ImGui::BeginChild("Scene toolbar",
                                   ImVec2(0,
-                                         (ImGui::GetContentRegionAvail().x < 620 ? 2.f : 1.f) *
+                                         (ImGui::GetContentRegionAvail().x < 620 ? 3.f : 2.f) *
                                                  ImGui::GetFrameHeightWithSpacing() +
                                              6),
                                   ImGuiChildFlags_AlwaysUseWindowPadding,
                                   ImGuiWindowFlags_NoScrollbar |
                                       ImGuiWindowFlags_NoScrollWithMouse);
                 editor.drawToolbar();
+                ImGui::SetNextItemWidth(100);
+                if (ImGui::SliderFloat(
+                        "Scroll zoom", &browser.settings.scrollZoomSpeed, .1f, 5.f, "%.1fx")) {
+                    browser.settings.save();
+                }
                 ImGui::EndChild();
                 ImGui::PopStyleVar();
                 sceneFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
@@ -2338,7 +2343,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                   cameraEye(pose, previewCamera),
                                   0,
                                   0,
-                                  false);
+                                  false,
+                                  world.tryGet<CameraEffects>(selectedEntity),
+                                  (std::uint64_t(selectedEntity.generation) << 32) |
+                                      selectedEntity.index | (std::uint64_t(1) << 63));
                 } catch (const std::exception& error) {
                     terminalErrors.report("Camera preview", error.what());
                 }
@@ -2361,7 +2369,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         cameraEye(t, c),
                         x,
                         y,
-                        false);
+                        false,
+                        world.tryGet<CameraEffects>(e),
+                        (std::uint64_t(e.generation) << 32) | e.index);
                     if (showGameColliders) {
                         world.each<Transform, Collider>([&](Entity entity,
                                                             const Transform& transform,

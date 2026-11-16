@@ -404,3 +404,12 @@ end
 
 Choose `onStart` for one-off work. If a task is canceled, code after its wait
 (including clearing `busy`) does not run; reset your application state when needed.
+
+## Camera effects
+
+`CameraEffects` is a scriptable component for Camera objects. All effects default
+off. Use `self:getComponent(CameraEffects)` / `self:addComponent(CameraEffects)`
+and set boolean effect switches and numeric parameters directly. See
+[CameraEffects controls, ranges and manual checks](manual/camera-effects-and-terrain-performance.md)
+and the editor's generated API catalog. Anti-aliasing uses FXAA; motion blur is
+camera-only; depth of field and ambient occlusion are bounded screen-space effects.

@@ -168,6 +168,9 @@ inline void brush(Terrain& terrain,
         for (int z = std::max(0, (z0 - 1) / 32); z <= std::min(count - 1, (z1 + 1) / 32); ++z) {
             for (int x = std::max(0, (x0 - 1) / 32); x <= std::min(count - 1, (x1 + 1) / 32); ++x) {
                 d.chunks[z * count + x] = d.revision;
+                if (tool != 4) {
+                    d.heightChunks[z * count + x] = d.shapeRevision;
+                }
             }
         }
     }

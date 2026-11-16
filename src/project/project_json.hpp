@@ -232,7 +232,8 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"ParticleSystem", {{"settings", 'j'}}},
     {"Laser", {{"settings", 'j'}}},
     {"LightShafts", {{"settings", 'j'}}},
-    {"Terrain", {{"asset", 's'}}}};
+    {"Terrain", {{"asset", 's'}}},
+    {"CameraEffects", {{"settings", 'j'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     Json result = Json::object();
@@ -343,7 +344,7 @@ inline Json fromLegacy(const std::string& text) {
     in >> magic >> version;
     Json doc = read(in, {{"script", 's'}, {"assets", 's'}});
     doc["format"] = "LegacyEngine";
-    doc["version"] = 19;
+    doc["version"] = 20;
     doc["editorCamera"] = read(in,
                                {{"target", 'f', 3},
                                 {"yaw", 'f'},
@@ -387,12 +388,12 @@ inline std::string toLegacy(const Json& doc) {
         (doc.at("version") != 9 && doc.at("version") != 10 && doc.at("version") != 11 &&
          doc.at("version") != 12 && doc.at("version") != 13 && doc.at("version") != 14 &&
          doc.at("version") != 15 && doc.at("version") != 16 && doc.at("version") != 17 &&
-         doc.at("version") != 18 && doc.at("version") != 19) ||
+         doc.at("version") != 18 && doc.at("version") != 19 && doc.at("version") != 20) ||
         !doc.at("objects").is_array() || doc.at("objects").size() > 10000) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 25\n";
+    out << std::setprecision(17) << "LegacyEngineProject 26\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),

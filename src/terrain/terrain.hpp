@@ -31,6 +31,13 @@ struct Data {
                                  {"", {.85f, .85f, .8f}, 8}}};
     unsigned identity = nextRevision(), revision = 0, shapeRevision = 0;
     std::vector<unsigned> chunks = std::vector<unsigned>(16, 0);
+    std::vector<unsigned> heightChunks = std::vector<unsigned>(16, 0);
+    struct Bounds {
+        unsigned revision = ~0u;
+        Vec3 center;
+        float radius = 0;
+    };
+    mutable std::vector<Bounds> bounds = std::vector<Bounds>(16);
 };
 inline int chunkCount(const Data& d) {
     return (d.resolution - 1) / 32;
@@ -39,6 +46,8 @@ inline void invalidate(Data& d) {
     d.revision = nextRevision();
     d.shapeRevision = d.revision;
     d.chunks.assign(chunkCount(d) * chunkCount(d), d.revision);
+    d.heightChunks = d.chunks;
+    d.bounds.assign(d.chunks.size(), {});
 }
 inline Vec3 point(const Data& d, int x, int z) {
     return {x * d.size / (d.resolution - 1),
@@ -63,3 +72,26 @@ struct Terrain {
     unsigned savedRevision = 0;
     bool sculpting = false;
 };
+
+namespace Terrains {
+inline const Data::Bounds& chunkBounds(const Data& d, int x, int z) {
+    int index = z * chunkCount(d) + x;
+    auto& b = d.bounds[index];
+    if (b.revision != d.heightChunks[index]) {
+        float lo = 1e10f, hi = -1e10f;
+        for (int rz = z * 32; rz <= z * 32 + 32; ++rz) {
+            for (int rx = x * 32; rx <= x * 32 + 32; ++rx) {
+                float h = d.heights[rz * d.resolution + rx];
+                lo = std::min(lo, h);
+                hi = std::max(hi, h);
+            }
+        }
+        float cell = d.size / (d.resolution - 1);
+        b.center = {(x * 32 + 16) * cell, (lo + hi) * .5f, (z * 32 + 16) * cell};
+        Vec3 extent{16 * cell, (hi - lo) * .5f + 8 * cell, 16 * cell};
+        b.radius = std::sqrt(dot(extent, extent));
+        b.revision = d.heightChunks[index];
+    }
+    return b;
+}
+} // namespace Terrains
