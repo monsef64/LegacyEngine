@@ -8,6 +8,7 @@
 #include "audio/audio_source.hpp"
 #include "core/ecs.hpp"
 #include "core/math.hpp"
+#include "effects/laser.hpp"
 #include "lighting/light.hpp"
 #include "materials/material.hpp"
 #include "particles/particle_system.hpp"

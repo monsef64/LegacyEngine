@@ -7,6 +7,9 @@ namespace Particles {
 inline Json settings(const ParticleSettings& s) {
     Json j = Json::object();
 #define P(name) j[#name] = s.name
+    P(collision);
+    P(restitution);
+    P(collisionFriction);
     P(loop);
     P(playOnAwake);
     P(localSpace);
@@ -54,6 +57,9 @@ inline ParticleSettings parse(const Json& j) {
 #define P(name)                                                                                    \
     if (j.contains(#name))                                                                         \
     j.at(#name).get_to(s.name)
+    P(collision);
+    P(restitution);
+    P(collisionFriction);
     P(loop);
     P(playOnAwake);
     P(localSpace);
@@ -104,7 +110,8 @@ inline ParticleSettings parse(const Json& j) {
     auto vector = [&](Vec3 v, float lo, float hi) {
         return range(v.x, lo, hi) && range(v.y, lo, hi) && range(v.z, lo, hi);
     };
-    if (!j.is_object() || !range(s.duration, .01f, 3600) || !range(s.startDelay, 0, 3600) ||
+    if (!j.is_object() || !range(s.restitution, 0, 1) || !range(s.collisionFriction, 0, 1) ||
+        !range(s.duration, .01f, 3600) || !range(s.startDelay, 0, 3600) ||
         !range(s.rate, 0, 10000) || s.maxParticles < 1 || s.maxParticles > 10000 ||
         s.burstCount < 0 || s.burstCount > 10000 || s.shape < 0 || s.shape > 3 || s.blend < 0 ||
         s.blend > 1 || s.sprite < 0 || s.sprite > 2 || !range(s.lifetimeMin, .01f, 120) ||

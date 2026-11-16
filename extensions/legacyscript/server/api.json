@@ -1,5 +1,9 @@
 [
   {
+    "name": "Laser",
+    "signature": "Laser - local -Z collider-clipped beam; enabled, color, intensity, range, width, glowWidth, impactSize; hit, endPosition and hitNormal are read-only"
+  },
+  {
     "name": "ParticleSystem",
     "signature": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles); configurable emission, shape, motion, color, size and sprite sheet; particleCount/isPlaying/paused/time read-only"
   },
@@ -281,7 +285,7 @@
   },
   {
     "name": "SpotLight",
-    "signature": "SpotLight - dynamic cone light with innerAngle and outerAngle in degrees"
+    "signature": "SpotLight - cone light with innerAngle/outerAngle in degrees; cookie is a project-relative projected RGB/alpha image, empty disables"
   },
   {
     "name": "Texture",
@@ -365,7 +369,7 @@
   },
   {
     "name": "lockCursor",
-    "signature": "lockCursor() -> boolean; relative motion, cursor hidden"
+    "signature": "lockCursor() -> boolean; viewport-confined motion, cursor hidden"
   },
   {
     "name": "unlockCursor",

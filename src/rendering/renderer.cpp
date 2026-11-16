@@ -114,6 +114,13 @@ bool Renderer::init() {
     lightmapLocation_ = glGetUniformLocation(litProgram_, "uLightmap");
     lightmapGridLocation_ = glGetUniformLocation(litProgram_, "uLightmapGrid");
     lightCountLocation_ = glGetUniformLocation(litProgram_, "uLightCount");
+    cookieSampler_ = glGetUniformLocation(litProgram_, "uCookieTexture");
+    for (int i = 0; i < 16; ++i) {
+        cookieRight_[i] =
+            glGetUniformLocation(litProgram_, ("uCookieRight[" + std::to_string(i) + "]").c_str());
+        cookieUp_[i] =
+            glGetUniformLocation(litProgram_, ("uCookieUp[" + std::to_string(i) + "]").c_str());
+    }
     shadowSamplerLocation_ = glGetUniformLocation(litProgram_, "uShadowTexture");
     softShadowLocation_ = glGetUniformLocation(litProgram_, "uSoftShadows");
     shadowViewLocation_ = glGetUniformLocation(litProgram_, "uShadowView");
@@ -189,6 +196,8 @@ void Renderer::clearModelCache() {
 }
 void Renderer::shutdown() {
     particles_.shutdown();
+    lasers_.shutdown();
+    cookies_.shutdown();
     pendingModels_.clear();
     failedModels_.clear();
     gpuSkinning_.shutdown();
@@ -656,6 +665,7 @@ void Renderer::draw(World& world,
         glDisable(GL_BLEND);
     }
     transparent.clear(); // Do not retain ECS references beyond this view.
+    lasers_.draw(world, viewProjection, cameraPosition);
     particles_.draw(world, materialAssets_, viewProjection, cameraPosition, editorView);
     if (editorView) {
         if (audioModel_.id == UINT32_MAX) {
@@ -955,7 +965,13 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
         glBindFramebuffer(GL_READ_FRAMEBUFFER, readFramebuffer);
     }
     casters.clear();
+    const auto cookieEnabled =
+        cookies_.update(materialAssets_, materialTextures_, lights, materialError);
+    glActiveTexture(GL_TEXTURE6);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, cookies_.texture());
+    glActiveTexture(GL_TEXTURE0);
     glUseProgram(litProgram_);
+    glUniform1i(cookieSampler_, 6);
     glUniform1i(lightCountLocation_, static_cast<int>(lights.size()));
     glUniform1i(shadowSamplerLocation_, 1);
     glUniform1i(softShadowLocation_, shadowSettings_.soft);
@@ -978,6 +994,12 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
     for (std::size_t i = 0; i < lights.size(); ++i) {
         const auto& l = lights[i];
         const auto& s = l.settings;
+        glUniform4f(cookieRight_[i],
+                    l.right.x,
+                    l.right.y,
+                    l.right.z,
+                    cookieEnabled[i] ? 1.f / std::tan(radians(s.outerAngle)) : 0.f);
+        glUniform3f(cookieUp_[i], l.up.x, l.up.y, l.up.z);
         const auto* lightTransform = world.tryGet<Transform>(l.entity);
         glUniform1i(lightBakedLocations_[i], lightTransform && lightTransform->isStatic);
         const bool csm = l.type == 0 && l.shadowCount == 4 && l.shadowLayer >= 0;

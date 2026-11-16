@@ -2,6 +2,7 @@
 #include "animation/animation_clip.hpp"
 #include "assets/cubemap.hpp"
 #include "core/hierarchy.hpp"
+#include "effects/laser_io.hpp"
 #include "particles/particle_io.hpp"
 #include "physics/queries.hpp"
 #include "prefabs/prefab.hpp"
@@ -56,7 +57,8 @@ const char* types[]{"Transform",
                     "FPSCamera",
                     "Raycast",
                     "Animation",
-                    "ParticleSystem"};
+                    "ParticleSystem",
+                    "Laser"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -65,7 +67,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 18; ++i) {
+    for (int i = 0; i < 19; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -111,6 +113,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<CharacterController>(h.entity);
     case 14:
         return h.world->has<FPSCamera>(h.entity);
+    case 18:
+        return h.world->has<Laser>(h.entity);
     case 17:
         return h.world->has<ParticleSystem>(h.entity);
     case 16:
@@ -154,6 +158,9 @@ Field field(lua_State* L, const Component& c, const char* key) {
         FIELD(shadowDistance, Number);
         FIELD(shadowBias, Number);
         FIELD(shadowQuality, Integer);
+        if (c.type == 11) {
+            FIELD(cookie, String);
+        }
     }
     switch (c.type) {
     case 13: {
@@ -444,7 +451,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 18; ++i) {
+    for (int i = 0; i < 19; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -655,6 +662,9 @@ int LuaScene::api(lua_State* L) {
             self.world_.each<CharacterController>(
                 [&](Entity e, CharacterController&) { collect(e); });
             break;
+        case 18:
+            self.world_.each<Laser>([&](Entity e, Laser&) { collect(e); });
+            break;
         case 17:
             self.world_.each<ParticleSystem>([&](Entity e, ParticleSystem&) { collect(e); });
             break;
@@ -806,6 +816,9 @@ int LuaScene::api(lua_State* L) {
         case 13:
             self.world_.remove<CharacterController>(h.entity);
             break;
+        case 18:
+            self.world_.remove<Laser>(h.entity);
+            break;
         case 17:
             self.world_.remove<ParticleSystem>(h.entity);
             break;
@@ -864,6 +877,12 @@ int LuaScene::api(lua_State* L) {
             break;
         case 13:
             addCharacterController(self.world_, h.entity);
+            break;
+        case 18:
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            self.world_.add(h.entity, Laser{});
             break;
         case 17:
             if (!self.world_.has<Transform>(h.entity)) {
@@ -1125,7 +1144,7 @@ int LuaScene::componentIndex(lua_State* L) {
         return objectIndex(L);
     }
     // Component aliases resolve on the same owner, without storing raw pointers.
-    for (int type = 0; type < 18; ++type) {
+    for (int type = 0; type < 19; ++type) {
         std::string alias = type == 14 ? "fpsCamera" : types[type];
         alias[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(alias[0])));
         if (!std::strcmp(key, alias.c_str())) {
@@ -1146,6 +1165,54 @@ int LuaScene::componentIndex(lua_State* L) {
             component(L, c.object, 0);
         } else {
             lua_pushnil(L);
+        }
+        return 1;
+    }
+    if (c.type == 18) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 18)) {
+            return luaL_error(L, "Laser no longer exists");
+        }
+        const auto& p = c.object.world->get<Laser>(c.object.entity);
+        if (!std::strcmp(key, "hit")) {
+            lua_pushboolean(L, p.hit);
+            return 1;
+        }
+        if (!std::strcmp(key, "endPosition")) {
+            pushVector(L, p.end);
+            return 1;
+        }
+        if (!std::strcmp(key, "hitNormal")) {
+            pushVector(L, p.hitNormal);
+            return 1;
+        }
+        bool found = false;
+        {
+            const auto data = Lasers::settings(p);
+            const auto it = data.find(key);
+            if (it != data.end()) {
+                found = true;
+                const auto& v = *it;
+                if (v.is_boolean()) {
+                    lua_pushboolean(L, v.get<bool>());
+                } else if (v.is_number()) {
+                    lua_pushnumber(L, v.get<double>());
+                } else if (v.is_string()) {
+                    const auto value = v.get<std::string>();
+                    lua_pushlstring(L, value.data(), value.size());
+                } else {
+                    lua_newtable(L);
+                    const char* axes[]{"x", "y", "z"};
+                    for (int a = 0; a < 3; ++a) {
+                        lua_pushnumber(L, v[a].get<double>());
+                        lua_setfield(L, -2, axes[a]);
+                        lua_pushnumber(L, v[a].get<double>());
+                        lua_rawseti(L, -2, a + 1);
+                    }
+                }
+            }
+        }
+        if (!found) {
+            return luaL_error(L, "Unknown Laser property: %s", key);
         }
         return 1;
     }
@@ -1491,6 +1558,84 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 18) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 18)) {
+            return luaL_error(L, "Laser no longer exists");
+        }
+        const char* key = luaL_checkstring(L, 2);
+        auto& p = c.object.world->get<Laser>(c.object.entity);
+        auto& error = c.object.scene->apiError_;
+        error.clear();
+        try {
+            auto data = Lasers::settings(p);
+            auto it = data.find(key);
+            if (it == data.end()) {
+                throw std::runtime_error("Unknown or read-only Laser property");
+            }
+            if (it->is_boolean()) {
+                if (!lua_isboolean(L, 3)) {
+                    throw std::runtime_error("Expected boolean");
+                }
+                *it = bool(lua_toboolean(L, 3));
+            } else if (it->is_number()) {
+                if (lua_type(L, 3) != LUA_TNUMBER) {
+                    throw std::runtime_error("Expected number");
+                }
+                const double v = lua_tonumber(L, 3);
+                if (!std::isfinite(v) || std::abs(v) > 1e9) {
+                    throw std::runtime_error("Invalid number");
+                }
+                if (it->is_number_integer()) {
+                    if (std::floor(v) != v) {
+                        throw std::runtime_error("Expected integer");
+                    }
+                    *it = int(v);
+                } else {
+                    *it = v;
+                }
+            } else if (it->is_string()) {
+                if (lua_type(L, 3) != LUA_TSTRING) {
+                    throw std::runtime_error("Expected texture path string");
+                }
+                std::size_t size;
+                const auto* text = lua_tolstring(L, 3, &size);
+                *it = std::string(text, size);
+            } else {
+                if (!lua_istable(L, 3)) {
+                    throw std::runtime_error(
+                        "Expected vector table {x,y,z} or {x=...,y=...,z=...}");
+                }
+                const char* axes[]{"x", "y", "z"};
+                Json values = Json::array();
+                for (int a = 0; a < 3; ++a) {
+                    lua_getfield(L, 3, axes[a]);
+                    if (lua_isnil(L, -1)) {
+                        lua_pop(L, 1);
+                        lua_rawgeti(L, 3, a + 1);
+                    }
+                    if (lua_type(L, -1) != LUA_TNUMBER) {
+                        lua_pop(L, 1);
+                        throw std::runtime_error("Expected three numeric vector values");
+                    }
+                    values.push_back(lua_tonumber(L, -1));
+                    lua_pop(L, 1);
+                }
+                *it = values;
+            }
+            const auto settings = Lasers::parse(data);
+            static_cast<LaserSettings&>(p) = settings;
+            p.ready = false;
+            p.hit = false;
+        } catch (const std::exception& e) {
+            error = e.what();
+        }
+        if (!error.empty()) {
+            lua_pushlstring(L, error.data(), error.size());
+            error.clear();
+            return lua_error(L);
+        }
+        return 0;
+    }
     if (c.type == 17) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, 17)) {
             return luaL_error(L, "ParticleSystem no longer exists");
@@ -1701,7 +1846,15 @@ int LuaScene::componentNewIndex(lua_State* L) {
         *static_cast<bool*>(f.value) = lua_toboolean(L, 3) != 0;
         break;
     case Kind::String: {
-        if ((c.type == 2 || c.type == 3) && !std::strcmp(gameplayKey, "model")) {
+        if (c.type == 11 && !std::strcmp(gameplayKey, "cookie")) {
+            std::size_t length = 0;
+            const char* text = luaL_checklstring(L, 3, &length);
+            const std::string path(text, length);
+            if (!validLightCookie(path)) {
+                return luaL_error(L, "Invalid spotlight cookie image path");
+            }
+            *static_cast<std::string*>(f.value) = path;
+        } else if ((c.type == 2 || c.type == 3) && !std::strcmp(gameplayKey, "model")) {
             std::string path = luaL_checkstring(L, 3);
             if (!path.empty() && (!materialPathValid(path) ||
                                   std::filesystem::path(path).extension() != ".lemesh")) {
@@ -2696,7 +2849,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 18; ++type) {
+                for (; type < 19; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }

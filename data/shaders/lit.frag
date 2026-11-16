@@ -13,6 +13,9 @@ uniform sampler2DArrayShadow uShadowTexture;
 uniform float uSpecular;
 uniform vec3 uCameraPosition, uColor;
 uniform int uLightCount;
+uniform sampler2DArray uCookieTexture;
+uniform vec4 uCookieRight[16]; // xyz local X, w cot(outer angle), zero disables
+uniform vec3 uCookieUp[16];
 uniform bool uSoftShadows;
 uniform vec4 uLightPosition[16];  // xyz, type
 uniform vec4 uLightColor[16];     // rgb * intensity, range
@@ -230,7 +233,17 @@ void main() {
         vec3 halfDirection = normalize(toLight + viewDirection);
         float specular = uSpecular * pow(max(dot(normal, halfDirection), 0.0), 64.0);
         float shadow = visibility(i, normal, toLight, worldDx, worldDy);
-        vec3 energy = uLightColor[i].rgb * attenuation;
+        vec3 cookie=vec3(1);
+        if(type==2 && uCookieRight[i].w>0.) {
+            vec3 fromLight=-delta;
+            float depth=dot(fromLight,uLightDirection[i].xyz);
+            if(depth<=.0001)continue;
+            vec2 uv=vec2(dot(fromLight,uCookieRight[i].xyz),dot(fromLight,uCookieUp[i]))*(.5*uCookieRight[i].w/depth)+.5;
+            if(any(lessThan(uv,vec2(0)))||any(greaterThan(uv,vec2(1))))continue;
+            vec4 texel=texture(uCookieTexture,vec3(uv,float(i)));
+            cookie=texel.rgb*texel.a;
+        }
+        vec3 energy = uLightColor[i].rgb * attenuation * cookie;
         if (uLightmapGrid > 0 && uLightBaked[i]) {
             // Keep realtime occluders on baked receivers. This irradiance-weighted
             // shadow mask is exact for one static light, approximate for overlapping lights.

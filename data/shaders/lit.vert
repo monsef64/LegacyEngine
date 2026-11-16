@@ -25,7 +25,8 @@ void main() {
     if (uLightmapGrid > 0) {
         int triangle = gl_VertexID / 3, corner = gl_VertexID % 3;
         float tile = float(textureSize(uLightmap, 0).x / uLightmapGrid);
-        vec2 local = corner == 0 ? vec2(2.5) : (corner == 1 ? vec2(tile - 2.5, 2.5) : vec2(2.5, tile - 2.5));
+        float gutter = tile >= 6.0 ? 2.5 : 0.5;
+        vec2 local = corner == 0 ? vec2(gutter) : (corner == 1 ? vec2(tile - gutter, gutter) : vec2(gutter, tile - gutter));
         vLightmapUV = (vec2(triangle % uLightmapGrid, triangle / uLightmapGrid) * tile + local) / vec2(textureSize(uLightmap, 0));
     }
     gl_Position = uModelViewProjection * vec4(aPosition, 1.0);

@@ -6,6 +6,7 @@
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <utility>
 struct InputState {
     std::array<bool, SDL_SCANCODE_COUNT> keys{}, pressed{}, released{};
     std::array<bool, 9> mouse{}, mousePressed{}, mouseReleased{};
@@ -43,41 +44,100 @@ struct InputState {
             alternatives[name][slot - 1] = code;
         }
     }
+    bool sceneLocked = false, warpLock = true;
+    SDL_Window* lockedWindow = nullptr;
+    float lockX = 0, lockY = 0, lastLockX = 0, lastLockY = 0;
+    Uint64 warpTime = 0;
+    std::pair<float, float> lockedMotion(const SDL_MouseMotionEvent& event) {
+        if (!warpLock) {
+            return {event.xrel, event.yrel};
+        }
+        if (event.timestamp <= warpTime) {
+            return {0, 0};
+        }
+        const float mx = event.x - lastLockX, my = event.y - lastLockY;
+        lastLockX = event.x;
+        lastLockY = event.y;
+        if (std::abs(event.x - lockX) < .5f && std::abs(event.y - lockY) < .5f) {
+            return {0, 0};
+        }
+        return {mx, my};
+    }
+    bool constrain(const SDL_Rect& rect) {
+        if (!lockedWindow || rect.w <= 0 || rect.h <= 0) {
+            return false;
+        }
+        SDL_SetWindowMouseRect(lockedWindow, &rect);
+        SDL_SetWindowMouseGrab(lockedWindow, true);
+        if (warpLock) {
+            lockX = rect.x + rect.w * .5f;
+            lockY = rect.y + rect.h * .5f;
+            lastLockX = lockX;
+            lastLockY = lockY;
+            warpTime = SDL_GetTicksNS();
+            SDL_WarpMouseInWindow(lockedWindow, lockX, lockY);
+        }
+        return true;
+    }
     bool lockCursor(bool locked) {
-        if (!window) {
-            return false;
-        }
-        // Windows otherwise clips relative mode to the editor WINDOW centre,
-        // overriding SDL_SetWindowMouseRect and escaping a docked Game image.
-        SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_CENTER, "0");
-        if (!SDL_SetWindowRelativeMouseMode(window, locked)) {
-            return false;
-        }
-        SDL_SetWindowMouseGrab(window, locked);
         if (!locked) {
-            SDL_SetWindowMouseRect(window, nullptr);
+            releaseMouse();
+            return true;
         }
-        mouseLocked = locked;
+        if (!window || !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
+            return false;
+        }
+        if (lockedWindow && lockedWindow != window) {
+            releaseMouse();
+        }
+        lockedWindow = window;
+        const char* driver = SDL_GetCurrentVideoDriver();
+        warpLock = !(driver && std::string(driver) == "wayland");
+        SDL_SetHint("SDL_MOUSE_EMULATE_WARP_WITH_RELATIVE", "0");
+        SDL_SetHint("SDL_MOUSE_RELATIVE_WARP_MOTION", "0");
+        if (!SDL_SetWindowRelativeMouseMode(window, !warpLock)) {
+            lockedWindow = nullptr;
+            return false;
+        }
+        SDL_SetWindowMouseGrab(window, true);
+        SDL_HideCursor();
+        float px, py;
+        SDL_GetMouseState(&px, &py);
+        lastLockX = lockX = px;
+        lastLockY = lockY = py;
+        mouseLocked = true;
+        sceneLocked = false;
+        return true;
+    }
+    bool lockSceneCursor() {
+        if (!lockCursor(true)) {
+            return false;
+        }
+        mouseLocked = false;
+        sceneLocked = true;
         return true;
     }
     bool showCursor(bool visible) {
         if (!window) {
             return false;
         }
-        if (!(visible ? SDL_ShowCursor() : SDL_HideCursor())) {
+        if (!((visible && !mouseLocked && !sceneLocked) ? SDL_ShowCursor() : SDL_HideCursor())) {
             return false;
         }
         mouseVisible = visible;
         return true;
     }
     void releaseMouse() {
-        if (window) {
-            SDL_SetWindowRelativeMouseMode(window, false);
-            SDL_SetWindowMouseGrab(window, false);
-            SDL_SetWindowMouseRect(window, nullptr);
+        if (lockedWindow ? lockedWindow : window) {
+            auto* target = lockedWindow ? lockedWindow : window;
+            SDL_SetWindowRelativeMouseMode(target, false);
+            SDL_SetWindowMouseGrab(target, false);
+            SDL_SetWindowMouseRect(target, nullptr);
             SDL_ShowCursor();
         }
         mouseLocked = false;
+        sceneLocked = false;
+        lockedWindow = nullptr;
         mouseVisible = true;
     }
 
@@ -204,8 +264,11 @@ struct InputState {
             x = e.motion.x;
             y = e.motion.y;
             if (enabled && mouseEnabled) {
-                dx += e.motion.xrel;
-                dy += e.motion.yrel;
+                const auto motion = mouseLocked
+                                        ? lockedMotion(e.motion)
+                                        : std::pair<float, float>{e.motion.xrel, e.motion.yrel};
+                dx += motion.first;
+                dy += motion.second;
             }
         }
         if (e.type == SDL_EVENT_MOUSE_WHEEL && enabled && mouseEnabled) {

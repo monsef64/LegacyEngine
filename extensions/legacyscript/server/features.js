@@ -1,7 +1,7 @@
 const api = require('./api.json');
 const members = require('./members.json');
 const keywords = 'and break do else elseif end false for function goto if in local nil not or repeat return then true until while'.split(' ');
-const objectMembers = { ...members.Transform, ...members.Animation, ...members.ParticleSystem, ...members.GameObject, ...members.MeshRenderer, ...members.CameraObject, ...members.AudioSource, ...members.AudioListener, ...members.DirectionalLight, ...members.PointLight, ...members.Skybox, ...members.SpotLight, ...members.CharacterController, ...members.FPSCamera, ...members.RigidBody, ...members.Collider, ...members.Raycast };
+const objectMembers = { ...members.Transform, ...members.Animation, ...members.ParticleSystem, ...members.Laser, ...members.GameObject, ...members.MeshRenderer, ...members.CameraObject, ...members.AudioSource, ...members.AudioListener, ...members.DirectionalLight, ...members.PointLight, ...members.Skybox, ...members.SpotLight, ...members.CharacterController, ...members.FPSCamera, ...members.RigidBody, ...members.Collider, ...members.Raycast };
 function memberTable(receiver) {
   if (receiver === 'GameObject') return members.GameObjectConstructor;
   if (receiver === 'color') return members.ColorPalette;

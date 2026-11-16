@@ -246,6 +246,7 @@ class AssetBrowser {
             remap(mesh.lightmap);
         });
         world.each<Collider>([&](Entity, Collider& collider) { remap(collider.model); });
+        world.each<SpotLight>([&](Entity, SpotLight& l) { remap(l.cookie); });
         world.each<ParticleSystem>([&](Entity, ParticleSystem& p) { remap(p.texture); });
         world.each<Animation>([&](Entity, Animation& a) {
             remap(a.clip);
@@ -294,7 +295,7 @@ class AssetBrowser {
                             }
                         } else if (value.is_string()) {
                             const std::string keys =
-                                "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                                "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                             if (keys.find("|" + key + "|") == std::string::npos) {
                                 return;
                             }
@@ -456,7 +457,7 @@ class AssetBrowser {
                     }
                 } else if (value.is_string()) {
                     const std::string keys =
-                        "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                        "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                     if (keys.find("|" + key + "|") == std::string::npos) {
                         return;
                     }

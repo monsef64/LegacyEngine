@@ -43,8 +43,10 @@ class TrashFile {
         }
         trashed = files / name;
         info = metadata / (name + ".trashinfo");
-        if (!std::filesystem::is_regular_file(original) || std::filesystem::is_symlink(original)) {
-            throw std::runtime_error("Asset no longer exists or is not a regular file");
+        if ((!std::filesystem::is_regular_file(original) &&
+             !std::filesystem::is_directory(original)) ||
+            std::filesystem::is_symlink(original)) {
+            throw std::runtime_error("Asset no longer exists or is not a file/folder");
         }
         std::ofstream out(info, std::ios::binary);
         const auto now = std::time(nullptr);

@@ -1,3 +1,5 @@
+#include "editor/recent_projects.hpp"
+#include "effects/laser_update.hpp"
 #include <cctype>
 // LegacyEngine - Scene editing and runtime orchestration.
 //
@@ -392,8 +394,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         const bool externalFocus =
             gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS);
         input.window = externalFocus ? gameWindow : window;
-        input.mouseLocked =
-            playMode.active() && input.window && SDL_GetWindowRelativeMouseMode(input.window);
+        if (input.lockedWindow && input.lockedWindow != input.window) {
+            input.releaseMouse();
+        }
+        if (input.mouseLocked && !playMode.active()) {
+            input.releaseMouse();
+        }
         input.enabled = ((SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) || externalFocus) &&
                         playMode.playing() && (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || input.mouseLocked) &&
@@ -453,6 +459,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 (cameraLooking && event.type == SDL_EVENT_MOUSE_BUTTON_UP &&
                  event.button.button == SDL_BUTTON_RIGHT)) {
                 cameraLooking = false;
+                input.releaseMouse();
                 SDL_SetWindowRelativeMouseMode(window, false);
                 SDL_SetWindowMouseGrab(window, false);
                 SDL_SetWindowMouseRect(window, nullptr);
@@ -507,10 +514,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (event.button.button == SDL_BUTTON_RIGHT && !playMode.active() && sceneHovered &&
                     layout.scene.contains(event.button.x, event.button.y) &&
                     !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
-                    SDL_SetWindowMouseRect(window, nullptr);
-                    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_CENTER, "0");
-                    SDL_SetWindowMouseGrab(window, true);
-                    cameraLooking = SDL_SetWindowRelativeMouseMode(window, true);
+                    cameraLooking = input.lockSceneCursor();
                     clicking = false;
                 }
                 if (event.button.button == SDL_BUTTON_LEFT) {
@@ -539,7 +543,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (event.motion.state & SDL_BUTTON_RMASK) {
                     clicking = false;
                     if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) {
-                        camera.look(event.motion.xrel, event.motion.yrel);
+                        const auto motion = input.lockedMotion(event.motion);
+                        camera.look(motion.first, motion.second);
                     }
                 }
                 break;
@@ -605,6 +610,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
         ImGuizmo::BeginFrame();
+        static RecentProjects recentProjects;
+        static bool confirmOpen = false, confirmExit = false;
+        static std::string pendingRecent;
+        static int continueAfterSave = 0;
+        std::string selectedRecent;
         bool openProject = false, saveProject = false, saveAsProject = false;
         const bool projectEnabled = !browser.importing() && !prefabLevel && !levels.busy() &&
                                     !playMode.active() && !editor.dragging() &&
@@ -613,6 +623,18 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("File")) {
                 openProject = ImGui::MenuItem("Open Project...", "Ctrl+O", false, projectEnabled);
+                if (ImGui::BeginMenu("Open Recent", projectEnabled)) {
+                    if (recentProjects.paths().empty()) {
+                        ImGui::TextDisabled("No recent projects");
+                    }
+                    for (const auto& path : recentProjects.paths()) {
+                        if (ImGui::MenuItem(path.c_str())) {
+                            selectedRecent = path;
+                            openProject = true;
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
                 saveProject = ImGui::MenuItem("Save Project", "Ctrl+S", false, projectEnabled);
                 saveAsProject =
                     ImGui::MenuItem("Save Project As...", "Ctrl+Shift+S", false, projectEnabled);
@@ -681,6 +703,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 browser.assets.root = assetRoot;
                 currentProject = path;
+                recentProjects.remember(path);
                 savedProjectState = projectContentState(world, embeddedLegacySource, camera);
                 projectDirty = false;
                 saved = true;
@@ -696,30 +719,73 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (saveProject && !currentProject.empty()) {
                 saveTo(currentProject);
             } else if (openProject || saveProject || saveAsProject) {
-                bool proceed = true;
                 if (openProject && projectDirty) {
-                    const SDL_MessageBoxButtonData buttons[]{
-                        {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel"},
-                        {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Open project"}};
-                    const SDL_MessageBoxData box{
-                        SDL_MESSAGEBOX_WARNING,
-                        window,
-                        "Unsaved project",
-                        "Opening another project replaces unsaved changes. Continue?",
-                        2,
-                        buttons,
-                        nullptr};
-                    int button = 0;
-                    proceed = SDL_ShowMessageBox(&box, &button) && button == 1;
-                }
-                if (proceed) {
+                    pendingRecent = selectedRecent;
+                    confirmOpen = true;
+                } else if (openProject && !selectedRecent.empty()) {
+                    projectDialog.openRecent(selectedRecent);
+                } else {
                     projectDialog.show(window, !openProject, currentProject);
                 }
             }
         }
+        if (confirmOpen || confirmExit) {
+            ImGui::OpenPopup("Unsaved project changes");
+        }
+        ImGui::SetNextWindowSize(ImVec2(480, 0), ImGuiCond_Appearing);
+        if (ImGui::BeginPopupModal(
+                "Unsaved project changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextUnformatted("You have unsaved changes");
+            ImGui::Separator();
+            ImGui::TextWrapped(
+                confirmExit
+                    ? "Save your work before closing LegacyEngine?"
+                    : "Save your work before opening another project? Discarded changes cannot be recovered.");
+            auto proceed = [&]() {
+                if (confirmExit) {
+                    running = false;
+                } else if (!pendingRecent.empty()) {
+                    projectDialog.openRecent(pendingRecent);
+                } else {
+                    projectDialog.show(window, false, currentProject);
+                }
+                confirmOpen = confirmExit = false;
+                pendingRecent.clear();
+                ImGui::CloseCurrentPopup();
+            };
+            if (ImGui::Button("Save and continue", ImVec2(160, 0))) {
+                if (!currentProject.empty()) {
+                    if (saveTo(currentProject)) {
+                        proceed();
+                    }
+                } else {
+                    continueAfterSave = confirmExit ? 2 : 1;
+                    confirmOpen = confirmExit = false;
+                    ImGui::CloseCurrentPopup();
+                    projectDialog.show(window, true, currentProject);
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Discard", ImVec2(120, 0))) {
+                proceed();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(120, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                confirmOpen = confirmExit = false;
+                pendingRecent.clear();
+                ImGui::CloseCurrentPopup();
+            }
+            if (!projectError.empty()) {
+                ImGui::Spacing();
+                ImGui::TextWrapped("%s", projectError.c_str());
+            }
+            ImGui::EndPopup();
+        }
         if (auto result = projectDialog.poll()) {
             if (result->path.empty() || !result->error.empty()) {
                 exitAfterSave = false;
+                continueAfterSave = 0;
+                pendingRecent.clear();
             }
             if (!result->error.empty()) {
                 projectError = result->error;
@@ -729,7 +795,21 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     if (!path.has_extension()) {
                         path += ".legacy";
                     }
-                    saveTo(path.string());
+                    if (saveTo(path.string()) && continueAfterSave) {
+                        if (continueAfterSave == 2) {
+                            running = false;
+                        } else if (!pendingRecent.empty()) {
+                            projectDialog.openRecent(pendingRecent);
+                        } else {
+                            projectDialog.show(window, false, currentProject);
+                        }
+                        continueAfterSave = 0;
+                        pendingRecent.clear();
+                    } else if (continueAfterSave) {
+                        confirmExit = continueAfterSave == 2;
+                        confirmOpen = !confirmExit;
+                        continueAfterSave = 0;
+                    }
                 } else {
                     std::string source, assetDirectory;
                     World loadedWorld;
@@ -768,6 +848,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         physics.reset();
                         clicking = false;
                         currentProject = result->path;
+                        recentProjects.remember(currentProject);
                         savedProjectState =
                             projectContentState(world, embeddedLegacySource, camera);
                         projectDirty = false;
@@ -1964,7 +2045,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             (!sceneVisible || browser.dialog.pending() || projectDialog.pending() ||
              !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS))) {
             cameraLooking = false;
-            SDL_SetWindowRelativeMouseMode(window, false);
+            input.releaseMouse();
         }
         if (cameraLooking && !browser.dialog.pending() && !projectDialog.pending() &&
             !cameraModifiersHeld(SDL_GetModState()) && !editor.dragging() &&
@@ -2117,12 +2198,18 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
 
+        Lasers::update(world, physics);
         Particles::update(world,
                           float(std::min(seconds, .1f)),
                           playMode.playing(),
                           playMode.active() && !playMode.playing(),
                           selectedEntity,
-                          particlePreviewSpeed);
+                          particlePreviewSpeed,
+                          [&](Entity emitter, const Ray& ray, float distance, RayHit& hit) {
+                              return physics.raycast(ray, distance, hit, [&](Entity other) {
+                                  return other != emitter && isActive(world, other);
+                              });
+                          });
         profiler.checkpoint(ProfilePart::Audio);
         int width = 0;
         int height = 0;
@@ -2377,94 +2464,38 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             } else if (!projectDirty) {
                 running = false;
             } else {
-                const SDL_MessageBoxButtonData buttons[]{
-                    {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel"},
-                    {0, 1, "Discard"},
-                    {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 2, "Save"}};
-                const SDL_MessageBoxData box{SDL_MESSAGEBOX_WARNING,
-                                             window,
-                                             "Unsaved project",
-                                             "Save project changes before exiting?",
-                                             3,
-                                             buttons,
-                                             nullptr};
-                int choice = 0;
-                if (SDL_ShowMessageBox(&box, &choice)) {
-                    if (choice == 1) {
-                        running = false;
-                    }
-                    if (choice == 2) {
-                        exitAfterSave = true;
-                        if (currentProject.empty()) {
-                            projectDialog.show(window, true, currentProject);
-                        } else {
-                            saveTo(currentProject);
-                        }
-                    }
-                }
+                confirmExit = true;
             }
         }
         if (cameraLooking || input.mouseLocked) {
-            SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_CENTER, "0");
-            if (input.mouseLocked && input.window == gameWindow && gameWindow) {
-                SDL_SetWindowMouseRect(window, nullptr);
-                SDL_SetWindowMouseGrab(window, false);
-                int w = 0, h = 0;
-                SDL_GetWindowSize(gameWindow, &w, &h);
-                const SDL_Rect rect{0, 0, w, h};
-                if (w > 0 && h > 0) {
-                    SDL_SetWindowMouseRect(gameWindow, &rect);
-                    SDL_SetWindowMouseGrab(gameWindow, true);
-                } else {
-                    input.releaseMouse();
-                }
+            SDL_Rect rect{};
+            if (input.lockedWindow == gameWindow && gameWindow) {
+                SDL_GetWindowSize(gameWindow, &rect.w, &rect.h);
             } else {
                 const auto origin = ImGui::GetMainViewport()->Pos;
-                SDL_Rect rect = !input.mouseLocked ? SDL_Rect{int(sceneRect.x - origin.x),
-                                                              int(sceneRect.y - origin.y),
-                                                              int(sceneRect.width),
-                                                              int(sceneRect.height)}
-                                                   : SDL_Rect{int(gameImageOrigin.x - origin.x),
-                                                              int(gameImageOrigin.y - origin.y),
-                                                              int(gameImageSize.x),
-                                                              int(gameImageSize.y)};
-                int w = 0, h = 0;
+                rect = cameraLooking ? SDL_Rect{int(sceneRect.x - origin.x),
+                                                int(sceneRect.y - origin.y),
+                                                int(sceneRect.width),
+                                                int(sceneRect.height)}
+                                     : SDL_Rect{int(gameImageOrigin.x - origin.x),
+                                                int(gameImageOrigin.y - origin.y),
+                                                int(gameImageSize.x),
+                                                int(gameImageSize.y)};
+                int w, h;
                 SDL_GetWindowSize(window, &w, &h);
-                int right = std::min(w, rect.x + rect.w), bottom = std::min(h, rect.y + rect.h);
+                const int right = std::min(w, rect.x + rect.w),
+                          bottom = std::min(h, rect.y + rect.h);
                 rect.x = std::max(0, rect.x);
                 rect.y = std::max(0, rect.y);
                 rect.w = right - rect.x;
                 rect.h = bottom - rect.y;
-                if (rect.w > 0 && rect.h > 0) {
-                    if (!SDL_SetWindowMouseRect(window, &rect) ||
-                        !SDL_SetWindowMouseGrab(window, true)) {
-                        input.releaseMouse();
-                        cameraLooking = false;
-                    } else {
-                        float x = 0, y = 0;
-                        SDL_GetMouseState(&x, &y);
-                        // Relative mode owns its virtual cursor. Repeated warps
-                        // inject synthetic motion and make Scene freelook jump.
-                        if (!SDL_GetWindowRelativeMouseMode(window) &&
-                            (x < rect.x || x >= rect.x + rect.w || y < rect.y ||
-                             y >= rect.y + rect.h)) {
-                            SDL_WarpMouseInWindow(
-                                window, rect.x + rect.w * .5f, rect.y + rect.h * .5f);
-                        }
-                    }
-                } else {
-                    input.releaseMouse();
-                    cameraLooking = false;
-                    SDL_SetWindowRelativeMouseMode(window, false);
-                }
             }
-        } else {
-            SDL_SetWindowMouseRect(window, nullptr);
-            SDL_SetWindowMouseGrab(window, false);
-            if (gameWindow) {
-                SDL_SetWindowMouseRect(gameWindow, nullptr);
-                SDL_SetWindowMouseGrab(gameWindow, false);
+            if (!input.constrain(rect)) {
+                input.releaseMouse();
+                cameraLooking = false;
             }
+        } else if (input.lockedWindow) {
+            input.releaseMouse();
         }
         const std::string title =
             projectWindowTitle(currentProject, projectDirty, levels.current());

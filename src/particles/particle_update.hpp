@@ -1,5 +1,6 @@
 #pragma once
 #include "core/hierarchy.hpp"
+#include "physics/queries.hpp"
 namespace Particles {
 inline float random(ParticleSystem& s) {
     s.random ^= s.random << 13;
@@ -15,7 +16,13 @@ inline Vec3 sphere(ParticleSystem& s) {
           r = std::sqrt(std::max(0.f, 1 - y * y));
     return {r * std::cos(angle), y, r * std::sin(angle)};
 }
-inline void step(ParticleSystem& s, const Transform& t, float dt, std::size_t& budget) {
+using CollisionQuery = std::function<bool(Entity, const Ray&, float, RayHit&)>;
+inline void step(ParticleSystem& s,
+                 const Transform& t,
+                 float dt,
+                 std::size_t& budget,
+                 Entity emitter = {},
+                 const CollisionQuery& query = {}) {
     if (!s.started && s.playOnAwake) {
         s.play();
     }
@@ -27,7 +34,39 @@ inline void step(ParticleSystem& s, const Transform& t, float dt, std::size_t& b
     for (auto& p : s.particles) {
         p.age += dt;
         p.velocity = (p.velocity + s.gravity * dt) * (std::exp(-s.drag * dt));
-        p.position = p.position + p.velocity * dt;
+        const Vec3 next = p.position + p.velocity * dt;
+        auto toWorld = [&](Vec3 v) {
+            return s.localSpace ? t.position + rotateVector(t.rotation, v * t.scale) : v;
+        };
+        const Vec3 from = toWorld(p.position), travel = toWorld(next) - from;
+        const float distance = std::sqrt(dot(travel, travel));
+        RayHit hit;
+        if (s.collision && query && distance > 1e-6f &&
+            query(emitter, {from, travel * (1.f / distance)}, distance, hit)) {
+            Vec3 v = s.localSpace ? rotateVector(t.rotation, p.velocity * t.scale) : p.velocity;
+            const float normalSpeed = dot(v, hit.normal);
+            if (normalSpeed < 0) {
+                v = (v - hit.normal * normalSpeed) * (1 - s.collisionFriction) -
+                    hit.normal * (normalSpeed * s.restitution);
+            }
+            Vec3 position = hit.point + hit.normal * .002f;
+            if (s.localSpace) {
+                Quat inverse{-t.rotation.x, -t.rotation.y, -t.rotation.z, t.rotation.w};
+                position = rotateVector(inverse, position - t.position);
+                v = rotateVector(inverse, v);
+                auto divide = [](float x, float scale) {
+                    return std::abs(scale) > 1e-6f ? x / scale : 0.f;
+                };
+                position = {divide(position.x, t.scale.x),
+                            divide(position.y, t.scale.y),
+                            divide(position.z, t.scale.z)};
+                v = {divide(v.x, t.scale.x), divide(v.y, t.scale.y), divide(v.z, t.scale.z)};
+            }
+            p.position = position;
+            p.velocity = v;
+        } else {
+            p.position = next;
+        }
         p.rotation += radians(s.angularVelocity) * dt;
     }
     s.particles.erase(std::remove_if(s.particles.begin(),
@@ -107,8 +146,13 @@ inline void step(ParticleSystem& s, const Transform& t, float dt, std::size_t& b
     }
     budget -= std::size_t(count);
 }
-inline void
-update(World& world, float dt, bool playing, bool paused, Entity preview, float previewSpeed) {
+inline void update(World& world,
+                   float dt,
+                   bool playing,
+                   bool paused,
+                   Entity preview,
+                   float previewSpeed,
+                   const CollisionQuery& query = {}) {
     std::size_t live = 0;
     world.each<ParticleSystem>([&](Entity, ParticleSystem& s) { live += s.particles.size(); });
     std::size_t budget = live >= 50000 ? 0 : 50000 - live;
@@ -124,7 +168,7 @@ update(World& world, float dt, bool playing, bool paused, Entity preview, float 
         if (!isActive(world, e) || paused) {
             return;
         }
-        step(s, t, dt * (s.preview ? previewSpeed : 1.f), budget);
+        step(s, t, dt * (s.preview ? previewSpeed : 1.f), budget, e, query);
     });
 }
 inline void reset(World& world) {
