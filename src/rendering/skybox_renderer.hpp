@@ -9,6 +9,9 @@ class SkyboxRenderer {
 
   public:
     std::string error;
+    unsigned texture() const {
+        return loaded_ ? texture_ : 0;
+    }
     bool init();
     bool prepare(const Skybox& sky, const AssetManager& assets);
     void clear();

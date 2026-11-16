@@ -1,6 +1,7 @@
 #pragma once
 #include "core/hierarchy.hpp"
 #include "effects/laser_io.hpp"
+#include "effects/light_shafts_io.hpp"
 #include "particles/particle_io.hpp"
 #include "project/project_json.hpp"
 #include "scene/camera.hpp"
@@ -70,7 +71,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 23\n";
+    out << std::setprecision(9) << "LegacyEngineProject 24\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -105,7 +106,7 @@ inline std::string encodeLegacy(World& world,
             (world.has<FPSCamera>(e) ? 65536 : 0) | (world.has<ObjectLayer>(e) ? 131072 : 0) |
             (world.has<InspectorOrder>(e) ? 262144 : 0) | (world.has<Raycast>(e) ? 524288 : 0) |
             (world.has<Animation>(e) ? 1048576 : 0) | (world.has<ParticleSystem>(e) ? 2097152 : 0) |
-            (world.has<Laser>(e) ? 4194304 : 0);
+            (world.has<Laser>(e) ? 4194304 : 0) | (world.has<LightShafts>(e) ? 8388608 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -205,7 +206,8 @@ inline std::string encodeLegacy(World& world,
             writeVec(out, l.color);
             out << l.intensity << ' ' << l.enabled << ' ' << l.shadows << ' ' << l.range << ' '
                 << l.innerAngle << ' ' << l.outerAngle << ' ' << l.shadowDistance << ' '
-                << l.shadowBias << ' ' << l.shadowQuality << ' ' << std::quoted(l.cookie) << ' ';
+                << l.shadowBias << ' ' << l.shadowQuality << ' ' << std::quoted(l.cookie) << ' '
+                << l.mode << ' ' << std::quoted(l.bake) << ' ' << l.softness << ' ';
         };
         if (auto* l = world.tryGet<DirectionalLight>(e)) {
             writeLight(*l);
@@ -282,6 +284,12 @@ inline std::string encodeLegacy(World& world,
             require(world.has<Transform>(e));
             out << std::quoted(data.dump()) << ' ';
         }
+        if (const auto* shafts = world.tryGet<LightShafts>(e)) {
+            const auto data = Shafts::settings(*shafts);
+            Shafts::parse(data);
+            require(world.has<Transform>(e));
+            out << std::quoted(data.dump()) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -299,7 +307,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 23));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 24));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -365,7 +373,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 20 ? 1048575u
                          : version < 22 ? 2097151u
                          : version < 23 ? 4194303u
-                                        : 8388607u) &&
+                         : version < 24 ? 8388607u
+                                        : 16777215u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -551,6 +560,17 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             if (version >= 23) {
                 in >> std::quoted(light.cookie);
             }
+            if (version >= 24) {
+                in >> light.mode >> std::quoted(light.bake);
+                light.softness = number(in);
+                require(materialPathValid(light.bake));
+            } else {
+                require(mask & 2);
+                light.mode = result.world.get<Transform>(e).isStatic ? 1 : 0;
+                if (light.mode == 1) {
+                    light.bake = "@legacy";
+                }
+            }
             require(validLight(light) && (mask & 2));
             result.world.add(e, light);
         };
@@ -618,10 +638,13 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= (version >= 23 ? 19u : 18u));
+            require(types.size() <= (version >= 24 ? 20u : version >= 23 ? 19u : 18u));
             std::vector<int> seen;
             for (int id : types) {
-                require(id >= 0 && id < (version >= 23 ? 19 : 18) &&
+                require(id >= 0 &&
+                        id < (version >= 24   ? 20
+                              : version >= 23 ? 19
+                                              : 18) &&
                         std::find(seen.begin(), seen.end(), id) == seen.end());
                 seen.push_back(id);
             }
@@ -663,6 +686,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             Laser laser;
             static_cast<LaserSettings&>(laser) = Lasers::parse(parseJson(data));
             result.world.add(e, laser);
+        }
+        if (mask & 8388608) {
+            std::string data;
+            in >> std::quoted(data);
+            require(data.size() <= 65536 && (mask & 2));
+            result.world.add(e, Shafts::parse(parseJson(data)));
         }
         require(bool(in));
     }

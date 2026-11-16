@@ -6,6 +6,7 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "effects/laser_renderer.hpp"
+#include "effects/light_shafts_renderer.hpp"
 #include "lighting/cookie_atlas.hpp"
 #include "lighting/lighting.hpp"
 #include "lighting/lightmap_state.hpp"
@@ -153,9 +154,12 @@ class Renderer {
     MaterialTextureCache materialTextures_;
     ParticleRenderer particles_;
     LaserRenderer lasers_;
+    LightShaftsRenderer shafts_;
     CookieAtlas cookies_;
     int cookieSampler_ = -1, cookieRight_[16]{}, cookieUp_[16]{};
     Lightmapping::ValidationCache lightmapValidation_;
+    int litReflective_ = -1, environmentCube_ = -1, environmentPanorama_ = -1,
+        environmentType_ = -1, environmentColor_ = -1;
     int litTransparent_ = -1;
     int litTexture_ = -1, litNormalTexture_ = -1, litHasTexture_ = -1, litBumped_ = -1,
         litStrength_ = -1, litTiling_ = -1;
@@ -165,6 +169,7 @@ class Renderer {
                   Vec3 color,
                   float opacity = 1.0f);
     int softShadowLocation_ = -1;
+    int bakedSoft_ = -1, dynamicShadow_[16]{};
     ShadowSettings shadowSettings_;
     int shadowAtlasResolution_ = 0;
     int cascadeCountLocations_[16]{}, cascadeSplitLocations_[16]{}, shadowViewLocation_ = -1;
@@ -199,6 +204,7 @@ class Renderer {
         Vec3 position;
         float radius;
         bool mirrored;
+        bool dynamic;
     };
     // Reused across Scene/Game views. Entries are valid only during draw();
     // clear keeps capacity, so steady-state frames do not rebuild these arrays.

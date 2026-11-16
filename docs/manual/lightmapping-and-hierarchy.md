@@ -4,7 +4,8 @@
 
 1. In Edit mode, mark each receiver/occluder **Static** in the Inspector header.
    Static is a saved Transform flag, not a physics lock; do not animate or move
-   baked objects. Mark the lights to bake Static as well. Unmarked lights stay
+   baked objects. Set each light component **Mode > Static** to include it (this
+   is independent of Transform Static). Dynamic and not-yet-baked Static lights stay
    realtime, including on lightmapped objects.
 2. Open **Windows > Lighting**. The window shows the current level,
    render-object total, eligible/excluded counts, atlas assignments, static-light
@@ -13,8 +14,9 @@
    that a model fits those budgets.
 3. Choose Draft/Medium/High chart quality and shadow ray bias, then **Bake level**.
    A bounded background job loads geometry, builds a ray-tracing BVH, generates
-   UV charts and bakes direct diffuse lighting, hard shadows and optional diffuse
-   GI. Loading/building and baking phases, texel progress, elapsed time and Cancel
+   UV charts and bakes direct diffuse lighting with sampled soft shadows (no new
+   indirect GI). Set **Source radius** / **Sun angular softness** on the light and
+   **Soft shadow samples** in Lighting. A zero source size makes hard shadows. Loading/building and baking phases, texel progress, elapsed time and Cancel
    are shown.
 4. Keep editing changes out of a running bake. A result is discarded if the
    scene signature, project, level or import revision differs at completion, or
@@ -35,14 +37,18 @@
 
 ## Scope and limits
 
-- Direct diffuse lighting plus optional static diffuse GI (see the GI section
-  below). No baked specular or area-light/soft-shadow sampling. The existing
-  ambient term remains realtime.
+- New bakes contain direct diffuse irradiance with soft shadow visibility sampling.
+  No new indirect GI or baked specular; ambient/specular remain realtime.
+  Historical GI bakes remain readable; the historical GI section below describes
+  old versions only, not the current baker. See `lighting-shafts-reflection.md`.
 - Baked diffuse is not added a second time as realtime diffuse. Baked receivers
   also receive an irradiance-weighted realtime shadow mask and realtime specular
   from visible static lights, so moving realtime casters can shadow a baked floor.
   The mask uses the existing realtime shadow/light budgets. It is approximate
-  for multiple overlapping static lights and may darken soft shadow transitions.
+  for multiple overlapping static lights. New soft-direct bakes use dynamic-only
+  occluder layers where spare shadow layers exist, so static shadows are not
+  applied twice and do not harden the baked penumbra. If no spare layers remain,
+  the baked penumbra is preserved but dynamic shadows on that receiver are omitted.
   Unbaked/stale receivers retain normal realtime lighting and shadows.
 - Only eligible static geometry participates as a baked shadow caster. Animated
   objects/descendants, dynamic rigid bodies/descendants, characters, cameras,
@@ -124,7 +130,7 @@
 - No automated tests were added/run. Full Linux build validation does not prove
   graphical behavior; visually verify shader execution and Windows separately.
 
-## Diffuse global illumination (LightmapGI-style baking)
+## Historical diffuse GI baking (pre-v24; retained for old-file regression checks)
 
 This is LegacyEngine's native CPU baker, not Godot's `LightmapGI` node or a
 Godot dependency. It now traces static diffuse indirect transport in addition
@@ -165,7 +171,7 @@ to the existing direct lighting bake.
   Settings remain session-local and are recorded in the manifest, not automatically
   restored per level. Existing ambient lighting remains present at runtime.
 
-### Manual GI checks (no automated tests added or run)
+### Historical GI checks (old bakes only; no automated tests added or run)
 
 1. Create a room with a red static wall and white static floor. Illuminate the
    wall with a static light; compare bounces 0, 1 and 2. Verify bounce illumination

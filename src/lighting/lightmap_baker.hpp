@@ -1,5 +1,6 @@
 #pragma once
 #include "assets/assets.hpp"
+#include "assets/image_write.hpp"
 #include "core/hierarchy.hpp"
 #include "lighting/cookie_image.hpp"
 #include "lighting/lightmap_state.hpp"
@@ -16,7 +17,7 @@ namespace Lightmapping {
 struct Settings {
     int tile = 16; // one isolated chart per triangle, including a two-texel gutter
     float bias = .002f;
-    int bounces = 2, samples = 32;
+    int bounces = 0, samples = 32;
     float maxDistance = 50;
     bool denoise = true;
 };
@@ -31,6 +32,7 @@ struct Light {
     int type;
     Vec3 right{1, 0, 0}, up{0, 1, 0};
     std::shared_ptr<Lighting::CookieImage> cookie;
+    Entity entity;
 };
 struct Progress {
     std::atomic<bool> cancel{false};
@@ -45,6 +47,7 @@ struct Assignment {
 struct Result {
     std::filesystem::path directory;
     std::vector<Assignment> assignments;
+    std::vector<std::pair<Entity, int>> lights;
     bool keep = false;
     ~Result() {
         if (!keep && !directory.empty()) {
@@ -248,7 +251,8 @@ inline Vec3 directLighting(Vec3 position,
                            std::size_t face,
                            const std::vector<Light>& lights,
                            const Bvh& bvh,
-                           float bias) {
+                           float bias,
+                           int shadowSamples = 1) {
     Vec3 irradiance{};
     for (const auto& light : lights) {
         auto direction = light.direction * -1.f;
@@ -286,9 +290,32 @@ inline Vec3 directLighting(Vec3 position,
         if (diffuse <= 0) {
             continue;
         }
-        if (light.settings.shadows &&
-            bvh.blocked(position + n * bias, direction, distance - bias, face)) {
-            continue;
+        if (light.settings.shadows) {
+            const int count = light.settings.softness > 0 ? shadowSamples : 1;
+            const Vec3 right = normalize(cross(
+                           direction, std::abs(direction.y) < .9f ? Vec3{0, 1, 0} : Vec3{1, 0, 0})),
+                       up = cross(right, direction);
+            float visible = 0;
+            for (int s = 0; s < count; ++s) {
+                const float radius = count == 1 ? 0 : std::sqrt((s + .5f) / count),
+                            angle = s * 2.39996323f;
+                const Vec3 offset =
+                    right * (radius * std::cos(angle)) + up * (radius * std::sin(angle));
+                Vec3 ray = direction;
+                float length = distance;
+                if (light.type == 0) {
+                    ray =
+                        normalize(direction + offset * std::tan(radians(light.settings.softness)));
+                } else {
+                    const Vec3 delta = light.position - position + offset * light.settings.softness;
+                    length = std::sqrt(dot(delta, delta));
+                    ray = delta * (1 / std::max(length, .0001f));
+                }
+                if (!bvh.blocked(position + n * bias, ray, length - bias, face)) {
+                    visible += 1;
+                }
+            }
+            diffuse *= visible / count;
         }
         irradiance =
             irradiance + light.settings.color * cookie * (light.settings.intensity * diffuse);
@@ -357,24 +384,12 @@ inline Vec3 indirectLighting(Vec3 position,
 }
 inline void
 writeAtlas(const std::filesystem::path& file, int size, const std::vector<unsigned char>& image) {
-    std::ofstream out(file, std::ios::binary);
-    unsigned char header[18]{};
-    header[2] = 2;
-    header[12] = size & 255;
-    header[13] = size >> 8;
-    header[14] = size & 255;
-    header[15] = size >> 8;
-    header[16] = 24;
-    out.write(reinterpret_cast<const char*>(header), 18);
-    out.write(reinterpret_cast<const char*>(image.data()), std::streamsize(image.size()));
-    out.close();
-    if (!out) {
-        throw std::runtime_error("Cannot write lightmap atlas");
-    }
+    writeBgrPng(file, size, size, image);
 }
+
 inline std::string indirectAtlas(const std::string& direct) {
     auto path = std::filesystem::path(direct);
-    return (path.parent_path() / (path.stem().string() + ".indirect.tga")).generic_string();
+    return (path.parent_path() / (path.stem().string() + ".indirect.png")).generic_string();
 }
 inline MeshData
 geometry(const Object& o, const AssetManager& assets, const ProjectIO::Meshes& meshes) {
@@ -406,6 +421,7 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
                                     Settings settings,
                                     const std::shared_ptr<Progress>& progress,
                                     const std::string& staticState) {
+    settings.bounces = 0; // new bakes are direct irradiance only, never indirect GI
     auto lights = sourceLights;
     if (objects.empty() || lights.empty() || lights.size() > 128 ||
         (settings.tile != 8 && settings.tile != 16 && settings.tile != 32) ||
@@ -465,9 +481,9 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
                 "Bake exceeds 32M texel / 500k triangle budget; split the level or lower quality");
         }
         workTexels += count * std::size_t(tile) * tile;
-        if (double(workTexels) * settings.samples * settings.bounces > 500000000.0) {
+        if (double(workTexels) * settings.samples * lights.size() > 500000000.0) {
             throw std::runtime_error(
-                "GI exceeds 500M path-segment budget; lower density/samples/bounces or split the level");
+                "Direct bake exceeds 500M shadow-ray budget; lower density/samples/light count or split the level");
         }
         ranges.push_back({triangles.size(), count, grid, tile, o.entity});
         const auto& t = o.transform;
@@ -505,6 +521,9 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
     progress->total = workTexels;
     Bvh bvh(triangles);
     auto result = std::make_shared<Result>();
+    for (const auto& light : lights) {
+        result->lights.emplace_back(light.entity, light.type);
+    }
     const auto parent = assets.resolve("Lightmaps");
     std::filesystem::create_directories(parent);
     const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -522,11 +541,11 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
     for (const auto& range : ranges) {
         const int tile = range.tile, size = range.grid * tile;
         std::vector<unsigned char> image(std::size_t(size) * size * 3, 0);
-        std::vector<unsigned char> indirectImage(image.size(), 0);
+
         for (std::size_t face = 0; face < range.count; ++face) {
             check(*progress);
             const auto& tri = triangles[range.first + face];
-            std::vector<Vec3> bounced(std::size_t(tile) * tile);
+
             for (int y = 0; y < tile; ++y) {
                 check(*progress);
                 for (int x = 0; x < tile; ++x) {
@@ -540,20 +559,13 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
                     }
                     const auto position = tri.p[0] * (1 - u - v) + tri.p[1] * u + tri.p[2] * v;
                     auto n = normalize(tri.n[0] * (1 - u - v) + tri.n[1] * u + tri.n[2] * v);
-                    const auto irradiance =
-                        directLighting(position, n, range.first + face, lights, bvh, settings.bias);
-                    const auto indirect =
-                        indirectLighting(position,
-                                         n,
-                                         range.first + face,
-                                         triangles,
-                                         lights,
-                                         bvh,
-                                         settings,
-                                         *progress,
-                                         std::uint32_t((range.first + face + 1) * 747796405ull +
-                                                       std::size_t(y * tile + x) * 2891336453ull));
-                    bounced[std::size_t(y) * tile + x] = indirect;
+                    const auto irradiance = directLighting(position,
+                                                           n,
+                                                           range.first + face,
+                                                           lights,
+                                                           bvh,
+                                                           settings.bias,
+                                                           settings.samples);
                     const std::size_t offset = (std::size_t(face / range.grid * tile + y) * size +
                                                 face % range.grid * tile + x) *
                                                3;
@@ -567,41 +579,11 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
                 }
                 progress->done += tile;
             }
-            // A chart-local 3x3 filter reduces Monte Carlo noise without atlas bleed.
-            for (int y = 0; y < tile; ++y) {
-                check(*progress);
-                for (int x = 0; x < tile; ++x) {
-                    Vec3 value{};
-                    float weight = 0;
-                    const int radius = settings.denoise ? 1 : 0;
-                    for (int dy = -radius; dy <= radius; ++dy) {
-                        for (int dx = -radius; dx <= radius; ++dx) {
-                            const auto p = std::size_t(std::clamp(y + dy, 0, tile - 1)) * tile +
-                                           std::clamp(x + dx, 0, tile - 1);
-                            value = value + bounced[p];
-                            ++weight;
-                        }
-                    }
-                    value = value * (1 / weight);
-                    const auto offset = (std::size_t(face / range.grid * tile + y) * size +
-                                         face % range.grid * tile + x) *
-                                        3;
-                    auto encode = [](float v) {
-                        return static_cast<unsigned char>(
-                            std::sqrt(std::clamp(v / 16.f, 0.f, 1.f)) * 255.f + .5f);
-                    };
-                    indirectImage[offset] = encode(value.z);
-                    indirectImage[offset + 1] = encode(value.y);
-                    indirectImage[offset + 2] = encode(value.x);
-                }
-            }
         }
         check(*progress);
-        const auto file = result->directory / (std::to_string(range.entity.index) + ".tga");
+        const auto file = result->directory / (std::to_string(range.entity.index) + ".png");
         writeAtlas(file, size, image);
-        if (settings.bounces > 0) {
-            writeAtlas(indirectAtlas(file.generic_string()), size, indirectImage);
-        }
+
         result->assignments.push_back(
             {range.entity,
              file.lexically_relative(std::filesystem::weakly_canonical(assets.root))
@@ -610,7 +592,10 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
     }
     check(*progress);
     Json manifest = {{"format", "LegacyEngineLightmapBake"},
-                     {"version", 4},
+                     {"version", 5},
+                     {"lightingMode", "direct-soft-shadows"},
+                     {"compression", "PNG-DEFLATE-lossless"},
+                     {"shadowSamples", settings.samples},
                      {"indirectBounces", settings.bounces},
                      {"indirectSamples", settings.samples},
                      {"indirectMaxDistance", settings.maxDistance},

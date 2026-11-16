@@ -7,6 +7,8 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"LightShafts",
+     "LightShafts - fast visual shaft; enabled, direction, height, width, endWidth, color, intensity, density, falloff, streaks, fade, nearFade, useBakedTexture and texture"},
     {"Laser",
      "Laser - local -Z collider-clipped beam; enabled, color, intensity, range, width, glowWidth, impactSize; hit, endPosition and hitNormal are read-only"},
     {"ParticleSystem",
@@ -232,7 +234,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"setMaterialNormalMap",
      "mesh:setMaterialNormalMap(Texture) - instance normal map override; nil clears"},
     {"setMaterialShader",
-     "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent')"},
+     "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"},
     {"setMaterialNormalStrength", "mesh:setMaterialNormalStrength(value) - 0..4"},
     {"setMaterialTiling", "mesh:setMaterialTiling(x,y) - nonzero UV repeat scale"},
     {"setMaterialSpecular", "mesh:setMaterialSpecular(value) - 0..1"},

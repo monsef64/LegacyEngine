@@ -11,7 +11,10 @@ inline constexpr int cookieResolution = 512; // Shared runtime and offline-bake 
 
 // Local -Z is the emission direction, matching the camera convention.
 struct LightSettings {
-    std::string cookie; // project-relative image; only SpotLight projects it
+    int mode = 0;          // editor-only: 0 Dynamic, 1 Static; not exposed to scripting
+    std::string bake;      // accepted bake manifest; empty means realtime fallback
+    float softness = .15f; // source radius in metres; sun angular radius in degrees
+    std::string cookie;    // project-relative image; only SpotLight projects it
     Vec3 color{1, 1, 1};
     float intensity = 1;
     bool enabled = true, shadows = true;
@@ -48,15 +51,16 @@ inline bool validLightCookie(const std::string& path) {
     return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp";
 }
 inline bool validLight(const LightSettings& l) {
-    return validLightCookie(l.cookie) && l.shadowQuality >= 0 && l.shadowQuality <= 3 &&
-           std::isfinite(l.color.x) && std::isfinite(l.color.y) && std::isfinite(l.color.z) &&
-           l.color.x >= 0 && l.color.y >= 0 && l.color.z >= 0 && l.color.x <= 100 &&
-           l.color.y <= 100 && l.color.z <= 100 && std::isfinite(l.intensity) && l.intensity >= 0 &&
-           l.intensity <= 1000 && std::isfinite(l.range) && l.range >= .1f && l.range <= 10000 &&
-           std::isfinite(l.innerAngle) && std::isfinite(l.outerAngle) && l.innerAngle >= 0 &&
-           l.innerAngle < l.outerAngle && l.outerAngle <= 85 && std::isfinite(l.shadowDistance) &&
-           l.shadowDistance >= 1 && l.shadowDistance <= 1000 && std::isfinite(l.shadowBias) &&
-           l.shadowBias >= 0 && l.shadowBias <= .05f;
+    return l.mode >= 0 && l.mode <= 1 && std::isfinite(l.softness) && l.softness >= 0 &&
+           l.softness <= 10 && validLightCookie(l.cookie) && l.shadowQuality >= 0 &&
+           l.shadowQuality <= 3 && std::isfinite(l.color.x) && std::isfinite(l.color.y) &&
+           std::isfinite(l.color.z) && l.color.x >= 0 && l.color.y >= 0 && l.color.z >= 0 &&
+           l.color.x <= 100 && l.color.y <= 100 && l.color.z <= 100 && std::isfinite(l.intensity) &&
+           l.intensity >= 0 && l.intensity <= 1000 && std::isfinite(l.range) && l.range >= .1f &&
+           l.range <= 10000 && std::isfinite(l.innerAngle) && std::isfinite(l.outerAngle) &&
+           l.innerAngle >= 0 && l.innerAngle < l.outerAngle && l.outerAngle <= 85 &&
+           std::isfinite(l.shadowDistance) && l.shadowDistance >= 1 && l.shadowDistance <= 1000 &&
+           std::isfinite(l.shadowBias) && l.shadowBias >= 0 && l.shadowBias <= .05f;
 }
 
 inline int lightShadowResolution(const LightSettings& l) {

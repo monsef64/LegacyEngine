@@ -1453,6 +1453,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui::End();
         bool hierarchyFocused = false;
         int hierarchyCreate = -1;
+        Entity hierarchyCreateParent;
         const std::string hierarchyLevelName =
             prefabLevel                 ? "Prefab: " + editingPrefab
             : !levels.current().empty() ? levels.current()
@@ -1463,14 +1464,19 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                              true,
                              &layout.hierarchy,
                              &hierarchyFocused,
-                             &hierarchyCreate,
+                             editAllowed ? &hierarchyCreate : nullptr,
                              hierarchyLevelName.c_str(),
-                             editAllowed && !prefabLevel ? &renameLevelPopup : nullptr)) {
+                             editAllowed && !prefabLevel ? &renameLevelPopup : nullptr,
+                             &hierarchyCreateParent)) {
             editor.finish(world);
             clicking = false;
         }
         if (hierarchyCreate >= 0) {
             createObject(hierarchyCreate);
+            if (world.alive(hierarchyCreateParent) && world.alive(selectedEntity)) {
+                setParent(world, selectedEntity, hierarchyCreateParent);
+                setLocalTransform(world, selectedEntity, Transform{});
+            }
         }
         static Entity lastInspectedEntity;
         if (selectedEntity != lastInspectedEntity ||

@@ -81,13 +81,14 @@ The existing 16 visible-light limit still applies. Texture edits reload through
 the cache; asset rename/move remaps cookie references, including saved JSON.
 Switching projects cannot reuse the previous project's image cache.
 
-Static cookies also participate in direct-light and multi-bounce GI baking.
+Static cookies participate in direct-light soft-shadow baking. Historical
+multi-bounce GI atlases are still readable, but new bakes no longer generate GI.
 Each unique image is decoded once per bake and sampled at the same 512px
 resolution/orientation. A missing/invalid image fails the bake rather than
 silently baking the wrong pattern. Cookie edits, like other static-light edits,
 require an explicit rebake; existing baked lighting remains a snapshot.
 
-Settings are saved in text v23 / JSON v17. Older supported projects without
+Settings are saved in text v24 / JSON v18. Older supported projects without
 cookies or lasers continue loading with an empty cookie/no laser. Current files
 are not expected to load in older engine binaries.
 
@@ -113,7 +114,7 @@ are not expected to load in older engine binaries.
    no previous-project leakage, and no stale pattern after clearing.
 6. Save/reload older scenes without cookies; save new scenes with cookies, use
    component Reset/copy/paste and undo/redo; check project dirty tracking.
-7. Bake an asymmetric cookie onto a static floor/wall with GI bounces enabled;
+7. Bake an asymmetric cookie onto a static floor/wall with soft shadows enabled;
    compare orientation/tint to realtime, including alpha and rolled lights.
    Move the light or edit its cookie: old baked pattern must remain until rebake.
    Test bake cancellation and missing-image errors.

@@ -13,7 +13,8 @@ inline Json materialJson(const MaterialProperties& p) {
     return {{"format", "LegacyEngineMaterial"},
             {"version", 1},
             {"shader",
-             p.shader == 2   ? "Diffuse Transparent"
+             p.shader == 3   ? "Diffuse Reflection"
+             : p.shader == 2 ? "Diffuse Transparent"
              : p.shader == 1 ? "Diffuse Bumped"
                              : "Diffuse"},
             {"color", {p.color.x, p.color.y, p.color.z}},
@@ -32,10 +33,13 @@ inline MaterialProperties parseMaterial(const Json& json) {
     if (shader == "Bumped Diffuse") {
         shader = "Diffuse Bumped";
     }
-    if (shader != "Diffuse" && shader != "Diffuse Bumped" && shader != "Diffuse Transparent") {
+    if (shader != "Diffuse" && shader != "Diffuse Bumped" && shader != "Diffuse Transparent" &&
+        shader != "Diffuse Reflection") {
         throw std::runtime_error("Unknown material shader");
     }
-    p.shader = shader == "Diffuse Transparent" ? 2 : shader == "Diffuse Bumped";
+    p.shader = shader == "Diffuse Reflection"    ? 3
+               : shader == "Diffuse Transparent" ? 2
+                                                 : shader == "Diffuse Bumped";
     const auto& color = json.at("color");
     const auto& tiling = json.at("tiling");
     if (!color.is_array() || color.size() != 3 || !tiling.is_array() || tiling.size() != 2) {

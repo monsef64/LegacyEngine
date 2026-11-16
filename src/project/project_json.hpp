@@ -160,7 +160,10 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"shadowDistance", 'f'},
       {"shadowBias", 'f'},
       {"shadowQuality", 'i'},
-      {"cookie", 's'}}},
+      {"cookie", 's'},
+      {"mode", 'i'},
+      {"bake", 's'},
+      {"softness", 'f'}}},
     {"PointLight",
      {{"color", 'f', 3},
       {"intensity", 'f'},
@@ -172,7 +175,10 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"shadowDistance", 'f'},
       {"shadowBias", 'f'},
       {"shadowQuality", 'i'},
-      {"cookie", 's'}}},
+      {"cookie", 's'},
+      {"mode", 'i'},
+      {"bake", 's'},
+      {"softness", 'f'}}},
     {"SpotLight",
      {{"color", 'f', 3},
       {"intensity", 'f'},
@@ -184,7 +190,10 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"shadowDistance", 'f'},
       {"shadowBias", 'f'},
       {"shadowQuality", 'i'},
-      {"cookie", 's'}}},
+      {"cookie", 's'},
+      {"mode", 'i'},
+      {"bake", 's'},
+      {"softness", 'f'}}},
     {"Skybox",
      {{"type", 'i'},
       {"color", 'f', 3},
@@ -221,7 +230,8 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"includeTriggers", 'b'}}},
     {"Animation", {{"clip", 's'}, {"loop", 'b'}, {"playOnStart", 'b'}}},
     {"ParticleSystem", {{"settings", 'j'}}},
-    {"Laser", {{"settings", 'j'}}}};
+    {"Laser", {{"settings", 'j'}}},
+    {"LightShafts", {{"settings", 'j'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     Json result = Json::object();
@@ -242,7 +252,15 @@ inline void writeSchema(std::ostream& out, const Json& original, const std::vect
             out << false << ' ';
             continue;
         }
-        if (!object.contains(name) && name == "cookie") {
+        if (!object.contains(name) && name == "mode") {
+            out << 0 << ' ';
+            continue;
+        }
+        if (!object.contains(name) && name == "softness") {
+            out << .15f << ' ';
+            continue;
+        }
+        if (!object.contains(name) && (name == "cookie" || name == "bake")) {
             out << std::quoted(std::string{}) << ' ';
             continue;
         }
@@ -324,7 +342,7 @@ inline Json fromLegacy(const std::string& text) {
     in >> magic >> version;
     Json doc = read(in, {{"script", 's'}, {"assets", 's'}});
     doc["format"] = "LegacyEngine";
-    doc["version"] = 17;
+    doc["version"] = 18;
     doc["editorCamera"] = read(in,
                                {{"target", 'f', 3},
                                 {"yaw", 'f'},
@@ -367,12 +385,13 @@ inline std::string toLegacy(const Json& doc) {
     if (doc.at("format") != "LegacyEngine" ||
         (doc.at("version") != 9 && doc.at("version") != 10 && doc.at("version") != 11 &&
          doc.at("version") != 12 && doc.at("version") != 13 && doc.at("version") != 14 &&
-         doc.at("version") != 15 && doc.at("version") != 16 && doc.at("version") != 17) ||
+         doc.at("version") != 15 && doc.at("version") != 16 && doc.at("version") != 17 &&
+         doc.at("version") != 18) ||
         !doc.at("objects").is_array() || doc.at("objects").size() > 10000) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 23\n";
+    out << std::setprecision(17) << "LegacyEngineProject 24\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),
@@ -411,7 +430,19 @@ inline std::string toLegacy(const Json& doc) {
                         writeFields(out, script.at("fields"));
                     }
                 } else {
-                    writeSchema(out, value, components[type].second);
+                    if (type >= 9 && type <= 11 && !value.contains("mode")) {
+                        Json migrated = value;
+                        migrated["mode"] = data.contains("Transform") &&
+                                                   data.at("Transform").value("isStatic", false)
+                                               ? 1
+                                               : 0;
+                        if (migrated["mode"] == 1) {
+                            migrated["bake"] = "@legacy";
+                        }
+                        writeSchema(out, migrated, components[type].second);
+                    } else {
+                        writeSchema(out, value, components[type].second);
+                    }
                 }
             }
         }

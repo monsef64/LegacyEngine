@@ -12,6 +12,14 @@ uniform sampler2D uCheckerTexture;
 uniform sampler2DArrayShadow uShadowTexture;
 uniform float uSpecular;
 uniform vec3 uCameraPosition, uColor;
+uniform bool uReflective;
+uniform samplerCube uEnvironmentCube;
+uniform sampler2D uEnvironmentPanorama;
+uniform int uEnvironmentType;
+uniform vec3 uEnvironmentColor;
+uniform bool uBakedSoft;
+uniform bool uLightBaked[16];
+uniform int uDynamicShadowBase[16];
 uniform int uLightCount;
 uniform sampler2DArray uCookieTexture;
 uniform vec4 uCookieRight[16]; // xyz local X, w cot(outer angle), zero disables
@@ -124,7 +132,7 @@ float mapVisibility(int i, int layer, vec3 normal, vec3 toLight, vec3 worldDx, v
     return sum / 144.0;
 }
 float visibility(int i, vec3 normal, vec3 toLight, vec3 worldDx, vec3 worldDy) {
-    int base = int(uLightShadow[i].x);
+    int base = uBakedSoft && uLightBaked[i] ? uDynamicShadowBase[i] : int(uLightShadow[i].x);
     if (base < 0) {
         return 1.0;
     }
@@ -171,7 +179,7 @@ uniform sampler2D uLightmap;
 uniform sampler2D uIndirectLightmap;
 uniform bool uHasIndirectLightmap;
 uniform int uLightmapGrid;
-uniform bool uLightBaked[16];
+
 void main() {
     vec3 worldDx = dFdx(vWorldPosition), worldDy = dFdy(vWorldPosition);
     vec2 uv = vUV * uTiling;
@@ -264,6 +272,20 @@ void main() {
             ? pow(textureLod(uIndirectLightmap, vLightmapUV, 0.0).rgb, vec3(2.0)) * 16.0
             : vec3(0);
         result += albedo * (baked * mask + indirect);
+    }
+    if(uReflective) {
+        vec3 ray=reflect(-viewDirection,normal);
+        vec3 env=mix(vec3(.08,.09,.11),vec3(.35,.48,.65),clamp(ray.y*.5+.5,0.,1.));
+        if(uEnvironmentType==0)env=texture(uEnvironmentCube,ray).rgb;
+        if(uEnvironmentType==1) {
+            vec2 uv=vec2(atan(ray.z,ray.x)*.159154943+.5,.5-asin(clamp(ray.y,-1.,1.))*.318309886);
+            env=texture(uEnvironmentPanorama,uv).rgb;
+        }
+        float f0=mix(.04,.95,uSpecular);
+        float fresnel=f0+(1.-f0)*pow(1.-max(dot(normal,viewDirection),0.),5.);
+        env=max(env*uEnvironmentColor,vec3(0));
+        if(uEnvironmentType==1)env=pow(env/(env+vec3(1)),vec3(1./2.2));
+        result=mix(result,env,fresnel);
     }
     fragColor = vec4(result, alpha);
 }
