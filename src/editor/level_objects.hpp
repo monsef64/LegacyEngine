@@ -98,20 +98,11 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(CharacterController{});
     component(FPSCamera{});
     component(Raycast{});
+    component(Animation{});
     component(ObjectLayer{});
     component(InspectorOrder{});
-    if (auto* scripts = world.tryGet<LuaScript>(copy)) {
-        auto remap = [&](std::vector<ScriptField>& fields) {
-            for (auto& field : fields) {
-                if (field.entity == source) {
-                    field.entity = copy;
-                }
-            }
-        };
-        remap(scripts->fields);
-        for (auto& extra : scripts->additional) {
-            remap(extra.fields);
-        }
+    if (auto* animation = world.tryGet<Animation>(copy)) {
+        *animation = Animation{animation->clip, animation->loop, animation->playOnStart};
     }
     if (auto* audio = world.tryGet<AudioSource>(copy)) {
         audio->stop();
@@ -127,8 +118,60 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     }
     return copy;
 }
+// Snapshot descendants before creating anything (source and destination may be identical).
+inline Entity
+copyLevelHierarchy(World& sourceWorld, Entity source, World& world, bool preserveParent = false) {
+    if (!sourceWorld.alive(source)) {
+        return {};
+    }
+    std::vector<Entity> originals{source}, copies;
+    const auto entities = sourceWorld.entities();
+    for (std::size_t i = 0; i < originals.size(); ++i) {
+        for (auto e : entities) {
+            if (getParent(sourceWorld, e) == originals[i] &&
+                std::find(originals.begin(), originals.end(), e) == originals.end()) {
+                originals.push_back(e);
+            }
+        }
+    }
+    for (auto e : originals) {
+        copies.push_back(copyLevelObject(sourceWorld, e, world));
+    }
+    auto remap = [&](Entity e) {
+        auto it = std::find(originals.begin(), originals.end(), e);
+        return it == originals.end() ? (&sourceWorld == &world ? e : Entity{})
+                                     : copies[std::size_t(it - originals.begin())];
+    };
+    for (std::size_t i = 0; i < originals.size(); ++i) {
+        if (i > 0) {
+            if (const auto* name = sourceWorld.tryGet<ObjectName>(originals[i])) {
+                const auto value = *name;
+                world.add(copies[i], value);
+            }
+        }
+        const auto parent = getParent(sourceWorld, originals[i]);
+        if (i || preserveParent) {
+            setParent(world, copies[i], remap(parent));
+        }
+        if (auto* camera = world.tryGet<Camera>(copies[i])) {
+            camera->targetEntity = remap(camera->targetEntity);
+        }
+        if (auto* scripts = world.tryGet<LuaScript>(copies[i])) {
+            auto fields = [&](auto& entries) {
+                for (auto& f : entries) {
+                    f.entity = remap(f.entity);
+                }
+            };
+            fields(scripts->fields);
+            for (auto& extra : scripts->additional) {
+                fields(extra.fields);
+            }
+        }
+    }
+    return copies.front();
+}
 inline Entity duplicateLevelObject(World& world, Entity source) {
-    return copyLevelObject(world, source, world, true);
+    return copyLevelHierarchy(world, source, world, true);
 }
 // Clipboard owns a detached copy, not a live reference to the source entity.
 class ObjectClipboard {
@@ -141,14 +184,14 @@ class ObjectClipboard {
             return;
         }
         data_ = std::make_unique<World>();
-        entity_ = copyLevelObject(world, source, *data_);
+        entity_ = copyLevelHierarchy(world, source, *data_);
         // Copy suffix is applied when pasting, not while storing the clipboard.
         if (auto* name = world.tryGet<ObjectName>(source)) {
             data_->add(entity_, *name);
         }
     }
     Entity paste(World& world) {
-        return data_ ? copyLevelObject(*data_, entity_, world) : Entity{};
+        return data_ ? copyLevelHierarchy(*data_, entity_, world) : Entity{};
     }
 
   private:

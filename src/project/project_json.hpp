@@ -92,7 +92,8 @@ inline void write(std::ostream& out, const Json& object, std::initializer_list<F
 }
 inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"ObjectName", {{"value", 's'}}},
-    {"Transform", {{"position", 'f', 3}, {"rotation", 'f', 4}, {"scale", 'f', 3}}},
+    {"Transform",
+     {{"position", 'f', 3}, {"rotation", 'f', 4}, {"scale", 'f', 3}, {"isStatic", 'b'}}},
     {"MeshRenderer",
      {{"mesh", 'i'},
       {"color", 'f', 3},
@@ -101,7 +102,9 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"material", 's'},
       {"materialOverrides", 'i'},
       {"materialValues", 'j'},
-      {"model", 's'}}},
+      {"model", 's'},
+      {"lightmap", 's'},
+      {"lightmapGrid", 'i'}}},
     {"Collider",
      {{"size", 'f', 3},
       {"center", 'f', 3},
@@ -230,6 +233,18 @@ inline void writeSchema(std::ostream& out, const Json& original, const std::vect
     }
     for (auto f : fields) {
         const std::string name = f.name;
+        if (!object.contains(name) && name == "isStatic") {
+            out << false << ' ';
+            continue;
+        }
+        if (!object.contains(name) && name == "lightmap") {
+            out << std::quoted(std::string{}) << ' ';
+            continue;
+        }
+        if (!object.contains(name) && name == "lightmapGrid") {
+            out << 0 << ' ';
+            continue;
+        }
         if (name == "meshDetail" && !object.contains(name)) {
             out << object.value("convexDetail", 8) << ' ';
             continue;
@@ -348,7 +363,7 @@ inline std::string toLegacy(const Json& doc) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 20\n";
+    out << std::setprecision(17) << "LegacyEngineProject 21\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),

@@ -25,6 +25,7 @@ struct Transform {
     Vec3 position;                   // metres
     Quat rotation;                   // see axisAngle() in math.hpp
     Vec3 scale = {1.0f, 1.0f, 1.0f}; // 2 is twice the size of the mesh
+    bool isStatic = false;           // editor/baking eligibility; does not freeze physics
 };
 
 // Draws a mesh at the entity's Transform.
@@ -36,7 +37,9 @@ struct MeshRenderer {
     std::string material;            // project-relative .mat; empty uses legacy Diffuse values
     MaterialProperties materialValues;
     unsigned materialOverrides = 0; // per-instance script overrides; never edits shared asset
-    std::string model; // project-relative baked .lemesh; empty selects a built-in primitive
+    std::string model;    // project-relative baked .lemesh; empty selects a built-in primitive
+    std::string lightmap; // generated direct-light atlas, square-root RGB encoded in TGA
+    int lightmapGrid = 0; // automatically generated per-triangle UV chart grid
 };
 
 enum class ColliderShape { Box, Sphere, Capsule, Cone, Mesh };

@@ -163,6 +163,10 @@ float visibility(int i, vec3 normal, vec3 toLight, vec3 worldDx, vec3 worldDy) {
     }
     return value;
 }
+in vec2 vLightmapUV;
+uniform sampler2D uLightmap;
+uniform int uLightmapGrid;
+uniform bool uLightBaked[16];
 void main() {
     vec3 worldDx = dFdx(vWorldPosition), worldDy = dFdy(vWorldPosition);
     vec2 uv = vUV * uTiling;
@@ -197,8 +201,10 @@ void main() {
         albedo *= texture(uCheckerTexture, vCheckerUV).rgb;
     }
     vec3 viewDirection = normalize(uCameraPosition - vWorldPosition);
-    vec3 result = albedo * .12;
+    vec3 baked = uLightmapGrid > 0 ? pow(textureLod(uLightmap, vLightmapUV, 0.0).rgb, vec3(2.0)) * 16.0 : vec3(0);
+    vec3 result = albedo * (.12 + baked);
     for (int i = 0; i < uLightCount; ++i) {
+        if (uLightmapGrid > 0 && uLightBaked[i]) continue;
         int type = int(uLightPosition[i].w);
         vec3 delta = uLightPosition[i].xyz - vWorldPosition;
         float dist = length(delta), attenuation = 1.0;

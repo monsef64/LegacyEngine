@@ -23,6 +23,7 @@
 #include "editor/input_settings.hpp"
 #include "editor/inspector.hpp"
 #include "editor/level_objects.hpp"
+#include "editor/lightmapping_window.hpp"
 #include "editor/model_preview_window.hpp"
 #include "editor/play_mode.hpp"
 #include "editor/playback_controls.hpp"
@@ -245,6 +246,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     AudioSystem audio;
     AnimationSystem animations;
     AnimationWindow animationWindow;
+    LightmappingWindow lightmappingWindow;
     ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
     AssetPreviewRenderer assetPreviews(
@@ -841,6 +843,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     ImGui::MenuItem(panelNames[i], nullptr, &panelOpen[i]);
                 }
                 ImGui::MenuItem("Animation", nullptr, &animationWindow.visible);
+                ImGui::MenuItem("Lightmapping", nullptr, &lightmappingWindow.visible);
                 ImGui::Separator();
                 if (ImGui::MenuItem("Reset layout")) {
                     resetWorkspace = true;
@@ -1414,6 +1417,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 browser.assets, std::exchange(browser.previewModelRequest, {}), renderer);
         }
         modelPreviewWindow.draw(browser.assets, renderer, ImGui::GetIO().DeltaTime);
+        lightmappingWindow.draw(world,
+                                selectedEntity,
+                                browser.assets,
+                                projectMeshes,
+                                history,
+                                editAllowed && !prefabLevel,
+                                levels.current());
         if (!browser.editAnimationRequest.empty()) {
             animationWindow.open(browser.assets, std::exchange(browser.editAnimationRequest, {}));
         }
