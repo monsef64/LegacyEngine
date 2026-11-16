@@ -246,6 +246,7 @@ class AssetBrowser {
             remap(mesh.lightmap);
         });
         world.each<Collider>([&](Entity, Collider& collider) { remap(collider.model); });
+        world.each<ParticleSystem>([&](Entity, ParticleSystem& p) { remap(p.texture); });
         world.each<Animation>([&](Entity, Animation& a) {
             remap(a.clip);
             remap(a.model);

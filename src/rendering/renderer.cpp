@@ -188,6 +188,7 @@ void Renderer::clearModelCache() {
     modelError.clear();
 }
 void Renderer::shutdown() {
+    particles_.shutdown();
     pendingModels_.clear();
     failedModels_.clear();
     gpuSkinning_.shutdown();
@@ -655,6 +656,7 @@ void Renderer::draw(World& world,
         glDisable(GL_BLEND);
     }
     transparent.clear(); // Do not retain ECS references beyond this view.
+    particles_.draw(world, materialAssets_, viewProjection, cameraPosition, editorView);
     if (editorView) {
         if (audioModel_.id == UINT32_MAX) {
             audioModel_ = createMesh(audioSourceGlyph());

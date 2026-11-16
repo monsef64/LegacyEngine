@@ -1,0 +1,11 @@
+#version 330 core
+uniform sampler2D uTexture;
+in vec2 vUV;
+in vec4 vColor;
+out vec4 fragColor;
+void main() {
+    fragColor = texture(uTexture, vUV) * vColor;
+    if (fragColor.a < .001) {
+        discard;
+    }
+}
