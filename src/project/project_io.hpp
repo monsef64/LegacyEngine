@@ -516,7 +516,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             Camera c;
             in >> c.active >> c.orthographic;
             c.fieldOfView = number(in);
-            c.nearClip = number(in);
+            c.nearClip = std::max(.020f,number(in));
             c.farClip = number(in);
             c.orthographicSize = number(in);
             c.viewportX = number(in);

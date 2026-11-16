@@ -127,3 +127,54 @@ light-mode controls and do not change Dynamic/Static lights from scripts.
    undo/redo, save/reload, bake and verify collision. Check no stale bounds or
    missing visible chunks in a scene exceeding 256 visible chunks. Measure upload
    churn rather than assuming the bounded cache removes all large-scene costs.
+
+
+## Inspector and scripting updates
+
+Camera effects are now individually expandable in the Inspector; expand an effect to
+find its Enabled switch and parameters. Right-click individual numeric, boolean,
+color and enum controls for Copy/Paste (the OS clipboard uses JSON values).
+Component-header reset and component-copy context actions remain available.
+Asset selection has an explicit **View: List / Grid** choice.
+Camera near clip cannot be smaller than **0.020** metres.
+
+Night vision uses `nightVision`, `nightVisionMode` (0 green, 1 infrared-style),
+and `nightVisionIntensity` (0..1). Infrared is a false-color luminance visualization,
+not a temperature simulation or a way to see through geometry. Nausea uses `nausea`,
+`nauseaIntensity` (0..1) and `nauseaSpeed` (0..5). Both effects default off and share
+the existing final postprocess pass, without extra render targets.
+
+```lua
+local fx = self:getComponent(CameraEffects)
+fx.nightVision = true
+fx.nightVisionMode = 1
+fx.nightVisionIntensity = 0.8
+fx.nausea = true
+fx.nauseaIntensity = 0.2
+fx.nauseaSpeed = 1
+```
+
+The Scene viewport supports right-mouse freecam, wheel zoom/speed and Alt-orbit
+while Play runs. It does not move the gameplay camera. Script input is suppressed
+while looking around the Scene viewport.
+
+Runtime Lua errors abort the failing callback invocation and log its traceback,
+but do not disable future callbacks or unrelated scripts. Lua cannot resume at
+the statement after an error; syntax/top-level startup errors still require fixing.
+The internal script editor shows line numbers alongside the source.
+
+### Additional manual checks
+
+- Copy/Paste one transform axis, a checkbox, color and dropdown; invalid clipboard
+  data must not alter the value. Check undo after pasting in edit mode.
+- Expand each effect and verify only its own parameters appear. Check green and
+  infrared modes and zero/full nausea intensity in both Game and camera preview.
+- Save/reopen the level and access new effect fields from Lua.
+- During Play, navigate Scene, then return to Game and verify gameplay input works.
+- Trigger a callback error twice and verify both tracebacks appear, other scripts
+  continue, and the next valid invocation can still run.
+- Check script gutter/caret alignment when scrolling horizontally/vertically,
+  editing multiline text, and jumping to the end of a long file.
+
+Play-mode editing/history changes are not yet implemented. Stop retains its existing
+restore-pre-Play-scene behavior pending a decision on retaining runtime edits.

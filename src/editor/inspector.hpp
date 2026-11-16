@@ -10,6 +10,7 @@
 #include "editor/level_objects.hpp"
 #include "editor/rotation_editor.hpp"
 #include "editor/transform_edit.hpp"
+#include "editor/value_context.hpp"
 #include "effects/laser_io.hpp"
 #include "effects/light_shafts_io.hpp"
 #include "materials/material_io.hpp"
@@ -71,7 +72,7 @@ inline bool editVector(const char* label,
             }
             ImGui::PushID(i);
             ImGui::SetNextItemWidth(std::max(12.f, ImGui::GetContentRegionAvail().x));
-            changed |= ImGui::DragFloat(
+            changed |= EditorValues::DragFloat(
                 "##axis", &v[i], speed, minimum, maximum, "%.3f", ImGuiSliderFlags_AlwaysClamp);
             ImGui::PopID();
         }
@@ -121,14 +122,14 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
             auto& value = edited[name];
             if (value.is_boolean()) {
                 bool b = value.get<bool>();
-                if (ImGui::Checkbox(caption, &b)) {
+                if (EditorValues::Checkbox(caption, &b)) {
                     value = b;
                     changed = true;
                 }
             } else if (value.is_array()) {
                 Vec3 v{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
                 const bool color = std::strstr(name, "Color") || !std::strcmp(name, "color");
-                if (color ? ImGui::ColorEdit3(caption, &v.x) : editVector(caption, v)) {
+                if (color ? EditorValues::ColorEdit3(caption, &v.x) : editVector(caption, v)) {
                     value = Json::array({v.x, v.y, v.z});
                     changed = true;
                 }
@@ -136,13 +137,13 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
                 int v = value.get<int>();
                 bool edit = false;
                 if (!std::strcmp(name, "shape")) {
-                    edit = ImGui::Combo(caption, &v, "Point\0Box\0Sphere\0Cone\0");
+                    edit = EditorValues::Combo(caption, &v, "Point\0Box\0Sphere\0Cone\0");
                 } else if (!std::strcmp(name, "blend")) {
-                    edit = ImGui::Combo(caption, &v, "Alpha\0Additive\0");
+                    edit = EditorValues::Combo(caption, &v, "Alpha\0Additive\0");
                 } else if (!std::strcmp(name, "sprite")) {
-                    edit = ImGui::Combo(caption, &v, "Fire\0Smoke\0Sparkles\0");
+                    edit = EditorValues::Combo(caption, &v, "Fire\0Smoke\0Sparkles\0");
                 } else {
-                    edit = ImGui::InputInt(caption, &v);
+                    edit = EditorValues::InputInt(caption, &v);
                 }
                 if (edit) {
                     value = v;
@@ -150,7 +151,7 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
                 }
             } else if (value.is_number()) {
                 float f = value.get<float>();
-                if (ImGui::DragFloat(caption, &f, .02f)) {
+                if (EditorValues::DragFloat(caption, &f, .02f)) {
                     value = f;
                     changed = true;
                 }
@@ -416,19 +417,6 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         world.remove<T>(entity);
         return false;
     }
-    if (open) {
-        ImGui::PushID(name);
-        if (ImGui::SmallButton("Copy values")) {
-            componentClipboard.copy<T>(world, entity);
-        }
-        ImGui::SameLine();
-        ImGui::BeginDisabled(!componentClipboard.matches<T>());
-        if (ImGui::SmallButton("Paste values")) {
-            componentClipboard.paste<T>(world, entity);
-        }
-        ImGui::EndDisabled();
-        ImGui::PopID();
-    }
     return open;
 }
 inline void drawScriptExports(World& world,
@@ -445,15 +433,15 @@ inline void drawScriptExports(World& world,
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
         if (field.type == "number") {
-            ImGui::DragFloat("##value",
-                             &field.number,
-                             .1f,
-                             -1000000,
-                             1000000,
-                             "%.3f",
-                             ImGuiSliderFlags_AlwaysClamp);
+            EditorValues::DragFloat("##value",
+                                    &field.number,
+                                    .1f,
+                                    -1000000,
+                                    1000000,
+                                    "%.3f",
+                                    ImGuiSliderFlags_AlwaysClamp);
         } else if (field.type == "boolean") {
-            ImGui::Checkbox("##value", &field.boolean);
+            EditorValues::Checkbox("##value", &field.boolean);
         } else if (field.type == "string") {
             char value[4097];
             std::snprintf(value, sizeof(value), "%s", field.text.c_str());
@@ -527,11 +515,11 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
     try {
         auto edited = loadMaterial(assets, path);
         bool changed = false;
-        changed |=
-            ImGui::Combo("Shader",
-                         &edited.shader,
-                         "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0");
-        changed |= ImGui::ColorEdit3("Color", &edited.color.x);
+        changed |= EditorValues::Combo(
+            "Shader",
+            &edited.shader,
+            "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0");
+        changed |= EditorValues::ColorEdit3("Color", &edited.color.x);
         auto texture = [&](const char* label, std::string& value) {
             bool result = assetPicker(label, value, &assets, [](const std::string& file) {
                 return materialTexturePath(file);
@@ -551,15 +539,15 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
         changed |= texture("Texture", edited.texture);
         if (edited.shader == 1) {
             changed |= texture("Normal map", edited.normalMap);
-            changed |= ImGui::SliderFloat("Normal strength", &edited.normalStrength, 0, 4);
+            changed |= EditorValues::SliderFloat("Normal strength", &edited.normalStrength, 0, 4);
         }
         float tiling[]{edited.tilingX, edited.tilingY};
-        if (ImGui::DragFloat2("UV tiling", tiling, .05f, -1000, 1000)) {
+        if (EditorValues::DragFloat2("UV tiling", tiling, .05f, -1000, 1000)) {
             edited.tilingX = tiling[0];
             edited.tilingY = tiling[1];
             changed = true;
         }
-        changed |= ImGui::SliderFloat("Specular", &edited.specular, 0, 1);
+        changed |= EditorValues::SliderFloat("Specular", &edited.specular, 0, 1);
         ImGui::TextWrapped(
             "Shared asset: edits are saved immediately and affect all objects using this material.");
         if (changed && validMaterial(edited)) {
@@ -603,7 +591,7 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
         }
         ImGui::TextWrapped("Model import settings: %s", settings.c_str());
         drawAssetPreview(assets, path, std::min(384.f, ImGui::GetContentRegionAvail().x), 1);
-        ImGui::InputFloat("Import scale", &scale, .001f, .1f, "%.6f");
+        EditorValues::InputFloat("Import scale", &scale, .001f, .1f, "%.6f");
         ImGui::TextWrapped(
             "Applied before Transform scale (0.000001 to 1000000). Shared instances and their Box collider bounds are updated.");
         if (ImGui::Button("Apply import scale")) {
@@ -685,7 +673,7 @@ inline void drawInspector(World& world,
             const float available = ImGui::GetContentRegionAvail().x;
             bool objectActive =
                 !world.has<ObjectActivity>(selected) || world.get<ObjectActivity>(selected).enabled;
-            if (ImGui::Checkbox("##Active", &objectActive)) {
+            if (EditorValues::Checkbox("##Active", &objectActive)) {
                 setObjectActive(world, selected, objectActive);
             }
             ImGui::SameLine();
@@ -698,7 +686,7 @@ inline void drawInspector(World& world,
             }
             ImGui::SameLine();
             if (auto* t = world.tryGet<Transform>(selected)) {
-                ImGui::Checkbox("Static", &t->isStatic);
+                EditorValues::Checkbox("Static", &t->isStatic);
             }
             int layer = LayerSettings::effective(world, selected);
             ImGui::SetNextItemWidth(-1);
@@ -739,20 +727,20 @@ inline void drawInspector(World& world,
                     static RotationEditorState rotationState;
                     rotationState.sync(selected, edited.rotation);
                     Vec3 rotation = rotationState.angles;
-                    if (editVector("Rotation (deg)", rotation, .5f, -360, 360)) {
+                    if (editVector("Rotation", rotation, .5f, -360, 360)) {
                         edited.rotation = rotationState.apply(rotation);
                         transformChanged = true;
                     }
                     const auto* c = world.tryGet<Collider>(selected);
                     if (c && c->shape != ColliderShape::Box) {
                         float size = edited.scale.x;
-                        if (ImGui::DragFloat("Uniform scale",
-                                             &size,
-                                             0.02f,
-                                             0.05f,
-                                             100,
-                                             "%.3f",
-                                             ImGuiSliderFlags_AlwaysClamp) &&
+                        if (EditorValues::DragFloat("Uniform scale",
+                                                    &size,
+                                                    0.02f,
+                                                    0.05f,
+                                                    100,
+                                                    "%.3f",
+                                                    ImGuiSliderFlags_AlwaysClamp) &&
                             std::isfinite(size)) {
                             edited.scale = {size, size, size};
                             transformChanged = true;
@@ -942,11 +930,12 @@ inline void drawInspector(World& world,
                                 if (ImGui::TreeNodeEx("Material properties",
                                                       ImGuiTreeNodeFlags_DefaultOpen)) {
                                     bool changed = false;
-                                    changed |= ImGui::Combo(
+                                    changed |= EditorValues::Combo(
                                         "Shader",
                                         &edited.shader,
                                         "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0");
-                                    changed |= ImGui::ColorEdit3("Material color", &edited.color.x);
+                                    changed |=
+                                        EditorValues::ColorEdit3("Material color", &edited.color.x);
                                     auto textureField = [&](const char* label, std::string& path) {
                                         ImGui::PushID(label);
                                         bool editedTexture = false;
@@ -972,16 +961,17 @@ inline void drawInspector(World& world,
                                     changed |= textureField("Texture", edited.texture);
                                     if (edited.shader == 1) {
                                         changed |= textureField("Normal map", edited.normalMap);
-                                        changed |= ImGui::SliderFloat(
+                                        changed |= EditorValues::SliderFloat(
                                             "Normal strength", &edited.normalStrength, 0, 4);
                                     }
                                     float tiling[]{edited.tilingX, edited.tilingY};
-                                    if (ImGui::DragFloat2("UV tiling", tiling, .05f, -1000, 1000)) {
+                                    if (EditorValues::DragFloat2(
+                                            "UV tiling", tiling, .05f, -1000, 1000)) {
                                         edited.tilingX = tiling[0];
                                         edited.tilingY = tiling[1];
                                         changed = true;
                                     }
-                                    changed |= ImGui::SliderFloat(
+                                    changed |= EditorValues::SliderFloat(
                                         "Material specular", &edited.specular, 0, 1);
                                     ImGui::TextDisabled(
                                         "Shared asset: edits affect all meshes using this material.");
@@ -1011,11 +1001,11 @@ inline void drawInspector(World& world,
                     }
                     if (r->material.empty()) {
                         float color[]{r->color.x, r->color.y, r->color.z};
-                        if (ImGui::ColorEdit3("Color", color)) {
+                        if (EditorValues::ColorEdit3("Color", color)) {
                             r->color = {color[0], color[1], color[2]};
                         }
-                        ImGui::Checkbox("Checkerboard", &r->checkerboard);
-                        ImGui::SliderFloat("Specular", &r->specular, 0, 1);
+                        EditorValues::Checkbox("Checkerboard", &r->checkerboard);
+                        EditorValues::SliderFloat("Specular", &r->specular, 0, 1);
                     }
                 }
                 if (auto* c = world.tryGet<Collider>(selected);
@@ -1023,7 +1013,7 @@ inline void drawInspector(World& world,
                     componentHeader<Collider>(world, selected, "Collider")) {
                     const char* names[]{"Box", "Sphere", "Capsule", "Cone", "Mesh"};
                     int shape = static_cast<int>(c->shape);
-                    if (ImGui::Combo("Collider shape", &shape, names, 5)) {
+                    if (EditorValues::Combo("Collider shape", &shape, names, 5)) {
                         c->shape = static_cast<ColliderShape>(shape);
                         if (c->shape == ColliderShape::Mesh) {
                             c->center = {};
@@ -1045,7 +1035,7 @@ inline void drawInspector(World& world,
                             }
                             ImGui::EndDragDropTarget();
                         }
-                        ImGui::SliderInt("Mesh detail", &c->meshDetail, 2, 15);
+                        EditorValues::SliderInt("Mesh detail", &c->meshDetail, 2, 15);
                         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                             ImGui::SetTooltip(
                                 "Lower = fewer triangles. 15 preserves source triangles. Simplification can remove small features.");
@@ -1060,46 +1050,46 @@ inline void drawInspector(World& world,
                     } else if (c->shape == ColliderShape::Box) {
                         editVector("Size", c->size, 0.02f, 0.01f, 10000);
                     } else {
-                        ImGui::DragFloat("Radius",
-                                         &c->radius,
-                                         0.02f,
-                                         0.01f,
-                                         10000,
-                                         "%.3f",
-                                         ImGuiSliderFlags_AlwaysClamp);
+                        EditorValues::DragFloat("Radius",
+                                                &c->radius,
+                                                0.02f,
+                                                0.01f,
+                                                10000,
+                                                "%.3f",
+                                                ImGuiSliderFlags_AlwaysClamp);
                         if (c->shape != ColliderShape::Sphere) {
-                            ImGui::DragFloat("Height",
-                                             &c->height,
-                                             0.02f,
-                                             0.01f,
-                                             10000,
-                                             "%.3f",
-                                             ImGuiSliderFlags_AlwaysClamp);
+                            EditorValues::DragFloat("Height",
+                                                    &c->height,
+                                                    0.02f,
+                                                    0.01f,
+                                                    10000,
+                                                    "%.3f",
+                                                    ImGuiSliderFlags_AlwaysClamp);
                         }
                     }
-                    ImGui::Checkbox("Is trigger", &c->isTrigger);
+                    EditorValues::Checkbox("Is trigger", &c->isTrigger);
                     ImGui::SeparatorText("Contact surface");
                     ImGui::TextDisabled(
                         "Surface properties also apply to static colliders (no RigidBody).");
-                    ImGui::SliderFloat("Friction", &c->friction, 0, 1);
-                    ImGui::SliderFloat("Bounciness", &c->bounciness, 0, 1);
+                    EditorValues::SliderFloat("Friction", &c->friction, 0, 1);
+                    EditorValues::SliderFloat("Bounciness", &c->bounciness, 0, 1);
                 }
                 if (auto* rb = world.tryGet<RigidBody>(selected);
                     componentID == 1 && rb &&
                     componentHeader<RigidBody>(world, selected, "RigidBody")) {
-                    ImGui::DragFloat(
+                    EditorValues::DragFloat(
                         "Mass", &rb->mass, 0.1f, 0, 1000000, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::Checkbox("Use gravity", &rb->useGravity);
-                    ImGui::Checkbox("Kinematic", &rb->isKinematic);
-                    ImGui::DragFloat(
+                    EditorValues::Checkbox("Use gravity", &rb->useGravity);
+                    EditorValues::Checkbox("Kinematic", &rb->isKinematic);
+                    EditorValues::DragFloat(
                         "Drag", &rb->drag, .01f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::DragFloat("Angular drag",
-                                     &rb->angularDrag,
-                                     .01f,
-                                     0,
-                                     100,
-                                     "%.2f",
-                                     ImGuiSliderFlags_AlwaysClamp);
+                    EditorValues::DragFloat("Angular drag",
+                                            &rb->angularDrag,
+                                            .01f,
+                                            0,
+                                            100,
+                                            "%.2f",
+                                            ImGuiSliderFlags_AlwaysClamp);
                     editVector("Linear velocity", rb->linearVelocity);
                     editVector("Angular velocity", rb->angularVelocity);
                 }
@@ -1108,7 +1098,7 @@ inline void drawInspector(World& world,
                     componentHeader<Camera>(world, selected, "Camera")) {
                     Camera edited = *camera;
                     bool active = camera->active;
-                    if (ImGui::Checkbox("Active camera", &active)) {
+                    if (EditorValues::Checkbox("Active camera", &active)) {
                         if (active) {
                             activateCamera(world, selected);
                         } else {
@@ -1116,19 +1106,20 @@ inline void drawInspector(World& world,
                         }
                     }
                     edited.active = camera->active;
-                    ImGui::Checkbox("Orthographic", &edited.orthographic);
-                    ImGui::DragFloat("Field of view (degrees)", &edited.fieldOfView, .1f, 1, 178);
-                    ImGui::DragFloat(
+                    EditorValues::Checkbox("Orthographic", &edited.orthographic);
+                    EditorValues::DragFloat(
+                        "Field of view (degrees)", &edited.fieldOfView, .1f, 1, 178);
+                    EditorValues::DragFloat(
                         "Orthographic size", &edited.orthographicSize, .1f, .01f, 1000000);
-                    ImGui::DragFloat(
-                        "Near clip", &edited.nearClip, .01f, .001f, edited.farClip - .001f);
-                    ImGui::DragFloat(
+                    EditorValues::DragFloat(
+                        "Near clip", &edited.nearClip, .001f, .020f, edited.farClip - .001f);
+                    EditorValues::DragFloat(
                         "Far clip", &edited.farClip, 1, edited.nearClip + .001f, 1000000);
                     float viewport[]{edited.viewportX,
                                      edited.viewportY,
                                      edited.viewportWidth,
                                      edited.viewportHeight};
-                    if (ImGui::DragFloat4("Viewport", viewport, .005f, 0, 1)) {
+                    if (EditorValues::DragFloat4("Viewport", viewport, .005f, 0, 1)) {
                         edited.viewportX = viewport[0];
                         edited.viewportY = viewport[1];
                         edited.viewportWidth = viewport[2];
@@ -1149,12 +1140,35 @@ inline void drawInspector(World& world,
                         if (!world.has<Camera>(selected)) {
                             ImGui::TextWrapped("Add Camera to this object to use effects.");
                         }
-                        for (const auto& f : CameraFx::boolFields) {
-                            ImGui::Checkbox(f.label, &(fx->*f.member));
-                        }
-                        ImGui::Separator();
-                        for (const auto& f : CameraFx::floatFields) {
-                            ImGui::SliderFloat(f.label, &(fx->*f.member), f.low, f.high, "%.3f");
+                        EditorValues::Checkbox("Enabled", &fx->enabled);
+                        const int first[]{0, 2, 6, 7, 10, 11, 12, 13, 13, 15, 17};
+                        const int last[]{2, 6, 7, 10, 11, 12, 13, 13, 15, 17, 19};
+                        for (int i = 1; i < int(CameraFx::boolFields.size()); ++i) {
+                            const auto& effect = CameraFx::boolFields[i];
+                            if (ImGui::TreeNode(effect.name,
+                                                "%s%s",
+                                                effect.label,
+                                                fx->*effect.member ? " (on)" : "")) {
+                                EditorValues::Checkbox("Enabled", &(fx->*effect.member));
+                                for (int k = first[i - 1]; k < last[i - 1]; ++k) {
+                                    const auto& f = CameraFx::floatFields[k];
+                                    if (k == 15) {
+                                        int mode = fx->nightVisionMode >= .5f ? 1 : 0;
+                                        if (EditorValues::Combo(
+                                                "Mode", &mode, "Green\0Infrared\0")) {
+                                            fx->nightVisionMode = float(mode);
+                                        }
+                                    } else {
+                                        EditorValues::SliderFloat(
+                                            f.label, &(fx->*f.member), f.low, f.high, "%.3f");
+                                    }
+                                }
+                                if (i == 8) {
+                                    ImGui::TextWrapped(
+                                        "Single-frame FXAA anti-aliasing; no extra controls.");
+                                }
+                                ImGui::TreePop();
+                            }
                         }
                         ImGui::TextWrapped(
                             "Fast OpenGL screen-space effects. Motion blur is camera-only. AO/DOF use opaque depth; transparent surfaces do not write it. AA is FXAA-style, not TAA/MSAA.");
@@ -1175,19 +1189,21 @@ inline void drawInspector(World& world,
                     if (auto* shaft = world.tryGet<LightShafts>(selected);
                         shaft && componentHeader<LightShafts>(world, selected, "LightShafts")) {
                         auto edited = *shaft;
-                        ImGui::Checkbox("Enabled", &edited.enabled);
+                        EditorValues::Checkbox("Enabled", &edited.enabled);
                         editVector("Local direction", edited.direction);
-                        ImGui::ColorEdit3("Shaft color", &edited.color.x);
-                        ImGui::DragFloat("Height", &edited.height, .1f, .01f, 1000);
-                        ImGui::DragFloat("Start width", &edited.width, .01f, .001f, 100);
-                        ImGui::DragFloat("End width", &edited.endWidth, .05f, .001f, 500);
-                        ImGui::DragFloat("Shaft intensity", &edited.intensity, .02f, 0, 100);
-                        ImGui::SliderFloat("Density", &edited.density, 0, 1);
-                        ImGui::SliderFloat("Edge falloff", &edited.falloff, .1f, 8);
-                        ImGui::SliderFloat("Streaks", &edited.streaks, 0, 64);
-                        ImGui::SliderFloat("Start fade", &edited.fade, .01f, 1);
-                        ImGui::DragFloat("Camera near fade", &edited.nearFade, .05f, .01f, 100);
-                        ImGui::Checkbox("Use baked profile texture", &edited.useBakedTexture);
+                        EditorValues::ColorEdit3("Shaft color", &edited.color.x);
+                        EditorValues::DragFloat("Height", &edited.height, .1f, .01f, 1000);
+                        EditorValues::DragFloat("Start width", &edited.width, .01f, .001f, 100);
+                        EditorValues::DragFloat("End width", &edited.endWidth, .05f, .001f, 500);
+                        EditorValues::DragFloat("Shaft intensity", &edited.intensity, .02f, 0, 100);
+                        EditorValues::SliderFloat("Density", &edited.density, 0, 1);
+                        EditorValues::SliderFloat("Edge falloff", &edited.falloff, .1f, 8);
+                        EditorValues::SliderFloat("Streaks", &edited.streaks, 0, 64);
+                        EditorValues::SliderFloat("Start fade", &edited.fade, .01f, 1);
+                        EditorValues::DragFloat(
+                            "Camera near fade", &edited.nearFade, .05f, .01f, 100);
+                        EditorValues::Checkbox("Use baked profile texture",
+                                               &edited.useBakedTexture);
                         assetPicker("Profile texture",
                                     edited.texture,
                                     assets,
@@ -1217,15 +1233,16 @@ inline void drawInspector(World& world,
                     if (auto* laser = world.tryGet<Laser>(selected);
                         laser && componentHeader<Laser>(world, selected, "Laser")) {
                         LaserSettings edited = *laser;
-                        ImGui::Checkbox("Enabled", &edited.enabled);
-                        ImGui::ColorEdit3("Beam color", &edited.color.x);
-                        ImGui::DragFloat("Beam intensity", &edited.intensity, .05f, 0, 100);
-                        ImGui::DragFloat("Beam range", &edited.range, .1f, .01f, 10000);
-                        ImGui::DragFloat("Core width", &edited.width, .001f, .001f, 10, "%.3f");
+                        EditorValues::Checkbox("Enabled", &edited.enabled);
+                        EditorValues::ColorEdit3("Beam color", &edited.color.x);
+                        EditorValues::DragFloat("Beam intensity", &edited.intensity, .05f, 0, 100);
+                        EditorValues::DragFloat("Beam range", &edited.range, .1f, .01f, 10000);
+                        EditorValues::DragFloat(
+                            "Core width", &edited.width, .001f, .001f, 10, "%.3f");
                         edited.glowWidth = std::max(edited.width, edited.glowWidth);
-                        ImGui::DragFloat(
+                        EditorValues::DragFloat(
                             "Glow width", &edited.glowWidth, .005f, edited.width, 100, "%.3f");
-                        ImGui::DragFloat(
+                        EditorValues::DragFloat(
                             "Impact size", &edited.impactSize, .005f, .001f, 100, "%.3f");
                         try {
                             Lasers::parse(Lasers::settings(edited));
@@ -1244,7 +1261,7 @@ inline void drawInspector(World& world,
                     }
                     T edited = *light;
                     ImGui::PushID(title);
-                    if (ImGui::Combo("Mode", &edited.mode, "Dynamic\0Static\0")) {
+                    if (EditorValues::Combo("Mode", &edited.mode, "Dynamic\0Static\0")) {
                         detachLightBake(world, *light);
                         edited.bake.clear();
                     }
@@ -1252,11 +1269,11 @@ inline void drawInspector(World& world,
                                         : edited.bake.empty()
                                             ? "Not baked: realtime fallback"
                                             : "Baked snapshot (rebake after edits)");
-                    ImGui::Checkbox("Enabled", &edited.enabled);
-                    ImGui::ColorEdit3("Color", &edited.color.x);
-                    ImGui::DragFloat("Intensity", &edited.intensity, .05f, 0, 1000);
+                    EditorValues::Checkbox("Enabled", &edited.enabled);
+                    EditorValues::ColorEdit3("Color", &edited.color.x);
+                    EditorValues::DragFloat("Intensity", &edited.intensity, .05f, 0, 1000);
                     if (kind != 0) {
-                        ImGui::DragFloat("Range", &edited.range, .1f, .1f, 10000);
+                        EditorValues::DragFloat("Range", &edited.range, .1f, .1f, 10000);
                     }
                     if (kind == 2) {
                         assetPicker("Cookie", edited.cookie, assets, [](const std::string& path) {
@@ -1279,25 +1296,27 @@ inline void drawInspector(World& world,
                         }
                         ImGui::TextWrapped(
                             "Cookie RGB times alpha modulates the cone. Local X/Y orient the projection; rotate the light to roll the image.");
-                        ImGui::DragFloat(
+                        EditorValues::DragFloat(
                             "Inner angle", &edited.innerAngle, .1f, 0, edited.outerAngle - .1f);
-                        ImGui::DragFloat(
+                        EditorValues::DragFloat(
                             "Outer angle", &edited.outerAngle, .1f, edited.innerAngle + .1f, 85);
                     }
-                    ImGui::DragFloat(kind == 0 ? "Sun angular softness" : "Source radius",
-                                     &edited.softness,
-                                     .01f,
-                                     0,
-                                     10,
-                                     "%.3f");
-                    ImGui::Checkbox("Cast dynamic shadows", &edited.shadows);
-                    ImGui::Combo("Shadow quality",
-                                 &edited.shadowQuality,
-                                 "Off\0Low (256)\0Medium (512)\0High (1024)\0");
+                    EditorValues::DragFloat(kind == 0 ? "Sun angular softness" : "Source radius",
+                                            &edited.softness,
+                                            .01f,
+                                            0,
+                                            10,
+                                            "%.3f");
+                    EditorValues::Checkbox("Cast dynamic shadows", &edited.shadows);
+                    EditorValues::Combo("Shadow quality",
+                                        &edited.shadowQuality,
+                                        "Off\0Low (256)\0Medium (512)\0High (1024)\0");
                     if (kind == 0) {
-                        ImGui::DragFloat("Shadow coverage", &edited.shadowDistance, .5f, 1, 1000);
+                        EditorValues::DragFloat(
+                            "Shadow coverage", &edited.shadowDistance, .5f, 1, 1000);
                     }
-                    ImGui::DragFloat("Shadow bias", &edited.shadowBias, .0001f, 0, .05f, "%.4f");
+                    EditorValues::DragFloat(
+                        "Shadow bias", &edited.shadowBias, .0001f, 0, .05f, "%.4f");
                     ImGui::TextWrapped(
                         "Emission follows local -Z. Shadow maps use a shared 12-layer budget; a point light uses six layers.");
                     if (validLight(edited)) {
@@ -1308,9 +1327,9 @@ inline void drawInspector(World& world,
                 if (auto* sky = world.tryGet<Skybox>(selected);
                     componentID == 12 && sky &&
                     componentHeader<Skybox>(world, selected, "Skybox")) {
-                    ImGui::Checkbox("Skybox enabled", &sky->enabled);
-                    ImGui::Combo("Skybox type", &sky->type, "Cubemap asset\0HDR panorama\0");
-                    ImGui::ColorEdit3("Skybox color", &sky->color.x);
+                    EditorValues::Checkbox("Skybox enabled", &sky->enabled);
+                    EditorValues::Combo("Skybox type", &sky->type, "Cubemap asset\0HDR panorama\0");
+                    EditorValues::ColorEdit3("Skybox color", &sky->color.x);
                     auto slot = [&](const char* label, std::string& path, bool hdr) {
                         ImGui::PushID(label);
                         assetPicker(label, path, assets, [&](const std::string& file) {
@@ -1346,7 +1365,7 @@ inline void drawInspector(World& world,
                 if (auto* listener = world.tryGet<AudioListener>(selected);
                     componentID == 8 && listener &&
                     componentHeader<AudioListener>(world, selected, "AudioListener")) {
-                    ImGui::Checkbox("Listener enabled", &listener->enabled);
+                    EditorValues::Checkbox("Listener enabled", &listener->enabled);
                     ImGui::TextWrapped(
                         "Receives audio at this object's world position. With multiple enabled listeners, the lowest entity ID is used.");
                 }
@@ -1365,23 +1384,24 @@ inline void drawInspector(World& world,
                         }
                         ImGui::EndDragDropTarget();
                     }
-                    ImGui::SliderFloat(
+                    EditorValues::SliderFloat(
                         "Volume", &a->volume, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::SliderFloat(
+                    EditorValues::SliderFloat(
                         "Pitch", &a->pitch, .1f, 4, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::SliderFloat("Pan", &a->pan, -1, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::DragFloat("Max Distance",
-                                     &a->distance,
-                                     .1f,
-                                     0,
-                                     10000,
-                                     "%.2f",
-                                     ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::SliderFloat(
+                    EditorValues::SliderFloat(
+                        "Pan", &a->pan, -1, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    EditorValues::DragFloat("Max Distance",
+                                            &a->distance,
+                                            .1f,
+                                            0,
+                                            10000,
+                                            "%.2f",
+                                            ImGuiSliderFlags_AlwaysClamp);
+                    EditorValues::SliderFloat(
                         "Spatial Blend", &a->blend, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::Checkbox("Looping", &a->looping);
-                    ImGui::Checkbox("Mute", &a->muted);
-                    ImGui::Checkbox("Play on start", &a->playOnStart);
+                    EditorValues::Checkbox("Looping", &a->looping);
+                    EditorValues::Checkbox("Mute", &a->muted);
+                    EditorValues::Checkbox("Play on start", &a->playOnStart);
                     ImGui::TextUnformatted(a->isPlaying()                           ? "Playing"
                                            : a->state == AudioSource::State::Paused ? "Paused"
                                                                                     : "Stopped");
@@ -1402,7 +1422,7 @@ inline void drawInspector(World& world,
                             }
                             ImGui::EndPopup();
                         }
-                        ImGui::Checkbox("Enabled", &enabled);
+                        EditorValues::Checkbox("Enabled", &enabled);
                         assetPicker("Script", path, assets, [](const std::string& file) {
                             return AssetManager::script(file);
                         });
@@ -1449,81 +1469,82 @@ inline void drawInspector(World& world,
                 if (auto* c = world.tryGet<CharacterController>(selected);
                     componentID == 13 && c &&
                     componentHeader<CharacterController>(world, selected, "CharacterController")) {
-                    ImGui::DragFloat(
+                    EditorValues::DragFloat(
                         "Move speed", &c->speed, .1f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::DragFloat("Sprint multiplier",
-                                     &c->sprintMultiplier,
-                                     .05f,
-                                     1,
-                                     10,
-                                     "%.2f",
-                                     ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::DragFloat("Jump speed",
-                                     &c->jumpSpeed,
-                                     .1f,
-                                     0,
-                                     100,
-                                     "%.2f",
-                                     ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::Checkbox("Can move", &c->canMove);
+                    EditorValues::DragFloat("Sprint multiplier",
+                                            &c->sprintMultiplier,
+                                            .05f,
+                                            1,
+                                            10,
+                                            "%.2f",
+                                            ImGuiSliderFlags_AlwaysClamp);
+                    EditorValues::DragFloat("Jump speed",
+                                            &c->jumpSpeed,
+                                            .1f,
+                                            0,
+                                            100,
+                                            "%.2f",
+                                            ImGuiSliderFlags_AlwaysClamp);
+                    EditorValues::Checkbox("Can move", &c->canMove);
                     ImGui::SameLine();
-                    ImGui::Checkbox("Can jump", &c->canJump);
+                    EditorValues::Checkbox("Can jump", &c->canJump);
                     ImGui::SameLine();
-                    ImGui::Checkbox("Can sprint", &c->canSprint);
+                    EditorValues::Checkbox("Can sprint", &c->canSprint);
                 }
                 if (auto* f = world.tryGet<FPSCamera>(selected);
                     componentID == 14 && f &&
                     componentHeader<FPSCamera>(world, selected, "FPSCamera")) {
-                    ImGui::Checkbox("Freecam", &f->isFreecam);
-                    ImGui::Checkbox("Mouse look", &f->mouseLook);
-                    ImGui::DragFloat("Look sensitivity",
-                                     &f->sensitivity,
-                                     .01f,
-                                     .01f,
-                                     5,
-                                     "%.2f",
-                                     ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::DragFloat("Freecam speed",
-                                     &f->speed,
-                                     .1f,
-                                     0,
-                                     100,
-                                     "%.2f",
-                                     ImGuiSliderFlags_AlwaysClamp);
+                    EditorValues::Checkbox("Freecam", &f->isFreecam);
+                    EditorValues::Checkbox("Mouse look", &f->mouseLook);
+                    EditorValues::DragFloat("Look sensitivity",
+                                            &f->sensitivity,
+                                            .01f,
+                                            .01f,
+                                            5,
+                                            "%.2f",
+                                            ImGuiSliderFlags_AlwaysClamp);
+                    EditorValues::DragFloat("Freecam speed",
+                                            &f->speed,
+                                            .1f,
+                                            0,
+                                            100,
+                                            "%.2f",
+                                            ImGuiSliderFlags_AlwaysClamp);
                     ImGui::TextWrapped(
                         "Inherits Camera settings. An unparented freecam uses WASD, Q/E while Game input is focused. Mouse look requires a locked cursor.");
                 }
                 if (auto* ray = world.tryGet<Raycast>(selected);
                     componentID == 15 && ray &&
                     componentHeader<Raycast>(world, selected, "Raycast")) {
-                    ImGui::Combo("Query type", &ray->type, "Line\0LineOfSight\0Sphere\0");
+                    EditorValues::Combo("Query type", &ray->type, "Line\0LineOfSight\0Sphere\0");
                     editVector("Origin offset", ray->offset);
-                    ImGui::DragFloat("Distance",
-                                     &ray->distance,
-                                     .1f,
-                                     .01f,
-                                     10000,
-                                     "%.2f",
-                                     ImGuiSliderFlags_AlwaysClamp);
+                    EditorValues::DragFloat("Distance",
+                                            &ray->distance,
+                                            .1f,
+                                            .01f,
+                                            10000,
+                                            "%.2f",
+                                            ImGuiSliderFlags_AlwaysClamp);
                     if (ray->type == 2) {
-                        ImGui::DragFloat("Radius",
-                                         &ray->radius,
-                                         .1f,
-                                         .01f,
-                                         10000,
-                                         "%.2f",
-                                         ImGuiSliderFlags_AlwaysClamp);
+                        EditorValues::DragFloat("Radius",
+                                                &ray->radius,
+                                                .1f,
+                                                .01f,
+                                                10000,
+                                                "%.2f",
+                                                ImGuiSliderFlags_AlwaysClamp);
                     }
                     if (ray->type == 1) {
-                        ImGui::SliderFloat("Fan angle", &ray->angle, 1, 360);
-                        ImGui::SliderInt("Fan samples", &ray->samples, 2, 181);
+                        EditorValues::SliderFloat("Fan angle", &ray->angle, 1, 360);
+                        EditorValues::SliderInt("Fan samples", &ray->samples, 2, 181);
                     }
-                    ImGui::Checkbox("Include triggers", &ray->includeTriggers);
+                    EditorValues::Checkbox("Include triggers", &ray->includeTriggers);
                     if (ImGui::TreeNode("Query layers")) {
                         for (int i = 0; i < 32; ++i) {
                             if (!LayerSettings::names[i].empty()) {
                                 bool enabled = ray->layerMask & (1u << i);
-                                if (ImGui::Checkbox(LayerSettings::names[i].c_str(), &enabled)) {
+                                if (EditorValues::Checkbox(LayerSettings::names[i].c_str(),
+                                                           &enabled)) {
                                     if (enabled) {
                                         ray->layerMask |= 1u << i;
                                     } else {
@@ -1541,8 +1562,8 @@ inline void drawInspector(World& world,
                 assetPicker("Animation clip", a->clip, assets, [](const std::string& path) {
                     return animationAsset(path);
                 });
-                ImGui::Checkbox("Loop", &a->loop);
-                ImGui::Checkbox("Play on start", &a->playOnStart);
+                EditorValues::Checkbox("Loop", &a->loop);
+                EditorValues::Checkbox("Play on start", &a->playOnStart);
                 if (ImGui::Button("Play##Animation")) {
                     a->request(AnimationAction::Play);
                 }
@@ -1567,13 +1588,13 @@ inline void drawInspector(World& world,
                 assetPicker("Cross-fade target", fadeTarget, assets, [](const std::string& p) {
                     return animationAsset(p);
                 });
-                ImGui::DragFloat("Cross-fade seconds",
-                                 &fadeSeconds,
-                                 .01f,
-                                 0,
-                                 3600,
-                                 "%.2f",
-                                 ImGuiSliderFlags_AlwaysClamp);
+                EditorValues::DragFloat("Cross-fade seconds",
+                                        &fadeSeconds,
+                                        .01f,
+                                        0,
+                                        3600,
+                                        "%.2f",
+                                        ImGuiSliderFlags_AlwaysClamp);
                 if (ImGui::Button("Cross-fade##Animation") && !fadeTarget.empty()) {
                     a->request(AnimationAction::CrossFade, fadeTarget, fadeSeconds);
                 }

@@ -2,6 +2,7 @@
 #include "animation/animation_clip.hpp"
 #include "editor/asset_picker.hpp"
 #include "editor/editor_history.hpp"
+#include "editor/value_context.hpp"
 #include "models/model_asset.hpp"
 #include "prefabs/prefab.hpp"
 #include "rendering/renderer.hpp"
@@ -511,11 +512,11 @@ class AnimationWindow {
                     resetPose_ = true;
                 }
                 ImGui::SameLine();
-                ImGui::Checkbox("Loop", &loop_);
+                EditorValues::Checkbox("Loop", &loop_);
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(75);
                 int frame = int(std::round(time_ * samples_));
-                if (ImGui::InputInt("Frame", &frame, 0)) {
+                if (EditorValues::InputInt("Frame", &frame, 0)) {
                     time_ = std::clamp(frame / float(samples_), 0.f, clip_.duration);
                     playing_ = false;
                     resetPose_ = false;
@@ -541,12 +542,12 @@ class AnimationWindow {
                 ImGui::TextUnformatted(path_.empty() ? "Unsaved animation" : path_.c_str());
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(65);
-                if (ImGui::InputInt("Samples", &samples_, 0)) {
+                if (EditorValues::InputInt("Samples", &samples_, 0)) {
                     samples_ = std::clamp(samples_, 1, 240);
                 }
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(95);
-                ImGui::SliderFloat("Zoom", &zoom_, 1, 12, "%.1fx");
+                EditorValues::SliderFloat("Zoom", &zoom_, 1, 12, "%.1fx");
                 if (ImGui::BeginPopup("Clip settings")) {
                     PopupScope popup;
                     auto next = path_;
@@ -590,7 +591,7 @@ class AnimationWindow {
                         float duration = clip_.duration;
                         {
                             DisabledScope imported(!clip_.model.empty());
-                            if (ImGui::InputFloat("Duration", &duration, .1f, 1) &&
+                            if (EditorValues::InputFloat("Duration", &duration, .1f, 1) &&
                                 std::isfinite(duration)) {
                                 float last = .001f;
                                 for (const auto& t : clip_.tracks) {
@@ -1008,7 +1009,7 @@ class AnimationWindow {
                         ImGui::SameLine();
                         ImGui::SetNextItemWidth(90);
                         float t = key.time;
-                        if (ImGui::DragFloat(
+                        if (EditorValues::DragFloat(
                                 "Key time", &t, 1.f / samples_, 0, clip_.duration, "%.3f")) {
                             float low = key_ ? track.keys[key_ - 1].time + .0001f : 0,
                                   high = key_ + 1 < int(track.keys.size())
@@ -1023,7 +1024,7 @@ class AnimationWindow {
                         }
                         if (property->kind == AnimationValueKind::Boolean) {
                             bool v = key.value[0] >= .5f;
-                            if (ImGui::Checkbox("Value", &v)) {
+                            if (EditorValues::Checkbox("Value", &v)) {
                                 key.value[0] = v ? 1.f : 0.f;
                                 dirty_ = true;
                                 previewDirty_ = true;
@@ -1037,13 +1038,13 @@ class AnimationWindow {
                                 ImGui::PushID(lane);
                                 ImGui::SetNextItemWidth(std::max(
                                     65.f, (ImGui::GetContentRegionAvail().x - 90.f) / (3 - lane)));
-                                if (ImGui::DragFloat(axes[lane],
-                                                     &key.value[lane],
-                                                     .01f,
-                                                     property->minimum,
-                                                     property->maximum,
-                                                     "%.3f",
-                                                     ImGuiSliderFlags_AlwaysClamp)) {
+                                if (EditorValues::DragFloat(axes[lane],
+                                                            &key.value[lane],
+                                                            .01f,
+                                                            property->minimum,
+                                                            property->maximum,
+                                                            "%.3f",
+                                                            ImGuiSliderFlags_AlwaysClamp)) {
                                     dirty_ = true;
                                     previewDirty_ = true;
                                     selectedLane_ = lane;

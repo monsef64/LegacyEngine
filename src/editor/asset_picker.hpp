@@ -40,7 +40,8 @@ inline bool assetPicker(const char* label,
         bool open = true;
         if (ImGui::Begin("Select asset###MatchingAssetSelector", &open)) {
             search.Draw("Search", -1);
-            ImGui::Checkbox("Grid", &grid);
+            int layout=grid?1:0;ImGui::SetNextItemWidth(100);
+            if(ImGui::Combo("View",&layout,"List\0Grid\0"))grid=layout==1;
             ImGui::SameLine();
             ImGui::SetNextItemWidth(150);
             ImGui::SliderFloat("Preview size", &iconSize, 40, 112, "%.0f");
