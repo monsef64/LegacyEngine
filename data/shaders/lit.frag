@@ -202,9 +202,9 @@ void main() {
     }
     vec3 viewDirection = normalize(uCameraPosition - vWorldPosition);
     vec3 baked = uLightmapGrid > 0 ? pow(textureLod(uLightmap, vLightmapUV, 0.0).rgb, vec3(2.0)) * 16.0 : vec3(0);
-    vec3 result = albedo * (.12 + baked);
+    vec3 result = albedo * .12;
+    vec3 staticDirect = vec3(0), staticVisible = vec3(0);
     for (int i = 0; i < uLightCount; ++i) {
-        if (uLightmapGrid > 0 && uLightBaked[i]) continue;
         int type = int(uLightPosition[i].w);
         vec3 delta = uLightPosition[i].xyz - vWorldPosition;
         float dist = length(delta), attenuation = 1.0;
@@ -227,8 +227,24 @@ void main() {
         }
         vec3 halfDirection = normalize(toLight + viewDirection);
         float specular = uSpecular * pow(max(dot(normal, halfDirection), 0.0), 64.0);
-        result += (albedo * diffuse + vec3(specular)) * uLightColor[i].rgb * attenuation *
-                  visibility(i, normal, toLight, worldDx, worldDy);
+        float shadow = visibility(i, normal, toLight, worldDx, worldDy);
+        vec3 energy = uLightColor[i].rgb * attenuation;
+        if (uLightmapGrid > 0 && uLightBaked[i]) {
+            // Keep realtime occluders on baked receivers. This irradiance-weighted
+            // shadow mask is exact for one static light, approximate for overlapping lights.
+            staticDirect += diffuse * energy;
+            staticVisible += diffuse * energy * shadow;
+            result += vec3(specular) * energy * shadow;
+        } else {
+            result += (albedo * diffuse + vec3(specular)) * energy * shadow;
+        }
+    }
+    if (uLightmapGrid > 0) {
+        vec3 mask = vec3(1);
+        for (int channel = 0; channel < 3; ++channel)
+            if (staticDirect[channel] > 0.00001)
+                mask[channel] = clamp(staticVisible[channel] / staticDirect[channel], 0.0, 1.0);
+        result += albedo * baked * mask;
     }
     fragColor = vec4(result, alpha);
 }

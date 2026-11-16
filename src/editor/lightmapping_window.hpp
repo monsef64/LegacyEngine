@@ -13,6 +13,7 @@ class LightmappingWindow {
     std::chrono::steady_clock::time_point started_;
     int quality_ = 1;
     unsigned revision_ = 0;
+    Lightmapping::ValidationCache validation_;
     static bool eligible(World& world,
                          Entity e,
                          const Transform& t,
@@ -100,14 +101,18 @@ class LightmappingWindow {
             return;
         }
         ImGui::TextWrapped("Level: %s", level.empty() ? "Unsaved level" : level.c_str());
+        const auto staticState = Lightmapping::staticState(world);
         std::vector<Lightmapping::Object> objects;
-        int total = 0, baked = 0;
+        int total = 0, baked = 0, assigned = 0;
         world.eachReadOnly<Transform, MeshRenderer>(
             [&](Entity e, const Transform& t, const MeshRenderer& r) {
                 ++total;
                 if (eligible(world, e, t, r, meshes)) {
                     objects.push_back({e, t, r});
-                    if (!r.lightmap.empty() && r.lightmapGrid > 0) {
+                    if (!r.lightmap.empty()) {
+                        ++assigned;
+                    }
+                    if (validation_.valid(assets, r, staticState)) {
                         ++baked;
                     }
                 }
@@ -125,7 +130,8 @@ class LightmappingWindow {
         world.eachReadOnly<SpotLight, Transform>(
             [&](Entity e, const SpotLight& l, const Transform& t) { collect(2, e, l, t); });
         ImGui::Text("Level render objects: %d", total);
-        ImGui::Text("Eligible static objects: %zu   Assigned lightmaps: %d", objects.size(), baked);
+        ImGui::Text("Eligible static objects: %zu   Valid lightmaps: %d", objects.size(), baked);
+        ImGui::Text("Stale/unverified assignments: %d (using realtime)", assigned - baked);
         ImGui::Text("Excluded render objects: %d", total - int(objects.size()));
         ImGui::Text("Enabled static lights: %zu (maximum 128)", lights.size());
         if (ImGui::TreeNode("Eligible objects")) {
@@ -133,7 +139,9 @@ class LightmappingWindow {
                 const auto* name = world.tryGet<ObjectName>(object.entity);
                 ImGui::Text("%s: %s",
                             name ? name->value.c_str() : "Object",
-                            object.renderer.lightmap.empty() ? "Not baked" : "Atlas assigned");
+                            validation_.valid(assets, object.renderer, staticState)
+                                ? "Valid bake"
+                                : "Not baked / stale: rebake");
             }
             ImGui::TreePop();
         }
@@ -144,7 +152,7 @@ class LightmappingWindow {
         ImGui::BeginDisabled(busy || !editAllowed);
         ImGui::Combo("Lightmap quality",
                      &quality_,
-                     "Draft (8 px/triangle)\0Medium (16 px/triangle)\0High (32 px/triangle)\0");
+                     "Draft (8 texels/metre)\0Medium (16 texels/metre)\0High (32 texels/metre)\0");
         settings_.tile = 8 << quality_;
         ImGui::DragFloat("Shadow ray bias",
                          &settings_.bias,
@@ -165,8 +173,10 @@ class LightmappingWindow {
                                                             assets,
                                                             meshes,
                                                             settings = settings_,
-                                                            progress] {
-                    return Lightmapping::bake(objects, lights, assets, meshes, settings, progress);
+                                                            progress,
+                                                            staticState] {
+                    return Lightmapping::bake(
+                        objects, lights, assets, meshes, settings, progress, staticState);
                 });
                 if (!request) {
                     status_ = "Background queue full; try again.";
@@ -220,7 +230,7 @@ class LightmappingWindow {
         }
         ImGui::Separator();
         ImGui::TextWrapped(
-            "Rebake after changing static geometry, transforms, imported models or lights. Assignments are not automatically invalidated. Atlases are saved under Assets/Lightmaps. Keep those files with the level. Baked RGB range: 0-16; higher values clamp. Baked lighting uses mesh normals, not normal maps or alpha-tested shadows.");
+            "Rebake after changing static geometry, transforms, imported models or lights. Stale or legacy bakes use realtime lighting until rebaked. Atlases are saved under Assets/Lightmaps. Keep those files with the level. Baked RGB range: 0-16; higher values clamp. Baked lighting uses mesh normals, not normal maps or alpha-tested shadows.");
         ImGui::End();
     }
 };

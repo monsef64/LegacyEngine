@@ -6,6 +6,7 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "lighting/lighting.hpp"
+#include "lighting/lightmap_state.hpp"
 #include "lighting/shadow_settings.hpp"
 #include "materials/material_io.hpp"
 #include "rendering/gpu_skinning.hpp"
@@ -147,6 +148,7 @@ class Renderer {
     std::map<std::pair<std::string, int>, std::vector<Vec3>> colliderTriangles_;
     MaterialAssetCache materialCache_;
     MaterialTextureCache materialTextures_;
+    Lightmapping::ValidationCache lightmapValidation_;
     int litTransparent_ = -1;
     int litTexture_ = -1, litNormalTexture_ = -1, litHasTexture_ = -1, litBumped_ = -1,
         litStrength_ = -1, litTiling_ = -1;

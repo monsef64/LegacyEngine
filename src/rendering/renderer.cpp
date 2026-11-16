@@ -541,6 +541,11 @@ void Renderer::draw(World& world,
                                                     std::abs(transform.scale.z)});
         return frustum.visible(transform.position, bound);
     };
+    bool hasLightmaps = false;
+    world.eachReadOnly<MeshRenderer>([&](Entity, const MeshRenderer& mesh) {
+        hasLightmaps |= !mesh.lightmap.empty() && mesh.lightmapGrid > 0;
+    });
+    const auto staticState = hasLightmaps ? Lightmapping::staticState(world) : std::string{};
     // All callers cull first, before resolving materials or building draw packets.
     auto drawMesh = [&](const Transform& transform,
                         const MeshRenderer& renderer,
@@ -578,7 +583,8 @@ void Renderer::draw(World& world,
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, checkerTexture_);
             const auto lightmap =
-                transform.isStatic && renderer.lightmapGrid > 0
+                transform.isStatic &&
+                        lightmapValidation_.valid(materialAssets_, renderer, staticState)
                     ? materialTextures_.get(materialAssets_, renderer.lightmap, materialError)
                     : 0;
             glActiveTexture(GL_TEXTURE4);
