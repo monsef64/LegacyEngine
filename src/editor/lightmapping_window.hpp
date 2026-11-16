@@ -8,7 +8,7 @@ class LightmappingWindow {
     Lightmapping::Settings settings_;
     std::shared_ptr<Lightmapping::Progress> progress_;
     std::future<std::shared_ptr<Lightmapping::Result>> future_;
-    std::string signature_, status_, level_;
+    std::string signature_, status_, level_, bakingState_;
     std::filesystem::path root_;
     std::chrono::steady_clock::time_point started_;
     int quality_ = 1;
@@ -51,6 +51,11 @@ class LightmappingWindow {
 
   public:
     bool visible = false;
+    void cancelBake() {
+        if (progress_) {
+            progress_->cancel = true;
+        }
+    }
     ~LightmappingWindow() {
         if (progress_) {
             progress_->cancel = true;
@@ -73,7 +78,8 @@ class LightmappingWindow {
                 auto result = future_.get();
                 if (progress_->cancel || !editAllowed || assets.root != root_ ||
                     modelAssetRevision != revision_ || level != level_ ||
-                    sceneSignature(world) != signature_) {
+                    sceneSignature(world) != signature_ ||
+                    Lightmapping::staticState(world, assets) != bakingState_) {
                     status_ =
                         "Bake discarded: scene/project changed or bake cancelled. Bake again in Edit mode.";
                 } else {
@@ -95,13 +101,13 @@ class LightmappingWindow {
         if (!visible) {
             return;
         }
-        ImGui::SetNextWindowSize(ImVec2(540, 470), ImGuiCond_FirstUseEver);
-        if (!ImGui::Begin("Lightmapping", &visible)) {
+        ImGui::SetNextWindowSize(ImVec2(520, 430), ImGuiCond_FirstUseEver);
+        if (!ImGui::Begin("Lighting", &visible)) {
             ImGui::End();
             return;
         }
         ImGui::TextWrapped("Level: %s", level.empty() ? "Unsaved level" : level.c_str());
-        const auto staticState = Lightmapping::staticState(world);
+        const auto staticState = Lightmapping::staticState(world, assets);
         std::vector<Lightmapping::Object> objects;
         int total = 0, baked = 0, assigned = 0;
         world.eachReadOnly<Transform, MeshRenderer>(
@@ -129,11 +135,11 @@ class LightmappingWindow {
             [&](Entity e, const PointLight& l, const Transform& t) { collect(1, e, l, t); });
         world.eachReadOnly<SpotLight, Transform>(
             [&](Entity e, const SpotLight& l, const Transform& t) { collect(2, e, l, t); });
-        ImGui::Text("Level render objects: %d", total);
-        ImGui::Text("Eligible static objects: %zu   Valid lightmaps: %d", objects.size(), baked);
-        ImGui::Text("Stale/unverified assignments: %d (using realtime)", assigned - baked);
-        ImGui::Text("Excluded render objects: %d", total - int(objects.size()));
-        ImGui::Text("Enabled static lights: %zu (maximum 128)", lights.size());
+        ImGui::Text("Objects: %d   Eligible: %zu   Baked: %d", total, objects.size(), baked);
+        ImGui::Text("Static lights: %zu", lights.size());
+        if (assigned > baked) {
+            ImGui::TextWrapped("%d stale lightmaps — rebake required.", assigned - baked);
+        }
         if (ImGui::TreeNode("Eligible objects")) {
             for (const auto& object : objects) {
                 const auto* name = world.tryGet<ObjectName>(object.entity);
@@ -145,8 +151,6 @@ class LightmappingWindow {
             }
             ImGui::TreePop();
         }
-        ImGui::TextWrapped(
-            "Mark receivers and lights Static in the Inspector. Only eligible static geometry casts baked shadows. Moving, animated, camera and unsupported custom meshes are excluded.");
         ImGui::Separator();
         const bool busy = future_.valid();
         ImGui::BeginDisabled(busy || !editAllowed);
@@ -161,8 +165,16 @@ class LightmappingWindow {
                          .1f,
                          "%.4f",
                          ImGuiSliderFlags_AlwaysClamp);
-        ImGui::TextWrapped(
-            "UVs: automatic isolated triangle charts with gutters. Direct diffuse lighting only; hard shadows, no indirect bounces. Dynamic lights remain realtime. Maximum 2048 x 2048 per object, 32M total texels and 500k triangles.");
+        ImGui::SliderInt("Indirect bounces", &settings_.bounces, 0, 4);
+        ImGui::SliderInt("GI samples / texel", &settings_.samples, 4, 256);
+        ImGui::DragFloat("GI ray distance",
+                         &settings_.maxDistance,
+                         1.f,
+                         1.f,
+                         1000.f,
+                         "%.1f m",
+                         ImGuiSliderFlags_AlwaysClamp);
+        ImGui::Checkbox("Denoise indirect lighting", &settings_.denoise);
         if (ImGui::Button("Bake level") && !objects.empty() && !lights.empty() &&
             !assets.root.empty()) {
             try {
@@ -184,6 +196,7 @@ class LightmappingWindow {
                     progress_ = std::move(progress);
                     future_ = std::move(*request);
                     signature_ = signature;
+                    bakingState_ = staticState;
                     root_ = assets.root;
                     level_ = level;
                     revision_ = modelAssetRevision;
@@ -208,12 +221,11 @@ class LightmappingWindow {
         ImGui::EndDisabled();
         if (busy && progress_) {
             const auto count = progress_->total.load(), done = progress_->done.load();
-            ImGui::TextUnformatted(progress_->phase == 0
-                                       ? "Loading geometry / building acceleration structure..."
-                                       : "Baking direct lighting and shadows...");
+            ImGui::TextUnformatted(progress_->phase == 0 ? "Preparing bake..."
+                                                         : "Baking lighting...");
             ImGui::ProgressBar(count ? float(done) / float(count) : 0.f, ImVec2(-1, 0));
             ImGui::Text(
-                "Triangles: %zu / %zu   Elapsed: %.1f s",
+                "Texels: %zu / %zu   Elapsed: %.1f s",
                 done,
                 count,
                 std::chrono::duration<float>(std::chrono::steady_clock::now() - started_).count());
@@ -222,15 +234,11 @@ class LightmappingWindow {
             }
         }
         if (objects.empty() || lights.empty()) {
-            ImGui::TextWrapped(
-                "Bake requires at least one eligible static mesh and one enabled static light.");
+            ImGui::TextWrapped("Mark at least one mesh and light Static to bake.");
         }
         if (!status_.empty()) {
             ImGui::TextWrapped("%s", status_.c_str());
         }
-        ImGui::Separator();
-        ImGui::TextWrapped(
-            "Rebake after changing static geometry, transforms, imported models or lights. Stale or legacy bakes use realtime lighting until rebaked. Atlases are saved under Assets/Lightmaps. Keep those files with the level. Baked RGB range: 0-16; higher values clamp. Baked lighting uses mesh normals, not normal maps or alpha-tested shadows.");
         ImGui::End();
     }
 };

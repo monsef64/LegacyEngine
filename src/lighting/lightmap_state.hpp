@@ -1,73 +1,128 @@
 #pragma once
 #include "assets/assets.hpp"
+#include "materials/material_io.hpp"
 #include "project/json_io.hpp"
+#include <cstring>
 #include <map>
 
 namespace Lightmapping {
 // Order/ID independent so save/reload and undo can recover a matching bake.
 // Excludes atlas assignments and renderer-generated GPU handles for imported meshes.
-inline std::string staticState(World& world) {
-    std::vector<std::string> records;
-    auto vec = [](Vec3 v) { return Json::array({v.x, v.y, v.z}); };
+inline std::string staticState(World& world, const AssetManager& assets) {
+    static thread_local MaterialAssetCache materials;
+    static thread_local std::filesystem::path root;
+    if (root != assets.root) {
+        root = assets.root;
+        materials.clear();
+    }
+    // Hash numeric values directly: JSON DOM construction/dump here used to run
+    // for every static object, every viewport, every frame.
+    struct Hash {
+        std::uint64_t value = 14695981039346656037ull;
+        void scalar(std::uint64_t v) {
+            for (int i = 0; i < 8; ++i) {
+                value ^= (v & 255);
+                value *= 1099511628211ull;
+                v >>= 8;
+            }
+        }
+        void number(float f) {
+            if (f == 0) {
+                f = 0; // normalize negative zero across save/reload
+            }
+            std::uint32_t bits;
+            std::memcpy(&bits, &f, sizeof(bits));
+            scalar(bits);
+        }
+        void vec(Vec3 v) {
+            number(v.x);
+            number(v.y);
+            number(v.z);
+        }
+        void text(const std::string& s) {
+            scalar(s.size());
+            for (unsigned char c : s) {
+                value ^= c;
+                value *= 1099511628211ull;
+            }
+        }
+    };
+    static thread_local std::vector<std::uint64_t> records;
+    records.clear();
     world.eachReadOnly<Transform>([&](Entity e, const Transform& t) {
         if (!t.isStatic) {
             return;
         }
-        Json pose = {vec(t.position),
-                     Json::array({t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w}),
-                     vec(t.scale),
-                     isActive(world, e)};
+        // Match the previous fingerprint's fields, excluding runtime GPU handles
+        // for model assets. Record sorting keeps it independent of entity IDs.
+        Hash pose;
+        pose.vec(t.position);
+        pose.number(t.rotation.x);
+        pose.number(t.rotation.y);
+        pose.number(t.rotation.z);
+        pose.number(t.rotation.w);
+        pose.vec(t.scale);
+        pose.scalar(isActive(world, e));
         if (const auto* mesh = world.tryGet<MeshRenderer>(e)) {
-            records.push_back(
-                Json{{"pose", pose},
-                     {"model", mesh->model},
-                     {"primitive", mesh->model.empty() ? mesh->mesh.id : 0u},
-                     {"animated", world.has<Animation>(e)},
-                     {"dynamicBody", world.has<RigidBody>(e) && world.get<RigidBody>(e).mass > 0},
-                     {"character", world.has<CharacterController>(e)},
-                     {"camera", world.has<Camera>(e)}}
-                    .dump());
+            auto h = pose;
+            h.scalar(1);
+            h.text(mesh->model);
+            h.scalar(mesh->model.empty() ? mesh->mesh.id : 0u);
+            try {
+                MaterialProperties material;
+                material.color = mesh->color;
+                if (!mesh->material.empty()) {
+                    material = materials.get(assets, mesh->material);
+                }
+                material =
+                    applyMaterialOverrides(material, mesh->materialValues, mesh->materialOverrides);
+                h.scalar(1);
+                h.vec(material.color);
+            } catch (const std::exception&) {
+                h.scalar(0);
+            }
+            h.scalar(world.has<Animation>(e));
+            h.scalar(world.has<RigidBody>(e) && world.get<RigidBody>(e).mass > 0);
+            h.scalar(world.has<CharacterController>(e));
+            h.scalar(world.has<Camera>(e));
+            records.push_back(h.value);
         }
-        auto light = [&](const char* type, const LightSettings& l) {
-            records.push_back(Json{
-                {"type", type},
-                {"pose", pose},
-                {"color", vec(l.color)},
-                {"intensity", l.intensity},
-                {"enabled", l.enabled},
-                {"shadows", l.shadows},
-                {"range", l.range},
-                {"inner", l.innerAngle},
-                {"outer",
-                 l.outerAngle}}.dump());
+        auto light = [&](unsigned type, const LightSettings& l) {
+            auto h = pose;
+            h.scalar(type);
+            h.vec(l.color);
+            h.number(l.intensity);
+            h.scalar(l.enabled);
+            h.scalar(l.shadows);
+            h.number(l.range);
+            h.number(l.innerAngle);
+            h.number(l.outerAngle);
+            records.push_back(h.value);
         };
         if (auto* l = world.tryGet<DirectionalLight>(e)) {
-            light("directional", *l);
+            light(2, *l);
         }
         if (auto* l = world.tryGet<PointLight>(e)) {
-            light("point", *l);
+            light(3, *l);
         }
         if (auto* l = world.tryGet<SpotLight>(e)) {
-            light("spot", *l);
+            light(4, *l);
         }
     });
     std::sort(records.begin(), records.end());
-    std::uint64_t hash = 14695981039346656037ull;
-    for (const auto& record : records) {
-        for (unsigned char c : record) {
-            hash ^= c;
-            hash *= 1099511628211ull;
-        }
-        hash ^= 0xff;
-        hash *= 1099511628211ull;
+    Hash scene;
+    scene.scalar(records.size());
+    for (auto record : records) {
+        scene.scalar(record);
     }
-    return std::to_string(hash);
+    return "numeric1:" + std::to_string(scene.value);
 }
 class ValidationCache {
     struct Entry {
         std::chrono::steady_clock::time_point checked{};
         std::string state;
         std::map<std::string, int> atlases;
+        std::map<std::string, std::string> indirect;
     };
     std::map<std::string, Entry> entries_;
     std::filesystem::path root_;
@@ -93,16 +148,21 @@ class ValidationCache {
             entry.checked = now;
             entry.state.clear();
             entry.atlases.clear();
+            entry.indirect.clear();
             try {
                 const auto manifest = readJsonFile(
                     assets.resolve((parent / "bake.json").generic_string()), 4 * 1024 * 1024);
                 if (manifest.at("format") == "LegacyEngineLightmapBake" &&
-                    manifest.at("version") == 2) {
+                    manifest.at("version") == 3) {
                     const auto state = manifest.at("staticState").get<std::string>();
                     std::map<std::string, int> atlases;
                     for (const auto& object : manifest.at("objects")) {
                         atlases.emplace(object.at("atlas").get<std::string>(),
                                         object.at("grid").get<int>());
+                    }
+                    for (const auto& object : manifest.at("objects")) {
+                        entry.indirect.emplace(object.at("atlas").get<std::string>(),
+                                               object.at("indirect").get<std::string>());
                     }
                     entry.state = state;
                     entry.atlases = std::move(atlases);
@@ -110,11 +170,23 @@ class ValidationCache {
             } catch (const std::exception&) {
                 entry.state.clear();
                 entry.atlases.clear();
+                entry.indirect.clear();
             }
         }
         const auto atlas = entry.atlases.find(mesh.lightmap);
         return entry.state == state && atlas != entry.atlases.end() &&
                atlas->second == mesh.lightmapGrid;
+    }
+    std::string
+    indirect(const AssetManager& assets, const MeshRenderer& mesh, const std::string& state) {
+        if (!valid(assets, mesh, state)) {
+            return {};
+        }
+        const auto& paths =
+            entries_.at(std::filesystem::path(mesh.lightmap).parent_path().generic_string())
+                .indirect;
+        const auto it = paths.find(mesh.lightmap);
+        return it == paths.end() ? std::string{} : it->second;
     }
 };
 } // namespace Lightmapping

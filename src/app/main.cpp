@@ -249,6 +249,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     LightmappingWindow lightmappingWindow;
     ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
+    auto lastSceneRender = std::chrono::steady_clock::time_point{};
+    int lastSceneWidth = 0, lastSceneHeight = 0;
     AssetPreviewRenderer assetPreviews(
         renderer, {gridMesh, planeMesh, cubeMesh, sphereMesh, capsuleMesh, coneMesh});
     EditorRect sceneRect{};
@@ -843,7 +845,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     ImGui::MenuItem(panelNames[i], nullptr, &panelOpen[i]);
                 }
                 ImGui::MenuItem("Animation", nullptr, &animationWindow.visible);
-                ImGui::MenuItem("Lightmapping", nullptr, &lightmappingWindow.visible);
+                ImGui::MenuItem("Lighting", nullptr, &lightmappingWindow.visible);
                 ImGui::Separator();
                 if (ImGui::MenuItem("Reset layout")) {
                     resetWorkspace = true;
@@ -1276,6 +1278,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             editHistory = std::move(history);
             history = EditorHistory(world, selectedEntity);
             if (playMode.play(world)) {
+                lightmappingWindow.cancelBake(); // do not compete with gameplay for CPU time
                 focusGame = true;
                 if (separateGame && !gameWindow) {
                     gameWindow = SDL_CreateWindow(
@@ -2112,7 +2115,19 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         renderer.setShadowSettings(renderingSettings.shadows);
         renderer.setAssetRoot(browser.assets.root);
         if (width > 0 && height > 0) {
-            if (sceneVisible) {
+            // Keep the unfocused editor view live at 15 Hz during gameplay,
+            // rather than rebuilding its full shadow atlas at the Game frame rate.
+            const auto renderTime = std::chrono::steady_clock::now();
+            const bool backgroundScene = playMode.playing() && gameVisible &&
+                                         (gameWindow || (!sceneFocused && !sceneHovered));
+            const bool renderScene =
+                sceneVisible && (!backgroundScene || sceneSurface.width != lastSceneWidth ||
+                                 sceneSurface.height != lastSceneHeight ||
+                                 renderTime - lastSceneRender >= std::chrono::milliseconds(66));
+            if (renderScene) {
+                lastSceneRender = renderTime;
+                lastSceneWidth = sceneSurface.width;
+                lastSceneHeight = sceneSurface.height;
                 glBindFramebuffer(GL_FRAMEBUFFER, sceneSurface.framebuffer);
                 const float aspect = static_cast<float>(sceneSurface.width) / sceneSurface.height;
                 const Mat4 viewProjection = camera.viewProjection(aspect);
@@ -2158,7 +2173,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
             }
             profiler.checkpoint(ProfilePart::Scene);
-            if (sceneVisible && world.has<Camera>(selectedEntity) &&
+            if (renderScene && world.has<Camera>(selectedEntity) &&
                 world.has<Transform>(selectedEntity)) {
                 auto previewCamera = world.get<Camera>(selectedEntity);
                 const auto& pose = world.get<Transform>(selectedEntity);
@@ -2259,8 +2274,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         data.AddDrawList(&overlay);
                         ImGui_ImplOpenGL3_RenderDrawData(&data);
                     }
+                    // Present only once with VSync per frame. Waiting for both
+                    // windows can halve the frame rate on multi-window drivers.
+                    int interval = 0;
+                    const bool restoreInterval = SDL_GL_GetSwapInterval(&interval) && interval != 0;
+                    const bool changedInterval = restoreInterval && SDL_GL_SetSwapInterval(0);
                     SDL_GL_SwapWindow(gameWindow);
                     SDL_GL_MakeCurrent(window, context);
+                    if (changedInterval) {
+                        SDL_GL_SetSwapInterval(interval);
+                    }
                 } else {
                     terminalErrors.report("Game window", SDL_GetError());
                 }

@@ -165,6 +165,8 @@ float visibility(int i, vec3 normal, vec3 toLight, vec3 worldDx, vec3 worldDy) {
 }
 in vec2 vLightmapUV;
 uniform sampler2D uLightmap;
+uniform sampler2D uIndirectLightmap;
+uniform bool uHasIndirectLightmap;
 uniform int uLightmapGrid;
 uniform bool uLightBaked[16];
 void main() {
@@ -244,7 +246,11 @@ void main() {
         for (int channel = 0; channel < 3; ++channel)
             if (staticDirect[channel] > 0.00001)
                 mask[channel] = clamp(staticVisible[channel] / staticDirect[channel], 0.0, 1.0);
-        result += albedo * baked * mask;
+        // Indirect transport is static and must not receive the direct-light shadow mask.
+        vec3 indirect = uHasIndirectLightmap
+            ? pow(textureLod(uIndirectLightmap, vLightmapUV, 0.0).rgb, vec3(2.0)) * 16.0
+            : vec3(0);
+        result += albedo * (baked * mask + indirect);
     }
     fragColor = vec4(result, alpha);
 }

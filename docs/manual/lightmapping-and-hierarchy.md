@@ -6,15 +6,16 @@
    Static is a saved Transform flag, not a physics lock; do not animate or move
    baked objects. Mark the lights to bake Static as well. Unmarked lights stay
    realtime, including on lightmapped objects.
-2. Open **Windows > Lightmapping**. The window shows the current level,
+2. Open **Windows > Lighting**. The window shows the current level,
    render-object total, eligible/excluded counts, atlas assignments, static-light
    count and eligible object list. Imported model triangle/atlas budgets are
    validated when the bake loads geometry; eligibility alone does not guarantee
    that a model fits those budgets.
 3. Choose Draft/Medium/High chart quality and shadow ray bias, then **Bake level**.
    A bounded background job loads geometry, builds a ray-tracing BVH, generates
-   UV charts and bakes direct diffuse lighting and hard shadows. Loading/building
-   and baking phases, triangle progress, elapsed time and Cancel are shown.
+   UV charts and bakes direct diffuse lighting, hard shadows and optional diffuse
+   GI. Loading/building and baking phases, texel progress, elapsed time and Cancel
+   are shown.
 4. Keep editing changes out of a running bake. A result is discarded if the
    scene signature, project, level or import revision differs at completion, or
    if completion occurs outside an editable scene. Closing the window does not
@@ -36,8 +37,9 @@
 
 ## Scope and limits
 
-- Direct diffuse lighting only: no indirect bounces, AO, baked specular or area
-  light/soft-shadow sampling. The existing ambient term remains realtime.
+- Direct diffuse lighting plus optional static diffuse GI (see the GI section
+  below). No baked specular or area-light/soft-shadow sampling. The existing
+  ambient term remains realtime.
 - Baked diffuse is not added a second time as realtime diffuse. Baked receivers
   also receive an irradiance-weighted realtime shadow mask and realtime specular
   from visible static lights, so moving realtime casters can shadow a baked floor.
@@ -102,8 +104,8 @@
 
 ## Regression checks for moving shadows / ground lighting
 
-- **Rebake once after this update.** Version-1 manifests have no static-state
-  fingerprint and intentionally use realtime fallback. Version-2 `bake.json`
+- **Rebake once after this update.** Older manifests lack current GI/material metadata and intentionally use
+  realtime fallback. Version-3 `bake.json`
   must accompany its atlas files when saving/distributing a level.
 - Bake a static cube above a static 16m plane with a static directional light.
   Move the cube: both receivers must switch to realtime, with no old shadow
@@ -111,7 +113,7 @@
   parent movement, activity toggle and light color/intensity/direction edits.
 - Undo back to the exact baked static scene: the matching atlas can be reused.
   Save/reload without edits: matching maps should remain valid. Check stale and
-  valid counts in the Lightmapping window.
+  valid counts in the Lighting window.
 - Bake the plane while a separate non-static cube is present, then move that
   cube. The floor must retain baked static lighting AND show its realtime shadow
   when the light has an available realtime shadow map. Check that static direct
@@ -123,3 +125,64 @@
   unlit floor. Also inspect from above; planes remain intentionally one-sided.
 - No automated tests were added/run. Full Linux build validation does not prove
   graphical behavior; visually verify shader execution and Windows separately.
+
+## Diffuse global illumination (LightmapGI-style baking)
+
+This is LegacyEngine's native CPU baker, not Godot's `LightmapGI` node or a
+Godot dependency. It now traces static diffuse indirect transport in addition
+to the existing direct lighting bake.
+
+- **Indirect bounces:** 0 (direct only) through 4; default 2.
+- **GI samples / texel:** 4–256; default 32. More samples reduce Monte Carlo
+  noise but increase bake time. Increase samples before increasing bounce count.
+- **GI ray distance:** 1–1000 metres per segment; default 50. Misses contribute
+  black: the baker does not integrate HDR sky/environment or emissive materials.
+- **Denoise indirect lighting:** optional chart-local 3x3 box filter, enabled by
+  default. This reduces noise, but can blur fine indirect detail; it is not an
+  advanced feature-aware denoiser.
+- Each hit uses cosine-weighted hemisphere sampling, the nearest BVH intersection,
+  material-tint diffuse reflectance, and shadow-tested static direct illumination.
+  Reflected light carries surface tint to other surfaces (color bleeding).
+  Reflectance clamps to 0–0.95 per channel for bounded diffuse transport. Material
+  texture pixels, normal maps, transparent transport, specular/refraction and
+  emissive lighting are not sampled. Geometry remains opaque and one-sided for
+  reflection; back-face hits stop a path rather than leaking through the mesh.
+- The bake retains the existing texel/triangle/atlas/light caps and adds a 500M
+  potential path-segment cap (`texels * samples * bounces`). This bounds admission,
+  not wall-clock duration; scenes with many lights can still take a long time.
+  Progress now counts atlas texels on real triangle charts (not triangles).
+- Direct and indirect lighting are stored in separate TGA atlases. Indirect is
+  an extra runtime texture sample, not realtime ray tracing. The existing mixed
+  realtime shadow mask only affects direct light; it does not erase baked bounce
+  light. Dynamic objects do not contribute baked indirect light or receive GI
+  probes. Runtime texture/cache memory use grows with the companion atlases.
+- **Rebake once for this update:** version-3 manifests list direct and optional
+  `.indirect.tga` companions, settings, and the material-aware static fingerprint.
+  Versions 1/2 intentionally fall back to realtime lighting. Keep `bake.json` and
+  both atlas files together. A pending/missing indirect companion temporarily
+  omits indirect light while retaining available direct/realtime lighting.
+- In-memory material tint/override edits and shared material color changes now
+  affect bake validity. Shared material files are checked through a 250ms cache.
+  Imported model and texture file-content changes still require manual rebaking.
+  Settings remain session-local and are recorded in the manifest, not automatically
+  restored per level. Existing ambient lighting remains present at runtime.
+
+### Manual GI checks (no automated tests added or run)
+
+1. Create a room with a red static wall and white static floor. Illuminate the
+   wall with a static light; compare bounces 0, 1 and 2. Verify bounce illumination
+   and red color bleeding on nearby floor areas without double-added direct light.
+2. Compare 8/32/128 samples on the same scene, denoise on/off. Check indirect noise,
+   charts/seams, bake time, progress, ray-distance truncation and memory use.
+3. Move a realtime caster across a baked floor: direct shadows should update,
+   while baked indirect illumination should not disappear with the shadow mask.
+4. Edit static material tint, transform, light or active/static flags, then undo.
+   Verify stale fallback and restoration of the matching bake. Edit a shared
+   material's color and allow the file cache interval to elapse.
+5. Save/reload the level, verify both atlases stream in, and verify no GI rays run
+   during rendering. Remove/restore the indirect companion and check safe behavior.
+6. Cancel during a noisy/high-sample bake, switch levels/projects, trigger a budget
+   error and try an unwritable output folder. Existing assignments should survive
+   rejected output and unfinished folders should be cleaned up.
+7. Visually verify shader execution and Windows MinGW-w64 separately. Compile/link
+   success alone does not establish image quality or runtime performance.
