@@ -13,11 +13,13 @@
 #include "lighting/shadow_settings.hpp"
 #include "materials/material_io.hpp"
 #include "particles/particle_renderer.hpp"
+#include "rendering/editor_lines.hpp"
 #include "rendering/gpu_skinning.hpp"
 #include "rendering/material_textures.hpp"
 #include "rendering/mesh.hpp"
 #include "rendering/skybox_renderer.hpp"
 #include "scene/editor_grid.hpp"
+#include "terrain/terrain_renderer.hpp"
 
 #include <future>
 #include <map>
@@ -138,7 +140,10 @@ class Renderer {
                       float opacity = 1.0f);
 
     void drawCamera(const Transform& transform, const Camera& camera, const Mat4& viewProjection);
-    void drawRaycast(const Transform& transform, const Raycast& query, const Mat4& viewProjection);
+    void drawRaycast(const Transform& transform,
+                     const Raycast& query,
+                     const Mat4& viewProjection,
+                     float thickness = 2.f);
     void drawAudioSource(const Transform& transform,
                          const AudioSource& source,
                          const Mat4& viewProjection);
@@ -160,6 +165,8 @@ class Renderer {
     Lightmapping::ValidationCache lightmapValidation_;
     int litReflective_ = -1, environmentCube_ = -1, environmentPanorama_ = -1,
         environmentType_ = -1, environmentColor_ = -1;
+    Terrains::Renderer terrainRenderer_;
+    EditorLines editorLines_;
     int litTransparent_ = -1;
     int litTexture_ = -1, litNormalTexture_ = -1, litHasTexture_ = -1, litBumped_ = -1,
         litStrength_ = -1, litTiling_ = -1;
@@ -167,7 +174,8 @@ class Renderer {
                   const Transform& transform,
                   const Mat4& viewProjection,
                   Vec3 color,
-                  float opacity = 1.0f);
+                  float opacity = 1.0f,
+                  float thickness = 1.f);
     int softShadowLocation_ = -1;
     int bakedSoft_ = -1, dynamicShadow_[16]{};
     ShadowSettings shadowSettings_;

@@ -213,7 +213,7 @@ class ParticleRenderer {
                                       p.rotation,
                                       lerp(s.color, s.endColor, f),
                                       s.alpha + (s.endAlpha - s.alpha) * f,
-                                      std::floor(p.age * s.frameRate)});
+                                      s.useSpriteSheet ? std::floor(p.age * s.frameRate) : 0.f});
             }
             if (s.blend == 0) {
                 std::sort(instances_.begin(), instances_.end(), [&](const auto& a, const auto& b) {
@@ -227,7 +227,9 @@ class ParticleRenderer {
                 texture = sprites_[std::clamp(s.sprite, 0, 2)];
             }
             glBindTexture(GL_TEXTURE_2D, texture);
-            glUniform2i(sheet_, std::clamp(s.sheetColumns, 1, 64), std::clamp(s.sheetRows, 1, 64));
+            glUniform2i(sheet_,
+                        s.useSpriteSheet ? std::clamp(s.sheetColumns, 1, 64) : 1,
+                        s.useSpriteSheet ? std::clamp(s.sheetRows, 1, 64) : 1);
             glBlendFuncSeparate(GL_SRC_ALPHA,
                                 s.blend ? GL_ONE : GL_ONE_MINUS_SRC_ALPHA,
                                 GL_ONE,

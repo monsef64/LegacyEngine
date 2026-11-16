@@ -55,6 +55,7 @@
 #include "scene/scene_camera.hpp"
 #include "scene/skybox_transition.hpp"
 #include "scripting/script_components.hpp"
+#include "terrain/terrain_editor.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -243,6 +244,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     ScriptEditor scripts;
     scripts.bindWorld(world, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
     EditorHistory history(world);
+    Terrains::Editor terrainEditor;
     PlayMode playMode;
     ObjectClipboard clipboard;
     float particlePreviewSpeed = 1;
@@ -326,6 +328,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     constexpr unsigned smokeFrames = 120;
     std::optional<Vec3> lastOrbitPivot;
     while (running) {
+        const Uint64 frameStarted = SDL_GetTicksNS();
         if (!playMode.active()) {
             if (const auto* pose = world.tryGet<Transform>(selectedEntity)) {
                 lastOrbitPivot = pose->position;
@@ -518,7 +521,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     clicking = false;
                 }
                 if (event.button.button == SDL_BUTTON_LEFT) {
-                    clicking = !(SDL_GetModState() & SDL_KMOD_ALT);
+                    clicking = !(SDL_GetModState() & SDL_KMOD_ALT) &&
+                               !terrainEditor.active(world, selectedEntity);
                     pressX = event.button.x;
                     pressY = event.button.y;
                 }
@@ -683,6 +687,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 browser.assets.copyTo(assetRoot);
                 AssetManager destination;
                 destination.root = assetRoot;
+                Terrains::saveAll(world, destination);
                 renderingSettings.save(destination);
                 inputSettings.save(destination, input);
                 if (!inputSettings.error.empty()) {
@@ -719,6 +724,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (saveProject && !currentProject.empty()) {
                 saveTo(currentProject);
             } else if (openProject || saveProject || saveAsProject) {
+                if (openProject) {
+                    projectDirty = currentProject.empty() || scripts.hasUnsavedChanges() ||
+                                   animationWindow.hasUnsavedChanges() ||
+                                   projectContentState(world, embeddedLegacySource, camera) !=
+                                       savedProjectState;
+                }
                 if (openProject && projectDirty) {
                     pendingRecent = selectedRecent;
                     confirmOpen = true;
@@ -1493,6 +1504,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                       &browser.assets,
                       5,
                       browser.selected);
+        terrainEditor.draw(world, selectedEntity, browser.assets, history, editAllowed);
         scripts.componentOutput = componentScripts.messages();
         scripts.setAssetContext(browser.openedScript, selectedEntity);
         scripts.draw(&layout, playMode.playing(), &browser.assets, &browser.openedScript);
@@ -1901,6 +1913,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                             !playMode.active() && !projectDialog.pending() &&
                                 !browser.dialog.pending() && !orientationInteracting &&
                                 !playbackHovered && !cameraLooking &&
+                                !terrainEditor.active(world, selectedEntity) &&
                                 !(SDL_GetModState() & SDL_KMOD_ALT),
                             camera,
                             static_cast<float>(sceneSurface.width) / sceneSurface.height,
@@ -1913,6 +1926,30 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
             ImGui::End();
             ImGui::PopStyleVar();
+        }
+        {
+            Ray terrainRay;
+            const auto mouse = ImGui::GetIO().MousePos;
+            const bool brushHover = editAllowed && sceneHovered && !cameraLooking &&
+                                    !(SDL_GetModState() & SDL_KMOD_ALT);
+            const bool brushDown = brushHover && ImGui::IsMouseDown(0);
+            bool rayValid =
+                brushHover && mouseRay(window, camera, mouse.x, mouse.y, terrainRay, layout.scene);
+            if (rayValid && sceneSurface.width > 0 && sceneSurface.height > 0) {
+                terrainEditor.preview(
+                    world,
+                    selectedEntity,
+                    rayValid ? &terrainRay : nullptr,
+                    camera.viewProjection(float(sceneSurface.width) / sceneSurface.height),
+                    layout.scene,
+                    sceneDrawList);
+            }
+            terrainEditor.stroke(world,
+                                 selectedEntity,
+                                 history,
+                                 rayValid ? &terrainRay : nullptr,
+                                 brushDown,
+                                 ImGui::GetIO().DeltaTime);
         }
         bool gameVisible = false;
         gameHovered = false;
@@ -2098,6 +2135,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         updateHierarchy(world);
         profiler.checkpoint(ProfilePart::Hierarchy);
         physics.setAssetRoot(browser.assets.root);
+        Terrains::update(world, browser.assets);
         physics.update(world, playMode.playing() ? seconds : 0.0f, [&](float dt) {
             scripts.fixedUpdate(dt);
             componentScripts.fixedUpdate(dt);
@@ -2265,7 +2303,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     }
                     if (transform) {
                         if (const auto* query = world.tryGet<Raycast>(selectedEntity)) {
-                            renderer.drawRaycast(*transform, *query, viewProjection);
+                            renderer.drawRaycast(*transform,
+                                                 *query,
+                                                 viewProjection,
+                                                 browser.settings.raycastThickness);
                         }
                     }
                     const auto* audioSource = world.tryGet<AudioSource>(selectedEntity);
@@ -2409,7 +2450,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
 
         // Compare persisted content, not history depth: Undo back to the saved
         // state clears the marker, while Lua/camera edits also mark it dirty.
-        if (!prefabLevel && !playMode.active() && !editor.dragging()) {
+        static auto lastDirtyCheck = std::chrono::steady_clock::time_point{};
+        if (!prefabLevel && !playMode.active() && !editor.dragging() &&
+            std::chrono::steady_clock::now() - lastDirtyCheck >= std::chrono::milliseconds(200)) {
+            lastDirtyCheck = std::chrono::steady_clock::now();
             projectDirty =
                 currentProject.empty() || scripts.hasUnsavedChanges() ||
                 animationWindow.hasUnsavedChanges() ||
@@ -2511,6 +2555,22 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         profiler.checkpoint(ProfilePart::Other);
         SDL_GL_SwapWindow(window);
+        const auto flags = SDL_GetWindowFlags(window);
+        const bool foreground =
+            (!(flags & SDL_WINDOW_MINIMIZED) && (flags & SDL_WINDOW_INPUT_FOCUS)) ||
+            (gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS));
+        const int limit = foreground ? browser.settings.maxFps : 30;
+        int swapInterval = 0;
+        const bool vsyncActive = SDL_GL_GetSwapInterval(&swapInterval) && swapInterval != 0;
+        // Do not stack a fractional-refresh sleep over VSync: it can turn a
+        // 144 Hz display into 72 FPS. Let VSync pace focused windows itself.
+        if (!smokeTest && limit > 0 && (!foreground || !vsyncActive)) {
+            const Uint64 budget = 1000000000ull / Uint64(limit),
+                         elapsed = SDL_GetTicksNS() - frameStarted;
+            if (elapsed < budget) {
+                SDL_DelayNS(budget - elapsed); // sleep; never busy-spin
+            }
+        }
         profiler.checkpoint(ProfilePart::Present);
         profiler.end();
         if (width > 0 && height > 0) {

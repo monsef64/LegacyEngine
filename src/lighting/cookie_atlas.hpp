@@ -8,6 +8,12 @@
 // Reuse the asynchronous image cache; copy/resample resident images into per-light layers.
 class CookieAtlas {
     GLuint texture_ = 0, read_ = 0, draw_ = 0;
+    struct Layer {
+        std::string path;
+        std::uint64_t generation = 0;
+    };
+    std::array<Layer, Lighting::maxLights> layers_{};
+    std::filesystem::path root_;
 
   public:
     void shutdown() {
@@ -21,6 +27,8 @@ class CookieAtlas {
             glDeleteFramebuffers(1, &draw_);
         }
         texture_ = read_ = draw_ = 0;
+        layers_ = {};
+        root_.clear();
     }
     GLuint texture() const {
         return texture_;
@@ -29,6 +37,10 @@ class CookieAtlas {
                                                  MaterialTextureCache& cache,
                                                  const std::vector<Lighting::Light>& lights,
                                                  std::string& error) {
+        if (root_ != assets.root) {
+            layers_ = {};
+            root_ = assets.root;
+        }
         std::array<bool, Lighting::maxLights> enabled{};
         bool any = false;
         for (const auto& light : lights) {
@@ -74,6 +86,11 @@ class CookieAtlas {
             if (!source) {
                 continue;
             }
+            const auto generation = cache.generation(l.settings.cookie);
+            if (layers_[i].path == l.settings.cookie && layers_[i].generation == generation) {
+                enabled[i] = true;
+                continue;
+            }
             glBindTexture(GL_TEXTURE_2D, source);
             GLint w = 0, h = 0;
             glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
@@ -101,6 +118,7 @@ class CookieAtlas {
                                   Lighting::cookieResolution,
                                   GL_COLOR_BUFFER_BIT,
                                   GL_LINEAR);
+                layers_[i] = {l.settings.cookie, generation};
                 enabled[i] = true;
             } else {
                 error = "Cannot build spotlight cookie atlas";

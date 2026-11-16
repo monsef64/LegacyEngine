@@ -25,6 +25,10 @@
   size, not a multiplier. Velocity/gravity use local axes in local space and world
   gravity in world space; initial direction/velocity are rotated by the emitter
   when spawning world-space particles. Emitter max scale controls billboard size.
+- **Texture animation > Use Sprite Sheet** is opt-in and off for new emitters and
+  presets. Enable it, assign the atlas texture, then set columns, rows and frame
+  rate. Disable it to show the complete sprite while retaining grid settings.
+  Older scenes with an explicitly configured multi-cell grid migrate as enabled.
 - Settings persist in levels/prefabs and participate in undo/redo, Reset, component
   value copy/paste, object duplication and subtree clipboard copying. Live particles
   and playback state are not serialized; copies start fresh. Entering Play clears

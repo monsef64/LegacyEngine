@@ -394,6 +394,7 @@
     "blend": "integer",
     "sprite": "integer",
     "seed": "integer",
+    "useSpriteSheet": "boolean Opt-in atlas animation; false by default",
     "sheetColumns": "integer",
     "sheetRows": "integer",
     "color": "table Assign a complete x/y/z vector table; returned tables are copies",

@@ -144,6 +144,7 @@ inline void save(AssetManager& assets,
     if (!asset(path)) {
         throw std::runtime_error("Expected project-relative .prefab asset");
     }
+    Terrains::saveAll(world, assets);
     World isolated;
     clone(world, entity, isolated);
     root(isolated);

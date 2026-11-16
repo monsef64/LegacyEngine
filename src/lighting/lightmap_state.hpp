@@ -84,6 +84,31 @@ inline std::string staticState(World& world, const AssetManager& assets) {
             h.scalar(world.has<Camera>(e));
             records.push_back(h.value);
         }
+        if (const auto* terrain = world.tryGet<Terrain>(e);
+            terrain && terrain->data && t.isStatic) {
+            auto h = pose;
+            h.scalar(5);
+            // Sculpt revisions are immutable snapshots: hash samples only once,
+            // not every frame while the Lighting window is open.
+            static thread_local std::map<std::pair<unsigned, unsigned>, std::uint64_t>
+                terrainHashes;
+            auto key = std::make_pair(terrain->data->identity, terrain->data->shapeRevision);
+            auto found = terrainHashes.find(key);
+            if (found == terrainHashes.end()) {
+                if (terrainHashes.size() >= 64) {
+                    terrainHashes.erase(terrainHashes.begin());
+                }
+                Hash geometry;
+                geometry.scalar(terrain->data->resolution);
+                geometry.number(terrain->data->size);
+                for (float height : terrain->data->heights) {
+                    geometry.number(height);
+                }
+                found = terrainHashes.emplace(key, geometry.value).first;
+            }
+            h.scalar(found->second);
+            records.push_back(h.value);
+        }
         auto light = [&](unsigned type, const LightSettings& l) {
             if (l.mode != 1) {
                 return;

@@ -81,6 +81,7 @@ MaterialTextureCache::get(const AssetManager& assets, const std::string& path, s
                 entries_.erase(oldest);
             }
             Entry entry;
+            entry.generation = ++generation_;
             entry.bytes = cost;
             entry.used = frame_;
             entry.checked = now;

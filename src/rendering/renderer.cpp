@@ -206,6 +206,8 @@ void Renderer::clearModelCache() {
 }
 void Renderer::shutdown() {
     particles_.shutdown();
+    terrainRenderer_.shutdown();
+    editorLines_.shutdown();
     lasers_.shutdown();
     shafts_.shutdown();
     cookies_.shutdown();
@@ -525,6 +527,8 @@ void Renderer::draw(World& world,
             }
         }
     }
+    terrainRenderer_.draw(
+        world, materialAssets_, viewProjection, cameraPosition, litProgram_, lights_);
     ProfileScope surfaces(ProfilePart::Surfaces);
     glUseProgram(litProgram_);
     const Skybox* environment = activeSky ? (skyFade ? &skyFade->from : activeSky) : nullptr;
@@ -577,12 +581,9 @@ void Renderer::draw(World& world,
                                                     std::abs(transform.scale.z)});
         return frustum.visible(transform.position, bound);
     };
-    bool hasLightmaps = false;
-    world.eachReadOnly<MeshRenderer>([&](Entity, const MeshRenderer& mesh) {
-        hasLightmaps |= !mesh.lightmap.empty() && mesh.lightmapGrid > 0;
-    });
-    const auto staticState =
-        hasLightmaps ? Lightmapping::staticState(world, materialAssets_) : std::string{};
+    // Bake validity is manifest/assignment based; a full scene fingerprint here
+    // was unused and repeated for every viewport render.
+    const std::string staticState;
     // All callers cull first, before resolving materials or building draw packets.
     auto drawMesh = [&](const Transform& transform,
                         const MeshRenderer& renderer,
@@ -759,7 +760,8 @@ void Renderer::drawCamera(const Transform& transform,
 }
 void Renderer::drawRaycast(const Transform& transform,
                            const Raycast& query,
-                           const Mat4& viewProjection) {
+                           const Mat4& viewProjection,
+                           float thickness) {
     MeshData wire;
     wire.topology = MeshData::Topology::Lines;
     auto line = [&](Vec3 a, Vec3 b) {
@@ -790,7 +792,7 @@ void Renderer::drawRaycast(const Transform& transform,
             previous = end;
         }
     }
-    drawWire(wire, transform, viewProjection, {1, .75f, .2f});
+    drawWire(wire, transform, viewProjection, {1, .75f, .2f}, 1.f, std::clamp(thickness, 1.f, 8.f));
 }
 void Renderer::drawAudioSource(const Transform& transform,
                                const AudioSource& source,
@@ -801,7 +803,8 @@ void Renderer::drawWire(const MeshData& wire,
                         const Transform& transform,
                         const Mat4& viewProjection,
                         Vec3 color,
-                        float opacity) {
+                        float opacity,
+                        float thickness) {
     if (wire.vertices.empty()) {
         return;
     }
@@ -826,9 +829,15 @@ void Renderer::drawWire(const MeshData& wire,
                  GL_STREAM_DRAW);
     const Mat4 mvp = multiply(viewProjection,
                               transformMatrix(transform.position, transform.rotation, {1, 1, 1}));
-    glUseProgram(unlitProgram_);
-    glUniformMatrix4fv(unlitModelViewProjection_, 1, GL_FALSE, mvp.m);
-    glUniform3f(unlitColor_, color.x, color.y, color.z);
+    if (thickness <= 1 || !editorLines_.bind(mvp, color, thickness)) {
+        glUseProgram(unlitProgram_);
+        glUniformMatrix4fv(unlitModelViewProjection_, 1, GL_FALSE, mvp.m);
+        glUniform3f(unlitColor_, color.x, color.y, color.z);
+    }
+    const bool cull = glIsEnabled(GL_CULL_FACE);
+    if (thickness > 1) {
+        glDisable(GL_CULL_FACE);
+    }
     // Show the entire collider, including the back and the plane's hidden slab.
     const bool depthTest = glIsEnabled(GL_DEPTH_TEST);
     glDisable(GL_DEPTH_TEST);
@@ -839,6 +848,9 @@ void Renderer::drawWire(const MeshData& wire,
         glBlendFuncSeparate(GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA, GL_ZERO, GL_ONE);
     }
     glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(wire.vertices.size()));
+    if (thickness > 1 && cull) {
+        glEnable(GL_CULL_FACE);
+    }
     if (opacity < 1) {
         glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
         if (!blend) {
@@ -1005,6 +1017,7 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
                     glFramebufferTextureLayer(
                         GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, shadowTexture_, 0, layer);
                     glClear(GL_DEPTH_BUFFER_BIT);
+                    terrainRenderer_.drawDepth(world, vp, unlitModelViewProjection_, pass == 1);
                     const ViewFrustum shadowFrustum(vp);
                     for (const auto& caster : casters) {
                         if (pass == 1 && !caster.dynamic) {

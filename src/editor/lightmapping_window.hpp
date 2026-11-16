@@ -85,9 +85,17 @@ class LightmappingWindow {
                 } else {
                     history.commit(world, selection);
                     for (const auto& assignment : result->assignments) {
-                        auto& r = world.get<MeshRenderer>(assignment.entity);
-                        r.lightmap = assignment.path;
-                        r.lightmapGrid = assignment.grid;
+                        if (auto* terrain = world.tryGet<Terrain>(assignment.entity)) {
+                            if (!terrain->data.unique()) {
+                                terrain->data = std::make_shared<Terrains::Data>(*terrain->data);
+                            }
+                            terrain->data->lightmap = assignment.path;
+                            terrain->data->revision = Terrains::nextRevision();
+                        } else {
+                            auto& r = world.get<MeshRenderer>(assignment.entity);
+                            r.lightmap = assignment.path;
+                            r.lightmapGrid = assignment.grid;
+                        }
                     }
                     const auto manifest =
                         (result->directory / "bake.json")
@@ -127,6 +135,9 @@ class LightmappingWindow {
         int total = 0, baked = 0, assigned = 0;
         world.eachReadOnly<Transform, MeshRenderer>(
             [&](Entity e, const Transform& t, const MeshRenderer& r) {
+                if (world.has<Terrain>(e)) {
+                    return;
+                }
                 ++total;
                 if (eligible(world, e, t, r, meshes)) {
                     objects.push_back({e, t, r});
@@ -136,6 +147,26 @@ class LightmappingWindow {
                     if (validation_.valid(assets, r, staticState)) {
                         ++baked;
                     }
+                }
+            });
+        world.eachReadOnly<Transform, Terrain>(
+            [&](Entity e, const Transform& t, const Terrain& terrain) {
+                ++total;
+                MeshRenderer eligibility;
+                eligibility.mesh = meshes[1];
+                if (!terrain.data || !eligible(world, e, t, eligibility, meshes)) {
+                    return;
+                }
+                MeshRenderer r;
+                r.lightmap = terrain.data->lightmap;
+                r.lightmapGrid = 1;
+                Lightmapping::Object object{e, t, r, terrain.data};
+                objects.push_back(object);
+                if (!r.lightmap.empty()) {
+                    ++assigned;
+                }
+                if (validation_.valid(assets, r, staticState)) {
+                    ++baked;
                 }
             });
         std::vector<Lightmapping::Light> lights;
@@ -179,6 +210,8 @@ class LightmappingWindow {
                      &quality_,
                      "Draft (8 texels/metre)\0Medium (16 texels/metre)\0High (32 texels/metre)\0");
         settings_.tile = 8 << quality_;
+        ImGui::TextWrapped(
+            "Terrain atlases: Draft 256 x 256, Medium 512 x 512, High 1024 x 1024, independent of render LOD.");
         ImGui::DragFloat("Shadow ray bias",
                          &settings_.bias,
                          .0001f,
@@ -228,6 +261,15 @@ class LightmappingWindow {
             world.each<MeshRenderer>([](Entity, MeshRenderer& r) {
                 r.lightmap.clear();
                 r.lightmapGrid = 0;
+            });
+            world.each<Terrain>([](Entity, Terrain& t) {
+                if (t.data && !t.data->lightmap.empty()) {
+                    if (!t.data.unique()) {
+                        t.data = std::make_shared<Terrains::Data>(*t.data);
+                    }
+                    t.data->lightmap.clear();
+                    t.data->revision = Terrains::nextRevision();
+                }
             });
             auto clear = [](Entity, auto& l) { l.bake.clear(); };
             world.each<DirectionalLight>(clear);

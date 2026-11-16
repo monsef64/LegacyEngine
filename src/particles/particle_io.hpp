@@ -8,6 +8,7 @@ inline Json settings(const ParticleSettings& s) {
     Json j = Json::object();
 #define P(name) j[#name] = s.name
     P(collision);
+    P(useSpriteSheet);
     P(restitution);
     P(collisionFriction);
     P(loop);
@@ -58,6 +59,7 @@ inline ParticleSettings parse(const Json& j) {
     if (j.contains(#name))                                                                         \
     j.at(#name).get_to(s.name)
     P(collision);
+    P(useSpriteSheet);
     P(restitution);
     P(collisionFriction);
     P(loop);
@@ -92,6 +94,10 @@ inline ParticleSettings parse(const Json& j) {
     P(frameRate);
     P(texture);
 #undef P
+    // Preserve deliberately configured grids from scenes saved before the toggle.
+    if (!j.contains("useSpriteSheet")) {
+        s.useSpriteSheet = s.sheetColumns > 1 || s.sheetRows > 1;
+    }
 #define V(name)                                                                                    \
     if (j.contains(#name)) {                                                                       \
         const auto& a = j.at(#name);                                                               \

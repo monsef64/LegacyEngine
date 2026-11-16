@@ -6,7 +6,7 @@
 
 // IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox; 12
 // character; 13 FPS camera; 14 raycast; 15 particles; 16 laser.
-inline constexpr int editorObjectTypeCount = 18;
+inline constexpr int editorObjectTypeCount = 19;
 inline bool validEditorObjectType(int item) {
     return item >= 0 && item < editorObjectTypeCount;
 }
@@ -20,6 +20,9 @@ inline int drawCreateItems() {
     }
     if (ImGui::MenuItem("FPS Camera")) {
         item = 13;
+    }
+    if (ImGui::MenuItem("Terrain")) {
+        item = 18;
     }
     if (ImGui::MenuItem("LightShafts")) {
         item = 17;
@@ -129,7 +132,8 @@ inline Entity createEditorObject(World& world,
                                "Raycast",
                                "Particles",
                                "Laser",
-                               "LightShafts"};
+                               "LightShafts",
+                               "Terrain"};
     static_assert(sizeof(names) / sizeof(names[0]) == editorObjectTypeCount);
     if (!validEditorObjectType(item)) {
         return {};
@@ -146,6 +150,10 @@ inline Entity createEditorObject(World& world,
                                     item > 0 && item < 5 ? meshes[item] : MeshHandle{},
                                     item > 0 && item < 5 ? shapes[item] : ColliderShape::Box,
                                     item == 0 || item >= 5);
+    if (item == 18) {
+        world.add(entity, Terrain{});
+        Terrains::openTools = true;
+    }
     if (item == 17) {
         world.add(entity, LightShafts{});
     }

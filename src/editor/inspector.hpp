@@ -195,7 +195,10 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
             "angularVelocity",
             "blend",
             "sprite"});
+    fields("Texture animation", {"useSpriteSheet"});
+    ImGui::BeginDisabled(!edited["useSpriteSheet"].get<bool>());
     fields("Sprite sheet", {"sheetColumns", "sheetRows", "frameRate"});
+    ImGui::EndDisabled();
     std::string texture = p.texture;
     if (assetPicker("Texture override", texture, assets, [](const std::string& path) {
             return materialTexturePath(path);
@@ -271,8 +274,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
                       !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) &&
                       !world.has<SpotLight>(entity) && !world.has<Laser>(entity) &&
-                      !world.has<LightShafts>(entity) && !world.has<CharacterController>(entity) &&
-                      !world.has<FPSCamera>(entity);
+                      !world.has<Terrain>(entity) && !world.has<LightShafts>(entity) &&
+                      !world.has<CharacterController>(entity) && !world.has<FPSCamera>(entity);
         }
         if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
             allowed = !world.has<CharacterController>(entity);
@@ -343,6 +346,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Laser>) {
             type = 18;
         }
+        if constexpr (std::is_same_v<T, Terrain>) {
+            type = 20;
+        }
         if constexpr (std::is_same_v<T, LightShafts>) {
             type = 19;
         }
@@ -360,8 +366,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                 "ObjectName",    "LegacyScripts",       "Camera",     "AudioSource",
                 "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
                 "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
-                "Animation",     "ParticleSystem",      "Laser",      "LightShafts"};
-            for (int i = 0; i < 20; ++i) {
+                "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
+                "Terrain"};
+            for (int i = 0; i < 21; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -700,12 +707,11 @@ inline void drawInspector(World& world,
                 ImGui::EndCombo();
             }
             ImGui::Separator();
-            auto ordered =
-                world.has<InspectorOrder>(selected)
-                    ? world.get<InspectorOrder>(selected).types
-                    : std::vector<int>{
-                          0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19};
-            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19}) {
+            auto ordered = world.has<InspectorOrder>(selected)
+                               ? world.get<InspectorOrder>(selected).types
+                               : std::vector<int>{0, 3, 2,  1,  6,  9,  10, 11, 12, 8,
+                                                  7, 5, 13, 14, 15, 16, 17, 18, 19, 20};
+            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19, 20}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -1131,6 +1137,17 @@ inline void drawInspector(World& world,
                         camera->targetEntity = {};
                     }
                 }
+                if (componentID == 20) {
+                    if (auto* terrain = world.tryGet<Terrain>(selected);
+                        terrain && componentHeader<Terrain>(world, selected, "Terrain")) {
+                        ImGui::TextWrapped("%s",
+                                           terrain->asset.empty() ? "Unsaved terrain"
+                                                                  : terrain->asset.c_str());
+                        if (ImGui::Button("Open terrain tools")) {
+                            Terrains::openTools = true;
+                        }
+                    }
+                }
                 if (componentID == 19) {
                     if (auto* shaft = world.tryGet<LightShafts>(selected);
                         shaft && componentHeader<LightShafts>(world, selected, "LightShafts")) {
@@ -1552,6 +1569,10 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<Terrain>(selected) && ImGui::MenuItem("Terrain")) {
+                    world.add(selected, Terrain{});
+                    Terrains::openTools = true;
+                }
                 if (!world.has<LightShafts>(selected) && ImGui::MenuItem("LightShafts")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});

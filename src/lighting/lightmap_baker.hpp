@@ -7,6 +7,7 @@
 #include "models/model_asset.hpp"
 #include "project/project_io.hpp"
 #include "scene/editor_grid.hpp"
+#include "terrain/terrain_mesh.hpp"
 #include <atomic>
 #include <limits>
 #include <numeric>
@@ -25,6 +26,7 @@ struct Object {
     Entity entity;
     Transform transform;
     MeshRenderer renderer;
+    std::shared_ptr<const Terrains::Data> terrain;
 };
 struct Light {
     LightSettings settings;
@@ -393,6 +395,9 @@ inline std::string indirectAtlas(const std::string& direct) {
 }
 inline MeshData
 geometry(const Object& o, const AssetManager& assets, const ProjectIO::Meshes& meshes) {
+    if (o.terrain) {
+        return Terrains::bakeMesh(*o.terrain);
+    }
     if (!o.renderer.model.empty()) {
         return loadModelAsset(assets, o.renderer.model);
     }
@@ -447,6 +452,7 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
         std::size_t first, count;
         int grid, tile;
         Entity entity;
+        std::shared_ptr<const Terrains::Data> terrain;
     };
     std::vector<Range> ranges;
     std::size_t pixels = 0, workTexels = 0;
@@ -457,7 +463,7 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
         if (!count || data.topology != MeshData::Topology::Triangles) {
             throw std::runtime_error("Mesh has no triangles");
         }
-        const int grid = int(std::ceil(std::sqrt(double(count))));
+        const int grid = o.terrain ? 1 : int(std::ceil(std::sqrt(double(count))));
         // A two-triangle floor needs world-space density, not 16 pixels for 16 metres.
         float longest = 0;
         for (std::size_t i = 0; i < count; ++i) {
@@ -474,18 +480,21 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
         }
         // Degrade chart density gracefully instead of rejecting high-poly models.
         const int tile =
-            std::clamp(int(std::min(2048.f, std::ceil(longest * settings.tile))) + 5, 2, maxTile);
+            o.terrain ? settings.tile * 32
+                      : std::clamp(int(std::min(2048.f, std::ceil(longest * settings.tile))) + 5,
+                                   2,
+                                   maxTile);
         pixels += std::size_t(grid * tile) * std::size_t(grid * tile);
         if (pixels > 32 * 1024 * 1024 || triangles.size() + count > 500000) {
             throw std::runtime_error(
                 "Bake exceeds 32M texel / 500k triangle budget; split the level or lower quality");
         }
-        workTexels += count * std::size_t(tile) * tile;
+        workTexels += (o.terrain ? 1 : count) * std::size_t(tile) * tile;
         if (double(workTexels) * settings.samples * lights.size() > 500000000.0) {
             throw std::runtime_error(
                 "Direct bake exceeds 500M shadow-ray budget; lower density/samples/light count or split the level");
         }
-        ranges.push_back({triangles.size(), count, grid, tile, o.entity});
+        ranges.push_back({triangles.size(), count, grid, tile, o.entity, o.terrain});
         const auto& t = o.transform;
         MaterialProperties material;
         material.color = o.renderer.color;
@@ -542,42 +551,81 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
         const int tile = range.tile, size = range.grid * tile;
         std::vector<unsigned char> image(std::size_t(size) * size * 3, 0);
 
-        for (std::size_t face = 0; face < range.count; ++face) {
-            check(*progress);
-            const auto& tri = triangles[range.first + face];
-
-            for (int y = 0; y < tile; ++y) {
+        if (range.terrain) {
+            const auto& d = *range.terrain;
+            for (int y = 0; y < size; ++y) {
                 check(*progress);
-                for (int x = 0; x < tile; ++x) {
-                    const float gutter = tile >= 6 ? 2.5f : .5f, span = tile - 2 * gutter;
-                    float u = std::clamp((x + .5f - gutter) / span, 0.f, 1.f),
-                          v = std::clamp((y + .5f - gutter) / span, 0.f, 1.f);
-                    if (u + v > 1) {
-                        float sum = u + v;
-                        u /= sum;
-                        v /= sum;
-                    }
-                    const auto position = tri.p[0] * (1 - u - v) + tri.p[1] * u + tri.p[2] * v;
-                    auto n = normalize(tri.n[0] * (1 - u - v) + tri.n[1] * u + tri.n[2] * v);
-                    const auto irradiance = directLighting(position,
-                                                           n,
-                                                           range.first + face,
-                                                           lights,
-                                                           bvh,
-                                                           settings.bias,
-                                                           settings.samples);
-                    const std::size_t offset = (std::size_t(face / range.grid * tile + y) * size +
-                                                face % range.grid * tile + x) *
-                                               3;
+                for (int x = 0; x < size; ++x) {
+                    float fx = (x + .5f) / size * (d.resolution - 1),
+                          fz = (y + .5f) / size * (d.resolution - 1);
+                    int ix = std::min(int(fx), d.resolution - 2),
+                        iz = std::min(int(fz), d.resolution - 2);
+                    float u = fx - ix, v = fz - iz;
+                    bool second = u + v > 1;
+                    const auto face =
+                        std::size_t(iz * (d.resolution - 1) + ix) * 2 + (second ? 1 : 0);
+                    const auto& tri = triangles[range.first + face];
+                    // Triangles: (a,c,b) then (b,c,e), matching render/collision winding.
+                    float b = second ? 1 - u : v, c = second ? u + v - 1 : u, a = 1 - b - c;
+                    auto position = tri.p[0] * a + tri.p[1] * b + tri.p[2] * c;
+                    auto n = normalize(tri.n[0] * a + tri.n[1] * b + tri.n[2] * c);
+                    auto irradiance = directLighting(position,
+                                                     n,
+                                                     range.first + face,
+                                                     lights,
+                                                     bvh,
+                                                     settings.bias,
+                                                     settings.samples);
                     auto encode = [](float v) {
                         return static_cast<unsigned char>(
                             std::sqrt(std::clamp(v / 16.f, 0.f, 1.f)) * 255.f + .5f);
                     };
+                    auto offset = (std::size_t(y) * size + x) * 3;
                     image[offset] = encode(irradiance.z);
                     image[offset + 1] = encode(irradiance.y);
                     image[offset + 2] = encode(irradiance.x);
                 }
-                progress->done += tile;
+                progress->done += size;
+            }
+        } else {
+            for (std::size_t face = 0; face < range.count; ++face) {
+                check(*progress);
+                const auto& tri = triangles[range.first + face];
+
+                for (int y = 0; y < tile; ++y) {
+                    check(*progress);
+                    for (int x = 0; x < tile; ++x) {
+                        const float gutter = tile >= 6 ? 2.5f : .5f, span = tile - 2 * gutter;
+                        float u = std::clamp((x + .5f - gutter) / span, 0.f, 1.f),
+                              v = std::clamp((y + .5f - gutter) / span, 0.f, 1.f);
+                        if (u + v > 1) {
+                            float sum = u + v;
+                            u /= sum;
+                            v /= sum;
+                        }
+                        const auto position = tri.p[0] * (1 - u - v) + tri.p[1] * u + tri.p[2] * v;
+                        auto n = normalize(tri.n[0] * (1 - u - v) + tri.n[1] * u + tri.n[2] * v);
+                        const auto irradiance = directLighting(position,
+                                                               n,
+                                                               range.first + face,
+                                                               lights,
+                                                               bvh,
+                                                               settings.bias,
+                                                               settings.samples);
+                        const std::size_t offset =
+                            (std::size_t(face / range.grid * tile + y) * size +
+                             face % range.grid * tile + x) *
+                            3;
+                        auto encode = [](float v) {
+                            return static_cast<unsigned char>(
+                                std::sqrt(std::clamp(v / 16.f, 0.f, 1.f)) * 255.f + .5f);
+                        };
+                        image[offset] = encode(irradiance.z);
+                        image[offset + 1] = encode(irradiance.y);
+                        image[offset + 2] = encode(irradiance.x);
+                    }
+                    progress->done += tile;
+                }
             }
         }
         check(*progress);

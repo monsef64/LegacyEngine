@@ -749,6 +749,7 @@ Animation = {}
 ---@field blend integer
 ---@field sprite integer
 ---@field seed integer
+---@field useSpriteSheet boolean Opt-in atlas animation; false by default
 ---@field sheetColumns integer
 ---@field sheetRows integer
 ---@field color table Assign a complete x/y/z vector table; returned tables are copies
