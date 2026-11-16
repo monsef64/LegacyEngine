@@ -67,6 +67,148 @@ inline bool editVector(const char* label,
     value = {v[0], v[1], v[2]};
     return true;
 }
+inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) {
+    const char* presets[]{"Fire", "Smoke", "Sparkles"};
+    if (ImGui::BeginCombo("Preset", "Select preset...")) {
+        for (int i = 0; i < 3; ++i) {
+            if (ImGui::Selectable(presets[i])) {
+                applyParticlePreset(p, i);
+            }
+        }
+        ImGui::EndCombo();
+    }
+    Json edited = Particles::settings(p);
+    bool changed = false;
+    auto fields = [&](const char* group, std::initializer_list<const char*> names) {
+        if (!ImGui::TreeNodeEx(group, ImGuiTreeNodeFlags_DefaultOpen)) {
+            return;
+        }
+        for (const auto* name : names) {
+            ImGui::PushID(name);
+            std::string label;
+            for (const char* c = name; *c; ++c) {
+                if (c != name && std::isupper(static_cast<unsigned char>(*c))) {
+                    label += ' ';
+                }
+                label += *c;
+            }
+            if (!label.empty()) {
+                label[0] = char(std::toupper(static_cast<unsigned char>(label[0])));
+            }
+            const char* caption = label.c_str();
+            auto& value = edited[name];
+            if (value.is_boolean()) {
+                bool b = value.get<bool>();
+                if (ImGui::Checkbox(caption, &b)) {
+                    value = b;
+                    changed = true;
+                }
+            } else if (value.is_array()) {
+                Vec3 v{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+                const bool color = std::strstr(name, "Color") || !std::strcmp(name, "color");
+                if (color ? ImGui::ColorEdit3(caption, &v.x) : editVector(caption, v)) {
+                    value = Json::array({v.x, v.y, v.z});
+                    changed = true;
+                }
+            } else if (value.is_number_integer()) {
+                int v = value.get<int>();
+                bool edit = false;
+                if (!std::strcmp(name, "shape")) {
+                    edit = ImGui::Combo(caption, &v, "Point\0Box\0Sphere\0Cone\0");
+                } else if (!std::strcmp(name, "blend")) {
+                    edit = ImGui::Combo(caption, &v, "Alpha\0Additive\0");
+                } else if (!std::strcmp(name, "sprite")) {
+                    edit = ImGui::Combo(caption, &v, "Fire\0Smoke\0Sparkles\0");
+                } else {
+                    edit = ImGui::InputInt(caption, &v);
+                }
+                if (edit) {
+                    value = v;
+                    changed = true;
+                }
+            } else if (value.is_number()) {
+                float f = value.get<float>();
+                if (ImGui::DragFloat(caption, &f, .02f)) {
+                    value = f;
+                    changed = true;
+                }
+            }
+        }
+        ImGui::TreePop();
+    };
+    fields("Emission",
+           {"playOnAwake",
+            "loop",
+            "duration",
+            "startDelay",
+            "rate",
+            "burstCount",
+            "maxParticles",
+            "seed"});
+    fields("Shape and motion",
+           {"shape",
+            "radius",
+            "boxSize",
+            "coneAngle",
+            "direction",
+            "localSpace",
+            "speedMin",
+            "speedMax",
+            "velocity",
+            "gravity",
+            "drag"});
+    fields("Appearance",
+           {"lifetimeMin",
+            "lifetimeMax",
+            "sizeMin",
+            "sizeMax",
+            "endSize",
+            "color",
+            "endColor",
+            "alpha",
+            "endAlpha",
+            "rotationMin",
+            "rotationMax",
+            "angularVelocity",
+            "blend",
+            "sprite"});
+    fields("Sprite sheet", {"sheetColumns", "sheetRows", "frameRate"});
+    std::string texture = p.texture;
+    if (assetPicker("Texture override", texture, assets, [](const std::string& path) {
+            return materialTexturePath(path);
+        })) {
+        edited["texture"] = texture;
+        changed = true;
+    }
+    if (ImGui::BeginDragDropTarget()) {
+        if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+            const std::string path = static_cast<const char*>(drop->Data);
+            if (materialTexturePath(path)) {
+                edited["texture"] = path;
+                changed = true;
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
+    static std::string error;
+    if (changed) {
+        try {
+            const auto settings = Particles::parse(edited);
+            const bool restart = settings.localSpace != p.localSpace || settings.seed != p.seed;
+            static_cast<ParticleSettings&>(p) = settings;
+            if (restart) {
+                p.restart();
+            }
+            error.clear();
+        } catch (const std::exception& e) {
+            error = e.what();
+        }
+    }
+    if (!error.empty()) {
+        ImGui::TextWrapped("%s", error.c_str());
+    }
+}
+
 template <class T>
 inline bool
 componentHeader(World& world, Entity entity, const char* name, const T& defaults = T{}) {
@@ -168,6 +310,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Animation>) {
             type = 16;
         }
+        if constexpr (std::is_same_v<T, ParticleSystem>) {
+            type = 17;
+        }
         EditorComponentPayload payload{entity, type};
         ImGui::SetDragDropPayload("EDITOR_COMPONENT", &payload, sizeof(payload));
         ImGui::TextUnformatted(name);
@@ -193,8 +338,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "CharacterController",
                                 "FPSCamera",
                                 "Raycast",
-                                "Animation"};
-            for (int i = 0; i < 17; ++i) {
+                                "Animation",
+                                "ParticleSystem"};
+            for (int i = 0; i < 18; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -203,9 +349,10 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                 auto& order =
                     world.has<InspectorOrder>(entity)
                         ? world.get<InspectorOrder>(entity)
-                        : world.add(entity,
-                                    InspectorOrder{
-                                        {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16}});
+                        : world.add(
+                              entity,
+                              InspectorOrder{
+                                  {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17}});
                 auto from = std::find(order.types.begin(), order.types.end(), source.type);
                 if (from != order.types.end()) {
                     order.types.erase(from);
@@ -241,7 +388,8 @@ inline void drawScriptExports(World& world,
                                  "CharacterController",
                                  "FPSCamera",
                                  "Raycast",
-                                 "Animation"};
+                                 "Animation",
+                                 "ParticleSystem"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -300,7 +448,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 17 &&
+                        if (target.type >= 0 && target.type < 18 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -514,13 +662,19 @@ inline void drawInspector(World& world,
             auto ordered =
                 world.has<InspectorOrder>(selected)
                     ? world.get<InspectorOrder>(selected).types
-                    : std::vector<int>{0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16};
-            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16}) {
+                    : std::vector<int>{0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17};
+            for (int id : {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
             }
             for (int componentID : ordered) {
+                if (auto* p = world.tryGet<ParticleSystem>(selected);
+                    componentID == 17 && p &&
+                    componentHeader<ParticleSystem>(world, selected, "ParticleSystem")) {
+                    drawParticleSettings(*p, assets);
+                }
+
                 if (auto* t = world.tryGet<Transform>(selected);
                     componentID == 0 && t &&
                     componentHeader<Transform>(world, selected, "Transform")) {
@@ -1257,6 +1411,12 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<ParticleSystem>(selected) && ImGui::MenuItem("Particle System")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, ParticleSystem{});
+                }
                 if (!world.has<Animation>(selected) && ImGui::MenuItem("Animation")) {
                     world.add(selected, Animation{});
                 }

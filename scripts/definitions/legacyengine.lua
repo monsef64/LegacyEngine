@@ -712,3 +712,65 @@ function findComponentInChildren(gameObject,componentType) end
 ---@field reset fun(self:Animation) Stops and restores the pre-play values
 ---@type ComponentToken
 Animation = {}
+
+
+---@class ParticleSystem
+---@field Point integer Shape constant
+---@field Box integer Shape constant
+---@field Sphere integer Shape constant
+---@field Cone integer Shape constant
+---@field Alpha integer Blend constant
+---@field Additive integer Blend constant
+---@field Fire integer Sprite constant
+---@field Smoke integer Sprite constant
+---@field Sparkles integer Sprite constant
+---@field play fun(self:ParticleSystem)
+---@field pause fun(self:ParticleSystem)
+---@field resume fun(self:ParticleSystem)
+---@field stop fun(self:ParticleSystem,clearParticles?:boolean)
+---@field restart fun(self:ParticleSystem)
+---@field clear fun(self:ParticleSystem)
+---@field emit fun(self:ParticleSystem,count:integer)
+---@field setPreset fun(self:ParticleSystem,name:string) Fire, Smoke or Sparkles
+---@field isPlaying boolean Read-only
+---@field paused boolean Read-only
+---@field particleCount integer Read-only
+---@field time number Read-only emitter cycle time
+---@field loop boolean
+---@field playOnAwake boolean
+---@field localSpace boolean
+---@field maxParticles integer
+---@field burstCount integer
+---@field shape integer
+---@field blend integer
+---@field sprite integer
+---@field seed integer
+---@field sheetColumns integer
+---@field sheetRows integer
+---@field color table Assign a complete x/y/z vector table; returned tables are copies
+---@field endColor table Assign a complete x/y/z vector table; returned tables are copies
+---@field direction table Assign a complete x/y/z vector table; returned tables are copies
+---@field velocity table Assign a complete x/y/z vector table; returned tables are copies
+---@field gravity table Assign a complete x/y/z vector table; returned tables are copies
+---@field boxSize table Assign a complete x/y/z vector table; returned tables are copies
+---@field duration number
+---@field startDelay number
+---@field rate number
+---@field lifetimeMin number
+---@field lifetimeMax number
+---@field speedMin number
+---@field speedMax number
+---@field sizeMin number
+---@field sizeMax number
+---@field endSize number
+---@field alpha number
+---@field endAlpha number
+---@field radius number
+---@field coneAngle number
+---@field drag number
+---@field rotationMin number
+---@field rotationMax number
+---@field angularVelocity number
+---@field frameRate number
+---@field texture string Empty selects bundled sprite; otherwise project-relative image
+ParticleSystem = {}

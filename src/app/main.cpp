@@ -25,6 +25,7 @@
 #include "editor/level_objects.hpp"
 #include "editor/lightmapping_window.hpp"
 #include "editor/model_preview_window.hpp"
+#include "editor/particle_playback.hpp"
 #include "editor/play_mode.hpp"
 #include "editor/playback_controls.hpp"
 #include "editor/profiler_window.hpp"
@@ -35,6 +36,7 @@
 #include "gameplay/raycast.hpp"
 #include "levels/level_system.hpp"
 #include "models/collider_source.hpp"
+#include "particles/particle_update.hpp"
 #include "physics/collider_debug.hpp"
 #include "physics/physics.hpp"
 #include "platform/engine_log.hpp"
@@ -241,6 +243,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     EditorHistory history(world);
     PlayMode playMode;
     ObjectClipboard clipboard;
+    float particlePreviewSpeed = 1;
     AssetBrowser browser;
     ScriptComponents componentScripts;
     AudioSystem audio;
@@ -1278,6 +1281,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             editHistory = std::move(history);
             history = EditorHistory(world, selectedEntity);
             if (playMode.play(world)) {
+                Particles::reset(world);
                 lightmappingWindow.cancelBake(); // do not compete with gameplay for CPU time
                 focusGame = true;
                 if (separateGame && !gameWindow) {
@@ -1766,11 +1770,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                             ImVec2(0, 1),
                                             ImVec2(1, 0));
                 }
-                sceneHovered =
-                    ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && ImGui::IsItemHovered();
-                if (sceneHovered && ImGui::IsMouseClicked(0)) {
-                    browser.selected.clear();
-                }
+                const bool imageHovered = ImGui::IsItemHovered();
+                sceneHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && imageHovered;
                 if (ImGui::BeginDragDropTarget()) {
                     if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                         const std::string path = static_cast<const char*>(asset->Data);
@@ -1783,6 +1784,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         }
                     }
                     ImGui::EndDragDropTarget();
+                }
+                const bool playbackHovered = drawParticlePlayback(
+                    world, selectedEntity, sceneRect, playMode.active(), particlePreviewSpeed);
+                sceneHovered &= !playbackHovered;
+                if (sceneHovered && ImGui::IsMouseClicked(0)) {
+                    browser.selected.clear();
                 }
                 if (editAllowed && (sceneFocused || sceneHovered) && !cameraLooking &&
                     !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
@@ -1799,12 +1806,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     }
                 }
                 orientationInteracting = drawSceneOrientation(
-                    camera, sceneRect, editAllowed && !cameraLooking && !editor.dragging());
+                    camera,
+                    sceneRect,
+                    editAllowed && !playbackHovered && !cameraLooking && !editor.dragging());
                 editor.draw(world,
                             selectedEntity,
                             !playMode.active() && !projectDialog.pending() &&
                                 !browser.dialog.pending() && !orientationInteracting &&
-                                !cameraLooking && !(SDL_GetModState() & SDL_KMOD_ALT),
+                                !playbackHovered && !cameraLooking &&
+                                !(SDL_GetModState() & SDL_KMOD_ALT),
                             camera,
                             static_cast<float>(sceneSurface.width) / sceneSurface.height,
                             &sceneRect,
@@ -2107,6 +2117,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
 
+        Particles::update(world,
+                          float(std::min(seconds, .1f)),
+                          playMode.playing(),
+                          playMode.active() && !playMode.playing(),
+                          selectedEntity,
+                          particlePreviewSpeed);
         profiler.checkpoint(ProfilePart::Audio);
         int width = 0;
         int height = 0;

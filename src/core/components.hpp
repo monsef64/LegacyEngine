@@ -10,6 +10,7 @@
 #include "core/math.hpp"
 #include "lighting/light.hpp"
 #include "materials/material.hpp"
+#include "particles/particle_system.hpp"
 #include "rendering/mesh.hpp"
 #include "rendering/skybox.hpp"
 #include <string>

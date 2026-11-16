@@ -99,10 +99,16 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(FPSCamera{});
     component(Raycast{});
     component(Animation{});
+    component(ParticleSystem{});
     component(ObjectLayer{});
     component(InspectorOrder{});
     if (auto* animation = world.tryGet<Animation>(copy)) {
         *animation = Animation{animation->clip, animation->loop, animation->playOnStart};
+    }
+    if (auto* particles = world.tryGet<ParticleSystem>(copy)) {
+        particles->stop();
+        particles->started = false;
+        particles->time = 0;
     }
     if (auto* audio = world.tryGet<AudioSource>(copy)) {
         audio->stop();

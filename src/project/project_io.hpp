@@ -1,5 +1,6 @@
 #pragma once
 #include "core/hierarchy.hpp"
+#include "particles/particle_io.hpp"
 #include "project/project_json.hpp"
 #include "scene/camera.hpp"
 #include "scene/scene_camera.hpp"
@@ -68,7 +69,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 21\n";
+    out << std::setprecision(9) << "LegacyEngineProject 22\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -102,7 +103,7 @@ inline std::string encodeLegacy(World& world,
             (world.has<CharacterController>(e) ? 32768 : 0) |
             (world.has<FPSCamera>(e) ? 65536 : 0) | (world.has<ObjectLayer>(e) ? 131072 : 0) |
             (world.has<InspectorOrder>(e) ? 262144 : 0) | (world.has<Raycast>(e) ? 524288 : 0) |
-            (world.has<Animation>(e) ? 1048576 : 0);
+            (world.has<Animation>(e) ? 1048576 : 0) | (world.has<ParticleSystem>(e) ? 2097152 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -268,6 +269,11 @@ inline std::string encodeLegacy(World& world,
             out << std::quoted(animation->clip) << ' ' << animation->loop << ' '
                 << animation->playOnStart << ' ';
         }
+        if (const auto* particles = world.tryGet<ParticleSystem>(e)) {
+            const auto data = Particles::settings(*particles);
+            Particles::parse(data);
+            out << std::quoted(data.dump()) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -285,7 +291,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 21));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 22));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -349,7 +355,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 15 ? 32767u
                          : version < 16 ? 131071u
                          : version < 20 ? 1048575u
-                                        : 2097151u) &&
+                         : version < 22 ? 2097151u
+                                        : 4194303u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -602,7 +609,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             require(types.size() <= 17);
             std::vector<int> seen;
             for (int id : types) {
-                require(id >= 0 && id < 17 &&
+                require(id >= 0 && id < 18 &&
                         std::find(seen.begin(), seen.end(), id) == seen.end());
                 seen.push_back(id);
             }
@@ -628,6 +635,14 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                     (materialPathValid(animation.clip) &&
                      std::filesystem::path(animation.clip).extension() == ".leanim"));
             result.world.add(e, animation);
+        }
+        if (mask & 2097152) {
+            std::string data;
+            in >> std::quoted(data);
+            require(data.size() <= 64 * 1024);
+            ParticleSystem particles;
+            static_cast<ParticleSettings&>(particles) = Particles::parse(parseJson(data));
+            result.world.add(e, particles);
         }
         require(bool(in));
     }

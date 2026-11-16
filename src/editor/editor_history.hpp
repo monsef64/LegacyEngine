@@ -1,5 +1,6 @@
 #pragma once
 #include "core/hierarchy.hpp"
+#include "particles/particle_io.hpp"
 #include <deque>
 #include <functional>
 #include <string>
@@ -49,6 +50,9 @@ inline std::string sceneSignature(World& world) {
         }
     };
     for (Entity e : world.entities()) {
+        component(e, ParticleSystem{}, [&](const ParticleSystem& p) {
+            result += Particles::settings(p).dump();
+        });
         component(e, ObjectActivity{}, [&](const ObjectActivity& a) { scalar(a.enabled); });
         component(e, PrefabInstance{}, [&](const PrefabInstance& p) {
             scalar(p.asset.size());

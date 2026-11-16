@@ -7,6 +7,8 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"ParticleSystem",
+     "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles); configurable emission, shape, motion, color, size and sprite sheet; particleCount/isPlaying/paused/time read-only"},
     {"Animation",
      "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"},
     {"onAnimationFinish", "onAnimationFinish() - targeted animation lifecycle callback"},
