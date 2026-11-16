@@ -10,9 +10,11 @@
 #include "editor/script_editor.hpp"
 #include "materials/material_io.hpp"
 #include "models/model_asset.hpp"
+#include "platform/open_location.hpp"
 #include "platform/project_dialog.hpp"
 #include "platform/system_trash.hpp"
 #include "project/project_assets.hpp"
+#include <deque>
 #include <future>
 #include <imgui_internal.h>
 #include <set>
@@ -123,38 +125,65 @@ class AssetBrowser {
         std::filesystem::path root;
         std::string selected, error;
     };
+    struct ImportRequest {
+        AssetManager manager;
+        std::string folder, path;
+    };
     std::future<ImportResult> importJob_;
+    std::deque<ImportRequest> importQueue_;
+    std::string importErrors_, activeImportPath_;
     bool importing() const {
-        return importJob_.valid();
+        return importJob_.valid() || !importQueue_.empty();
+    }
+    void startNextImport() {
+        if (importJob_.valid() || importQueue_.empty()) {
+            return;
+        }
+        auto request = std::move(importQueue_.front());
+        importQueue_.pop_front();
+        activeImportPath_ = request.path;
+        importJob_ = std::async(std::launch::async, [request = std::move(request)]() mutable {
+            return runImport(std::move(request.manager), std::move(request.folder), request.path);
+        });
     }
     void pollImport() {
-        if (!importJob_.valid() ||
-            importJob_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            return;
-        }
-        try {
-            auto result = importJob_.get();
-            ++modelAssetRevision;
-            if (result.root == assets.root) {
-                selected = result.selected;
-                expandedModels_.insert(selected);
-                assets.error = result.error;
-                thumbnails.clear();
+        if (importJob_.valid() &&
+            importJob_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            try {
+                auto result = importJob_.get();
+                ++modelAssetRevision;
+                if (result.root == assets.root) {
+                    if (!result.selected.empty()) {
+                        selected = result.selected;
+                        expandedModels_.insert(selected);
+                    }
+                    if (!result.error.empty()) {
+                        importErrors_ +=
+                            std::filesystem::path(activeImportPath_).filename().string() + ": " +
+                            result.error + "\n";
+                    }
+                    assets.error = importErrors_;
+                    thumbnails.clear();
+                }
+            } catch (const std::exception& e) {
+                importErrors_ += std::string("Import failed: ") + e.what() + "\n";
+                assets.error = importErrors_;
             }
-        } catch (const std::exception& e) {
-            assets.error = std::string("Import failed: ") + e.what();
         }
+        startNextImport();
     }
     void importFile(const std::string& path) {
-        if (importing()) {
-            assets.error = "An import is already running; wait for it to finish.";
+        if (path.empty()) {
             return;
         }
-        const auto manager = assets;
-        const auto folder = currentFolder;
-        importJob_ = std::async(std::launch::async, [manager, folder, path]() mutable {
-            return runImport(std::move(manager), folder, path);
-        });
+        if (!importing()) {
+            importErrors_.clear();
+            assets.error.clear();
+        }
+        // Own each SDL drop path immediately; later events can invalidate its pointer.
+        // Capture root/folder now so navigation cannot redirect queued imports.
+        importQueue_.push_back({assets, currentFolder, path});
+        startNextImport();
     }
     static ImportResult
     runImport(AssetManager assets, std::string currentFolder, const std::string& path) {
@@ -541,6 +570,10 @@ class AssetBrowser {
         assets.error.clear();
     }
     void setRoot(const std::filesystem::path& root) {
+        // An in-flight worker owns its old manager and may finish there. Never
+        // redirect its remaining queue into a newly opened project.
+        importQueue_.clear();
+        importErrors_.clear();
         preview.stop();
         thumbnails.clear();
         clipboardPath_.clear();
@@ -563,6 +596,10 @@ class AssetBrowser {
         if (auto result = dialog.poll()) {
             if (!result->error.empty()) {
                 assets.error = result->error;
+            } else if (!result->paths.empty()) {
+                for (const auto& path : result->paths) {
+                    importFile(path);
+                }
             } else if (!result->path.empty()) {
                 importFile(result->path);
             }
@@ -581,7 +618,8 @@ class AssetBrowser {
         }
         if (beginEditorPanel("Assets")) {
             if (importing()) {
-                ImGui::TextUnformatted("Importing assets in background...");
+                ImGui::Text("Importing assets: %zu waiting", importQueue_.size());
+                ImGui::TextWrapped("%s", activeImportPath_.c_str());
                 ImGui::TextDisabled(
                     "One worker is converting and compressing meshes. Asset edits are paused.");
                 ImGui::End();
@@ -931,6 +969,16 @@ class AssetBrowser {
                         }
                         if (!folderItem && modelAsset(file) &&
                             ImGui::BeginPopupContextItem("Model actions")) {
+                            selected = file;
+                            if (ImGui::MenuItem(folderItem ? "Open folder location"
+                                                           : "Open asset location")) {
+                                try {
+                                    openLocation(assets.resolve(file));
+                                } catch (const std::exception& e) {
+                                    assets.error = e.what();
+                                }
+                            }
+                            ImGui::Separator();
                             if (ImGui::MenuItem("Instantiate in level")) {
                                 spawnModelRequest = file;
                             }
@@ -938,6 +986,16 @@ class AssetBrowser {
                         }
                         if (!folderItem && AssetManager::extension(file) == ".prefab" &&
                             ImGui::BeginPopupContextItem("Prefab actions")) {
+                            selected = file;
+                            if (ImGui::MenuItem(folderItem ? "Open folder location"
+                                                           : "Open asset location")) {
+                                try {
+                                    openLocation(assets.resolve(file));
+                                } catch (const std::exception& e) {
+                                    assets.error = e.what();
+                                }
+                            }
+                            ImGui::Separator();
                             if (ImGui::MenuItem("Edit Prefab")) {
                                 editPrefabRequest = file;
                             }
@@ -954,6 +1012,15 @@ class AssetBrowser {
                         }
                         if (ImGui::BeginPopupContextItem("Asset actions")) {
                             selected = file;
+                            if (ImGui::MenuItem(folderItem ? "Open folder location"
+                                                           : "Open asset location")) {
+                                try {
+                                    openLocation(assets.resolve(file));
+                                } catch (const std::exception& e) {
+                                    assets.error = e.what();
+                                }
+                            }
+                            ImGui::Separator();
                             if (!folderItem && AssetManager::extension(file) == ".leanim" &&
                                 ImGui::IsMouseDoubleClicked(0)) {
                                 editAnimationRequest = file;

@@ -51,3 +51,29 @@ If changing scripting APIs, update `scripts/definitions/legacyengine.lua` and
 `python docs/generate_reference.py`. Documentation tests reject a stale reference
 or an API without an example. The release workflow builds the complete HTML site,
 includes it in the engine package, and publishes a standalone docs ZIP.
+
+## Compact release binaries
+
+`LEGACY_SMALL_RELEASE=ON` (the default) enables function/data sections and linker
+section garbage collection for optimized GNU/Clang builds on Linux and Windows
+MinGW-w64. This discards unreachable compiled code, including unused routines
+inside static-library objects; it does not disable engine subsystems, remove
+supported asset formats, change optimization level, or remove runtime data.
+Debug builds are unaffected. Set `-DLEGACY_SMALL_RELEASE=OFF` to compare builds.
+
+The Windows and Linux packaging workflows strip unneeded symbols **only from
+the packaged executable copy**. The build-directory executable retains its
+symbols. Keep all bundled runtime DLLs, shaders, particle data, documentation and
+licenses; they are not expendable size savings. No executable packer is used.
+
+A Linux Release/headless-SDL build measured during implementation:
+
+| Executable | Bytes |
+| --- | ---: |
+| Previous linking settings, unstripped | 15,796,656 |
+| Section garbage collection, unstripped | 13,740,696 |
+| Section garbage collection, packaged/stripped copy | 12,194,640 |
+
+The combined reduction is about 22.8%. These are executable sizes, **not archive
+or full installation sizes**; Windows builds and other toolchains will differ.
+The full desktop runtime and Windows MinGW package need manual verification.

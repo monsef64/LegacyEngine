@@ -46,6 +46,8 @@ jobs:
           set -euo pipefail
           mkdir -p package/LegacyEngine
           cp build/LegacyEngine.exe package/LegacyEngine/
+          # Strip only the distribution copy; retain the build binary for debugging.
+          strip --strip-unneeded package/LegacyEngine/LegacyEngine.exe
           cp -R data package/LegacyEngine/data
           cp LICENSE package/LegacyEngine/
           # ldd lists transitive dependencies too. Bundle MinGW runtime DLLs,
