@@ -9,7 +9,7 @@
   },
   {
     "name": "ParticleSystem",
-    "signature": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles); configurable emission, shape, motion, color, size and sprite sheet; particleCount/isPlaying/paused/time read-only"
+    "signature": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"
   },
   {
     "name": "Animation",

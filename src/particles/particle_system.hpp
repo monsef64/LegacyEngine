@@ -7,6 +7,7 @@
 struct ParticleSettings {
     bool loop = true, playOnAwake = true, localSpace = false;
     bool collision = false;
+    bool useSpriteSheet = false; // opt-in; a single complete sprite remains the default
     float restitution = .5f, collisionFriction = .1f;
     float duration = 5, startDelay = 0, rate = 40;
     int maxParticles = 1000, burstCount = 0, shape = 3, blend = 1, sprite = 0;

@@ -5,6 +5,7 @@
 #include "models/mesh_simplify.hpp"
 #include "models/model_asset.hpp"
 #include "physics/physics.hpp"
+#include "terrain/terrain_mesh.hpp"
 #include <set>
 #include <tuple>
 
@@ -90,7 +91,7 @@ Pose toPose(const Transform& transform) {
 struct Box {
     std::string model;
     Vec3 hullScale{1, 1, 1};
-    unsigned revision = 0;
+    std::uint64_t revision = 0;
     int meshDetail = 8;
     ColliderShape shape = ColliderShape::Box;
     float radius = 0.5f, height = 1.0f;
@@ -315,7 +316,7 @@ struct Physics::Impl {
         }
         return result.Get();
     }
-    JPH::ShapeRefC shape(const Box& box, bool collider) {
+    JPH::ShapeRefC shape(const Box& box, bool collider, const Terrain* terrain = nullptr) {
         JPH::ShapeRefC result;
         if (!collider) {
             return new JPH::EmptyShape;
@@ -353,7 +354,9 @@ struct Physics::Impl {
                     "Mesh collider requires a model asset; no convex/box fallback");
             }
             auto vertices =
-                simplifyMeshTriangles(loadModelAsset(assets, box.model), box.meshDetail);
+                terrain && terrain->data
+                    ? Terrains::collision(*terrain->data)
+                    : simplifyMeshTriangles(loadModelAsset(assets, box.model), box.meshDetail);
             JPH::TriangleList triangles;
             for (std::size_t i = 0; i + 2 < vertices.size(); i += 3) {
                 auto a = vertices[i] * box.hullScale, b = vertices[i + 1] * box.hullScale,
@@ -389,8 +392,19 @@ struct Physics::Impl {
             if (!isActive(world, entity)) {
                 return;
             }
+            const auto* terrain = world.tryGet<Terrain>(entity);
             const auto* source = world.tryGet<Collider>(entity);
-            const auto resolved = source ? effectiveCollider(world, entity, *source) : Collider{};
+            Collider terrainCollider;
+            if (terrain && terrain->data) {
+                terrainCollider.shape = ColliderShape::Mesh;
+                terrainCollider.model = "@terrain";
+                terrainCollider.meshDetail = 15;
+                terrainCollider.friction = .7f;
+                source = &terrainCollider;
+            }
+            const auto resolved = source == &terrainCollider ? terrainCollider
+                                  : source ? effectiveCollider(world, entity, *source)
+                                           : Collider{};
             const auto* rigid = world.tryGet<RigidBody>(entity);
             if ((!source && !rigid) || !isUsable(transform, source ? &resolved : nullptr, rigid)) {
                 return;
@@ -399,7 +413,14 @@ struct Physics::Impl {
             const bool fresh = body.id.IsInvalid();
             body.entity = entity;
             body.visited = true;
-            const Box box = source ? toBox(resolved, transform.scale) : Box{};
+            Box box = source ? toBox(resolved, transform.scale) : Box{};
+            if (terrain && terrain->data) {
+                box.revision =
+                    (std::uint64_t(terrain->data->identity) << 32) | terrain->data->shapeRevision;
+                if (terrain->sculpting && !fresh) {
+                    box.revision = body.box.revision;
+                }
+            }
             const bool sensor = source && resolved.isTrigger;
             auto motion = rigid && rigid->isKinematic ? JPH::EMotionType::Kinematic
                           : rigid && rigid->mass > 0  ? JPH::EMotionType::Dynamic
@@ -453,7 +474,7 @@ struct Physics::Impl {
             try {
                 if (rebuild) {
                     release(body);
-                    const auto geometry = shape(box, source != nullptr);
+                    const auto geometry = shape(box, source != nullptr, terrain);
                     JPH::BodyCreationSettings settings(geometry,
                                                        jvec(pose.position),
                                                        jquat(pose.rotation),

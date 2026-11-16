@@ -26,6 +26,9 @@ inline const char* assetIcon(const std::string& path, bool folder = false) {
     if (ext == ".ls" || ext == ".lua") {
         return "\xef\x87\x89"; // file-code
     }
+    if (ext == ".terrain") {
+        return "\xef\x9b\xbc";
+    }
     if (ext == ".prefab") {
         return "\xef\x86\xb2";
     }
@@ -245,6 +248,36 @@ class AssetBrowser {
             remap(mesh.model);
             remap(mesh.lightmap);
         });
+        world.each<Terrain>([&](Entity, Terrain& t) {
+            if (remap(t.asset)) {
+                t.loaded = assets.resolve(t.asset).generic_string();
+            }
+            if (t.data) {
+                bool copy = false;
+                for (const auto& layer : t.data->layers) {
+                    auto path = layer.texture;
+                    copy |= remap(path);
+                    path = layer.normalMap;
+                    copy |= remap(path);
+                    path = layer.material;
+                    copy |= remap(path);
+                }
+                auto atlas = t.data->lightmap;
+                copy |= remap(atlas);
+                if (copy) {
+                    if (!t.data.unique()) {
+                        t.data = std::make_shared<Terrains::Data>(*t.data);
+                    }
+                    for (auto& layer : t.data->layers) {
+                        remap(layer.texture);
+                        remap(layer.normalMap);
+                        remap(layer.material);
+                    }
+                    remap(t.data->lightmap);
+                    t.data->revision = Terrains::nextRevision();
+                }
+            }
+        });
         world.each<Collider>([&](Entity, Collider& collider) { remap(collider.model); });
         world.each<LightShafts>([&](Entity, LightShafts& s) { remap(s.texture); });
         auto remapLight = [&](Entity, auto& l) {
@@ -287,7 +320,7 @@ class AssetBrowser {
         for (const auto& file : assets.files()) {
             const auto extension = AssetManager::extension(file);
             if (extension == ".leanim" || extension == ".prefab" || extension == ".level" ||
-                extension == ".cubemap") {
+                extension == ".cubemap" || extension == ".terrain") {
                 try {
                     auto doc = readJsonFile(assets.resolve(file), 256 * 1024 * 1024);
                     bool changed = false;
@@ -478,7 +511,7 @@ class AssetBrowser {
             auto fix = [&](const std::filesystem::path& file) {
                 const auto ext = AssetManager::extension(file);
                 if (ext != ".lemesh" && ext != ".leanim" && ext != ".mat" && ext != ".prefab" &&
-                    ext != ".level" && ext != ".cubemap") {
+                    ext != ".level" && ext != ".cubemap" && ext != ".terrain") {
                     return;
                 }
                 auto doc = readJsonFile(file, 256 * 1024 * 1024);

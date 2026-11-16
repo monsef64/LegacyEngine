@@ -12,7 +12,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"Laser",
      "Laser - local -Z collider-clipped beam; enabled, color, intensity, range, width, glowWidth, impactSize; hit, endPosition and hitNormal are read-only"},
     {"ParticleSystem",
-     "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles); configurable emission, shape, motion, color, size and sprite sheet; particleCount/isPlaying/paused/time read-only"},
+     "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"},
     {"Animation",
      "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"},
     {"onAnimationFinish", "onAnimationFinish() - targeted animation lifecycle callback"},

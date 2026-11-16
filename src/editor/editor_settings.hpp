@@ -12,7 +12,9 @@
 struct EditorSettings {
     bool external = false, visible = false, alwaysShowColliders = false;
     int theme = 0;
-    int autosaveSeconds = 120; // zero disables autosave
+    float raycastThickness = 2.f; // viewport pixels; editor gizmo only
+    int maxFps = 120;             // zero disables foreground cap; background still sleeps
+    int autosaveSeconds = 120;    // zero disables autosave
     GridSettings grid;
     std::string error;
     std::filesystem::path file() const {
@@ -54,6 +56,21 @@ struct EditorSettings {
                 autosaveSeconds = std::clamp(delay, 0, 3600);
             }
         }
+        {
+            std::ifstream in(file());
+            std::string line;
+            for (int i = 0; i < 3; ++i) {
+                std::getline(in, line);
+            }
+            float thickness;
+            int fps;
+            if (in >> thickness && std::isfinite(thickness)) {
+                raycastThickness = std::clamp(thickness, 1.f, 8.f);
+            }
+            if (in >> fps) {
+                maxFps = std::clamp(fps, 0, 240);
+            }
+        }
         if (ImGui::GetCurrentContext()) {
             applyEditorPalette(theme);
         }
@@ -61,10 +78,11 @@ struct EditorSettings {
     std::string signature() const {
         std::ostringstream out;
         out.precision(9);
-        out << autosaveSeconds << ':' << external << theme << alwaysShowColliders << grid.visible
-            << ':' << grid.cells << ':' << grid.plane << ':' << grid.spacing << ':'
-            << grid.position.x << ':' << grid.position.y << ':' << grid.position.z << ':'
-            << grid.color.x << ':' << grid.color.y << ':' << grid.color.z;
+        out << raycastThickness << ':' << maxFps << ':' << autosaveSeconds << ':' << external
+            << theme << alwaysShowColliders << grid.visible << ':' << grid.cells << ':'
+            << grid.plane << ':' << grid.spacing << ':' << grid.position.x << ':' << grid.position.y
+            << ':' << grid.position.z << ':' << grid.color.x << ':' << grid.color.y << ':'
+            << grid.color.z;
         return out.str();
     }
     void save() {
@@ -75,7 +93,8 @@ struct EditorSettings {
                 << grid.visible << ' ' << grid.cells << ' ' << grid.plane << ' ' << grid.spacing
                 << ' ' << grid.position.x << ' ' << grid.position.y << ' ' << grid.position.z << ' '
                 << grid.color.x << ' ' << grid.color.y << ' ' << grid.color.z << '\n'
-                << autosaveSeconds;
+                << autosaveSeconds << '\n'
+                << raycastThickness << ' ' << maxFps;
         }
     }
     bool openExternal(const std::filesystem::path& folder, bool isFile = false) {
@@ -160,6 +179,14 @@ struct EditorSettings {
             if (ImGui::Checkbox("Always Show Colliders", &alwaysShowColliders)) {
                 save();
             }
+            if (ImGui::SliderFloat("Raycast line thickness", &raycastThickness, 1, 8, "%.1f px")) {
+                save();
+            }
+            if (ImGui::SliderInt("FPS limit (VSync off)", &maxFps, 0, 240, "%d")) {
+                save();
+            }
+            ImGui::TextDisabled(
+                "VSync takes priority. Limit 0 = uncapped; background target = 30 FPS.");
             if (ImGui::InputInt("Autosave delay (seconds)", &autosaveSeconds)) {
                 autosaveSeconds = std::clamp(autosaveSeconds, 0, 3600);
                 save();

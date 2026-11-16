@@ -15,6 +15,7 @@
 #include "particles/particle_system.hpp"
 #include "rendering/mesh.hpp"
 #include "rendering/skybox.hpp"
+#include "terrain/terrain.hpp"
 #include <string>
 #include <vector>
 

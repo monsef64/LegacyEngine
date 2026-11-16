@@ -89,7 +89,7 @@ Json readCompressedMesh(std::istream& stream, std::size_t limit, bool zstandard)
     }
     return Json::from_cbor(plain, true, true);
 }
-void writeCompressedMesh(std::ostream& stream, const Json& document) {
+void writeCompressedMesh(std::ostream& stream, const Json& document, const char* magic) {
     auto plain = Json::to_cbor(document);
     if (plain.size() > 256ull * 1024 * 1024) {
         throw std::runtime_error("Expanded mesh exceeds 256 MiB");
@@ -99,7 +99,7 @@ void writeCompressedMesh(std::ostream& stream, const Json& document) {
     if (ZSTD_isError(count)) {
         throw std::runtime_error("Zstandard mesh compression failed");
     }
-    stream.write("LEMZ0002", 8);
+    stream.write(magic, 8);
     unsigned char size[8]{};
     for (int i = 0; i < 8; ++i) {
         size[i] = static_cast<unsigned char>(std::uint64_t(plain.size()) >> (8 * i));

@@ -7,6 +7,7 @@
 #include "scene/camera.hpp"
 #include "scene/scene_camera.hpp"
 #include "scripting/script_exports.hpp"
+#include "terrain/terrain_io.hpp"
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -71,7 +72,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 24\n";
+    out << std::setprecision(9) << "LegacyEngineProject 25\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -106,7 +107,8 @@ inline std::string encodeLegacy(World& world,
             (world.has<FPSCamera>(e) ? 65536 : 0) | (world.has<ObjectLayer>(e) ? 131072 : 0) |
             (world.has<InspectorOrder>(e) ? 262144 : 0) | (world.has<Raycast>(e) ? 524288 : 0) |
             (world.has<Animation>(e) ? 1048576 : 0) | (world.has<ParticleSystem>(e) ? 2097152 : 0) |
-            (world.has<Laser>(e) ? 4194304 : 0) | (world.has<LightShafts>(e) ? 8388608 : 0);
+            (world.has<Laser>(e) ? 4194304 : 0) | (world.has<LightShafts>(e) ? 8388608 : 0) |
+            (world.has<Terrain>(e) ? 16777216 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -290,6 +292,10 @@ inline std::string encodeLegacy(World& world,
             require(world.has<Transform>(e));
             out << std::quoted(data.dump()) << ' ';
         }
+        if (const auto* terrain = world.tryGet<Terrain>(e)) {
+            require(terrain->asset.empty() || Terrains::asset(terrain->asset));
+            out << std::quoted(terrain->asset) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -307,7 +313,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 24));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 25));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -374,7 +380,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 22 ? 2097151u
                          : version < 23 ? 4194303u
                          : version < 24 ? 8388607u
-                                        : 16777215u) &&
+                         : version < 25 ? 16777215u
+                                        : 33554431u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -638,11 +645,15 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= (version >= 24 ? 20u : version >= 23 ? 19u : 18u));
+            require(types.size() <= (version >= 25   ? 21u
+                                     : version >= 24 ? 20u
+                                     : version >= 23 ? 19u
+                                                     : 18u));
             std::vector<int> seen;
             for (int id : types) {
                 require(id >= 0 &&
-                        id < (version >= 24   ? 20
+                        id < (version >= 25   ? 21
+                              : version >= 24 ? 20
                               : version >= 23 ? 19
                                               : 18) &&
                         std::find(seen.begin(), seen.end(), id) == seen.end());
@@ -692,6 +703,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> std::quoted(data);
             require(data.size() <= 65536 && (mask & 2));
             result.world.add(e, Shafts::parse(parseJson(data)));
+        }
+        if (mask & 16777216) {
+            Terrain t;
+            in >> std::quoted(t.asset);
+            require(t.asset.empty() || Terrains::asset(t.asset));
+            result.world.add(e, t);
         }
         require(bool(in));
     }

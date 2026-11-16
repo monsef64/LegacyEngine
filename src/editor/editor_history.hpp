@@ -53,7 +53,48 @@ inline std::string sceneSignature(World& world) {
     };
     for (Entity e : world.entities()) {
         component(e, ParticleSystem{}, [&](const ParticleSystem& p) {
-            result += Particles::settings(p).dump();
+            scalar(p.loop);
+            scalar(p.playOnAwake);
+            scalar(p.localSpace);
+            scalar(p.collision);
+            scalar(p.useSpriteSheet);
+            scalar(p.restitution);
+            scalar(p.collisionFriction);
+            scalar(p.duration);
+            scalar(p.startDelay);
+            scalar(p.rate);
+            scalar(p.maxParticles);
+            scalar(p.burstCount);
+            scalar(p.shape);
+            scalar(p.blend);
+            scalar(p.sprite);
+            scalar(p.lifetimeMin);
+            scalar(p.lifetimeMax);
+            scalar(p.speedMin);
+            scalar(p.speedMax);
+            scalar(p.sizeMin);
+            scalar(p.sizeMax);
+            scalar(p.endSize);
+            scalar(p.alpha);
+            scalar(p.endAlpha);
+            scalar(p.radius);
+            scalar(p.coneAngle);
+            scalar(p.drag);
+            scalar(p.rotationMin);
+            scalar(p.rotationMax);
+            scalar(p.angularVelocity);
+            scalar(p.seed);
+            scalar(p.sheetColumns);
+            scalar(p.sheetRows);
+            scalar(p.frameRate);
+            vec(p.color);
+            vec(p.endColor);
+            vec(p.direction);
+            vec(p.velocity);
+            vec(p.gravity);
+            vec(p.boxSize);
+            scalar(p.texture.size());
+            result += p.texture;
         });
         component(e, ObjectActivity{}, [&](const ObjectActivity& a) { scalar(a.enabled); });
         component(e, PrefabInstance{}, [&](const PrefabInstance& p) {
@@ -81,6 +122,16 @@ inline std::string sceneSignature(World& world) {
         });
         component(
             e, LightShafts{}, [&](const LightShafts& s) { result += Shafts::settings(s).dump(); });
+        scalar(world.has<Terrain>(e));
+        if (const auto* terrain = world.tryGet<Terrain>(e)) {
+            const auto& t = *terrain;
+            scalar(t.asset.size());
+            result += t.asset;
+            scalar(bool(t.data));
+            if (t.data) {
+                scalar(t.data->revision);
+            }
+        }
         component(e, Laser{}, [&](const Laser& l) { result += Lasers::settings(l).dump(); });
         auto light = [&](const LightSettings& l) {
             vec(l.color);

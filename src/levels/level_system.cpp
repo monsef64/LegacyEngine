@@ -99,6 +99,7 @@ void LevelSystem::save(const std::string& name,
     if (added && names_.size() >= 256) {
         throw std::runtime_error("Maximum 256 levels");
     }
+    Terrains::saveAll(world, assets_);
     auto document = parseJson(ProjectIO::encode(world, source, camera, meshes_));
     ProjectIO::Loaded check;
     ProjectIO::decode(document.dump(), check, meshes_);

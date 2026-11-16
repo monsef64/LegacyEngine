@@ -5,6 +5,7 @@
 class MaterialTextureCache {
     struct Entry {
         unsigned texture = 0;
+        std::uint64_t generation = 0;
         std::size_t bytes = 0;
         std::uint64_t used = 0;
         std::filesystem::file_time_type stamp{};
@@ -24,7 +25,7 @@ class MaterialTextureCache {
     unsigned uploads_ = 0;
     bool waiting_ = false;
     std::size_t bytes_ = 0;
-    std::uint64_t frame_ = 0;
+    std::uint64_t frame_ = 0, generation_ = 0;
 
   public:
     ~MaterialTextureCache() {
@@ -38,6 +39,10 @@ class MaterialTextureCache {
         ++frame_;
         uploads_ = 0;
         waiting_ = false;
+    }
+    std::uint64_t generation(const std::string& path) const {
+        const auto it = entries_.find(path);
+        return it == entries_.end() ? 0 : it->second.generation;
     }
     unsigned get(const AssetManager& assets, const std::string& path, std::string& error);
 };
