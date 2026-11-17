@@ -171,7 +171,7 @@ Use getComponent(Type) for attached self, getComponent(object, Type) for an expl
 - `overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil`
 - `overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil`
 - `overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil`
-- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
+- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
 - `overload fun(componentType:ComponentType):any`
 
 ```lua
@@ -1310,7 +1310,7 @@ print("Player position", self:getPosition().x)
 
 ### GameObject.getComponent
 
-`getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
+`getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
 
 - `getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
 
@@ -1321,7 +1321,7 @@ object:getComponent(Transform)
 
 ### GameObject.getComponentInParent
 
-`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
+`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
 
 - `getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent`
 
@@ -1332,7 +1332,7 @@ object:getComponentInParent(RigidBody)
 
 ### GameObject.getComponentInChildren
 
-`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
+`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
 
 - `getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants`
 
@@ -1343,7 +1343,7 @@ object:getComponentInChildren(Camera)
 
 ### GameObject.findComponentInParent
 
-`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
+`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
 
 - `findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent`
 
@@ -1354,7 +1354,7 @@ object:findComponentInParent(RigidBody)
 
 ### GameObject.findComponentInChildren
 
-`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
+`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
 
 - `findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren`
 
@@ -1365,7 +1365,7 @@ object:findComponentInChildren(Camera)
 
 ### GameObject.addComponent
 
-`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog`
+`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River`
 
 - `addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner`
 
@@ -3129,7 +3129,7 @@ component:emit(10)
 
 ### ParticleSystem.setPreset
 
-`setPreset(self:ParticleSystem,name:string) Fire, Smoke or Sparkles`
+`setPreset(self:ParticleSystem,name:string) Fire, Smoke, Sparkles, Blood or Explosion`
 
 ```lua
 local component = self:getComponent(ParticleSystem) or self:addComponent(ParticleSystem)
@@ -3213,7 +3213,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | Field | Type / meaning |
 | --- | --- |
 | `shape` | `'Box' / 'Sphere' / 'Capsule' / 'Cone' / 'Mesh'` |
-| `model` | `string Static triangle-mesh .lemesh source; empty follows the rendered model` |
+| `model` | `string Static triangle-mesh .mesh source; empty follows the rendered model` |
 | `meshDetail` | `integer Mesh detail 2..15 (default 8); 15 preserves source triangles` |
 | `size` | `Vec3` |
 | `center` | `Vec3` |
@@ -3234,7 +3234,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `color` | `Vec3` |
 | `checkerboard` | `boolean` |
 | `specular` | `number` |
-| `model` | `string Static .lemesh asset path; setting mesh to a primitive clears this` |
+| `model` | `string Static .mesh asset path; setting mesh to a primitive clears this` |
 
 ### ObjectName fields
 
@@ -3575,6 +3575,36 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `density` | `number 0..10 inverse metres; zero is clear` |
 | `start` | `number Distance before fog begins, 0 or greater and less than end` |
 | `end` | `number Distance cap, greater than start and at most 1000000 metres; use fog["end"] in Lua` |
+
+### CloudSystem fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `volumetric` | `boolean False = 2D procedural layer; true = bounded volumetric box` |
+| `color` | `table RGB 0..1; assign a complete x/y/z or three-element table, read returns a copy` |
+| `size` | `table XYZ extent 0.1..10000 metres, multiplied by Transform scale; read returns a copy` |
+| `coverage` | `number 0..1` |
+| `density` | `number 0..10` |
+| `scale` | `number Noise frequency 0.001..10` |
+| `speed` | `number Wind speed -100..100` |
+| `opacity` | `number 0..1` |
+| `steps` | `integer Volumetric raymarch budget 4..24, default 12` |
+
+### River fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `color` | `table RGB 0..1; assign a complete vector, read returns a copy` |
+| `width` | `number 0.05..1000 local units` |
+| `opacity` | `number 0..1` |
+| `speed` | `number Flow speed -100..100` |
+| `waveScale` | `number 0.01..100` |
+| `waveStrength` | `number 0..1 Shading only; does not displace geometry` |
+| `foam` | `number 0..1 Procedural edge foam` |
+| `subdivisions` | `integer Samples per curve span 2..32` |
+| `points` | `table List of 2..64 complete local vector tables; getter returns copies, assign the whole list to change` |
 
 ## Skybox1 to Skybox2 transition
 

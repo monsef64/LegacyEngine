@@ -9,6 +9,7 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "effects/camera_effects.hpp"
+#include "effects/environment.hpp"
 #include "effects/fog.hpp"
 #include "effects/laser.hpp"
 #include "effects/light_shafts.hpp"
@@ -43,7 +44,7 @@ struct MeshRenderer {
     std::string material;            // project-relative .mat; empty uses legacy Diffuse values
     MaterialProperties materialValues;
     unsigned materialOverrides = 0; // per-instance script overrides; never edits shared asset
-    std::string model;    // project-relative baked .lemesh; empty selects a built-in primitive
+    std::string model;    // project-relative baked .mesh; empty selects a built-in primitive
     std::string lightmap; // generated direct-light atlas, square-root RGB encoded in TGA
     int lightmapGrid = 0; // automatically generated per-triangle UV chart grid
 };
@@ -67,7 +68,7 @@ struct Collider {
     float radius = 0.5f;
     float height = 1.0f;
     bool isTrigger = false;
-    std::string model;  // Triangle mesh source .lemesh; empty follows this entity's rendered model
+    std::string model;  // Triangle mesh source .mesh; empty follows this entity's rendered model
     int meshDetail = 8; // detail 2..15; 15 preserves triangles, smaller is simpler
 };
 

@@ -14,6 +14,222 @@ class Editor {
     float radius_ = 5, strength_ = 5, falloff_ = .5f, flatten_ = 0, size_ = 128, importScale_ = 50,
           importOffset_ = 0;
     std::string source_, heightmap_, error_;
+    int tab_ = 0, grassType_ = 0, treeType_ = 0;
+    float foliageRate_ = 100, foliageAccumulator_ = 0;
+    unsigned foliageRandom_ = 1337;
+    float random() {
+        foliageRandom_ ^= foliageRandom_ << 13;
+        foliageRandom_ ^= foliageRandom_ >> 17;
+        foliageRandom_ ^= foliageRandom_ << 5;
+        return float(foliageRandom_ >> 8) / 16777216.f;
+    }
+    void foliageUI(Terrain& terrain, const AssetManager& assets, bool allowSave) {
+        if (!terrain.data) {
+            return;
+        }
+        bool trees = tab_ == 2;
+        int& selected = trees ? treeType_ : grassType_;
+        EditorValues::Checkbox("Enable Scene brush", &enabled_);
+        EditorValues::DragFloat(
+            "Brush radius", &radius_, .1f, .1f, 500, "%.1f", ImGuiSliderFlags_AlwaysClamp);
+        EditorValues::SliderFloat("Placement rate", &foliageRate_, 1, 5000, "%.0f / sec");
+        ImGui::TextWrapped(
+            "Paint in Scene. Hold Shift to erase the selected prototype. Grass and trees are GPU-instanced cutouts, not GameObjects.");
+        if (!trees) {
+            ImGui::BeginDisabled(!allowSave);
+            if (ImGui::Button("Install 5 sample grass textures")) {
+                try {
+                    const char* names[]{"meadow", "dry", "fescue", "wild", "short"};
+                    writable(terrain);
+                    for (auto name : names) {
+                        std::string target = std::string("Terrain/Grass/") + name + ".png";
+                        auto source = std::filesystem::path(SDL_GetBasePath()) /
+                                      "data/terrain/grass" / (std::string(name) + ".png");
+                        if (!std::filesystem::exists(source)) {
+                            source = std::filesystem::path("data/terrain/grass") /
+                                     (std::string(name) + ".png");
+                        }
+                        auto dest = assets.resolve(target);
+                        std::filesystem::create_directories(dest.parent_path());
+                        if (!std::filesystem::exists(dest)) {
+                            std::filesystem::copy_file(source, dest);
+                        }
+                        bool exists = false;
+                        for (auto& p : terrain.data->grassTypes) {
+                            exists |= p.asset == target;
+                        }
+                        if (!exists && terrain.data->grassTypes.size() < 16) {
+                            FoliagePrototype p;
+                            p.asset = target;
+                            terrain.data->grassTypes.push_back(p);
+                        }
+                    }
+                    terrain.data->revision = nextRevision();
+                    error_.clear();
+                } catch (const std::exception& e) {
+                    error_ = e.what();
+                }
+            }
+            ImGui::EndDisabled();
+        }
+        auto& types = trees ? terrain.data->treeTypes : terrain.data->grassTypes;
+        if (types.size() < 16 &&
+            ImGui::Button(trees ? "Add tree prototype" : "Add grass prototype")) {
+            writable(terrain);
+            auto& list = trees ? terrain.data->treeTypes : terrain.data->grassTypes;
+            FoliagePrototype p;
+            if (trees) {
+                p.distance = 200;
+            }
+            list.push_back(p);
+            selected = int(list.size()) - 1;
+            terrain.data->revision = nextRevision();
+        }
+        auto& list = trees ? terrain.data->treeTypes : terrain.data->grassTypes;
+        if (!list.empty()) {
+            selected = std::clamp(selected, 0, int(list.size()) - 1);
+            auto label = list[selected].asset.empty() ? "Unassigned" : list[selected].asset.c_str();
+            if (ImGui::BeginCombo("Prototype", label)) {
+                for (int i = 0; i < int(list.size()); ++i) {
+                    ImGui::PushID(i);
+                    if (ImGui::Selectable(list[i].asset.empty() ? "Unassigned"
+                                                                : list[i].asset.c_str(),
+                                          selected == i)) {
+                        selected = i;
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::EndCombo();
+            }
+            auto edited = list[selected];
+            bool changed = assetPicker(trees ? "Tree mesh" : "Grass texture",
+                                       edited.asset,
+                                       &assets,
+                                       [&](const std::string& path) {
+                                           auto ext = AssetManager::extension(path);
+                                           return trees ? (ext == ".mesh" || ext == ".lemesh")
+                                                        : materialTexturePath(path);
+                                       });
+            changed |= EditorValues::ColorEdit3("Tint", &edited.color.x);
+            changed |= EditorValues::DragFloat("Width multiplier",
+                                               &edited.width,
+                                               .05f,
+                                               .01f,
+                                               100,
+                                               "%.2f",
+                                               ImGuiSliderFlags_AlwaysClamp);
+            changed |= EditorValues::DragFloat("Height multiplier",
+                                               &edited.height,
+                                               .05f,
+                                               .01f,
+                                               100,
+                                               "%.2f",
+                                               ImGuiSliderFlags_AlwaysClamp);
+            changed |= EditorValues::DragFloat("Min random scale",
+                                               &edited.minScale,
+                                               .05f,
+                                               .01f,
+                                               edited.maxScale,
+                                               "%.2f",
+                                               ImGuiSliderFlags_AlwaysClamp);
+            changed |= EditorValues::DragFloat("Max random scale",
+                                               &edited.maxScale,
+                                               .05f,
+                                               edited.minScale,
+                                               100,
+                                               "%.2f",
+                                               ImGuiSliderFlags_AlwaysClamp);
+            changed |=
+                EditorValues::SliderFloat("Draw distance", &edited.distance, 1, 2000, "%.0f m");
+            if (changed) {
+                writable(terrain);
+                (trees ? terrain.data->treeTypes : terrain.data->grassTypes)[selected] = edited;
+                terrain.data->revision = nextRevision();
+            }
+            if (ImGui::Button("Remove selected prototype")) {
+                writable(terrain);
+                auto& ps = trees ? terrain.data->treeTypes : terrain.data->grassTypes;
+                auto& instances = trees ? terrain.data->trees : terrain.data->grass;
+                ps.erase(ps.begin() + selected);
+                instances.erase(std::remove_if(instances.begin(),
+                                               instances.end(),
+                                               [&](auto& i) { return i.prototype == selected; }),
+                                instances.end());
+                for (auto& i : instances) {
+                    if (i.prototype > selected) {
+                        --i.prototype;
+                    }
+                }
+                selected = 0;
+                terrain.data->revision = nextRevision();
+            }
+        }
+        ImGui::Text("Placed: %zu", (trees ? terrain.data->trees : terrain.data->grass).size());
+        ImGui::BeginDisabled(!allowSave);
+        if (ImGui::Button("Save .terrain asset")) {
+            try {
+                save(terrain, assets);
+                error_.clear();
+            } catch (const std::exception& e) {
+                error_ = e.what();
+            }
+        }
+        ImGui::EndDisabled();
+        if (!error_.empty()) {
+            ImGui::TextWrapped("%s", error_.c_str());
+        }
+    }
+    void paintFoliage(Terrain& terrain, Vec3 hit, float dt) {
+        bool trees = tab_ == 2;
+        int selected = trees ? treeType_ : grassType_;
+        const auto& original = trees ? terrain.data->treeTypes : terrain.data->grassTypes;
+        if (selected < 0 || selected >= int(original.size())) {
+            return;
+        }
+        bool erase = ImGui::GetIO().KeyShift;
+        if (!erase && original[selected].asset.empty()) {
+            return;
+        }
+        writable(terrain);
+        auto& d = *terrain.data;
+        auto& placed = trees ? d.trees : d.grass;
+        if (erase) {
+            auto size = placed.size();
+            placed.erase(std::remove_if(placed.begin(),
+                                        placed.end(),
+                                        [&](const FoliageInstance& p) {
+                                            float x = p.x - hit.x, z = p.z - hit.z;
+                                            return p.prototype == selected &&
+                                                   x * x + z * z <= radius_ * radius_;
+                                        }),
+                         placed.end());
+            if (size != placed.size()) {
+                d.revision = nextRevision();
+            }
+            return;
+        }
+        auto p = (trees ? d.treeTypes : d.grassTypes)[selected];
+        foliageAccumulator_ += foliageRate_ * (trees ? .05f : 1.f) * std::clamp(dt, 0.f, .05f);
+        int count = std::min(int(foliageAccumulator_), 256);
+        foliageAccumulator_ -= count;
+        bool changed = false;
+        for (int i = 0; i < count && placed.size() < (trees ? 10000u : 100000u); ++i) {
+            float angle = random() * 2 * kPi, r = std::sqrt(random()) * radius_,
+                  x = hit.x + std::cos(angle) * r, z = hit.z + std::sin(angle) * r;
+            if (x < 0 || z < 0 || x > d.size || z > d.size) {
+                continue;
+            }
+            placed.push_back({x,
+                              z,
+                              p.minScale + random() * (p.maxScale - p.minScale),
+                              random() * 2 * kPi,
+                              selected});
+            changed = true;
+        }
+        if (changed) {
+            d.revision = nextRevision();
+        }
+    }
 
     void drawBrushGrid() {
         ImGui::Text("Brush: %s", brushNames[brushShape_]);
@@ -110,6 +326,27 @@ class Editor {
         if (ImGui::Begin("Terrain tools", &visible_)) {
             ImGui::BeginDisabled(!editable);
             auto& terrain = world.get<Terrain>(selected);
+            if (ImGui::BeginTabBar("Terrain tabs")) {
+                const char* names[]{"Terrain", "Grass", "Trees"};
+                for (int i = 0; i < 3; ++i) {
+                    if (ImGui::BeginTabItem(names[i])) {
+                        if (tab_ != i) {
+                            finish(world, selected, history);
+                            tab_ = i;
+                            foliageAccumulator_ = 0;
+                        }
+                        ImGui::EndTabItem();
+                    }
+                }
+                ImGui::EndTabBar();
+            }
+            if (tab_ > 0) {
+                foliageUI(terrain, assets, allowSave);
+                ImGui::EndDisabled();
+                ImGui::End();
+                return;
+            }
+
             EditorValues::Checkbox("Enable Scene brush", &enabled_);
             EditorValues::Combo("Tool", &tool_, "Raise\0Lower\0Smooth\0Flatten\0Paint\0");
             drawBrushGrid();
@@ -385,6 +622,10 @@ class Editor {
             history.commit(world, selected);
             stroke_ = selected;
             terrain.sculpting = true;
+        }
+        if (tab_ > 0) {
+            paintFoliage(terrain, hit, dt);
+            return;
         }
         brush(terrain,
               hit,

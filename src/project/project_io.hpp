@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 27\n";
+    out << std::setprecision(9) << "LegacyEngineProject 28\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -110,7 +110,8 @@ inline std::string encodeLegacy(World& world,
             (world.has<Animation>(e) ? 1048576 : 0) | (world.has<ParticleSystem>(e) ? 2097152 : 0) |
             (world.has<Laser>(e) ? 4194304 : 0) | (world.has<LightShafts>(e) ? 8388608 : 0) |
             (world.has<Terrain>(e) ? 16777216 : 0) | (world.has<CameraEffects>(e) ? 33554432 : 0) |
-            (world.has<Fog>(e) ? 67108864 : 0);
+            (world.has<Fog>(e) ? 67108864 : 0) | (world.has<CloudSystem>(e) ? 134217728 : 0) |
+            (world.has<River>(e) ? 268435456 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -133,8 +134,10 @@ inline std::string encodeLegacy(World& world,
                     mesh = i;
                 }
             }
-            require(m->model.empty() || (materialPathValid(m->model) &&
-                                         std::filesystem::path(m->model).extension() == ".lemesh"));
+            require(m->model.empty() ||
+                    (materialPathValid(m->model) &&
+                     (std::filesystem::path(m->model).extension() == ".mesh" ||
+                      std::filesystem::path(m->model).extension() == ".lemesh")));
             require(mesh >= 0 || !m->model.empty());
             if (!m->model.empty()) {
                 mesh = 2;
@@ -160,8 +163,10 @@ inline std::string encodeLegacy(World& world,
                 << c->radius << ' ' << c->height << ' ' << c->isTrigger << ' '
                 << std::quoted(c->model) << ' ' << c->meshDetail << ' ';
             require(c->meshDetail >= 2 && c->meshDetail <= 15);
-            require(c->model.empty() || (materialPathValid(c->model) &&
-                                         std::filesystem::path(c->model).extension() == ".lemesh"));
+            require(c->model.empty() ||
+                    (materialPathValid(c->model) &&
+                     (std::filesystem::path(c->model).extension() == ".mesh" ||
+                      std::filesystem::path(c->model).extension() == ".lemesh")));
         }
         if (auto* b = world.tryGet<RigidBody>(e)) {
             out << b->mass << ' ' << b->useGravity << ' ';
@@ -306,6 +311,14 @@ inline std::string encodeLegacy(World& world,
             require(Fogs::valid(*f));
             out << std::quoted(Fogs::settings(*f).dump()) << ' ';
         }
+        if (auto* c = world.tryGet<CloudSystem>(e)) {
+            require(Environment::valid(*c));
+            out << std::quoted(Environment::settings(*c).dump()) << ' ';
+        }
+        if (auto* c = world.tryGet<River>(e)) {
+            require(Environment::valid(*c));
+            out << std::quoted(Environment::settings(*c).dump()) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -323,7 +336,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 27));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 28));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -393,7 +406,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 25 ? 16777215u
                          : version < 26 ? 33554431u
                          : version < 27 ? 67108863u
-                                        : 134217727u) &&
+                         : version < 28 ? 134217727u
+                                        : 536870911u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -432,7 +446,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                 in >> std::quoted(m.model);
                 require(m.model.empty() ||
                         (materialPathValid(m.model) &&
-                         std::filesystem::path(m.model).extension() == ".lemesh"));
+                         (std::filesystem::path(m.model).extension() == ".mesh" ||
+                          std::filesystem::path(m.model).extension() == ".lemesh")));
             }
             if (version >= 21) {
                 in >> std::quoted(m.lightmap) >> m.lightmapGrid;
@@ -463,7 +478,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                 in >> std::quoted(c.model);
                 require(c.model.empty() ||
                         (materialPathValid(c.model) &&
-                         std::filesystem::path(c.model).extension() == ".lemesh"));
+                         (std::filesystem::path(c.model).extension() == ".mesh" ||
+                          std::filesystem::path(c.model).extension() == ".lemesh")));
             }
             if (version >= 19) {
                 in >> c.meshDetail;
@@ -657,7 +673,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= (version >= 27   ? 23u
+            require(types.size() <= (version >= 28   ? 25u
+                                     : version >= 27 ? 23u
                                      : version >= 26 ? 22u
                                      : version >= 25 ? 21u
                                      : version >= 24 ? 20u
@@ -666,7 +683,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::vector<int> seen;
             for (int id : types) {
                 require(id >= 0 &&
-                        id < (version >= 27   ? 23
+                        id < (version >= 28   ? 25
+                              : version >= 27 ? 23
                               : version >= 26 ? 22
                               : version >= 25 ? 21
                               : version >= 24 ? 20
@@ -737,6 +755,18 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> std::quoted(text);
             require(text.size() <= 16384);
             result.world.add(e, Fogs::parse(parseJson(text)));
+        }
+        if (mask & 134217728) {
+            std::string text;
+            in >> std::quoted(text);
+            require(text.size() <= 16384);
+            result.world.add(e, Environment::parse<CloudSystem>(parseJson(text)));
+        }
+        if (mask & 268435456) {
+            std::string text;
+            in >> std::quoted(text);
+            require(text.size() <= 16384);
+            result.world.add(e, Environment::parse<River>(parseJson(text)));
         }
         require(bool(in));
     }

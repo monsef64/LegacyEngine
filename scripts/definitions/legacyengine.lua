@@ -7,16 +7,16 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil
----@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil
----@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil
----@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil
----@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog
+---@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onAnimationFinish fun()|nil
 ---@field onAnimationStart fun()|nil
@@ -48,7 +48,7 @@
 ---@field angularVelocity Vec3
 ---@class Collider
 ---@field shape 'Box'|'Sphere'|'Capsule'|'Cone'|'Mesh'
----@field model string Static triangle-mesh .lemesh source; empty follows the rendered model
+---@field model string Static triangle-mesh .mesh source; empty follows the rendered model
 ---@field meshDetail integer Mesh detail 2..15 (default 8); 15 preserves source triangles
 ---@field size Vec3
 ---@field center Vec3
@@ -94,7 +94,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -669,7 +669,7 @@ function onCollisionStay(collider) end
 function onCollisionExit(collider) end
 
 ---@class MeshRenderer
----@field model string Static .lemesh asset path; setting mesh to a primitive clears this
+---@field model string Static .mesh asset path; setting mesh to a primitive clears this
 
 ---Include self, then search nearest parents. Returns the component, or nil.
 ---@param gameObject GameObject
@@ -732,7 +732,7 @@ Animation = {}
 ---@field restart fun(self:ParticleSystem)
 ---@field clear fun(self:ParticleSystem)
 ---@field emit fun(self:ParticleSystem,count:integer)
----@field setPreset fun(self:ParticleSystem,name:string) Fire, Smoke or Sparkles
+---@field setPreset fun(self:ParticleSystem,name:string) Fire, Smoke, Sparkles, Blood or Explosion
 ---@field isPlaying boolean Read-only
 ---@field paused boolean Read-only
 ---@field particleCount integer Read-only
@@ -863,3 +863,29 @@ Fog = nil
 ---@param rgb Vec3 RGB 0..1, e.g. color.black
 ---@return ColorFade
 function fadeToColor(rgb) end
+
+---@class CloudSystem
+---@field enabled boolean
+---@field volumetric boolean False = 2D procedural layer; true = bounded volumetric box
+---@field color table RGB 0..1; assign a complete x/y/z or three-element table, read returns a copy
+---@field size table XYZ extent 0.1..10000 metres, multiplied by Transform scale; read returns a copy
+---@field coverage number 0..1
+---@field density number 0..10
+---@field scale number Noise frequency 0.001..10
+---@field speed number Wind speed -100..100
+---@field opacity number 0..1
+---@field steps integer Volumetric raymarch budget 4..24, default 12
+CloudSystem = nil
+
+---@class River
+---@field enabled boolean
+---@field color table RGB 0..1; assign a complete vector, read returns a copy
+---@field width number 0.05..1000 local units
+---@field opacity number 0..1
+---@field speed number Flow speed -100..100
+---@field waveScale number 0.01..100
+---@field waveStrength number 0..1 Shading only; does not displace geometry
+---@field foam number 0..1 Procedural edge foam
+---@field subdivisions integer Samples per curve span 2..32
+---@field points table List of 2..64 complete local vector tables; getter returns copies, assign the whole list to change
+River = nil

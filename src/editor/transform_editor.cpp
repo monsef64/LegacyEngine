@@ -143,7 +143,7 @@ void TransformEditor::draw(World& world,
 }
 
 void TransformEditor::drawToolbar() {
-    const bool compact = ImGui::GetContentRegionAvail().x < 620;
+    const bool compact = ImGui::GetContentRegionAvail().x < 900;
     const char* ids[]{"##move", "##rotate", "##scale"};
     const char* tips[]{
         "Move: drag an axis arrow", "Rotate: drag an axis ring", "Scale: drag an axis handle"};
@@ -186,8 +186,8 @@ void TransformEditor::drawToolbar() {
     }
     ImGui::SameLine();
     const float width = ImGui::GetContentRegionAvail().x;
-    if (width > 180) {
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - 180);
+    if (width > 390) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - 390);
     }
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Snap");

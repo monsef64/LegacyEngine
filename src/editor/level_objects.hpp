@@ -22,6 +22,10 @@ struct LevelObject {
     bool hasCollider;
 };
 
+inline unsigned hierarchyExpansionEpoch = 0;
+inline void resetHierarchyExpansion() {
+    ++hierarchyExpansionEpoch;
+}
 inline std::vector<LevelObject> levelObjects(World& world) {
     std::vector<LevelObject> objects;
     world.each<Transform>([&](Entity e, Transform&) {
@@ -361,7 +365,13 @@ inline bool drawLevelObjects(World& world,
         if (focused) {
             *focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         }
-        static std::unordered_set<std::uint64_t> collapsed;
+        static std::unordered_set<std::uint64_t> collapsed, known;
+        static unsigned expansionEpoch = ~0u;
+        if (expansionEpoch != hierarchyExpansionEpoch) {
+            collapsed.clear();
+            known.clear();
+            expansionEpoch = hierarchyExpansionEpoch;
+        }
         if (createRequest) {
             ImGui::BeginDisabled(!selectionEnabled);
             if (ImGui::Button(world.alive(selected) ? "Create child..." : "Create...")) {
@@ -469,6 +479,9 @@ inline bool drawLevelObjects(World& world,
                     return getParent(world, other.entity) == object.entity;
                 });
             const auto key = hierarchyKey(object.entity);
+            if (hasChildren && known.insert(key).second) {
+                collapsed.insert(key);
+            }
             if (hasChildren) {
                 // Let the Hierarchy background show through in every button state.
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));

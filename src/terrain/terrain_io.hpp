@@ -10,6 +10,79 @@ namespace Terrains {
 inline bool asset(const std::string& p) {
     return materialPathValid(p) && std::filesystem::path(p).extension() == ".terrain";
 }
+inline Json foliageTypes(const std::vector<FoliagePrototype>& types) {
+    Json j = Json::array();
+    for (const auto& p : types) {
+        j.push_back({{"asset", p.asset},
+                     {"color", {p.color.x, p.color.y, p.color.z}},
+                     {"width", p.width},
+                     {"height", p.height},
+                     {"minScale", p.minScale},
+                     {"maxScale", p.maxScale},
+                     {"distance", p.distance}});
+    }
+    return j;
+}
+inline Json foliageInstances(const std::vector<FoliageInstance>& instances) {
+    Json j = Json::array();
+    for (auto i : instances) {
+        j.push_back({i.x, i.z, i.scale, i.yaw, i.prototype});
+    }
+    return j;
+}
+inline void parseFoliage(const Json& j, Data& d, bool trees) {
+    auto& types = trees ? d.treeTypes : d.grassTypes;
+    auto& instances = trees ? d.trees : d.grass;
+    auto t = j.value(trees ? "treeTypes" : "grassTypes", Json::array()),
+         v = j.value(trees ? "trees" : "grass", Json::array());
+    if (!t.is_array() || t.size() > 16 || !v.is_array() || v.size() > (trees ? 10000u : 100000u)) {
+        throw std::runtime_error("Terrain foliage limit exceeded");
+    }
+    for (const auto& p : t) {
+        FoliagePrototype f;
+        f.asset = p.at("asset").get<std::string>();
+        auto c = p.at("color").get<std::array<float, 3>>();
+        f.color = {c[0], c[1], c[2]};
+        f.width = p.at("width").get<float>();
+        f.height = p.at("height").get<float>();
+        f.minScale = p.at("minScale").get<float>();
+        f.maxScale = p.at("maxScale").get<float>();
+        f.distance = p.at("distance").get<float>();
+        auto range = [](float n, float lo, float hi) {
+            return std::isfinite(n) && n >= lo && n <= hi;
+        };
+        auto ext = std::filesystem::path(f.asset).extension();
+        if (!materialPathValid(f.asset) ||
+            (!f.asset.empty() &&
+             (trees ? (ext != ".mesh" && ext != ".lemesh") : !materialTexturePath(f.asset))) ||
+            !range(f.width, .01f, 100) || !range(f.height, .01f, 100) ||
+            !range(f.minScale, .01f, 100) || !range(f.maxScale, f.minScale, 100) ||
+            !range(f.distance, 1, 2000) || !range(f.color.x, 0, 1) || !range(f.color.y, 0, 1) ||
+            !range(f.color.z, 0, 1)) {
+            throw std::runtime_error("Invalid foliage prototype");
+        }
+        types.push_back(f);
+    }
+    for (const auto& p : v) {
+        if (!p.is_array() || p.size() != 5 ||
+            (!p.at(4).is_number_integer() || p.at(4).get<double>() < 0 ||
+             p.at(4).get<double>() >= double(types.size()))) {
+            throw std::runtime_error("Invalid foliage instance");
+        }
+        FoliageInstance f{p[0].get<float>(),
+                          p[1].get<float>(),
+                          p[2].get<float>(),
+                          p[3].get<float>(),
+                          p[4].get<int>()};
+        if (!std::isfinite(f.x) || !std::isfinite(f.z) || f.x < 0 || f.z < 0 || f.x > d.size ||
+            f.z > d.size || !std::isfinite(f.scale) || f.scale < .01f || f.scale > 100 ||
+            !std::isfinite(f.yaw) || std::abs(f.yaw) > 7 || f.prototype < 0 ||
+            f.prototype >= int(types.size())) {
+            throw std::runtime_error("Invalid foliage instance value");
+        }
+        instances.push_back(f);
+    }
+}
 inline Json document(const Data& d) {
     Json layers = Json::array();
     for (const auto& l : d.layers) {
@@ -21,16 +94,20 @@ inline Json document(const Data& d) {
                           {"normalStrength", l.normalStrength}});
     }
     return {{"format", "LegacyEngineTerrain"},
-            {"version", 1},
+            {"version", 2},
             {"resolution", d.resolution},
             {"size", d.size},
             {"heights", d.heights},
             {"weights", d.weights},
             {"layers", layers},
-            {"lightmap", d.lightmap}};
+            {"lightmap", d.lightmap},
+            {"grassTypes", foliageTypes(d.grassTypes)},
+            {"treeTypes", foliageTypes(d.treeTypes)},
+            {"grass", foliageInstances(d.grass)},
+            {"trees", foliageInstances(d.trees)}};
 }
 inline std::shared_ptr<Data> parse(const Json& j) {
-    if (j.at("format") != "LegacyEngineTerrain" || j.at("version") != 1) {
+    if (j.at("format") != "LegacyEngineTerrain" || (j.at("version") != 1 && j.at("version") != 2)) {
         throw std::runtime_error("Unsupported terrain asset");
     }
     auto d = std::make_shared<Data>();
@@ -99,6 +176,8 @@ inline std::shared_ptr<Data> parse(const Json& j) {
             throw std::runtime_error("Invalid terrain layer");
         }
     }
+    parseFoliage(j, *d, false);
+    parseFoliage(j, *d, true);
     d->chunks.assign(chunkCount(*d) * chunkCount(*d), 0);
     d->heightChunks = d->chunks;
     d->bounds.assign(d->chunks.size(), {});

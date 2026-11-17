@@ -38,7 +38,7 @@ inline void writeJsonFile(const std::filesystem::path& path, const Json& documen
         std::ofstream out(temp, std::ios::binary);
         if (path.extension() == ".terrain") {
             writeCompressedMesh(out, document, "TERZ0001");
-        } else if (path.extension() == ".lemesh") {
+        } else if ((path.extension() == ".mesh" || path.extension() == ".lemesh")) {
             writeCompressedMesh(out, document);
         } else {
             out << document.dump(2) << '\n';

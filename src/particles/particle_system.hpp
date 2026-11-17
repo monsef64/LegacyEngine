@@ -81,6 +81,11 @@ struct ParticleSystem : ParticleSettings {
         started = true;
     }
 };
+inline constexpr const char* particlePresetNames[]{
+    "Fire", "Smoke", "Sparkles", "Blood", "Explosion"};
+inline constexpr int particlePresetCount =
+    int(sizeof(particlePresetNames) / sizeof(particlePresetNames[0]));
+
 inline void applyParticlePreset(ParticleSystem& system, int preset) {
     ParticleSettings s;
     if (preset == 1) {
@@ -115,6 +120,53 @@ inline void applyParticlePreset(ParticleSystem& system, int preset) {
         s.speedMax = 1;
         s.gravity = {0, -.2f, 0};
         s.angularVelocity = 90;
+    }
+    if (preset == 3) { // Blood: small, alpha-blended droplets with ballistic falloff.
+        s.loop = false;
+        s.duration = .1f;
+        s.rate = 0;
+        s.burstCount = 60;
+        s.maxParticles = 120;
+        s.sprite = 1;
+        s.blend = 0;
+        s.shape = 3;
+        s.radius = .06f;
+        s.coneAngle = 55;
+        s.lifetimeMin = .35f;
+        s.lifetimeMax = .9f;
+        s.speedMin = 1.5f;
+        s.speedMax = 4;
+        s.sizeMin = .025f;
+        s.sizeMax = .075f;
+        s.endSize = .015f;
+        s.color = {.65f, .015f, .025f};
+        s.endColor = {.12f, .002f, .005f};
+        s.alpha = .95f;
+        s.gravity = {0, -9.81f, 0};
+        s.drag = .3f;
+        s.angularVelocity = 0;
+    } else if (preset == 4) { // Explosion: a short, bright, omnidirectional fire burst.
+        s.loop = false;
+        s.duration = .15f;
+        s.rate = 0;
+        s.burstCount = 140;
+        s.maxParticles = 200;
+        s.sprite = 0;
+        s.blend = 1;
+        s.shape = 2;
+        s.radius = .2f;
+        s.lifetimeMin = .25f;
+        s.lifetimeMax = .85f;
+        s.speedMin = 3;
+        s.speedMax = 8;
+        s.sizeMin = .2f;
+        s.sizeMax = .55f;
+        s.endSize = .8f;
+        s.color = {1, .7f, .15f};
+        s.endColor = {.35f, .035f, .005f};
+        s.gravity = {0, -.8f, 0};
+        s.drag = 2;
+        s.angularVelocity = 100;
     }
     static_cast<ParticleSettings&>(system) = s;
     system.clear();

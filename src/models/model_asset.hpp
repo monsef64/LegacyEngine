@@ -6,7 +6,8 @@
 #include "rendering/mesh.hpp"
 
 inline bool modelAsset(const std::string& path) {
-    return materialPathValid(path) && AssetManager::extension(path) == ".lemesh";
+    return materialPathValid(path) &&
+           (AssetManager::extension(path) == ".mesh" || AssetManager::extension(path) == ".lemesh");
 }
 constexpr std::size_t maxModelVertices = 1500000;
 inline bool validModelVertex(const Vertex& v) {
@@ -29,7 +30,7 @@ inline float modelImportScale(const Json& json) {
 }
 inline Json modelDocument(const AssetManager& assets, const std::string& path) {
     if (!modelAsset(path)) {
-        throw std::runtime_error("Expected a .lemesh asset");
+        throw std::runtime_error("Expected a .mesh asset");
     }
     auto json = readJsonFile(assets.resolve(path), 256 * 1024 * 1024);
     if (json.at("format") != "LegacyEngineMesh" ||

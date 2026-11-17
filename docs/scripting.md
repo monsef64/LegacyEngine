@@ -413,3 +413,11 @@ and set boolean effect switches and numeric parameters directly. See
 [CameraEffects controls, ranges and manual checks (repository)](../docs/manual/camera-effects-and-terrain-performance.md)
 and the editor's generated API catalog. Anti-aliasing uses FXAA; motion blur is
 camera-only; depth of field and ambient occlusion are bounded screen-space effects.
+
+## Clouds and curve-based rivers
+
+`CloudSystem` supports a cheap 2D layer and a bounded volumetric mode. `River`
+provides an editable Catmull-Rom path and lightweight animated water. Both expose
+validated fields to Lua; vector and point-list reads return copies. See the
+[clouds and rivers guide](../docs/manual/clouds-and-rivers.md) (repository) for examples,
+Scene editing, performance controls and rendering limitations.
