@@ -3201,6 +3201,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | --- | --- |
 | `mass` | `number` |
 | `useGravity` | `boolean` |
+| `floatOnRivers` | `boolean Default false; opt-in river buoyancy for dynamic bodies with gravity and primitive non-trigger colliders` |
 | `linearVelocity` | `Vec3` |
 | `angularVelocity` | `Vec3` |
 | `velocity` | `Vec3 Alias of linearVelocity` |

@@ -2,6 +2,7 @@
 #include <Jolt/Jolt.h>
 
 #include "models/collider_source.hpp"
+#include "effects/environment.hpp"
 #include "models/mesh_simplify.hpp"
 #include "models/model_asset.hpp"
 #include "physics/physics.hpp"
@@ -10,6 +11,7 @@
 #include <tuple>
 
 #include "core/components.hpp"
+#include "core/hierarchy.hpp"
 #include "core/worker_pool.hpp"
 
 #include <Jolt/Core/Factory.h>
@@ -290,11 +292,113 @@ struct Physics::Impl {
     std::map<std::pair<std::uint64_t, std::uint64_t>, Pair> pairs;
     AssetManager assets;
     float accumulated = 0;
+    double waterTime = 0;
     bool needsWake_ = false;
     Impl() {
         system.Init(16384, 0, 65536, 16384, broad, broadFilter, pairFilter);
         system.SetContactListener(&contacts);
         system.SetGravity({0, -9.81f, 0});
+    }
+    struct WaterPatch {
+        Vec3 a, along, side, normal;
+        float aa, ss, as, inverseDet, flow, wave;
+    };
+    std::vector<WaterPatch> waterPatches(World& world) {
+        std::vector<WaterPatch> patches;
+        world.eachReadOnly<Transform, River>([&](Entity e, const Transform& t, const River& r) {
+            if (!r.enabled || !isActive(world, e) || !Environment::valid(r) ||
+                !Environment::finite(t.position) || !Environment::finite(t.scale) ||
+                !isUsable(t.rotation)) {
+                return;
+            }
+            const int count = (int(r.points.size()) - 1) * r.subdivisions;
+            auto point = [&](Vec3 p) { return t.position + rotateVector(t.rotation, p * t.scale); };
+            for (int i = 0; i < count; ++i) {
+                const auto a = Environment::curve(r, float(i) / count);
+                const auto b = Environment::curve(r, float(i + 1) / count);
+                auto side = normalize(Vec3{-(b - a).z, 0, (b - a).x});
+                if (dot(side, side) < .1f) {
+                    continue;
+                }
+                WaterPatch patch;
+                patch.a = point(a);
+                patch.along = point(b) - patch.a;
+                patch.side = rotateVector(t.rotation, side * t.scale) * (r.width * .5f);
+                patch.normal = normalize(cross(patch.along, patch.side));
+                if (patch.normal.y < 0) {
+                    patch.normal = patch.normal * -1.f;
+                }
+                // Rivers must be water-like surfaces, not near-vertical walls.
+                if (patch.normal.y < .25f) {
+                    continue;
+                }
+                patch.aa = dot(patch.along, patch.along);
+                patch.ss = dot(patch.side, patch.side);
+                patch.as = dot(patch.along, patch.side);
+                const float det = patch.aa * patch.ss - patch.as * patch.as;
+                if (!std::isfinite(det) || det < 1e-10f) {
+                    continue;
+                }
+                patch.inverseDet = 1.f / det;
+                patch.flow = r.flowing ? std::clamp(r.speed * r.flowAmount * .08f, -2.f, 2.f) : 0;
+                patch.wave = r.flowing && r.flowAmount > 0 && r.speed != 0
+                                 ? r.waveStrength * std::min(r.flowAmount, 1.f) * .25f
+                                 : 0;
+                patches.push_back(patch);
+            }
+        });
+        return patches;
+    }
+    void floatBody(const Body& body, const std::vector<WaterPatch>& patches) {
+        auto& api = system.GetBodyInterface();
+        const auto center = vec(api.GetCenterOfMassPosition(body.id));
+        if (!isUsable(center)) {
+            return;
+        }
+        const auto& box = body.box;
+        const float radius = box.shape == ColliderShape::Box
+                                 ? std::sqrt(dot(box.halfSize, box.halfSize))
+                                 : box.radius + box.height * .5f;
+        const WaterPatch* best = nullptr;
+        Vec3 surface{};
+        float highest = -1e30f;
+        for (const auto& patch : patches) {
+            // Intersect the body's vertical line with the finite ribbon patch.
+            const float dy = dot(patch.a - center, patch.normal) / patch.normal.y;
+            if (dy > 4.f + radius || dy < -radius - .15f) {
+                continue;
+            }
+            const auto p = center + Vec3{0, dy, 0};
+            const auto delta = p - patch.a;
+            const float da = dot(delta, patch.along), ds = dot(delta, patch.side);
+            const float u = (da * patch.ss - ds * patch.as) * patch.inverseDet;
+            const float v = (ds * patch.aa - da * patch.as) * patch.inverseDet;
+            if (u < 0 || u > 1 || std::abs(v) > 1) {
+                continue;
+            }
+            if (p.y > highest) {
+                highest = p.y;
+                surface = p;
+                best = &patch;
+            }
+        }
+        if (!best) {
+            return; // Never stack buoyancy from overlapping rivers.
+        }
+        // A tiny coherent wave proxy drives gentle heave; Jolt integrates the
+        // actual submerged shape volume, center-of-buoyancy torque and drag.
+        surface.y +=
+            best->wave * std::sin(float(waterTime * 1.8) + surface.x * .45f + surface.z * .3f);
+        const auto current = normalize(best->along) * best->flow;
+        api.ApplyBuoyancyImpulse(body.id,
+                                 jvec(surface),
+                                 jvec(best->normal),
+                                 1.8f,
+                                 .8f,
+                                 .6f,
+                                 jvec(current),
+                                 system.GetGravity(),
+                                 kStepSeconds);
     }
     ~Impl() {
         for (auto& entry : bodies) {
@@ -705,6 +809,14 @@ void Physics::update(World& world, float seconds, const std::function<void(float
             beforeStep(kStepSeconds);
             impl.sync(world);
         }
+        const bool hasFloaters =
+            std::any_of(impl.bodies.begin(), impl.bodies.end(), [](const auto& entry) {
+                const auto& b = entry.second;
+                return b.motion == JPH::EMotionType::Dynamic && b.rigid.floatOnRivers &&
+                       b.rigid.useGravity;
+            });
+        const auto water = hasFloaters ? impl.waterPatches(world) : std::vector<Impl::WaterPatch>{};
+        impl.waterTime += kStepSeconds;
         for (auto& entry : impl.bodies) {
             auto& body = entry.second;
             if (body.id.IsInvalid()) {
@@ -718,6 +830,10 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                 }
                 if (isUsable(rigid.impulse) && rigid.impulse != Vec3{}) {
                     api.AddImpulse(body.id, jvec(rigid.impulse));
+                }
+                if (rigid.floatOnRivers && rigid.useGravity && body.hasCollider && !body.sensor &&
+                    body.box.shape != ColliderShape::Mesh) {
+                    impl.floatBody(body, water);
                 }
                 rigid.force = {};
                 rigid.impulse = {};

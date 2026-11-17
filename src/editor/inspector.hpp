@@ -1113,6 +1113,10 @@ inline void drawInspector(World& world,
                     EditorValues::DragFloat(
                         "Mass", &rb->mass, 0.1f, 0, 1000000, "%.2f", ImGuiSliderFlags_AlwaysClamp);
                     EditorValues::Checkbox("Use gravity", &rb->useGravity);
+                    EditorValues::Checkbox("Float on rivers", &rb->floatOnRivers);
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("Opt-in buoyancy and water damping. Requires a dynamic body, gravity and a non-trigger primitive collider. Only active during simulation.");
+                    }
                     EditorValues::Checkbox("Kinematic", &rb->isKinematic);
                     EditorValues::DragFloat(
                         "Drag", &rb->drag, .01f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);

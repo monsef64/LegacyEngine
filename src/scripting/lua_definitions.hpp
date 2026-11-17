@@ -256,6 +256,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"scale", "Transform.scale: {x,y,z}"},
     {"mass", "RigidBody.mass: number"},
     {"useGravity", "RigidBody.useGravity: boolean"},
+    {"floatOnRivers", "RigidBody.floatOnRivers: boolean, default false. Dynamic bodies with gravity and primitive non-trigger colliders receive river buoyancy, water drag and gentle bobbing."},
     {"linearVelocity", "RigidBody.linearVelocity: {x,y,z}"},
     {"angularVelocity", "RigidBody.angularVelocity: {x,y,z}"},
     {"shape",

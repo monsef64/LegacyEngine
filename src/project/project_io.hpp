@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 28\n";
+    out << std::setprecision(9) << "LegacyEngineProject 29\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -172,7 +172,8 @@ inline std::string encodeLegacy(World& world,
             out << b->mass << ' ' << b->useGravity << ' ';
             writeVec(out, b->linearVelocity);
             writeVec(out, b->angularVelocity);
-            out << b->drag << ' ' << b->angularDrag << ' ' << b->isKinematic << ' ';
+            out << b->drag << ' ' << b->angularDrag << ' ' << b->isKinematic << ' '
+                << b->floatOnRivers << ' ';
         }
         if (auto* script = world.tryGet<LuaScript>(e)) {
             require(script->additional.size() <= 63);
@@ -336,7 +337,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 28));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 29));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -497,6 +498,9 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                 b.drag = number(in);
                 b.angularDrag = number(in);
                 in >> b.isKinematic;
+            }
+            if (version >= 29) {
+                in >> b.floatOnRivers;
             }
             require(b.mass >= 0 && b.drag >= 0 && b.angularDrag >= 0);
             result.world.add(e, b);

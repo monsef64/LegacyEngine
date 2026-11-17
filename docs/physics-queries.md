@@ -29,6 +29,53 @@ step, then clear. Call `addForce` from `onFixedUpdate` for continuous force;
 do not multiply impulses by deltaTime. `movePosition` is a teleport, **not** a
 swept character move. `stop` clears velocities and queued force/impulse.
 
+### Opt-in river buoyancy
+
+Enable **RigidBody > Float on rivers** to give a dynamic body buoyancy on enabled,
+active River surfaces. It is **off by default**, including for older scenes.
+The body needs positive mass, **Use gravity** enabled, Kinematic disabled, and a
+non-trigger primitive collider (box, sphere, capsule or cone). Triangle-mesh
+colliders and collider-less bodies are excluded.
+
+```lua
+local body = self:getComponent(RigidBody)
+body.floatOnRivers = true   -- can be toggled at runtime
+-- body.floatOnRivers = false -- return to ordinary physics
+```
+
+Buoyancy runs at the physics fixed timestep, not the rendering frame rate. Jolt
+uses the submerged collider volume and center of buoyancy to produce lift and
+torque; water drag damps linear/angular motion. Flowing rivers add a gentle wave
+proxy (driven by River Surface detail/Flow amount) and a bounded downstream
+current. Disable Flowing, or use zero Flow amount/speed, for still water: bodies
+can bob on entry, then naturally settle. The shader remains normal-shaded rather
+than displaced, so the small physical heave is an approximation, not simulated
+visible waves. Buoyancy is a gameplay flotation ratio, not configurable real-world
+fluid density: enabled bodies are intended to float regardless of their mass.
+
+The finite sampled ribbon determines water coverage using the body's center of
+mass. Centers outside the banks/endpoints receive no buoyancy, even if an edge
+of the collider overlaps water. Buoyancy extends approximately four metres below
+the surface plus the body's bounding radius; near-vertical river surfaces are
+excluded. Overlapping rivers use only the highest eligible surface, not stacked
+forces. River opacity, shader mode and visual contact-effects settings do not
+control buoyancy. Pause/Edit mode do not integrate it. No runtime water/body state
+is saved; Stop restores the normal edit snapshot.
+
+Manual verification (desktop play-testing still required):
+
+- Drop two identical boxes on a river, only one opted in: confirm only that box
+  floats, rocks and settles; verify its collider offset and nonuniform scale.
+- Repeat with sphere/capsule/cone, mass changes, a sloped/rotated/scaled river,
+  still/flowing settings and both shader modes.
+- Toggle `floatOnRivers` through Lua while submerged; verify disabling restores
+  gravity-driven sinking. Check kinematic/zero-mass/trigger exclusions.
+- Move across banks and endpoints, disable the River, and check overlapping
+  rivers do not double the lift. Verify normal collisions remain active.
+- Pause/resume, Stop, undo/redo the checkbox, duplicate the object, save/reopen,
+  and load an older project (checkbox remains off). Check both project/level and
+  prefab workflows preserve the new field.
+
 ## Trigger colliders
 
 Enable **Is trigger** in Collider, or assign `collider.isTrigger=true`.

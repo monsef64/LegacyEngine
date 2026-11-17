@@ -87,6 +87,7 @@ struct RigidBody {
     Vec3 angularVelocity;   // radians per second around each axis
     float drag = 0, angularDrag = 0;
     bool isKinematic = false;
+    bool floatOnRivers = false; // Opt-in submerged-volume buoyancy on enabled rivers.
     Vec3 force, impulse;
 };
 

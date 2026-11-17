@@ -294,6 +294,7 @@ inline std::string sceneSignature(World& world) {
         component(e, RigidBody{}, [&](const RigidBody& b) {
             scalar(b.mass);
             scalar(b.useGravity);
+            scalar(b.floatOnRivers);
             vec(b.linearVelocity);
             vec(b.angularVelocity);
             scalar(b.drag);
