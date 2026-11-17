@@ -219,7 +219,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     float cameraSpeed = 5.0f;
     Entity selectedEntity;
     ScriptEditor scripts;
-    scripts.bindConsoleMeshes(world, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
+    scripts.bindWorld(world, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
     EditorHistory history(world);
     Terrains::Editor terrainEditor;
     PlayMode playMode;

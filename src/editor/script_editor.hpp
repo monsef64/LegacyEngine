@@ -133,12 +133,12 @@ class ScriptEditor {
     }
     // Binds the consoles' script helpers to the engine meshes; the Qt editor
     // calls this once during setup, exactly where the old editor did.
-    void bindConsoleMeshes(World& world,
-                           MeshHandle cube,
-                           MeshHandle sphere,
-                           MeshHandle capsule,
-                           MeshHandle cone = {},
-                           MeshHandle plane = {}) {
+    void bindWorld(World& world,
+                   MeshHandle cube,
+                   MeshHandle sphere,
+                   MeshHandle capsule,
+                   MeshHandle cone = {},
+                   MeshHandle plane = {}) {
         world_ = &world;
         console_.bindWorld(world, cube, sphere, capsule, cone, plane);
     }
