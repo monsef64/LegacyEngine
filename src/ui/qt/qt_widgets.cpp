@@ -29,6 +29,7 @@
 #include <QVBoxLayout>
 #include <QPalette>
 #include <cmath>
+#include <algorithm>
 
 namespace ui {
 namespace qt {

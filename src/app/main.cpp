@@ -894,10 +894,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         // requested action through the sink above.
         const bool externalFocus =
             gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS);
-        // Viewport visibility: the dock is shown and the picture has a size.
-        sceneVisible = !view.sceneSurface.isEmpty();
+        // Ask the widgets how big the pictures should be, then decide what is
+        // visible from that. Reading visibility first would describe the
+        // previous frame's layout, so a dock that had just been shown stayed
+        // "hidden" for one more frame.
         view.sceneSurface = shell.shell()->scenePixelSize();
         view.gameSurface = shell.shell()->gamePixelSize();
+        sceneVisible = !view.sceneSurface.isEmpty();
         view.scenePointer = shell.shell()->scenePointer();
         view.gamePointer = shell.shell()->gamePointer();
         view.sceneFocused = shell.shell()->scenePanelFocused();

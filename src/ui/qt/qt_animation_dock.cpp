@@ -26,6 +26,7 @@
 #include <QVBoxLayout>
 
 #include <cmath>
+#include <algorithm>
 
 namespace ui {
 namespace qt {

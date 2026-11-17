@@ -50,6 +50,7 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <algorithm>
 
 namespace ui {
 namespace qt {

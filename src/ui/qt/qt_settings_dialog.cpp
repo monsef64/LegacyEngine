@@ -14,6 +14,7 @@
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
+#include <algorithm>
 
 namespace ui {
 namespace qt {

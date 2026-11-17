@@ -16,6 +16,7 @@
 #include <QSlider>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <algorithm>
 
 namespace ui {
 namespace qt {
