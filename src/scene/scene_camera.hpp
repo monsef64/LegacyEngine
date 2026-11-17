@@ -32,7 +32,7 @@ inline void aimCamera(Transform& transform, Vec3 target) {
 inline bool validCamera(const Camera& c) {
     auto finite = [](float n) { return std::isfinite(n) && std::abs(n) <= 1e6; };
     return finite(c.fieldOfView) && c.fieldOfView > 0 && c.fieldOfView < 179 &&
-           finite(c.nearClip) && finite(c.farClip) && c.nearClip > 0 && c.farClip > c.nearClip &&
+           finite(c.nearClip) && finite(c.farClip) && c.nearClip >= .020f && c.farClip > c.nearClip &&
            finite(c.orthographicSize) && c.orthographicSize > 0 && finite(c.viewportX) &&
            finite(c.viewportY) && finite(c.viewportWidth) && finite(c.viewportHeight) &&
            c.viewportX >= 0 && c.viewportY >= 0 && c.viewportWidth > 0 && c.viewportHeight > 0 &&

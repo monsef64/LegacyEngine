@@ -100,6 +100,8 @@ inline std::shared_ptr<Data> parse(const Json& j) {
         }
     }
     d->chunks.assign(chunkCount(*d) * chunkCount(*d), 0);
+    d->heightChunks = d->chunks;
+    d->bounds.assign(d->chunks.size(), {});
     return d;
 }
 inline void load(Terrain& t, const AssetManager& assets) {

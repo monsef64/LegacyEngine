@@ -7,6 +7,10 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"Fog", "Fog - enabled, color (complete RGB vector), density (0..10), start (>=0), end (>start, <=1000000). Global distance fog; first enabled active entity wins. Use bracket notation for the end field (a Lua keyword)."},
+    {"fadeToColor", "fadeToColor(rgb) -> ColorFade for the current active camera; RGB 0..1, e.g. color.black. Call start(seconds=1) to fade to opaque, stop(seconds=1) to fade to transparent; 0..3600 playing seconds, 0 immediate. Controllers share camera state."},
+    {"CameraEffects",
+     "CameraEffects - optional OpenGL camera post effects; enabled, bloom, colorGrading, vignette, depthOfField, motionBlur, filmGrain, chromaticAberration, antiAliasing, ambientOcclusion, nightVision, nausea; bloomIntensity, bloomThreshold, exposure, contrast, saturation, temperature, vignetteIntensity, focusDistance, focusRange, dofStrength, motionStrength, grainIntensity, aberrationStrength, aoIntensity, aoRadius, nightVisionMode (0 green, 1 infrared-style), nightVisionIntensity (0..1), nauseaIntensity (0..1), nauseaSpeed (0..5). All effects default off; motion blur is camera-only; antiAliasing uses FXAA-style filtering."},
     {"LightShafts",
      "LightShafts - fast visual shaft; enabled, direction, height, width, endWidth, color, intensity, density, falloff, streaks, fade, nearFade, useBakedTexture and texture"},
     {"Laser",

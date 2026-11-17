@@ -431,6 +431,7 @@ struct PanelInfo {
 
 struct MultilineEditInfo {
     Rect innerRect;
+    Rect gutterRect;
     Vec2 textOrigin;
     float scrollX = 0.0f;
     float scrollY = 0.0f;
@@ -645,7 +646,8 @@ bool inputTextMultiline(const char* label,
                         InputTextFlags flags = InputTextFlags_None,
                         InputTextCallback callback = nullptr,
                         void* userData = nullptr,
-                        MultilineEditInfo* outInfo = nullptr);
+                        MultilineEditInfo* outInfo = nullptr,
+                        float gutterWidth = 0.0f);
 
 bool dragFloat(const char* label,
                float* v,

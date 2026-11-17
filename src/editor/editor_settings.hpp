@@ -1,5 +1,6 @@
 #pragma once
 #include "editor/editor_palette.hpp"
+#include "editor/value_context.hpp"
 #include "scene/editor_grid.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -12,6 +13,7 @@
 struct EditorSettings {
     bool external = false, visible = false, alwaysShowColliders = false;
     int theme = 0;
+    float scrollZoomSpeed = 1.f;
     float raycastThickness = 2.f; // viewport pixels; editor gizmo only
     int maxFps = 120;             // zero disables foreground cap; background still sleeps
     int autosaveSeconds = 120;    // zero disables autosave
@@ -70,6 +72,10 @@ struct EditorSettings {
             if (in >> fps) {
                 maxFps = std::clamp(fps, 0, 240);
             }
+            float zoom;
+            if (in >> zoom && std::isfinite(zoom)) {
+                scrollZoomSpeed = std::clamp(zoom, .1f, 5.f);
+            }
         }
         if (ui::hasContext()) {
             applyEditorPalette(theme);
@@ -78,11 +84,11 @@ struct EditorSettings {
     std::string signature() const {
         std::ostringstream out;
         out.precision(9);
-        out << raycastThickness << ':' << maxFps << ':' << autosaveSeconds << ':' << external
-            << theme << alwaysShowColliders << grid.visible << ':' << grid.cells << ':'
-            << grid.plane << ':' << grid.spacing << ':' << grid.position.x << ':' << grid.position.y
-            << ':' << grid.position.z << ':' << grid.color.x << ':' << grid.color.y << ':'
-            << grid.color.z;
+        out << scrollZoomSpeed << ':' << raycastThickness << ':' << maxFps << ':' << autosaveSeconds
+            << ':' << external << theme << alwaysShowColliders << grid.visible << ':' << grid.cells
+            << ':' << grid.plane << ':' << grid.spacing << ':' << grid.position.x << ':'
+            << grid.position.y << ':' << grid.position.z << ':' << grid.color.x << ':'
+            << grid.color.y << ':' << grid.color.z;
         return out.str();
     }
     void save() {
@@ -94,7 +100,7 @@ struct EditorSettings {
                 << ' ' << grid.position.x << ' ' << grid.position.y << ' ' << grid.position.z << ' '
                 << grid.color.x << ' ' << grid.color.y << ' ' << grid.color.z << '\n'
                 << autosaveSeconds << '\n'
-                << raycastThickness << ' ' << maxFps;
+                << raycastThickness << ' ' << maxFps << ' ' << scrollZoomSpeed;
         }
     }
     bool openExternal(const std::filesystem::path& folder, bool isFile = false) {
@@ -171,23 +177,24 @@ struct EditorSettings {
             ui::Vec2(std::min(360.0f, area.x), std::min(380.0f, area.y)), area);
         if (ui::beginWindow("Editor Settings", &visible, ui::WindowFlags_NoDocking)) {
             ui::setNextItemWidth(-120);
-            if (ui::combo(
+            if (EditorValues::Combo(
                     "Theme", &theme, "Legacy Dark\0Grey\0Unity 5 Classic\0Unity Dark Classic\0")) {
                 applyEditorPalette(theme);
                 save();
             }
-            if (ui::checkbox("Always Show Colliders", &alwaysShowColliders)) {
+            if (EditorValues::Checkbox("Always Show Colliders", &alwaysShowColliders)) {
                 save();
             }
-            if (ui::sliderFloat("Raycast line thickness", &raycastThickness, 1, 8, "%.1f px")) {
+            if (EditorValues::SliderFloat(
+                    "Raycast line thickness", &raycastThickness, 1, 8, "%.1f px")) {
                 save();
             }
-            if (ui::sliderInt("FPS limit (VSync off)", &maxFps, 0, 240, "%d")) {
+            if (EditorValues::SliderInt("FPS limit (VSync off)", &maxFps, 0, 240, "%d")) {
                 save();
             }
             ui::textDisabled(
                 "VSync takes priority. Limit 0 = uncapped; background target = 30 FPS.");
-            if (ui::inputInt("Autosave delay (seconds)", &autosaveSeconds)) {
+            if (EditorValues::InputInt("Autosave delay (seconds)", &autosaveSeconds)) {
                 autosaveSeconds = std::clamp(autosaveSeconds, 0, 3600);
                 save();
             }
@@ -195,12 +202,12 @@ struct EditorSettings {
                 "0 disables autosave. Only previously saved projects are autosaved.");
             ui::separatorText("Scene Grid");
             auto next = grid;
-            bool changed = ui::checkbox("Show grid", &next.visible);
-            changed |= ui::combo("Plane", &next.plane, "XZ\0XY\0YZ\0");
+            bool changed = EditorValues::Checkbox("Show grid", &next.visible);
+            changed |= EditorValues::Combo("Plane", &next.plane, "XZ\0XY\0YZ\0");
             changed |= ui::dragInt("Cells", &next.cells, 1, 2, 512);
-            changed |= ui::dragFloat("Spacing", &next.spacing, .05f, .01f, 1000);
+            changed |= EditorValues::DragFloat("Spacing", &next.spacing, .05f, .01f, 1000);
             changed |= ui::dragFloat3("Grid position (X/Y/Z)", &next.position.x, .05f);
-            changed |= ui::colorEdit3("Grid color", &next.color.x);
+            changed |= EditorValues::ColorEdit3("Grid color", &next.color.x);
             if (changed && next.valid()) {
                 grid = next;
                 save();
@@ -208,7 +215,7 @@ struct EditorSettings {
             ui::separatorText("Editor");
             int choice = external ? 1 : 0;
             ui::setNextItemWidth(-120);
-            if (ui::combo("Code editor", &choice, "Internal\0External (VS Code)\0")) {
+            if (EditorValues::Combo("Code editor", &choice, "Internal\0External (VS Code)\0")) {
                 external = choice == 1;
                 save();
                 if (external) {

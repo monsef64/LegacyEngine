@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/animation_clip.hpp"
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
@@ -9,10 +10,11 @@
 #include "rendering/renderer.hpp"
 #include "rendering/scene_surface.hpp"
 #include "scene/camera.hpp"
+#include "terrain/terrain_io.hpp"
 #include <array>
 #include <fstream>
 
-// Two independent slots prevent Inspector and tooltip images overwriting one another.
+// Independent Inspector, tooltip and picker-detail slots prevent image aliasing.
 class AssetPreviewRenderer {
     struct Slot {
         SceneSurface surface;
@@ -28,10 +30,12 @@ class AssetPreviewRenderer {
     };
     Renderer& renderer_;
     ProjectIO::Meshes meshes_;
-    std::array<Slot, 2> slots_;
+    std::array<Slot, 3> slots_;
+    int thumbnailFrame_ = -1;
     std::map<std::string, std::unique_ptr<Slot>> icons_;
     MaterialTextureCache textures_;
     TexturePreviewCache thumbnails_;
+    TexturePreviewCache pickerThumbnails_;
     std::filesystem::path root_;
     int iconFrame_ = -1, iconBudget_ = 4;
 
@@ -103,7 +107,30 @@ class AssetPreviewRenderer {
             slot.world.reset();
             return;
         }
-        if (materialAsset(path)) {
+        if (animationAsset(path)) {
+            const auto clip =
+                decodeAnimationClip(readJsonFile(assets.resolve(path), 16 * 1024 * 1024));
+            std::size_t keys = 0;
+            for (const auto& track : clip.tracks) {
+                keys += track.keys.size();
+            }
+            slot.data.text = "Animation clip\nDuration: " + std::to_string(clip.duration) +
+                             " seconds\nTracks: " + std::to_string(clip.tracks.size()) +
+                             "\nKeys: " + std::to_string(keys);
+            if (!clip.model.empty()) {
+                slot.data.text += "\nModel: " + clip.model;
+            }
+            slot.world.reset();
+            return;
+        }
+        if (Terrains::asset(path)) {
+            auto e = world.create();
+            world.add(e, Transform{});
+            Terrain terrain;
+            terrain.asset = path;
+            Terrains::load(terrain, assets);
+            world.add(e, terrain);
+        } else if (materialAsset(path)) {
             auto entity = world.create();
             world.add(entity, Transform{});
             MeshRenderer mesh{meshes_[3]};
@@ -145,6 +172,7 @@ class AssetPreviewRenderer {
         }
         auto& scene = *slot.world;
         updateHierarchy(scene);
+        Terrains::update(scene, assets);
         for (auto entity : scene.entities()) {
             scene.remove<Camera>(entity);
             scene.remove<DirectionalLight>(entity);
@@ -181,14 +209,36 @@ class AssetPreviewRenderer {
                     }
                 }
             });
+        scene.eachReadOnly<Transform, Terrain>([&](Entity,
+                                                   const Transform& t,
+                                                   const Terrain& terrain) {
+            if (!terrain.data) {
+                return;
+            }
+            const auto& d = *terrain.data;
+            for (int z = 0; z < d.resolution; ++z) {
+                for (int x = 0; x < d.resolution; ++x) {
+                    auto p =
+                        t.position + rotateVector(t.rotation, Terrains::point(d, x, z) * t.scale);
+                    if (!any) {
+                        low = high = p;
+                        any = true;
+                    }
+                    low = {std::min(low.x, p.x), std::min(low.y, p.y), std::min(low.z, p.z)};
+                    high = {std::max(high.x, p.x), std::max(high.y, p.y), std::max(high.z, p.z)};
+                }
+            }
+        });
         const auto center = (low + high) * .5f;
         const auto size = high - low;
         const float radius =
             materialAsset(path) ? .5f : std::max(1e-20f, std::sqrt(dot(size, size)) * .5f);
         if (any) {
-            scene.each<Transform, MeshRenderer>([&](Entity, Transform& pose, MeshRenderer&) {
-                pose.position = (pose.position - center) * (1 / radius);
-                pose.scale = pose.scale * (1 / radius);
+            scene.each<Transform>([&](Entity e, Transform& pose) {
+                if (scene.has<MeshRenderer>(e) || scene.has<Terrain>(e)) {
+                    pose.position = (pose.position - center) * (1 / radius);
+                    pose.scale = pose.scale * (1 / radius);
+                }
             });
         }
         auto light = scene.create();
@@ -235,7 +285,8 @@ class AssetPreviewRenderer {
             icons_[path] = std::make_unique<Slot>();
             --iconBudget_;
         }
-        auto& slot = index == 2 ? *icons_.at(path) : slots_[std::clamp(index, 0, 1)];
+        auto& slot =
+            index == 2 ? *icons_.at(path) : slots_[index == 3 ? 2 : std::clamp(index, 0, 1)];
         slot.lastUsed = iconFrame_;
         const auto now = std::chrono::steady_clock::now();
         if (root_ != assets.root) {
@@ -320,6 +371,25 @@ class AssetPreviewRenderer {
   public:
     AssetPreviewRenderer(Renderer& renderer, ProjectIO::Meshes meshes)
         : renderer_(renderer), meshes_(meshes) {
+        assetThumbnail = [this](const AssetManager& assets, const std::string& path) {
+            AssetPreviewData image;
+            if (textureAsset(path)) {
+                if (thumbnailFrame_ != ui::frameCount()) {
+                    thumbnailFrame_ = ui::frameCount();
+                    pickerThumbnails_.beginFrame(assets);
+                }
+                image.texture = pickerThumbnails_.texture(assets, path);
+                image.width = image.height = 128;
+            } else if (modelAsset(path) || materialAsset(path) || Prefabs::asset(path) ||
+                       cubemapAsset(path) || Terrains::asset(path)) {
+                const auto& preview = get(assets, path, 2);
+                image.texture = preview.texture;
+                image.width = preview.width;
+                image.height = preview.height;
+                image.flip = preview.flip;
+            }
+            return image;
+        };
         assetPreview =
             [this](const auto& assets, const auto& path, int slot) -> const AssetPreviewData& {
             return get(assets, path, slot);
@@ -327,5 +397,6 @@ class AssetPreviewRenderer {
     }
     ~AssetPreviewRenderer() {
         assetPreview = {};
+        assetThumbnail = {};
     }
 };

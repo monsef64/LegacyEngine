@@ -5,6 +5,7 @@
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include "core/math.hpp"
+#include "effects/camera_effects_renderer.hpp"
 #include "effects/laser_renderer.hpp"
 #include "effects/light_shafts_renderer.hpp"
 #include "lighting/cookie_atlas.hpp"
@@ -120,7 +121,9 @@ class Renderer {
               Vec3 cameraPosition,
               int x = 0,
               int y = 0,
-              bool editorView = true);
+              bool editorView = true,
+              const CameraEffects* effects = nullptr,
+              std::uint64_t cameraKey = 0);
 
     bool meshBounds(MeshHandle handle, Vec3& low, Vec3& high) const {
         if (handle.id >= meshes_.size() || !meshes_[handle.id].vertexCount) {
@@ -166,6 +169,8 @@ class Renderer {
     int litReflective_ = -1, environmentCube_ = -1, environmentPanorama_ = -1,
         environmentType_ = -1, environmentColor_ = -1;
     Terrains::Renderer terrainRenderer_;
+    CameraFx::Renderer cameraEffects_;
+    bool composingEffects_ = false;
     EditorLines editorLines_;
     int litTransparent_ = -1;
     int litTexture_ = -1, litNormalTexture_ = -1, litHasTexture_ = -1, litBumped_ = -1,

@@ -104,6 +104,7 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(Animation{});
     component(ParticleSystem{});
     component(LightShafts{});
+    component(CameraEffects{});
     if (const auto* terrain = sourceWorld.tryGet<Terrain>(source)) {
         world.add(copy, *terrain);
     }

@@ -46,6 +46,14 @@ class Renderer {
     };
     std::vector<UniformCopy> uniforms_;
     GLuint sourceProgram_ = 0;
+    std::map<std::string, GLint, std::less<>> locations_;
+    GLint location(const char* name) {
+        auto it = locations_.find(name);
+        if (it != locations_.end()) {
+            return it->second;
+        }
+        return locations_.emplace(name, glGetUniformLocation(program_, name)).first->second;
+    }
     Lightmapping::ValidationCache lightmaps_;
     void copyLighting(GLuint source) {
         if (sourceProgram_ != source) {
@@ -66,7 +74,7 @@ class Renderer {
                 }
                 for (int j = 0; j < size; ++j) {
                     auto n = size > 1 ? base + "[" + std::to_string(j) + "]" : std::string(name);
-                    auto to = glGetUniformLocation(program_, n.c_str());
+                    auto to = location(n.c_str());
                     if (to >= 0) {
                         uniforms_.push_back({glGetUniformLocation(source, n.c_str()), to, type});
                     }
@@ -185,14 +193,14 @@ vec3 terrainLayerNormal(sampler2D tex,vec2 p,vec2 dx,vec2 dy,float strength){vec
 void main(){
     vec3 worldDx=dFdx(vWorldPosition),worldDy=dFdy(vWorldPosition);vec2 dx=dFdx(vUV),dy=dFdy(vUV);
     vec4 w=max(vWeights,vec4(0));w/=max(dot(w,vec4(1)),.0001);vec3 albedo=vec3(0);vec3 mapped=vec3(0);float alpha=1.;
-    albedo+=w.x*uColors[0]*(uHasTexture.x?terrainBomb(uTexture0,vUV*uLayerUV[0],dx*uLayerUV[0],dy*uLayerUV[0],false):vec3(1));
-    albedo+=w.y*uColors[1]*(uHasTexture.y?terrainBomb(uTexture1,vUV*uLayerUV[1],dx*uLayerUV[1],dy*uLayerUV[1],false):vec3(1));
-    albedo+=w.z*uColors[2]*(uHasTexture.z?terrainBomb(uTexture2,vUV*uLayerUV[2],dx*uLayerUV[2],dy*uLayerUV[2],false):vec3(1));
-    albedo+=w.w*uColors[3]*(uHasTexture.w?terrainBomb(uTexture3,vUV*uLayerUV[3],dx*uLayerUV[3],dy*uLayerUV[3],false):vec3(1));
-    mapped+=w.x*(uHasNormal.x?terrainLayerNormal(uNormal0,vUV*uLayerUV[0],dx*uLayerUV[0],dy*uLayerUV[0],uNormalStrengths.x):vec3(0,0,1));
-    mapped+=w.y*(uHasNormal.y?terrainLayerNormal(uNormal1,vUV*uLayerUV[1],dx*uLayerUV[1],dy*uLayerUV[1],uNormalStrengths.y):vec3(0,0,1));
-    mapped+=w.z*(uHasNormal.z?terrainLayerNormal(uNormal2,vUV*uLayerUV[2],dx*uLayerUV[2],dy*uLayerUV[2],uNormalStrengths.z):vec3(0,0,1));
-    mapped+=w.w*(uHasNormal.w?terrainLayerNormal(uNormal3,vUV*uLayerUV[3],dx*uLayerUV[3],dy*uLayerUV[3],uNormalStrengths.w):vec3(0,0,1));
+    if(w.x>.0001)albedo+=w.x*uColors[0]*(uHasTexture.x?terrainBomb(uTexture0,vUV*uLayerUV[0],dx*uLayerUV[0],dy*uLayerUV[0],false):vec3(1));
+    if(w.y>.0001)albedo+=w.y*uColors[1]*(uHasTexture.y?terrainBomb(uTexture1,vUV*uLayerUV[1],dx*uLayerUV[1],dy*uLayerUV[1],false):vec3(1));
+    if(w.z>.0001)albedo+=w.z*uColors[2]*(uHasTexture.z?terrainBomb(uTexture2,vUV*uLayerUV[2],dx*uLayerUV[2],dy*uLayerUV[2],false):vec3(1));
+    if(w.w>.0001)albedo+=w.w*uColors[3]*(uHasTexture.w?terrainBomb(uTexture3,vUV*uLayerUV[3],dx*uLayerUV[3],dy*uLayerUV[3],false):vec3(1));
+    if(w.x>.0001)mapped+=w.x*(uHasNormal.x?terrainLayerNormal(uNormal0,vUV*uLayerUV[0],dx*uLayerUV[0],dy*uLayerUV[0],uNormalStrengths.x):vec3(0,0,1));
+    if(w.y>.0001)mapped+=w.y*(uHasNormal.y?terrainLayerNormal(uNormal1,vUV*uLayerUV[1],dx*uLayerUV[1],dy*uLayerUV[1],uNormalStrengths.y):vec3(0,0,1));
+    if(w.z>.0001)mapped+=w.z*(uHasNormal.z?terrainLayerNormal(uNormal2,vUV*uLayerUV[2],dx*uLayerUV[2],dy*uLayerUV[2],uNormalStrengths.z):vec3(0,0,1));
+    if(w.w>.0001)mapped+=w.w*(uHasNormal.w?terrainLayerNormal(uNormal3,vUV*uLayerUV[3],dx*uLayerUV[3],dy*uLayerUV[3],uNormalStrengths.w):vec3(0,0,1));
     vec3 normal=normalize(vNormal);float det=dx.x*dy.y-dx.y*dy.x;
     if(abs(det)>1e-10){vec3 t=(worldDx*dy.y-worldDy*dx.y)/det,b=(-worldDx*dy.x+worldDy*dx.x)/det;t-=normal*dot(normal,t);if(dot(t,t)>1e-10){t=normalize(t);b=normalize(cross(normal,t))*sign(dot(cross(normal,t),b));normal=normalize(t*mapped.x+b*mapped.y+normal*mapped.z);}}
 )");
@@ -307,6 +315,7 @@ void main(){
         }
         program_ = 0;
         attempted_ = false;
+        locations_.clear();
         sourceProgram_ = 0;
         uniforms_.clear();
     }
@@ -351,13 +360,13 @@ void main(){
             glGetIntegerv(GL_TEXTURE_BINDING_2D, &bindings[i]);
         }
         glUseProgram(program_);
-        glUniformMatrix4fv(glGetUniformLocation(program_, "uVP"), 1, GL_FALSE, vp.m);
+        glUniformMatrix4fv(location("uVP"), 1, GL_FALSE, vp.m);
         copyLighting(lightingProgram);
-        glUniform1i(glGetUniformLocation(program_, "uReflective"), false);
-        glUniform1f(glGetUniformLocation(program_, "uSpecular"), .1f);
-        glUniform3f(glGetUniformLocation(program_, "uCameraPosition"), eye.x, eye.y, eye.z);
-        glUniform1i(glGetUniformLocation(program_, "uHasIndirectLightmap"), false);
-        glUniform1i(glGetUniformLocation(program_, "uLightmap"), 4);
+        glUniform1i(location("uReflective"), false);
+        glUniform1f(location("uSpecular"), .1f);
+        glUniform3f(location("uCameraPosition"), eye.x, eye.y, eye.z);
+        glUniform1i(location("uHasIndirectLightmap"), false);
+        glUniform1i(location("uLightmap"), 4);
         world.eachReadOnly<Transform, Terrain>([&](Entity e,
                                                    const Transform& t,
                                                    const Terrain& terrain) {
@@ -367,10 +376,10 @@ void main(){
             const auto& d = *terrain.data;
             const auto model = transformMatrix(t.position, t.rotation, t.scale);
             const auto normals = normalMatrix(t.rotation, t.scale);
-            glUniformMatrix4fv(glGetUniformLocation(program_, "uModel"), 1, GL_FALSE, model.m);
-            glUniformMatrix3fv(glGetUniformLocation(program_, "uNormal"), 1, GL_FALSE, normals.m);
+            glUniformMatrix4fv(location("uModel"), 1, GL_FALSE, model.m);
+            glUniformMatrix3fv(location("uNormal"), 1, GL_FALSE, normals.m);
             glFrontFace(t.scale.x * t.scale.y * t.scale.z < 0 ? GL_CW : GL_CCW);
-            glUniform1f(glGetUniformLocation(program_, "uTerrainSize"), d.size);
+            glUniform1f(location("uTerrainSize"), d.size);
             MeshRenderer baked;
             baked.lightmap = d.lightmap;
             baked.lightmapGrid = 1;
@@ -382,9 +391,8 @@ void main(){
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             }
-            glUniform1i(glGetUniformLocation(program_, "uLightmapGrid"), atlas ? 1 : 0);
-            glUniform1i(glGetUniformLocation(program_, "uBakedSoft"),
-                        atlas && lightmaps_.softDirect(baked));
+            glUniform1i(location("uLightmapGrid"), atlas ? 1 : 0);
+            glUniform1i(location("uBakedSoft"), atlas && lightmaps_.softDirect(baked));
             const auto manifest =
                 (std::filesystem::path(d.lightmap).parent_path() / "bake.json").generic_string();
             for (std::size_t i = 0; i < lights.size(); ++i) {
@@ -413,37 +421,41 @@ void main(){
                     }
                 }
                 strengths[i] = layer.normalStrength;
-                glUniform2f(
-                    glGetUniformLocation(program_, ("uLayerUV[" + std::to_string(i) + "]").c_str()),
-                    layer.tiling / d.size * tilingX,
-                    layer.tiling / d.size * tilingY);
+                glUniform2f(location(("uLayerUV[" + std::to_string(i) + "]").c_str()),
+                            layer.tiling / d.size * tilingX,
+                            layer.tiling / d.size * tilingY);
                 glActiveTexture(GL_TEXTURE0 + units[i]);
                 const auto texture = textures_.get(assets, layer.texture, error);
                 glBindTexture(GL_TEXTURE_2D, texture);
                 has[i] = texture != 0;
-                glUniform1i(
-                    glGetUniformLocation(program_, ("uTexture" + std::to_string(i)).c_str()),
-                    units[i]);
+                glUniform1i(location(("uTexture" + std::to_string(i)).c_str()), units[i]);
                 glActiveTexture(GL_TEXTURE9 + i);
                 auto normal = textures_.get(assets, layer.normalMap, error);
                 glBindTexture(GL_TEXTURE_2D, normal);
                 hasNormal[i] = normal != 0;
-                glUniform1i(glGetUniformLocation(program_, ("uNormal" + std::to_string(i)).c_str()),
-                            9 + i);
+                glUniform1i(location(("uNormal" + std::to_string(i)).c_str()), 9 + i);
                 const auto c = layer.color;
                 glUniform3f(
-                    glGetUniformLocation(program_, ("uColors[" + std::to_string(i) + "]").c_str()),
-                    c.x,
-                    c.y,
-                    c.z);
+                    location(("uColors[" + std::to_string(i) + "]").c_str()), c.x, c.y, c.z);
             }
-            glUniform4iv(glGetUniformLocation(program_, "uHasTexture"), 1, has);
-            glUniform4iv(glGetUniformLocation(program_, "uHasNormal"), 1, hasNormal);
-            glUniform4fv(glGetUniformLocation(program_, "uNormalStrengths"), 1, strengths);
+            glUniform4iv(location("uHasTexture"), 1, has);
+            glUniform4iv(location("uHasNormal"), 1, hasNormal);
+            glUniform4fv(location("uNormalStrengths"), 1, strengths);
             const int count = chunkCount(d);
             for (int z = 0; z < count; ++z) {
                 for (int x = 0; x < count; ++x) {
                     const int index = z * count + x;
+                    const auto& bounds = chunkBounds(d, x, z);
+                    const auto& p = bounds.center;
+                    const Vec3 center{
+                        model.m[0] * p.x + model.m[4] * p.y + model.m[8] * p.z + model.m[12],
+                        model.m[1] * p.x + model.m[5] * p.y + model.m[9] * p.z + model.m[13],
+                        model.m[2] * p.x + model.m[6] * p.y + model.m[10] * p.z + model.m[14]};
+                    const float scale =
+                        std::max({std::abs(t.scale.x), std::abs(t.scale.y), std::abs(t.scale.z)});
+                    if (!frustum.visible(center, bounds.radius * scale)) {
+                        continue;
+                    }
                     auto key = std::make_tuple(e.index, e.generation, index);
                     auto it = chunks_.find(key);
                     if (it == chunks_.end()) {
@@ -456,8 +468,10 @@ void main(){
                                     oldest = p;
                                 }
                             }
+                            // Entries already drawn this view can be evicted safely:
+                            // GL defers deletion until submitted draws complete.
                             if (oldest == chunks_.end()) {
-                                continue;
+                                oldest = chunks_.begin();
                             }
                             release(oldest->second);
                             chunks_.erase(oldest);
@@ -467,35 +481,17 @@ void main(){
                     auto& c = it->second;
                     if (c.identity != d.identity || c.revision != d.chunks[index]) {
                         release(c);
-                        float lo = 1e10f, hi = -1e10f;
-                        for (int rz = z * 32; rz <= z * 32 + 32; ++rz) {
-                            for (int rx = x * 32; rx <= x * 32 + 32; ++rx) {
-                                float h = d.heights[rz * d.resolution + rx];
-                                lo = std::min(lo, h);
-                                hi = std::max(hi, h);
-                            }
-                        }
-                        const float cell = d.size / (d.resolution - 1);
-                        c.center = {(x * 32 + 16) * cell, (lo + hi) * .5f, (z * 32 + 16) * cell};
-                        const Vec3 extent{16 * cell, (hi - lo) * .5f + 8 * cell, 16 * cell};
-                        c.radius = std::sqrt(dot(extent, extent));
                         c.identity = d.identity;
                         c.revision = d.chunks[index];
                     }
-                    const Vec3 center = t.position + rotateVector(t.rotation, c.center * t.scale);
-                    const float scale =
-                        std::max({std::abs(t.scale.x), std::abs(t.scale.y), std::abs(t.scale.z)});
-                    if (!frustum.visible(center, c.radius * scale)) {
-                        continue;
-                    }
                     c.used = frame_;
                     const Vec3 delta = eye - center;
-                    const float distance = std::sqrt(dot(delta, delta));
+                    const float distance = dot(delta, delta);
                     const float span = d.size / (d.resolution - 1) * 32 * scale;
-                    const int lod = distance < span * 2   ? 0
-                                    : distance < span * 4 ? 1
-                                    : distance < span * 8 ? 2
-                                                          : 3;
+                    const int lod = distance < span * span * 4    ? 0
+                                    : distance < span * span * 16 ? 1
+                                    : distance < span * span * 64 ? 2
+                                                                  : 3;
                     auto& b = c.lod[lod];
                     if (!b.vao) {
                         auto vertices = chunk(d, x, z, 1 << lod);

@@ -72,6 +72,7 @@ int main()
     require(ui::createContext(), "fresh MyGUI context for syntax alignment checks");
     ui::setDisplaySize(1280, 720);
     ui::setDeltaTime(1.0f / 60.0f);
+    float syntaxGutterWidth = 0.0f;
     struct SyntaxSnapshot {
         ui::MultilineEditInfo edit;
         bool keywordFound = false;
@@ -100,7 +101,8 @@ int main()
                                ui::InputTextFlags_None,
                                nullptr,
                                nullptr,
-                               &editInfo);
+                               &editInfo,
+                               syntaxGutterWidth);
         auto* draw = ui::windowDrawList();
         const auto vertexStart = draw->vertices().size();
         script_editor_detail::drawLuaSyntaxOverlay(draw, buffer, editInfo);
@@ -174,6 +176,7 @@ int main()
                 std::string(horizontalBuffer).back() == 'z',
             "Lua keyword overlays track MyGUI horizontal scrolling while text is edited");
 
+    syntaxGutterWidth = 48.0f;
     std::string verticalSource;
     for (int line = 0; line < 14; ++line) {
         verticalSource += line == 2 ? "Camera = 1\n" : "-- filler\n";
@@ -208,6 +211,10 @@ int main()
                 ui::Vec2(240, 70), false, verticalEdited);
     require(verticalBase.apiFound && verticalBase.clipFound &&
                 verticalEdited.apiFound && verticalEdited.clipFound &&
+                verticalBase.edit.gutterRect.width >= 47.0f &&
+                verticalBase.edit.innerRect.x >=
+                    verticalBase.edit.gutterRect.x + verticalBase.edit.gutterRect.width &&
+                verticalBase.edit.textOrigin.x >= verticalBase.edit.innerRect.x &&
                 verticalEdited.edit.scrollY > 0.0f &&
                 std::abs((verticalBase.apiPosition.y - verticalEdited.apiPosition.y) -
                          verticalEdited.edit.scrollY) < 2.0f &&

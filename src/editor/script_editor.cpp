@@ -47,6 +47,34 @@ void script_editor_detail::drawLuaSyntaxOverlay(ui::DrawList* draw,
     draw->popClipRect();
 }
 
+namespace {
+void drawLuaLineNumbers(ui::DrawList* draw,
+                        std::string_view source,
+                        const ui::MultilineEditInfo& editInfo) {
+    if (!draw || editInfo.gutterRect.width <= 0.0f) return;
+    const auto& gutter = editInfo.gutterRect;
+    draw->pushClipRect(gutter.min(), gutter.max(), true);
+    draw->addRectFilled(gutter.min(), gutter.max(), UI_COL32(25, 29, 35, 255));
+    const float lineHeight = ui::fontSize();
+    float y = editInfo.textOrigin.y - editInfo.scrollY;
+    int line = 1;
+    for (std::size_t i = 0; i <= source.size(); ++i) {
+        if (i != 0 && source[i - 1] != '\n') continue;
+        if (y + lineHeight >= gutter.y && y <= gutter.y + gutter.height) {
+            char number[24];
+            std::snprintf(number, sizeof(number), "%d", line);
+            const auto width = ui::calcTextSize(number).x;
+            draw->addText({gutter.x + gutter.width - width - 6.0f, y},
+                          UI_COL32(125, 140, 155, 255),
+                          number);
+        }
+        ++line;
+        y += lineHeight;
+    }
+    draw->popClipRect();
+}
+} // namespace
+
 ScriptEditor::ScriptEditor() = default;
 
 void ScriptEditor::draw(const EditorLayout* layout,
@@ -168,6 +196,7 @@ void ScriptEditor::draw(const EditorLayout* layout,
             }
             ui::beginDisabled(!fileOpen());
             ui::MultilineEditInfo editInfo;
+            const float gutter = ui::calcTextSize("00000").x + 12.0f;
             ui::pushStyleColor(ui::Col_Text, ui::Color(0, 0, 0, 0));
             const bool sourceChanged = ui::inputTextMultiline("##source",
                                                               source_.data(),
@@ -177,13 +206,15 @@ void ScriptEditor::draw(const EditorLayout* layout,
                                                                   ui::InputTextFlags_CallbackAlways,
                                                               completion,
                                                               this,
-                                                              &editInfo);
+                                                              &editInfo,
+                                                              gutter);
             ui::popStyleColor();
             if (sourceChanged) fileDirty_ = true;
 
-            // MyGUI's EditBox owns caret, selection, text input, and scrolling.
-            // A clipped native draw-list pass adds Lua token colours above it.
+            // MyGUI's EditBox owns caret, selection, text input, and scrolling. The
+            // overlay adds line numbers and Lua token colours in the aligned text view.
             if (editInfo.drawList) {
+                drawLuaLineNumbers(editInfo.drawList, source_.data(), editInfo);
                 script_editor_detail::drawLuaSyntaxOverlay(
                     editInfo.drawList, source_.data(), editInfo);
             }

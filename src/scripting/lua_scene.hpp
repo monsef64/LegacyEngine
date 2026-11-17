@@ -80,6 +80,8 @@ class LuaScene {
     static int spawnAPI(lua_State* state);
     static int destroyAPI(lua_State* state);
     static int audioApi(lua_State* state);
+    static int fadeColorAPI(lua_State* state);
+    static int fadeColorControl(lua_State* state);
     static int skyboxFadeAPI(lua_State* state);
     static int skyboxMethod(lua_State* state);
     static int materialMethod(lua_State* state);

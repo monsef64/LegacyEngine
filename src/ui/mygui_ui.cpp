@@ -252,6 +252,9 @@ struct WidgetRecord {
     uint64_t changedFrame = 0;
     uint64_t pressedFrame = 0;
     float hoverSince = -1.0f;
+    MyGUI::IntCoord multilineClientBase{};
+    MyGUI::IntCoord multilineClientApplied{};
+    bool multilineClientAdjusted = false;
     float dragStartX = 0.0f;
     float dragStartValue = 0.0f;
     bool dragging = false;
@@ -4129,7 +4132,8 @@ bool inputTextMultiline(const char* label,
                         InputTextFlags flags,
                         InputTextCallback callback,
                         void* userData,
-                        MultilineEditInfo* outInfo) {
+                        MultilineEditInfo* outInfo,
+                        float gutterWidth) {
     if (!gContext || !label || !buf || bufSize == 0) return false;
     auto& c = *gContext;
     const auto avail = contentRegionAvail();
@@ -4148,6 +4152,26 @@ bool inputTextMultiline(const char* label,
     edit->setEditWordWrap(false);
     edit->setVisibleVScroll(true);
     edit->setVisibleHScroll(true);
+    const int gutterPixels = static_cast<int>(std::round(std::clamp(
+        gutterWidth, 0.0f, std::max(0.0f, rec->rect.width - 48.0f))));
+    if (auto* client = edit->getClientWidget()) {
+        const auto current = client->getCoord();
+        MyGUI::IntCoord base = current;
+        if (rec->multilineClientAdjusted &&
+            current.left == rec->multilineClientApplied.left &&
+            current.top == rec->multilineClientApplied.top) {
+            base = rec->multilineClientBase;
+            base.width += current.width - rec->multilineClientApplied.width;
+            base.height += current.height - rec->multilineClientApplied.height;
+        }
+        auto adjusted = base;
+        adjusted.left += gutterPixels;
+        adjusted.width = std::max(1, adjusted.width - gutterPixels);
+        client->setCoord(adjusted);
+        rec->multilineClientBase = base;
+        rec->multilineClientApplied = adjusted;
+        rec->multilineClientAdjusted = gutterPixels > 0;
+    }
     const auto textColor = c.style.Colors[Col_Text];
     auto* manager = inputManager();
     bool focused = manager && manager->getKeyFocusWidget() &&
@@ -4186,8 +4210,18 @@ bool inputTextMultiline(const char* label,
     rec->inputBufferValue = buf;
     const bool changed = rec->changedFrame == c.frame || (focused && existing != rec->inputValue);
     if (outInfo) {
-        outInfo->innerRect = rec->rect;
-        outInfo->textOrigin = {rec->rect.x + c.style.FramePadding.x + 5.0f,
+        const float gutter = static_cast<float>(gutterPixels);
+        outInfo->gutterRect = gutter > 0.0f
+                                  ? Rect{rec->rect.x,
+                                         rec->rect.y,
+                                         gutter,
+                                         rec->rect.height}
+                                  : Rect{};
+        outInfo->innerRect = {rec->rect.x + gutter,
+                              rec->rect.y,
+                              std::max(1.0f, rec->rect.width - gutter),
+                              rec->rect.height};
+        outInfo->textOrigin = {rec->rect.x + c.style.FramePadding.x + 5.0f + gutter,
                                rec->rect.y + c.style.FramePadding.y + 3.0f};
         // MyGUI exposes signed view offsets through size_t getters. A transient
         // negative IntPoint therefore wraps to a huge size_t; discard values

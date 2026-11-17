@@ -2,6 +2,7 @@
 #include "animation/animation_clip.hpp"
 #include "editor/asset_picker.hpp"
 #include "editor/editor_history.hpp"
+#include "editor/value_context.hpp"
 #include "models/model_asset.hpp"
 #include "prefabs/prefab.hpp"
 #include "rendering/renderer.hpp"
@@ -511,11 +512,11 @@ class AnimationWindow {
                     resetPose_ = true;
                 }
                 ui::sameLine();
-                ui::checkbox("Loop", &loop_);
+                EditorValues::Checkbox("Loop", &loop_);
                 ui::sameLine();
                 ui::setNextItemWidth(75);
                 int frame = int(std::round(time_ * samples_));
-                if (ui::inputInt("Frame", &frame, 0)) {
+                if (EditorValues::InputInt("Frame", &frame, 0)) {
                     time_ = std::clamp(frame / float(samples_), 0.f, clip_.duration);
                     playing_ = false;
                     resetPose_ = false;
@@ -541,12 +542,12 @@ class AnimationWindow {
                 ui::textUnformatted(path_.empty() ? "Unsaved animation" : path_.c_str());
                 ui::sameLine();
                 ui::setNextItemWidth(65);
-                if (ui::inputInt("Samples", &samples_, 0)) {
+                if (EditorValues::InputInt("Samples", &samples_, 0)) {
                     samples_ = std::clamp(samples_, 1, 240);
                 }
                 ui::sameLine();
                 ui::setNextItemWidth(95);
-                ui::sliderFloat("Zoom", &zoom_, 1, 12, "%.1fx");
+                EditorValues::SliderFloat("Zoom", &zoom_, 1, 12, "%.1fx");
                 if (ui::beginPopup("Clip settings")) {
                     PopupScope popup;
                     auto next = path_;
@@ -590,7 +591,7 @@ class AnimationWindow {
                         float duration = clip_.duration;
                         {
                             DisabledScope imported(!clip_.model.empty());
-                            if (ui::inputFloat("Duration", &duration, .1f, 1) &&
+                            if (EditorValues::InputFloat("Duration", &duration, .1f, 1) &&
                                 std::isfinite(duration)) {
                                 float last = .001f;
                                 for (const auto& t : clip_.tracks) {
@@ -1006,7 +1007,7 @@ class AnimationWindow {
                         ui::sameLine();
                         ui::setNextItemWidth(90);
                         float t = key.time;
-                        if (ui::dragFloat(
+                        if (EditorValues::DragFloat(
                                 "Key time", &t, 1.f / samples_, 0, clip_.duration, "%.3f")) {
                             float low = key_ ? track.keys[key_ - 1].time + .0001f : 0,
                                   high = key_ + 1 < int(track.keys.size())
@@ -1021,7 +1022,7 @@ class AnimationWindow {
                         }
                         if (property->kind == AnimationValueKind::Boolean) {
                             bool v = key.value[0] >= .5f;
-                            if (ui::checkbox("Value", &v)) {
+                            if (EditorValues::Checkbox("Value", &v)) {
                                 key.value[0] = v ? 1.f : 0.f;
                                 dirty_ = true;
                                 previewDirty_ = true;
@@ -1035,13 +1036,13 @@ class AnimationWindow {
                                 ui::pushId(lane);
                                 ui::setNextItemWidth(std::max(
                                     65.f, (ui::contentRegionAvail().x - 90.f) / (3 - lane)));
-                                if (ui::dragFloat(axes[lane],
-                                                     &key.value[lane],
-                                                     .01f,
-                                                     property->minimum,
-                                                     property->maximum,
-                                                     "%.3f",
-                                                     ui::SliderFlags_AlwaysClamp)) {
+                                if (EditorValues::DragFloat(axes[lane],
+                                                            &key.value[lane],
+                                                            .01f,
+                                                            property->minimum,
+                                                            property->maximum,
+                                                            "%.3f",
+                                                            ui::SliderFlags_AlwaysClamp)) {
                                     dirty_ = true;
                                     previewDirty_ = true;
                                     selectedLane_ = lane;
