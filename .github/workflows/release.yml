@@ -214,9 +214,14 @@ jobs:
             echo '```'
           } > shell-report.md
           cat shell-report.md >> "$GITHUB_STEP_SUMMARY"
-          gh pr comment "$PR_NUMBER" --body-file shell-report.md \
-            || gh pr comment "$PR_NUMBER" --body "Qt editor shell test failed; see the run page." \
-            || true
+          # Report what the comment attempt did rather than swallowing it: a
+          # silent no-op here is what made a failure unreadable once already.
+          echo "PR_NUMBER=[$PR_NUMBER]"
+          echo "report bytes: $(wc -c < shell-report.md)"
+          if ! gh pr comment "$PR_NUMBER" --body-file shell-report.md; then
+            echo "::error::could not comment the shell report on PR $PR_NUMBER"
+            gh pr comment "$PR_NUMBER" --body "Qt editor shell test failed; see the run page." || true
+          fi
 
       # Only if the report above could not run at all: a failed run with
       # nothing to read is what sent me guessing once already.
