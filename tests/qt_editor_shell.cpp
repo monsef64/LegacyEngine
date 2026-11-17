@@ -44,9 +44,11 @@ int main(int argc, char** argv) {
     require(window.scriptPanel() != nullptr, "Script panel is created");
     require(window.toolbar() != nullptr, "Toolbar is created");
 
-    // The menus and docks the engine drives by name must all exist.
+    // The docks the engine drives by name must all exist. Scene is absent on
+    // purpose: it is the central widget, not a dock, so it has no title for
+    // panel() to match and no View menu entry that could hide it.
     for (const char* name :
-         {"Scene", "Game", "Hierarchy", "Inspector", "Assets", "Script", "Console"}) {
+         {"Game", "Hierarchy", "Inspector", "Assets", "Script", "Console"}) {
         require(window.panel(name) != nullptr, name);
     }
 
@@ -94,7 +96,8 @@ int main(int argc, char** argv) {
 
     // The Layout menu writes and restores a file; a missing one must not throw.
     window.resetLayout();
-    require(window.panel("Scene") != nullptr, "Scene survives a layout reset");
+    require(window.panel("Hierarchy") != nullptr, "Hierarchy survives a layout reset");
+    require(window.sceneView() != nullptr, "Scene survives a layout reset");
 
     // Shutdown: the window closes without leaving Qt in a bad state.
     window.requestClose();
