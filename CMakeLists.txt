@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20...3.31)
+cmake_minimum_required(VERSION 3.22...3.31)
 
 project(LegacyEngine LANGUAGES C CXX)
 
@@ -120,27 +120,56 @@ target_link_libraries(legacy_models PUBLIC assimp::assimp legacy_json)
 add_library(glad STATIC third_party/glad/src/gl.c)
 target_include_directories(glad SYSTEM PUBLIC third_party/glad/include)
 
-# --- Dear ImGui (SDL3 + OpenGL3 backends) -----------------------------------
-FetchContent_Declare(imgui
-  GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG v1.92.5-docking
+# --- MyGUI (retained-mode editor UI) ----------------------------------------
+# Build a static, headless-capable MyGUI engine with its vendored FreeType
+# rasterizer. Pugixml and utfcpp are fetched by MyGUI's own FetchContent setup.
+set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+FetchContent_Declare(freetype
+  GIT_REPOSITORY https://github.com/freetype/freetype.git
+  GIT_TAG VER-2-13-3
   GIT_SHALLOW TRUE)
-FetchContent_MakeAvailable(imgui)
-add_library(legacy_imgui STATIC
-  ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
-  ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
-target_include_directories(legacy_imgui SYSTEM PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
-target_link_libraries(legacy_imgui PUBLIC SDL3::SDL3 ${CMAKE_DL_LIBS})
+FetchContent_MakeAvailable(freetype)
+if(TARGET freetype AND NOT TARGET Freetype::Freetype)
+  add_library(Freetype::Freetype ALIAS freetype)
+  # MyGUI exports this dependency in MyGUITargets when it configures its
+  # install rules, so keep the vendored static target in the same export set.
+  install(TARGETS freetype EXPORT MyGUITargets)
+endif()
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/cmake")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cmake/FindFreetype.cmake" "
+set(FREETYPE_FOUND TRUE)
+set(Freetype_FOUND TRUE)
+set(FREETYPE_LIBRARIES Freetype::Freetype)
+set(FREETYPE_INCLUDE_DIRS \"\${freetype_SOURCE_DIR}/include\")
+")
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_BINARY_DIR}/cmake")
 
-# --- ImGuizmo (transform handles, pinned for reproducible builds) -----------
-FetchContent_Declare(imguizmo
-  GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
-  GIT_TAG 105e4fde45e4e74aae8973d98750820ef7aca7e2)
-set(IMGUIZMO_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(imguizmo)
-target_link_libraries(imguizmo PUBLIC legacy_imgui)
+set(MYGUI_DONT_USE_OBSOLETE ON CACHE BOOL "" FORCE)
+set(MYGUI_USE_FREETYPE ON CACHE BOOL "" FORCE)
+set(MYGUI_RENDERSYSTEM 1 CACHE STRING "" FORCE)
+set(MYGUI_BUILD_RENDERSYSTEMS "1" CACHE STRING "" FORCE)
+set(MYGUI_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
+set(MYGUI_BUILD_ADVANCED_DEMOS OFF CACHE BOOL "" FORCE)
+set(MYGUI_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(MYGUI_BUILD_UNITTESTS OFF CACHE BOOL "" FORCE)
+set(MYGUI_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(MYGUI_BUILD_TEST_APP OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(mygui
+  GIT_REPOSITORY https://github.com/MyGUI/mygui.git
+  GIT_TAG v3.5.4
+  GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(mygui)
+
+add_library(legacy_mygui STATIC
+  src/ui/mygui_platform.cpp
+  src/ui/mygui_ui.cpp
+  src/ui/mygui_gizmo.cpp)
+target_include_directories(legacy_mygui PUBLIC src "${CMAKE_CURRENT_BINARY_DIR}/generated" PRIVATE third_party/stb)
+target_link_libraries(legacy_mygui PUBLIC SDL3::SDL3 glad MyGUI::MyGUI Freetype::Freetype ${CMAKE_DL_LIBS})
 
 # --- Lua (embedded, no external interpreter installation needed) -------------
 FetchContent_Declare(lua
@@ -173,7 +202,7 @@ target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3)
 add_library(legacy_thumbnails STATIC src/assets/texture_preview.cpp)
 target_include_directories(legacy_thumbnails PUBLIC src PRIVATE third_party/stb)
 target_link_libraries(legacy_thumbnails PUBLIC SDL3::SDL3 glad Threads::Threads)
-target_link_libraries(legacy_imgui PUBLIC legacy_thumbnails)
+target_link_libraries(legacy_mygui PUBLIC legacy_thumbnails)
 
 # SIMD parser with a compatibility DOM bridge (no second text parse).
 add_library(legacy_simdjson STATIC third_party/simdjson/simdjson.cpp)
@@ -187,7 +216,7 @@ add_library(legacy_levels STATIC src/levels/level_system.cpp)
 target_include_directories(legacy_levels PUBLIC src)
 target_link_libraries(legacy_levels PUBLIC legacy_json Threads::Threads)
 target_link_libraries(lua_console PUBLIC legacy_levels)
-target_link_libraries(legacy_imgui PUBLIC legacy_json)
+target_link_libraries(legacy_mygui PUBLIC legacy_json)
 
 add_library(legacy_material_textures STATIC src/rendering/material_textures.cpp src/rendering/skybox_renderer.cpp)
 target_include_directories(legacy_material_textures PUBLIC src PRIVATE third_party/stb)
@@ -203,7 +232,8 @@ add_executable(LegacyEngine
   src/editor/transform_editor.cpp
   src/editor/script_editor.cpp
 )
-# Embed the UI font so release binaries need no external asset directory.
+# Embed the UI fonts so release binaries need no external asset directory.
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/third_party/roboto/Roboto-Regular.ttf")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/roboto/Roboto-Regular.ttf" LEGACY_FONT_HEX HEX)
@@ -215,7 +245,7 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf"
 string(REGEX REPLACE "(..)" "0x\\1," LEGACY_ICON_BYTES "${LEGACY_ICON_HEX}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma once\ninline const unsigned char editorIconData[] = {${LEGACY_ICON_BYTES}};\n")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_mygui lua_console legacy_material_textures legacy_models)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
@@ -230,14 +260,14 @@ include(CTest)
 if(BUILD_TESTING)
   add_executable(shape_tests tests/shapes.cpp src/rendering/mesh.cpp src/physics/physics.cpp)
   target_include_directories(shape_tests PRIVATE src)
-  target_link_libraries(shape_tests PRIVATE Jolt)
+  target_link_libraries(shape_tests PRIVATE Jolt legacy_json)
   add_test(NAME shapes COMMAND shape_tests)
 endif()
 
 if(BUILD_TESTING)
   add_executable(transform_editor_tests tests/transform_editor.cpp src/editor/transform_editor.cpp)
   target_include_directories(transform_editor_tests PRIVATE src)
-  target_link_libraries(transform_editor_tests PRIVATE imguizmo)
+  target_link_libraries(transform_editor_tests PRIVATE legacy_mygui)
   add_test(NAME transform_editor COMMAND transform_editor_tests)
 endif()
 
@@ -250,14 +280,14 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(script_editor_tests tests/script_editor.cpp src/editor/script_editor.cpp)
-  target_link_libraries(script_editor_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(script_editor_tests PRIVATE lua_console legacy_mygui)
   add_test(NAME script_editor COMMAND script_editor_tests)
 endif()
 
 if(BUILD_TESTING)
   add_executable(level_objects_tests tests/level_objects.cpp)
   target_include_directories(level_objects_tests PRIVATE src)
-  target_link_libraries(level_objects_tests PRIVATE legacy_imgui)
+  target_link_libraries(level_objects_tests PRIVATE legacy_mygui)
   add_test(NAME level_objects COMMAND level_objects_tests)
 endif()
 
@@ -271,21 +301,21 @@ endif()
 if(BUILD_TESTING)
   add_executable(create_hierarchy_tests tests/create_hierarchy.cpp src/physics/physics.cpp src/rendering/mesh.cpp)
   target_include_directories(create_hierarchy_tests PRIVATE src)
-  target_link_libraries(create_hierarchy_tests PRIVATE legacy_imgui Jolt)
+  target_link_libraries(create_hierarchy_tests PRIVATE legacy_mygui Jolt)
   add_test(NAME create_hierarchy COMMAND create_hierarchy_tests)
 endif()
 
 if(BUILD_TESTING)
   add_executable(editor_layout_tests tests/editor_layout.cpp src/physics/physics.cpp)
   target_include_directories(editor_layout_tests PRIVATE src)
-  target_link_libraries(editor_layout_tests PRIVATE imguizmo Jolt)
+  target_link_libraries(editor_layout_tests PRIVATE legacy_mygui Jolt)
   add_test(NAME editor_layout COMMAND editor_layout_tests)
 endif()
 
 if(BUILD_TESTING)
   add_executable(editor_theme_tests tests/editor_theme.cpp)
   target_include_directories(editor_theme_tests PRIVATE src "${CMAKE_CURRENT_BINARY_DIR}/generated")
-  target_link_libraries(editor_theme_tests PRIVATE legacy_imgui)
+  target_link_libraries(editor_theme_tests PRIVATE legacy_mygui)
   # Keep assertions active in Release builds, as with the other test targets.
   if(MSVC)
     target_compile_options(editor_theme_tests PRIVATE /UNDEBUG)
@@ -298,7 +328,8 @@ endif()
 if(BUILD_TESTING)
   add_executable(play_mode_tests tests/play_mode.cpp src/physics/physics.cpp)
   target_include_directories(play_mode_tests PRIVATE src)
-  target_link_libraries(play_mode_tests PRIVATE legacy_imgui Jolt)
+  target_link_libraries(play_mode_tests PRIVATE legacy_mygui Jolt)
+  target_compile_definitions(play_mode_tests PRIVATE JPH_NO_DEBUG)
   if(MSVC)
     target_compile_options(play_mode_tests PRIVATE /UNDEBUG)
   else()
@@ -310,7 +341,7 @@ endif()
 if(BUILD_TESTING)
   add_executable(editor_history_tests tests/editor_history.cpp)
   target_include_directories(editor_history_tests PRIVATE src)
-  target_link_libraries(editor_history_tests PRIVATE legacy_imgui)
+  target_link_libraries(editor_history_tests PRIVATE legacy_mygui)
   if(MSVC)
     target_compile_options(editor_history_tests PRIVATE /UNDEBUG)
   else()
@@ -345,7 +376,7 @@ endif()
 if(BUILD_TESTING)
   add_executable(assets_scripts_tests tests/assets_scripts.cpp)
   target_include_directories(assets_scripts_tests PRIVATE src)
-  target_link_libraries(assets_scripts_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(assets_scripts_tests PRIVATE lua_console legacy_mygui)
   if(MSVC)
     target_compile_options(assets_scripts_tests PRIVATE /UNDEBUG)
   else()
@@ -357,7 +388,7 @@ endif()
 if(BUILD_TESTING)
   add_executable(asset_trash_tests tests/asset_trash.cpp src/editor/script_editor.cpp)
   target_include_directories(asset_trash_tests PRIVATE src)
-  target_link_libraries(asset_trash_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(asset_trash_tests PRIVATE lua_console legacy_mygui legacy_models)
   if(MSVC)
     target_compile_options(asset_trash_tests PRIVATE /UNDEBUG)
   else()
@@ -369,7 +400,7 @@ endif()
 if(BUILD_TESTING)
   add_executable(camera_tests tests/cameras.cpp src/rendering/mesh.cpp)
   target_include_directories(camera_tests PRIVATE src)
-  target_link_libraries(camera_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(camera_tests PRIVATE lua_console legacy_mygui)
   if(MSVC)
     target_compile_options(camera_tests PRIVATE /UNDEBUG)
   else()
@@ -381,7 +412,7 @@ endif()
 if(BUILD_TESTING)
   add_executable(oop_project_assets_tests tests/oop_project_assets.cpp)
   target_include_directories(oop_project_assets_tests PRIVATE src)
-  target_link_libraries(oop_project_assets_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(oop_project_assets_tests PRIVATE lua_console legacy_mygui)
   if(MSVC)
     target_compile_options(oop_project_assets_tests PRIVATE /UNDEBUG)
   else()
@@ -393,7 +424,7 @@ endif()
 if(BUILD_TESTING)
   add_executable(editor_polish_tests tests/editor_polish.cpp src/rendering/mesh.cpp src/editor/script_editor.cpp)
   target_include_directories(editor_polish_tests PRIVATE src)
-  target_link_libraries(editor_polish_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(editor_polish_tests PRIVATE lua_console legacy_mygui legacy_models)
   if(MSVC)
     target_compile_options(editor_polish_tests PRIVATE /UNDEBUG)
   else()
@@ -415,7 +446,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(script_exports_tests tests/script_exports.cpp src/editor/script_editor.cpp)
-  target_link_libraries(script_exports_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(script_exports_tests PRIVATE lua_console legacy_mygui)
   if(MSVC)
     target_compile_options(script_exports_tests PRIVATE /UNDEBUG)
   else()
@@ -426,7 +457,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(input_audio_tests tests/input_audio.cpp)
-  target_link_libraries(input_audio_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(input_audio_tests PRIVATE lua_console legacy_mygui)
   target_compile_definitions(input_audio_tests PRIVATE TEST_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
   if(MSVC)
     target_compile_options(input_audio_tests PRIVATE /UNDEBUG)
@@ -438,7 +469,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(lighting_tests tests/lighting.cpp src/rendering/mesh.cpp)
-  target_link_libraries(lighting_tests PRIVATE lua_console legacy_imgui)
+  target_link_libraries(lighting_tests PRIVATE lua_console legacy_mygui)
   add_executable(lighting_render_tests tests/lighting_render.cpp src/rendering/renderer.cpp src/rendering/mesh.cpp)
   target_link_libraries(lighting_render_tests PRIVATE SDL3::SDL3 glad lua_console legacy_thumbnails legacy_material_textures)
   target_include_directories(lighting_render_tests PRIVATE src)
@@ -484,7 +515,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(skybox_tests tests/skybox.cpp)
-  target_link_libraries(skybox_tests PRIVATE lua_console legacy_json legacy_imgui)
+  target_link_libraries(skybox_tests PRIVATE lua_console legacy_json legacy_mygui)
   target_include_directories(skybox_tests PRIVATE src)
   if(MSVC)
     target_compile_options(skybox_tests PRIVATE /UNDEBUG)

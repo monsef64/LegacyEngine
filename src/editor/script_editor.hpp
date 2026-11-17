@@ -8,8 +8,14 @@
 #include <algorithm>
 #include <array>
 #include <string>
+#include <string_view>
 #include <vector>
-struct ImGuiInputTextCallbackData;
+
+namespace script_editor_detail {
+void drawLuaSyntaxOverlay(ui::DrawList* draw,
+                          std::string_view source,
+                          const ui::MultilineEditInfo& editInfo);
+}
 
 class ScriptEditor {
   public:
@@ -140,7 +146,7 @@ class ScriptEditor {
     double treeRefresh_ = 0;
     LuaConsole console_;
     std::array<char, LuaConsole::maxSourceBytes + 1> source_{};
-    static int completion(ImGuiInputTextCallbackData* data);
+    static int completion(ui::InputTextCallbackData* data);
     std::string completionPrefix_;
     bool autoScroll_ = true;
     bool scrollToBottom_ = false;

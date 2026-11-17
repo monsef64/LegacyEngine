@@ -59,5 +59,5 @@ these lines and the shell exit status (`echo $?` immediately after running on
 Linux/macOS) when reporting the issue.
 
 Missing skybox/material/audio assets continue to be reported to the terminal,
-but do not automatically open ImGui error windows. Inline Inspector/Asset Browser
+but do not automatically open UI error dialogs. Inline Inspector/Asset Browser
 validation messages remain available.

@@ -123,7 +123,7 @@ with project assets. The default bottom tab order is **Assets, Script Editor,
 Console**; use **Windows > Reset layout** to restore it. Assets also has an
 icon-only **New Folder** button with a tooltip.
 
-ImGui conflict highlighting and red recovery tooltips are disabled in the engine
+UI conflict highlighting and red recovery tooltips are disabled in the engine
 viewport. Recoverable UI errors are still sent to the engine log rather than
 silently discarded.
 

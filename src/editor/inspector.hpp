@@ -16,9 +16,10 @@
 #include "materials/material_io.hpp"
 #include "models/model_asset.hpp"
 #include "project/layers.hpp"
+#include "particles/particle_io.hpp"
 #include "scene/scene_camera.hpp"
 #include "scripting/script_exports.hpp"
-#include <ImGuizmo.h>
+#include "ui/mygui_ui.hpp"
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -30,57 +31,57 @@ inline bool editVector(const char* label,
                        float speed = 0.05f,
                        float minimum = -1000000,
                        float maximum = 1000000) {
-    ImGui::PushID(label);
+    ui::pushId(label);
     float v[]{value.x, value.y, value.z};
     bool changed = false;
     const char* axes[]{"X", "Y", "Z"};
-    const bool narrow = ImGui::GetContentRegionAvail().x < 340;
+    const bool narrow = ui::contentRegionAvail().x < 340;
     if (narrow) {
-        ImGui::TextUnformatted(label);
+        ui::textUnformatted(label);
         changed |= EditorValues::context(v, 3, minimum, maximum, "Vector values");
     }
-    if (ImGui::BeginTable("##Vector",
+    if (ui::beginTable("##Vector",
                           narrow ? 2 : 4,
-                          ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoHostExtendX)) {
+                          ui::TableFlags_SizingStretchProp | ui::TableFlags_NoHostExtendX)) {
         if (narrow) {
-            ImGui::TableSetupColumn("Axis", ImGuiTableColumnFlags_WidthFixed, 18);
-            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+            ui::tableSetupColumn("Axis", ui::TableColumnFlags_WidthFixed, 18);
+            ui::tableSetupColumn("Value", ui::TableColumnFlags_WidthStretch);
         } else {
-            ImGui::TableSetupColumn("Label",
-                                    ImGuiTableColumnFlags_WidthFixed,
-                                    std::min(100.f, ImGui::GetContentRegionAvail().x * .25f));
+            ui::tableSetupColumn("Label",
+                                    ui::TableColumnFlags_WidthFixed,
+                                    std::min(100.f, ui::contentRegionAvail().x * .25f));
             for (int i = 0; i < 3; ++i) {
-                ImGui::TableSetupColumn(axes[i], ImGuiTableColumnFlags_WidthStretch);
+                ui::tableSetupColumn(axes[i], ui::TableColumnFlags_WidthStretch);
             }
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(label);
+            ui::tableNextRow();
+            ui::tableSetColumnIndex(0);
+            ui::alignTextToFramePadding();
+            ui::textUnformatted(label);
             changed |= EditorValues::context(v, 3, minimum, maximum, "Vector values");
         }
         for (int i = 0; i < 3; ++i) {
             if (narrow) {
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
+                ui::tableNextRow();
+                ui::tableSetColumnIndex(0);
             } else {
-                ImGui::TableSetColumnIndex(i + 1);
+                ui::tableSetColumnIndex(i + 1);
             }
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(axes[i]);
+            ui::alignTextToFramePadding();
+            ui::textUnformatted(axes[i]);
             if (narrow) {
-                ImGui::TableSetColumnIndex(1);
+                ui::tableSetColumnIndex(1);
             } else {
-                ImGui::SameLine();
+                ui::sameLine();
             }
-            ImGui::PushID(i);
-            ImGui::SetNextItemWidth(std::max(12.f, ImGui::GetContentRegionAvail().x));
+            ui::pushId(i);
+            ui::setNextItemWidth(std::max(12.f, ui::contentRegionAvail().x));
             changed |= EditorValues::DragFloat(
-                "##axis", &v[i], speed, minimum, maximum, "%.3f", ImGuiSliderFlags_AlwaysClamp);
-            ImGui::PopID();
+                "##axis", &v[i], speed, minimum, maximum, "%.3f", ui::SliderFlags_AlwaysClamp);
+            ui::popId();
         }
-        ImGui::EndTable();
+        ui::endTable();
     }
-    ImGui::PopID();
+    ui::popId();
     if (!changed) {
         return false;
     }
@@ -94,22 +95,22 @@ inline bool editVector(const char* label,
 }
 inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) {
     const char* presets[]{"Fire", "Smoke", "Sparkles"};
-    if (ImGui::BeginCombo("Preset", "Select preset...")) {
+    if (ui::beginCombo("Preset", "Select preset...")) {
         for (int i = 0; i < 3; ++i) {
-            if (ImGui::Selectable(presets[i])) {
+            if (ui::selectable(presets[i])) {
                 applyParticlePreset(p, i);
             }
         }
-        ImGui::EndCombo();
+        ui::endCombo();
     }
     Json edited = Particles::settings(p);
     bool changed = false;
     auto fields = [&](const char* group, std::initializer_list<const char*> names) {
-        if (!ImGui::TreeNodeEx(group, ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (!ui::treeNodeEx(group, ui::TreeNodeFlags_DefaultOpen)) {
             return;
         }
         for (const auto* name : names) {
-            ImGui::PushID(name);
+            ui::pushId(name);
             std::string label;
             for (const char* c = name; *c; ++c) {
                 if (c != name && std::isupper(static_cast<unsigned char>(*c))) {
@@ -159,7 +160,7 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
                 }
             }
         }
-        ImGui::TreePop();
+        ui::treePop();
     };
     fields("Emission",
            {"playOnAwake",
@@ -199,9 +200,9 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
             "blend",
             "sprite"});
     fields("Texture animation", {"useSpriteSheet"});
-    ImGui::BeginDisabled(!edited["useSpriteSheet"].get<bool>());
+    ui::beginDisabled(!edited["useSpriteSheet"].get<bool>());
     fields("Sprite sheet", {"sheetColumns", "sheetRows", "frameRate"});
-    ImGui::EndDisabled();
+    ui::endDisabled();
     std::string texture = p.texture;
     if (assetPicker("Texture override", texture, assets, [](const std::string& path) {
             return materialTexturePath(path);
@@ -209,15 +210,15 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
         edited["texture"] = texture;
         changed = true;
     }
-    if (ImGui::BeginDragDropTarget()) {
-        if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-            const std::string path = static_cast<const char*>(drop->Data);
+    if (ui::beginDragDropTarget()) {
+        if (const auto* drop = ui::acceptDragDropPayload("ASSET_PATH")) {
+            const std::string path = static_cast<const char*>(drop->data());
             if (materialTexturePath(path)) {
                 edited["texture"] = path;
                 changed = true;
             }
         }
-        ImGui::EndDragDropTarget();
+        ui::endDragDropTarget();
     }
     static std::string error;
     if (changed) {
@@ -234,34 +235,34 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
         }
     }
     if (!error.empty()) {
-        ImGui::TextWrapped("%s", error.c_str());
+        ui::textWrapped("%s", error.c_str());
     }
 }
 
 template <class T>
 inline bool
 componentHeader(World& world, Entity entity, const char* name, const T& defaults = T{}) {
-    ImGui::Spacing();
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4);
-    ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(.16f, .23f, .31f, 1));
-    const bool open = ImGui::CollapsingHeader(name, ImGuiTreeNodeFlags_DefaultOpen);
-    const auto header = ImGui::GetItemRectMin(), end = ImGui::GetItemRectMax();
-    ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(header.x, header.y + 3),
-                                              ImVec2(header.x + 3, end.y - 3),
-                                              ImGui::GetColorU32(ImGuiCol_CheckMark),
+    ui::spacing();
+    ui::pushStyleVar(ui::StyleVar_FramePadding, ui::Vec2(10, 6));
+    ui::pushStyleVar(ui::StyleVar_FrameRounding, 4);
+    ui::pushStyleColor(ui::Col_Header, ui::Color(.16f, .23f, .31f, 1));
+    const bool open = ui::collapsingHeader(name, ui::TreeNodeFlags_DefaultOpen);
+    const auto header = ui::itemRectMin(), end = ui::itemRectMax();
+    ui::windowDrawList()->addRectFilled(ui::Vec2(header.x, header.y + 3),
+                                              ui::Vec2(header.x + 3, end.y - 3),
+                                              ui::colorU32(ui::Col_CheckMark),
                                               2);
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(2);
+    ui::popStyleColor();
+    ui::popStyleVar(2);
     bool remove = false;
-    if (ImGui::BeginPopupContextItem(name)) {
-        if (ImGui::MenuItem("Copy values")) {
+    if (ui::beginPopupContextItem(name)) {
+        if (ui::menuItem("Copy values")) {
             componentClipboard.copy<T>(world, entity);
         }
-        if (ImGui::MenuItem("Paste values", nullptr, false, componentClipboard.matches<T>())) {
+        if (ui::menuItem("Paste values", nullptr, false, componentClipboard.matches<T>())) {
             componentClipboard.paste<T>(world, entity);
         }
-        if (ImGui::MenuItem("Reset")) {
+        if (ui::menuItem("Reset")) {
             if constexpr (std::is_same_v<T, Transform>) {
                 setLocalTransform(world, entity, Transform{});
             } else {
@@ -271,7 +272,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                 world.get<T>(entity) = defaults;
             }
         }
-        ImGui::Separator();
+        ui::separator();
         bool allowed = true;
         if constexpr (std::is_same_v<T, Transform>) {
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
@@ -287,14 +288,14 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Camera>) {
             allowed = !world.has<FPSCamera>(entity);
         }
-        remove = ImGui::MenuItem("Remove component", nullptr, false, allowed);
+        remove = ui::menuItem("Remove component", nullptr, false, allowed);
         if (!allowed) {
-            ImGui::TextDisabled(
+            ui::textDisabled(
                 "Remove dependent Camera / listener / lights / controller / FPSCamera first");
         }
-        ImGui::EndPopup();
+        ui::endPopup();
     }
-    if (ImGui::BeginDragDropSource()) {
+    if (ui::beginDragDropSource()) {
         int type = -1;
         if constexpr (std::is_same_v<T, Transform>) {
             type = 0;
@@ -363,13 +364,13 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             type = 19;
         }
         EditorComponentPayload payload{entity, type};
-        ImGui::SetDragDropPayload("EDITOR_COMPONENT", &payload, sizeof(payload));
-        ImGui::TextUnformatted(name);
-        ImGui::EndDragDropSource();
+        ui::setDragDropPayload("EDITOR_COMPONENT", &payload, sizeof(payload));
+        ui::textUnformatted(name);
+        ui::endDragDropSource();
     }
-    if (ImGui::BeginDragDropTarget()) {
-        if (const auto* payload = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
-            const auto source = *static_cast<const EditorComponentPayload*>(payload->Data);
+    if (ui::beginDragDropTarget()) {
+        if (const auto* payload = ui::acceptDragDropPayload("EDITOR_COMPONENT")) {
+            const auto source = *static_cast<const EditorComponentPayload*>(payload->data());
             int target = -1;
             const char* names[]{
                 "Transform",     "RigidBody",           "Collider",   "MeshRenderer",
@@ -413,7 +414,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                 order.types.insert(to, source.type);
             }
         }
-        ImGui::EndDragDropTarget();
+        ui::endDragDropTarget();
     }
     if (remove) {
         if constexpr (std::is_base_of_v<LightSettings, T>) {
@@ -421,6 +422,19 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         }
         world.remove<T>(entity);
         return false;
+    }
+    if (open) {
+        ui::pushId(name);
+        if (ui::smallButton("Copy values")) {
+            componentClipboard.copy<T>(world, entity);
+        }
+        ui::sameLine();
+        ui::beginDisabled(!componentClipboard.matches<T>());
+        if (ui::smallButton("Paste values")) {
+            componentClipboard.paste<T>(world, entity);
+        }
+        ui::endDisabled();
+        ui::popId();
     }
     return open;
 }
@@ -435,8 +449,8 @@ inline void drawScriptExports(World& world,
         "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
         "Terrain",       "CameraEffects",       "Fog"};
     for (auto& field : fields) {
-        ImGui::PushID(field.name.c_str());
-        ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
+        ui::pushId(field.name.c_str());
+        ui::text("%s (%s)", field.name.c_str(), field.type.c_str());
         if (field.type == "number") {
             EditorValues::DragFloat("##value",
                                     &field.number,
@@ -444,7 +458,7 @@ inline void drawScriptExports(World& world,
                                     -1000000,
                                     1000000,
                                     "%.3f",
-                                    ImGuiSliderFlags_AlwaysClamp);
+                                    ui::SliderFlags_AlwaysClamp);
         } else if (field.type == "boolean") {
             EditorValues::Checkbox("##value", &field.boolean);
         } else if (field.type == "string") {
@@ -469,13 +483,13 @@ inline void drawScriptExports(World& world,
                                : true;
                 });
             } else {
-                ImGui::Button(value.c_str(),
-                              ImVec2(std::max(40.0f, ImGui::GetContentRegionAvail().x - 36), 0));
+                ui::button(value.c_str(),
+                              ui::Vec2(std::max(40.0f, ui::contentRegionAvail().x - 36), 0));
             }
-            if (ImGui::BeginDragDropTarget()) {
+            if (ui::beginDragDropTarget()) {
                 if (asset) {
-                    if (auto* p = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                        std::string path = static_cast<const char*>(p->Data);
+                    if (auto* p = ui::acceptDragDropPayload("ASSET_PATH")) {
+                        std::string path = static_cast<const char*>(p->data());
                         if ((field.type != "AudioClip" || audioAsset(path)) &&
                             (field.type != "Texture" ||
                              (!path.empty() &&
@@ -484,14 +498,14 @@ inline void drawScriptExports(World& world,
                         }
                     }
                 } else {
-                    if (auto* p = ImGui::AcceptDragDropPayload("LEVEL_OBJECT")) {
-                        Entity target = *static_cast<const Entity*>(p->Data);
+                    if (auto* p = ui::acceptDragDropPayload("LEVEL_OBJECT")) {
+                        Entity target = *static_cast<const Entity*>(p->data());
                         if (exportHasComponent(world, target, field.type)) {
                             field.entity = target;
                         }
                     }
-                    if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
-                        auto target = *static_cast<const EditorComponentPayload*>(p->Data);
+                    if (auto* p = ui::acceptDragDropPayload("EDITOR_COMPONENT")) {
+                        auto target = *static_cast<const EditorComponentPayload*>(p->data());
                         if (target.type >= 0 && target.type < 23 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
@@ -500,23 +514,23 @@ inline void drawScriptExports(World& world,
                         }
                     }
                 }
-                ImGui::EndDragDropTarget();
+                ui::endDragDropTarget();
             }
-            ImGui::SameLine();
-            if (ImGui::SmallButton("X")) {
+            ui::sameLine();
+            if (ui::smallButton("X")) {
                 field.entity = {};
                 field.text.clear();
             }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Clear assignment");
+            if (ui::isItemHovered()) {
+                ui::setTooltip("Clear assignment");
             }
         }
-        ImGui::PopID();
+        ui::popId();
     }
 }
 inline void drawMaterialAssetInspector(const AssetManager& assets, const std::string& path) {
-    ImGui::TextWrapped("Material: %s", path.c_str());
-    ImGui::Separator();
+    ui::textWrapped("Material: %s", path.c_str());
+    ui::separator();
     try {
         auto edited = loadMaterial(assets, path);
         bool changed = false;
@@ -529,15 +543,15 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
             bool result = assetPicker(label, value, &assets, [](const std::string& file) {
                 return materialTexturePath(file);
             });
-            if (ImGui::BeginDragDropTarget()) {
-                if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                    std::string file = static_cast<const char*>(drop->Data);
+            if (ui::beginDragDropTarget()) {
+                if (const auto* drop = ui::acceptDragDropPayload("ASSET_PATH")) {
+                    std::string file = static_cast<const char*>(drop->data());
                     if (materialTexturePath(file)) {
                         value = file;
                         result = true;
                     }
                 }
-                ImGui::EndDragDropTarget();
+                ui::endDragDropTarget();
             }
             return result;
         };
@@ -553,13 +567,13 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
             changed = true;
         }
         changed |= EditorValues::SliderFloat("Specular", &edited.specular, 0, 1);
-        ImGui::TextWrapped(
+        ui::textWrapped(
             "Shared asset: edits are saved immediately and affect all objects using this material.");
         if (changed && validMaterial(edited)) {
             saveMaterial(assets, path, edited);
         }
     } catch (const std::exception& error) {
-        ImGui::TextWrapped("%s", error.what());
+        ui::textWrapped("%s", error.what());
     }
 }
 
@@ -594,12 +608,12 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
             revision = modelAssetRevision;
             error.clear();
         }
-        ImGui::TextWrapped("Model import settings: %s", settings.c_str());
-        drawAssetPreview(assets, path, std::min(384.f, ImGui::GetContentRegionAvail().x), 1);
+        ui::textWrapped("Model import settings: %s", settings.c_str());
+        drawAssetPreview(assets, path, std::min(384.f, ui::contentRegionAvail().x), 1);
         EditorValues::InputFloat("Import scale", &scale, .001f, .1f, "%.6f");
-        ImGui::TextWrapped(
+        ui::textWrapped(
             "Applied before Transform scale (0.000001 to 1000000). Shared instances and their Box collider bounds are updated.");
-        if (ImGui::Button("Apply import scale")) {
+        if (ui::button("Apply import scale")) {
             try {
                 saveModelImportScale(assets, settings, scale);
                 world.each<MeshRenderer, Collider>(
@@ -634,18 +648,18 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
             }
         }
         if (partCount) {
-            ImGui::Text("Mesh parts: %d", partCount);
+            ui::text("Mesh parts: %d", partCount);
         }
         if (!warnings.empty()) {
-            ImGui::TextWrapped("%s", warnings.c_str());
+            ui::textWrapped("%s", warnings.c_str());
         }
-        ImGui::TextWrapped(
+        ui::textWrapped(
             "Skeletal clips can be previewed by clicking the model in Assets. Materials live in its data folder.");
         if (!error.empty()) {
-            ImGui::TextWrapped("%s", error.c_str());
+            ui::textWrapped("%s", error.c_str());
         }
     } catch (const std::exception& error) {
-        ImGui::TextWrapped("%s", error.what());
+        ui::textWrapped("%s", error.what());
     }
 }
 
@@ -664,48 +678,48 @@ inline void drawInspector(World& world,
     placeEditorPanel(rect);
     if (beginEditorPanel("Inspector", fixedPanelFlags)) {
         if (assets && modelAsset(selectedAsset)) {
-            ImGui::BeginDisabled(editingGizmo || runtime);
+            ui::beginDisabled(editingGizmo || runtime);
             drawModelImportInspector(world, *assets, selectedAsset);
-            ImGui::EndDisabled();
+            ui::endDisabled();
         } else if (assets && materialAsset(selectedAsset)) {
-            ImGui::BeginDisabled(editingGizmo || runtime);
+            ui::beginDisabled(editingGizmo || runtime);
             drawMaterialAssetInspector(*assets, selectedAsset);
-            ImGui::EndDisabled();
+            ui::endDisabled();
         } else if (!world.alive(selected)) {
-            ImGui::TextDisabled("Select a GameObject in Hierarchy or Scene.");
+            ui::textDisabled("Select a GameObject in Hierarchy or Scene.");
         } else {
-            ImGui::PushID(static_cast<int>(selected.index));
-            ImGui::BeginDisabled(editingGizmo);
-            const float available = ImGui::GetContentRegionAvail().x;
+            ui::pushId(static_cast<int>(selected.index));
+            ui::beginDisabled(editingGizmo);
+            const float available = ui::contentRegionAvail().x;
             bool objectActive =
                 !world.has<ObjectActivity>(selected) || world.get<ObjectActivity>(selected).enabled;
             if (EditorValues::Checkbox("##Active", &objectActive)) {
                 setObjectActive(world, selected, objectActive);
             }
-            ImGui::SameLine();
+            ui::sameLine();
             auto* objectName = world.tryGet<ObjectName>(selected);
             char name[257];
             std::snprintf(name, sizeof(name), "%s", objectName ? objectName->value.c_str() : "");
-            ImGui::SetNextItemWidth(std::max(30.f, available - ImGui::GetFrameHeight() - 100.f));
+            ui::setNextItemWidth(std::max(30.f, available - ui::frameHeight() - 100.f));
             if (EditorValues::InputText("##Name", name, sizeof(name))) {
                 world.add(selected, ObjectName{name});
             }
-            ImGui::SameLine();
+            ui::sameLine();
             if (auto* t = world.tryGet<Transform>(selected)) {
                 EditorValues::Checkbox("Static", &t->isStatic);
             }
             int layer = LayerSettings::effective(world, selected);
-            ImGui::SetNextItemWidth(-1);
-            if (ImGui::BeginCombo("##Layer", ("Layer   " + LayerSettings::names[layer]).c_str())) {
+            ui::setNextItemWidth(-1);
+            if (ui::beginCombo("##Layer", ("Layer   " + LayerSettings::names[layer]).c_str())) {
                 for (int i = 0; i < 32; ++i) {
                     if (!LayerSettings::names[i].empty() &&
-                        ImGui::Selectable(LayerSettings::names[i].c_str(), layer == i)) {
+                        ui::selectable(LayerSettings::names[i].c_str(), layer == i)) {
                         world.add(selected, ObjectLayer{i});
                     }
                 }
-                ImGui::EndCombo();
+                ui::endCombo();
             }
-            ImGui::Separator();
+            ui::separator();
             auto ordered = world.has<InspectorOrder>(selected)
                                ? world.get<InspectorOrder>(selected).types
                                : std::vector<int>{0, 3,  2,  1,  6,  9,  10, 11, 12, 8,  7,
@@ -746,7 +760,7 @@ inline void drawInspector(World& world,
                                                     0.05f,
                                                     100,
                                                     "%.3f",
-                                                    ImGuiSliderFlags_AlwaysClamp) &&
+                                                    ui::SliderFlags_AlwaysClamp) &&
                             std::isfinite(size)) {
                             edited.scale = {size, size, size};
                             transformChanged = true;
@@ -769,14 +783,14 @@ inline void drawInspector(World& world,
                         r->model.empty()) {
                         r->mesh = meshes[0];
                     }
-                    if (ImGui::BeginDragDropTarget()) {
-                        if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                            std::string path = static_cast<const char*>(drop->Data);
+                    if (ui::beginDragDropTarget()) {
+                        if (const auto* drop = ui::acceptDragDropPayload("ASSET_PATH")) {
+                            std::string path = static_cast<const char*>(drop->data());
                             if (modelAsset(path)) {
                                 r->model = path;
                             }
                         }
-                        ImGui::EndDragDropTarget();
+                        ui::endDragDropTarget();
                     }
                     const char* names[]{"Cube", "Sphere", "Capsule", "Cone", "Plane"};
                     int current = -1;
@@ -785,9 +799,9 @@ inline void drawInspector(World& world,
                             current = i;
                         }
                     }
-                    if (ImGui::BeginCombo("Mesh", current < 0 ? "Custom" : names[current])) {
+                    if (ui::beginCombo("Mesh", current < 0 ? "Custom" : names[current])) {
                         for (int i = 0; i < std::min(meshCount, 5); ++i) {
-                            if (ImGui::Selectable(names[i], current == i)) {
+                            if (ui::selectable(names[i], current == i)) {
                                 r->mesh = meshes[i];
                                 r->model.clear();
                                 if (i != 0) {
@@ -811,7 +825,7 @@ inline void drawInspector(World& world,
                                 }
                             }
                         }
-                        ImGui::EndCombo();
+                        ui::endCombo();
                     }
                     if (assets) {
                         static std::string materialError;
@@ -822,51 +836,51 @@ inline void drawInspector(World& world,
                                     })) {
                                 r->materialOverrides = 0;
                             }
-                            if (ImGui::BeginDragDropTarget()) {
+                            if (ui::beginDragDropTarget()) {
                                 if (const auto* payload =
-                                        ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                                    std::string path = static_cast<const char*>(payload->Data);
+                                        ui::acceptDragDropPayload("ASSET_PATH")) {
+                                    std::string path = static_cast<const char*>(payload->data());
                                     if (materialAsset(path)) {
                                         r->material = path;
                                         r->materialOverrides = 0;
                                     }
                                 }
-                                ImGui::EndDragDropTarget();
+                                ui::endDragDropTarget();
                             }
                             static char materialName[128] = "NewMaterial";
                             static bool focusMaterialName = false;
                             bool createRequested = false;
-                            if (ImGui::BeginPopupContextItem("Material slot actions")) {
+                            if (ui::beginPopupContextItem("Material slot actions")) {
                                 createRequested =
-                                    ImGui::MenuItem("Create Material", nullptr, false, !runtime);
-                                ImGui::EndPopup();
+                                    ui::menuItem("Create Material", nullptr, false, !runtime);
+                                ui::endPopup();
                             }
                             if (!runtime && r->material.empty() &&
-                                ImGui::SmallButton("Create Material")) {
+                                ui::smallButton("Create Material")) {
                                 createRequested = true;
                             }
                             if (createRequested) {
                                 std::snprintf(materialName, sizeof(materialName), "NewMaterial");
                                 materialError.clear();
                                 focusMaterialName = true;
-                                ImGui::OpenPopup("Create Material asset");
+                                ui::openPopup("Create Material asset");
                             }
                             if (!runtime &&
-                                ImGui::BeginPopupModal("Create Material asset",
+                                ui::beginPopupModal("Create Material asset",
                                                        nullptr,
-                                                       ImGuiWindowFlags_AlwaysAutoResize)) {
-                                ImGui::TextUnformatted("Name the material (saved in Assets)");
+                                                       ui::WindowFlags_AlwaysAutoResize)) {
+                                ui::textUnformatted("Name the material (saved in Assets)");
                                 if (focusMaterialName) {
-                                    ImGui::SetKeyboardFocusHere();
+                                    ui::setKeyboardFocusHere();
                                     focusMaterialName = false;
                                 }
                                 const bool enter =
                                     EditorValues::InputText("Name",
                                                             materialName,
                                                             sizeof(materialName),
-                                                            ImGuiInputTextFlags_EnterReturnsTrue |
-                                                                ImGuiInputTextFlags_AutoSelectAll);
-                                if (ImGui::Button("Create") || enter) {
+                                                            ui::InputTextFlags_EnterReturnsTrue |
+                                                                ui::InputTextFlags_AutoSelectAll);
+                                if (ui::button("Create") || enter) {
                                     try {
                                         std::string name = materialName;
                                         const auto first = name.find_first_not_of(" \t");
@@ -918,21 +932,21 @@ inline void drawInspector(World& world,
                                         r->material = path;
                                         r->materialOverrides = 0;
                                         materialError.clear();
-                                        ImGui::CloseCurrentPopup();
+                                        ui::closeCurrentPopup();
                                     } catch (const std::exception& error) {
                                         materialError = error.what();
                                     }
                                 }
-                                ImGui::SameLine();
-                                if (ImGui::Button("Cancel") ||
-                                    ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                                ui::sameLine();
+                                if (ui::button("Cancel") ||
+                                    ui::isKeyPressed(ui::Key_Escape)) {
                                     materialError.clear();
-                                    ImGui::CloseCurrentPopup();
+                                    ui::closeCurrentPopup();
                                 }
                                 if (!materialError.empty()) {
-                                    ImGui::TextWrapped("%s", materialError.c_str());
+                                    ui::textWrapped("%s", materialError.c_str());
                                 }
-                                ImGui::EndPopup();
+                                ui::endPopup();
                             }
                             if (!r->material.empty()) {
                                 auto edited = loadMaterial(*assets, r->material);
@@ -940,8 +954,8 @@ inline void drawInspector(World& world,
                                     edited = applyMaterialOverrides(
                                         edited, r->materialValues, r->materialOverrides);
                                 }
-                                if (ImGui::TreeNodeEx("Material properties",
-                                                      ImGuiTreeNodeFlags_DefaultOpen)) {
+                                if (ui::treeNodeEx("Material properties",
+                                                      ui::TreeNodeFlags_DefaultOpen)) {
                                     bool changed = false;
                                     changed |= EditorValues::Combo(
                                         "Shader",
@@ -950,25 +964,25 @@ inline void drawInspector(World& world,
                                     changed |=
                                         EditorValues::ColorEdit3("Material color", &edited.color.x);
                                     auto textureField = [&](const char* label, std::string& path) {
-                                        ImGui::PushID(label);
+                                        ui::pushId(label);
                                         bool editedTexture = false;
                                         editedTexture |= assetPicker(
                                             label, path, assets, [](const std::string& file) {
                                                 return materialTexturePath(file);
                                             });
-                                        if (ImGui::BeginDragDropTarget()) {
+                                        if (ui::beginDragDropTarget()) {
                                             if (const auto* payload =
-                                                    ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                                                    ui::acceptDragDropPayload("ASSET_PATH")) {
                                                 std::string value =
-                                                    static_cast<const char*>(payload->Data);
+                                                    static_cast<const char*>(payload->data());
                                                 if (!value.empty() && materialTexturePath(value)) {
                                                     path = value;
                                                     editedTexture = true;
                                                 }
                                             }
-                                            ImGui::EndDragDropTarget();
+                                            ui::endDragDropTarget();
                                         }
-                                        ImGui::PopID();
+                                        ui::popId();
                                         return editedTexture;
                                     };
                                     changed |= textureField("Texture", edited.texture);
@@ -986,7 +1000,7 @@ inline void drawInspector(World& world,
                                     }
                                     changed |= EditorValues::SliderFloat(
                                         "Material specular", &edited.specular, 0, 1);
-                                    ImGui::TextDisabled(
+                                    ui::textDisabled(
                                         runtime
                                             ? "Temporary instance overrides (discarded on Stop)."
                                             : "Shared asset: edits affect all meshes using this material.");
@@ -1004,19 +1018,19 @@ inline void drawInspector(World& world,
                                         }
                                     }
                                     if (r->materialOverrides) {
-                                        ImGui::TextDisabled("This mesh has instance overrides.");
-                                        if (ImGui::SmallButton("Reset material overrides")) {
+                                        ui::textDisabled("This mesh has instance overrides.");
+                                        if (ui::smallButton("Reset material overrides")) {
                                             r->materialOverrides = 0;
                                         }
                                     }
-                                    ImGui::TreePop();
+                                    ui::treePop();
                                 }
                             }
                         } catch (const std::exception& e) {
                             materialError = e.what();
                         }
                         if (!materialError.empty()) {
-                            ImGui::TextWrapped("%s", materialError.c_str());
+                            ui::textWrapped("%s", materialError.c_str());
                         }
                     }
                     if (r->material.empty()) {
@@ -1046,25 +1060,25 @@ inline void drawInspector(World& world,
                                     c->model,
                                     assets,
                                     [](const std::string& path) { return modelAsset(path); });
-                        if (ImGui::BeginDragDropTarget()) {
-                            if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                                std::string path = static_cast<const char*>(drop->Data);
+                        if (ui::beginDragDropTarget()) {
+                            if (const auto* drop = ui::acceptDragDropPayload("ASSET_PATH")) {
+                                std::string path = static_cast<const char*>(drop->data());
                                 if (modelAsset(path)) {
                                     c->model = path;
                                 }
                             }
-                            ImGui::EndDragDropTarget();
+                            ui::endDragDropTarget();
                         }
                         EditorValues::SliderInt("Mesh detail", &c->meshDetail, 2, 15);
-                        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                            ImGui::SetTooltip(
+                        if (ui::isItemHovered(ui::HoveredFlags_AllowWhenDisabled)) {
+                            ui::setTooltip(
                                 "Lower = fewer triangles. 15 preserves source triangles. Simplification can remove small features.");
                         }
-                        ImGui::TextWrapped(
+                        ui::textWrapped(
                             "Static triangle-mesh collider. None uses this object's rendered .lemesh model. An explicit source overrides it. No cube fallback. RigidBody movement is disabled for this shape.");
                         const auto* visual = world.tryGet<MeshRenderer>(selected);
                         if (c->model.empty() && (!visual || visual->model.empty())) {
-                            ImGui::TextWrapped(
+                            ui::textWrapped(
                                 "No model source: choose a .lemesh asset above, or add this collider to a model's mesh child. Primitive meshes require an explicit model source.");
                         }
                     } else if (c->shape == ColliderShape::Box) {
@@ -1076,7 +1090,7 @@ inline void drawInspector(World& world,
                                                 0.01f,
                                                 10000,
                                                 "%.3f",
-                                                ImGuiSliderFlags_AlwaysClamp);
+                                                ui::SliderFlags_AlwaysClamp);
                         if (c->shape != ColliderShape::Sphere) {
                             EditorValues::DragFloat("Height",
                                                     &c->height,
@@ -1084,12 +1098,12 @@ inline void drawInspector(World& world,
                                                     0.01f,
                                                     10000,
                                                     "%.3f",
-                                                    ImGuiSliderFlags_AlwaysClamp);
+                                                    ui::SliderFlags_AlwaysClamp);
                         }
                     }
                     EditorValues::Checkbox("Is trigger", &c->isTrigger);
-                    ImGui::SeparatorText("Contact surface");
-                    ImGui::TextDisabled(
+                    ui::separatorText("Contact surface");
+                    ui::textDisabled(
                         "Surface properties also apply to static colliders (no RigidBody).");
                     EditorValues::SliderFloat("Friction", &c->friction, 0, 1);
                     EditorValues::SliderFloat("Bounciness", &c->bounciness, 0, 1);
@@ -1098,18 +1112,18 @@ inline void drawInspector(World& world,
                     componentID == 1 && rb &&
                     componentHeader<RigidBody>(world, selected, "RigidBody")) {
                     EditorValues::DragFloat(
-                        "Mass", &rb->mass, 0.1f, 0, 1000000, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                        "Mass", &rb->mass, 0.1f, 0, 1000000, "%.2f", ui::SliderFlags_AlwaysClamp);
                     EditorValues::Checkbox("Use gravity", &rb->useGravity);
                     EditorValues::Checkbox("Kinematic", &rb->isKinematic);
                     EditorValues::DragFloat(
-                        "Drag", &rb->drag, .01f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                        "Drag", &rb->drag, .01f, 0, 100, "%.2f", ui::SliderFlags_AlwaysClamp);
                     EditorValues::DragFloat("Angular drag",
                                             &rb->angularDrag,
                                             .01f,
                                             0,
                                             100,
                                             "%.2f",
-                                            ImGuiSliderFlags_AlwaysClamp);
+                                            ui::SliderFlags_AlwaysClamp);
                     editVector("Linear velocity", rb->linearVelocity);
                     editVector("Angular velocity", rb->angularVelocity);
                 }
@@ -1148,7 +1162,7 @@ inline void drawInspector(World& world,
                     if (validCamera(edited)) {
                         *camera = edited;
                     }
-                    if (ImGui::Button("Clear camera target")) {
+                    if (ui::button("Clear camera target")) {
                         camera->tracking = false;
                         camera->following = false;
                         camera->targetEntity = {};
@@ -1168,7 +1182,7 @@ inline void drawInspector(World& world,
                         if (Fogs::valid(edited)) {
                             *f = edited;
                         }
-                        ImGui::TextWrapped(
+                        ui::textWrapped(
                             "Global distance fog. First enabled active Fog in entity order is used.");
                     }
                 }
@@ -1176,17 +1190,18 @@ inline void drawInspector(World& world,
                     if (auto* fx = world.tryGet<CameraEffects>(selected);
                         fx && componentHeader<CameraEffects>(world, selected, "CameraEffects")) {
                         if (!world.has<Camera>(selected)) {
-                            ImGui::TextWrapped("Add Camera to this object to use effects.");
+                            ui::textWrapped("Add Camera to this object to use effects.");
                         }
                         EditorValues::Checkbox("Enabled", &fx->enabled);
                         const int first[]{0, 2, 6, 7, 10, 11, 12, 13, 13, 15, 17};
                         const int last[]{2, 6, 7, 10, 11, 12, 13, 13, 15, 17, 19};
                         for (int i = 1; i < int(CameraFx::boolFields.size()); ++i) {
                             const auto& effect = CameraFx::boolFields[i];
-                            if (ImGui::TreeNode(effect.name,
-                                                "%s%s",
-                                                effect.label,
-                                                fx->*effect.member ? " (on)" : "")) {
+                            if (ui::treeNodeEx(effect.name,
+                                               ui::TreeNodeFlags_None,
+                                               "%s%s",
+                                               effect.label,
+                                               fx->*effect.member ? " (on)" : "")) {
                                 EditorValues::Checkbox("Enabled", &(fx->*effect.member));
                                 for (int k = first[i - 1]; k < last[i - 1]; ++k) {
                                     const auto& f = CameraFx::floatFields[k];
@@ -1202,23 +1217,23 @@ inline void drawInspector(World& world,
                                     }
                                 }
                                 if (i == 8) {
-                                    ImGui::TextWrapped(
+                                    ui::textWrapped(
                                         "Single-frame FXAA anti-aliasing; no extra controls.");
                                 }
-                                ImGui::TreePop();
+                                ui::treePop();
                             }
                         }
-                        ImGui::TextWrapped(
+                        ui::textWrapped(
                             "Fast OpenGL screen-space effects. Motion blur is camera-only. AO/DOF use opaque depth; transparent surfaces do not write it. AA is FXAA-style, not TAA/MSAA.");
                     }
                 }
                 if (componentID == 20) {
                     if (auto* terrain = world.tryGet<Terrain>(selected);
                         terrain && componentHeader<Terrain>(world, selected, "Terrain")) {
-                        ImGui::TextWrapped("%s",
+                        ui::textWrapped("%s",
                                            terrain->asset.empty() ? "Unsaved terrain"
                                                                   : terrain->asset.c_str());
-                        if (ImGui::Button("Open terrain tools")) {
+                        if (ui::button("Open terrain tools")) {
                             Terrains::openTools = true;
                         }
                     }
@@ -1247,8 +1262,8 @@ inline void drawInspector(World& world,
                                     assets,
                                     [](const std::string& p) { return materialTexturePath(p); });
                         static std::string shaftError;
-                        ImGui::BeginDisabled(runtime);
-                        if (assets && ImGui::Button("Bake profile to PNG")) {
+                        ui::beginDisabled(runtime);
+                        if (assets && ui::button("Bake profile to PNG")) {
                             try {
                                 edited.texture = Shafts::bake(*assets, selected, edited);
                                 edited.useBakedTexture = true;
@@ -1257,11 +1272,11 @@ inline void drawInspector(World& world,
                                 shaftError = e.what();
                             }
                         }
-                        ImGui::EndDisabled();
+                        ui::endDisabled();
                         if (!shaftError.empty()) {
-                            ImGui::TextWrapped("%s", shaftError.c_str());
+                            ui::textWrapped("%s", shaftError.c_str());
                         }
-                        ImGui::TextWrapped(
+                        ui::textWrapped(
                             "Fast depth-tested visual shaft, not raymarched lighting. Profile baking caches edge/streak/fade shading only, not scene occlusion. Rebake after changing profile controls.");
                         try {
                             *shaft = Shafts::parse(Shafts::settings(edited));
@@ -1289,7 +1304,7 @@ inline void drawInspector(World& world,
                             static_cast<LaserSettings&>(*laser) = edited;
                         } catch (const std::exception&) {
                         }
-                        ImGui::TextWrapped(
+                        ui::textWrapped(
                             "Local -Z beam stops at the first active collider (excluding itself). Additive glow is depth-tested; no damage or forces are applied.");
                     }
                 }
@@ -1300,12 +1315,12 @@ inline void drawInspector(World& world,
                         return;
                     }
                     T edited = *light;
-                    ImGui::PushID(title);
+                    ui::pushId(title);
                     if (EditorValues::Combo("Mode", &edited.mode, "Dynamic\0Static\0")) {
                         detachLightBake(world, *light);
                         edited.bake.clear();
                     }
-                    ImGui::TextDisabled(edited.mode == 0 ? "Realtime light"
+                    ui::textDisabled(edited.mode == 0 ? "Realtime light"
                                         : edited.bake.empty()
                                             ? "Not baked: realtime fallback"
                                             : "Baked snapshot (rebake after edits)");
@@ -1319,22 +1334,22 @@ inline void drawInspector(World& world,
                         assetPicker("Cookie", edited.cookie, assets, [](const std::string& path) {
                             return validLightCookie(path);
                         });
-                        if (ImGui::BeginDragDropTarget()) {
-                            if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                                const std::string path = static_cast<const char*>(payload->Data);
+                        if (ui::beginDragDropTarget()) {
+                            if (const auto* payload = ui::acceptDragDropPayload("ASSET_PATH")) {
+                                const std::string path = static_cast<const char*>(payload->data());
                                 if (validLightCookie(path)) {
                                     edited.cookie = path;
                                 }
                             }
-                            ImGui::EndDragDropTarget();
+                            ui::endDragDropTarget();
                         }
                         if (!edited.cookie.empty()) {
-                            ImGui::SameLine();
-                            if (ImGui::SmallButton("Clear cookie")) {
+                            ui::sameLine();
+                            if (ui::smallButton("Clear cookie")) {
                                 edited.cookie.clear();
                             }
                         }
-                        ImGui::TextWrapped(
+                        ui::textWrapped(
                             "Cookie RGB times alpha modulates the cone. Local X/Y orient the projection; rotate the light to roll the image.");
                         EditorValues::DragFloat(
                             "Inner angle", &edited.innerAngle, .1f, 0, edited.outerAngle - .1f);
@@ -1357,12 +1372,12 @@ inline void drawInspector(World& world,
                     }
                     EditorValues::DragFloat(
                         "Shadow bias", &edited.shadowBias, .0001f, 0, .05f, "%.4f");
-                    ImGui::TextWrapped(
+                    ui::textWrapped(
                         "Emission follows local -Z. Shadow maps use a shared 12-layer budget; a point light uses six layers.");
                     if (validLight(edited)) {
                         *light = edited;
                     }
-                    ImGui::PopID();
+                    ui::popId();
                 };
                 if (auto* sky = world.tryGet<Skybox>(selected);
                     componentID == 12 && sky &&
@@ -1371,21 +1386,21 @@ inline void drawInspector(World& world,
                     EditorValues::Combo("Skybox type", &sky->type, "Cubemap asset\0HDR panorama\0");
                     EditorValues::ColorEdit3("Skybox color", &sky->color.x);
                     auto slot = [&](const char* label, std::string& path, bool hdr) {
-                        ImGui::PushID(label);
+                        ui::pushId(label);
                         assetPicker(label, path, assets, [&](const std::string& file) {
                             return hdr ? skyboxHDRPath(file) : cubemapAsset(file);
                         });
-                        if (ImGui::BeginDragDropTarget()) {
-                            if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                                std::string value = static_cast<const char*>(payload->Data);
+                        if (ui::beginDragDropTarget()) {
+                            if (const auto* payload = ui::acceptDragDropPayload("ASSET_PATH")) {
+                                std::string value = static_cast<const char*>(payload->data());
                                 if (!value.empty() &&
                                     (hdr ? skyboxHDRPath(value) : cubemapAsset(value))) {
                                     path = value;
                                 }
                             }
-                            ImGui::EndDragDropTarget();
+                            ui::endDragDropTarget();
                         }
-                        ImGui::PopID();
+                        ui::popId();
                     };
                     if (sky->type == 1) {
                         slot("HDR panorama", sky->hdr, true);
@@ -1406,7 +1421,7 @@ inline void drawInspector(World& world,
                     componentID == 8 && listener &&
                     componentHeader<AudioListener>(world, selected, "AudioListener")) {
                     EditorValues::Checkbox("Listener enabled", &listener->enabled);
-                    ImGui::TextWrapped(
+                    ui::textWrapped(
                         "Receives audio at this object's world position. With multiple enabled listeners, the lowest entity ID is used.");
                 }
                 if (auto* a = world.tryGet<AudioSource>(selected);
@@ -1415,34 +1430,34 @@ inline void drawInspector(World& world,
                     assetPicker("Audio clip", a->clip, assets, [](const std::string& path) {
                         return audioAsset(path);
                     });
-                    if (ImGui::BeginDragDropTarget()) {
-                        if (auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                            std::string path = static_cast<const char*>(payload->Data);
+                    if (ui::beginDragDropTarget()) {
+                        if (auto* payload = ui::acceptDragDropPayload("ASSET_PATH")) {
+                            std::string path = static_cast<const char*>(payload->data());
                             if (audioAsset(path)) {
                                 a->clip = path;
                             }
                         }
-                        ImGui::EndDragDropTarget();
+                        ui::endDragDropTarget();
                     }
                     EditorValues::SliderFloat(
-                        "Volume", &a->volume, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                        "Volume", &a->volume, 0, 1, "%.2f", ui::SliderFlags_AlwaysClamp);
                     EditorValues::SliderFloat(
-                        "Pitch", &a->pitch, .1f, 4, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                        "Pitch", &a->pitch, .1f, 4, "%.2f", ui::SliderFlags_AlwaysClamp);
                     EditorValues::SliderFloat(
-                        "Pan", &a->pan, -1, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                        "Pan", &a->pan, -1, 1, "%.2f", ui::SliderFlags_AlwaysClamp);
                     EditorValues::DragFloat("Max Distance",
                                             &a->distance,
                                             .1f,
                                             0,
                                             10000,
                                             "%.2f",
-                                            ImGuiSliderFlags_AlwaysClamp);
+                                            ui::SliderFlags_AlwaysClamp);
                     EditorValues::SliderFloat(
-                        "Spatial Blend", &a->blend, 0, 1, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                        "Spatial Blend", &a->blend, 0, 1, "%.2f", ui::SliderFlags_AlwaysClamp);
                     EditorValues::Checkbox("Looping", &a->looping);
                     EditorValues::Checkbox("Mute", &a->muted);
                     EditorValues::Checkbox("Play on start", &a->playOnStart);
-                    ImGui::TextUnformatted(a->isPlaying()                           ? "Playing"
+                    ui::textUnformatted(a->isPlaying()                           ? "Playing"
                                            : a->state == AudioSource::State::Paused ? "Paused"
                                                                                     : "Stopped");
                 }
@@ -1454,36 +1469,36 @@ inline void drawInspector(World& world,
                                    bool& enabled,
                                    std::vector<ScriptField>& fields,
                                    int index) {
-                        ImGui::PushID(index);
-                        ImGui::SeparatorText(("Script " + std::to_string(index + 1)).c_str());
-                        if (ImGui::BeginPopupContextItem("Script actions")) {
-                            if (ImGui::MenuItem("Remove script")) {
+                        ui::pushId(index);
+                        ui::separatorText(("Script " + std::to_string(index + 1)).c_str());
+                        if (ui::beginPopupContextItem("Script actions")) {
+                            if (ui::menuItem("Remove script")) {
                                 remove = index;
                             }
-                            ImGui::EndPopup();
+                            ui::endPopup();
                         }
                         EditorValues::Checkbox("Enabled", &enabled);
                         assetPicker("Script", path, assets, [](const std::string& file) {
                             return AssetManager::script(file);
                         });
-                        if (ImGui::BeginDragDropTarget()) {
-                            if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                                std::string file = static_cast<const char*>(payload->Data);
+                        if (ui::beginDragDropTarget()) {
+                            if (const auto* payload = ui::acceptDragDropPayload("ASSET_PATH")) {
+                                std::string file = static_cast<const char*>(payload->data());
                                 if (AssetManager::script(file)) {
                                     path = file;
                                 }
                             }
-                            ImGui::EndDragDropTarget();
+                            ui::endDragDropTarget();
                         }
                         if (assets && !path.empty()) {
                             try {
                                 syncScriptExports(assets->readScript(path), fields);
                             } catch (const std::exception& error) {
-                                ImGui::TextWrapped("%s", error.what());
+                                ui::textWrapped("%s", error.what());
                             }
                         }
                         drawScriptExports(world, fields, assets);
-                        ImGui::PopID();
+                        ui::popId();
                     };
                     row(scripts->path, scripts->enabled, scripts->fields, 0);
                     for (std::size_t i = 0; i < scripts->additional.size(); ++i) {
@@ -1510,25 +1525,25 @@ inline void drawInspector(World& world,
                     componentID == 13 && c &&
                     componentHeader<CharacterController>(world, selected, "CharacterController")) {
                     EditorValues::DragFloat(
-                        "Move speed", &c->speed, .1f, 0, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                        "Move speed", &c->speed, .1f, 0, 100, "%.2f", ui::SliderFlags_AlwaysClamp);
                     EditorValues::DragFloat("Sprint multiplier",
                                             &c->sprintMultiplier,
                                             .05f,
                                             1,
                                             10,
                                             "%.2f",
-                                            ImGuiSliderFlags_AlwaysClamp);
+                                            ui::SliderFlags_AlwaysClamp);
                     EditorValues::DragFloat("Jump speed",
                                             &c->jumpSpeed,
                                             .1f,
                                             0,
                                             100,
                                             "%.2f",
-                                            ImGuiSliderFlags_AlwaysClamp);
+                                            ui::SliderFlags_AlwaysClamp);
                     EditorValues::Checkbox("Can move", &c->canMove);
-                    ImGui::SameLine();
+                    ui::sameLine();
                     EditorValues::Checkbox("Can jump", &c->canJump);
-                    ImGui::SameLine();
+                    ui::sameLine();
                     EditorValues::Checkbox("Can sprint", &c->canSprint);
                 }
                 if (auto* f = world.tryGet<FPSCamera>(selected);
@@ -1542,15 +1557,15 @@ inline void drawInspector(World& world,
                                             .01f,
                                             5,
                                             "%.2f",
-                                            ImGuiSliderFlags_AlwaysClamp);
+                                            ui::SliderFlags_AlwaysClamp);
                     EditorValues::DragFloat("Freecam speed",
                                             &f->speed,
                                             .1f,
                                             0,
                                             100,
                                             "%.2f",
-                                            ImGuiSliderFlags_AlwaysClamp);
-                    ImGui::TextWrapped(
+                                            ui::SliderFlags_AlwaysClamp);
+                    ui::textWrapped(
                         "Inherits Camera settings. An unparented freecam uses WASD, Q/E while Game input is focused. Mouse look requires a locked cursor.");
                 }
                 if (auto* ray = world.tryGet<Raycast>(selected);
@@ -1564,7 +1579,7 @@ inline void drawInspector(World& world,
                                             .01f,
                                             10000,
                                             "%.2f",
-                                            ImGuiSliderFlags_AlwaysClamp);
+                                            ui::SliderFlags_AlwaysClamp);
                     if (ray->type == 2) {
                         EditorValues::DragFloat("Radius",
                                                 &ray->radius,
@@ -1572,14 +1587,14 @@ inline void drawInspector(World& world,
                                                 .01f,
                                                 10000,
                                                 "%.2f",
-                                                ImGuiSliderFlags_AlwaysClamp);
+                                                ui::SliderFlags_AlwaysClamp);
                     }
                     if (ray->type == 1) {
                         EditorValues::SliderFloat("Fan angle", &ray->angle, 1, 360);
                         EditorValues::SliderInt("Fan samples", &ray->samples, 2, 181);
                     }
                     EditorValues::Checkbox("Include triggers", &ray->includeTriggers);
-                    if (ImGui::TreeNode("Query layers")) {
+                    if (ui::treeNode("Query layers")) {
                         for (int i = 0; i < 32; ++i) {
                             if (!LayerSettings::names[i].empty()) {
                                 bool enabled = ray->layerMask & (1u << i);
@@ -1593,7 +1608,7 @@ inline void drawInspector(World& world,
                                 }
                             }
                         }
-                        ImGui::TreePop();
+                        ui::treePop();
                     }
                 }
             }
@@ -1604,23 +1619,23 @@ inline void drawInspector(World& world,
                 });
                 EditorValues::Checkbox("Loop", &a->loop);
                 EditorValues::Checkbox("Play on start", &a->playOnStart);
-                if (ImGui::Button("Play##Animation")) {
+                if (ui::button("Play##Animation")) {
                     a->request(AnimationAction::Play);
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Stop##Animation")) {
+                ui::sameLine();
+                if (ui::button("Stop##Animation")) {
                     a->request(AnimationAction::Stop);
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Pause##Animation")) {
+                ui::sameLine();
+                if (ui::button("Pause##Animation")) {
                     a->request(AnimationAction::Pause);
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Resume##Animation")) {
+                ui::sameLine();
+                if (ui::button("Resume##Animation")) {
                     a->request(AnimationAction::Resume);
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Reset##Animation")) {
+                ui::sameLine();
+                if (ui::button("Reset##Animation")) {
                     a->request(AnimationAction::Reset);
                 }
                 static std::string fadeTarget;
@@ -1634,115 +1649,115 @@ inline void drawInspector(World& world,
                                         0,
                                         3600,
                                         "%.2f",
-                                        ImGuiSliderFlags_AlwaysClamp);
-                if (ImGui::Button("Cross-fade##Animation") && !fadeTarget.empty()) {
+                                        ui::SliderFlags_AlwaysClamp);
+                if (ui::button("Cross-fade##Animation") && !fadeTarget.empty()) {
                     a->request(AnimationAction::CrossFade, fadeTarget, fadeSeconds);
                 }
-                ImGui::Text("%s - %.3f seconds",
+                ui::text("%s - %.3f seconds",
                             a->isPlaying ? "Playing"
                             : a->paused  ? "Paused"
                                          : "Stopped",
                             a->time);
                 if (!a->error.empty()) {
-                    ImGui::TextWrapped("%s", a->error.c_str());
+                    ui::textWrapped("%s", a->error.c_str());
                 }
-                ImGui::TextDisabled(
+                ui::textDisabled(
                     "Author .leanim clips in Windows > Animation. Runtime controls require Play mode.");
             }
-            if (ImGui::Button("Add Component")) {
-                ImGui::OpenPopup("AddComponent");
+            if (ui::button("Add Component")) {
+                ui::openPopup("AddComponent");
             }
-            if (ImGui::BeginPopup("AddComponent")) {
-                if (!world.has<Fog>(selected) && ImGui::MenuItem("Fog")) {
+            if (ui::beginPopup("AddComponent")) {
+                if (!world.has<Fog>(selected) && ui::menuItem("Fog")) {
                     world.add(selected, Fog{});
                 }
-                if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("CameraEffects")) {
+                if (!world.has<CameraEffects>(selected) && ui::menuItem("CameraEffects")) {
                     world.add(selected, CameraEffects{});
                 }
-                if (!world.has<Terrain>(selected) && ImGui::MenuItem("Terrain")) {
+                if (!world.has<Terrain>(selected) && ui::menuItem("Terrain")) {
                     world.add(selected, Terrain{});
                     Terrains::openTools = true;
                 }
-                if (!world.has<LightShafts>(selected) && ImGui::MenuItem("LightShafts")) {
+                if (!world.has<LightShafts>(selected) && ui::menuItem("LightShafts")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});
                     }
                     world.add(selected, LightShafts{});
                 }
-                if (!world.has<Laser>(selected) && ImGui::MenuItem("Laser")) {
+                if (!world.has<Laser>(selected) && ui::menuItem("Laser")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});
                     }
                     world.add(selected, Laser{});
                 }
-                if (!world.has<ParticleSystem>(selected) && ImGui::MenuItem("Particle System")) {
+                if (!world.has<ParticleSystem>(selected) && ui::menuItem("Particle System")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});
                     }
                     world.add(selected, ParticleSystem{});
                 }
-                if (!world.has<Animation>(selected) && ImGui::MenuItem("Animation")) {
+                if (!world.has<Animation>(selected) && ui::menuItem("Animation")) {
                     world.add(selected, Animation{});
                 }
-                if (!world.has<Raycast>(selected) && ImGui::MenuItem("Raycast")) {
+                if (!world.has<Raycast>(selected) && ui::menuItem("Raycast")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});
                     }
                     world.add(selected, Raycast{});
                 }
-                if (ImGui::BeginMenu("Physics")) {
-                    if (!world.has<RigidBody>(selected) && ImGui::MenuItem("Rigidbody")) {
+                if (ui::beginMenu("Physics")) {
+                    if (!world.has<RigidBody>(selected) && ui::menuItem("Rigidbody")) {
                         if (!world.has<Transform>(selected)) {
                             world.add(selected, Transform{});
                         }
                         world.add(selected, RigidBody{});
                     }
                     if (!world.has<CharacterController>(selected) &&
-                        ImGui::MenuItem("Character Controller")) {
+                        ui::menuItem("Character Controller")) {
                         addCharacterController(world, selected);
                     }
-                    ImGui::EndMenu();
+                    ui::endMenu();
                 }
-                if (!world.has<FPSCamera>(selected) && ImGui::MenuItem("FPSCamera")) {
+                if (!world.has<FPSCamera>(selected) && ui::menuItem("FPSCamera")) {
                     addFPSCamera(world, selected);
                 }
                 if (world.has<Transform>(selected)) {
                     if (!world.has<DirectionalLight>(selected) &&
-                        ImGui::MenuItem("DirectionalLight")) {
+                        ui::menuItem("DirectionalLight")) {
                         world.add(selected, DirectionalLight{});
                     }
-                    if (!world.has<PointLight>(selected) && ImGui::MenuItem("PointLight")) {
+                    if (!world.has<PointLight>(selected) && ui::menuItem("PointLight")) {
                         world.add(selected, PointLight{});
                     }
-                    if (!world.has<SpotLight>(selected) && ImGui::MenuItem("SpotLight")) {
+                    if (!world.has<SpotLight>(selected) && ui::menuItem("SpotLight")) {
                         world.add(selected, SpotLight{});
                     }
                 }
-                if (ImGui::BeginMenu("Audio")) {
-                    if (!world.has<AudioSource>(selected) && ImGui::MenuItem("Audio Source")) {
+                if (ui::beginMenu("Audio")) {
+                    if (!world.has<AudioSource>(selected) && ui::menuItem("Audio Source")) {
                         world.add(selected, AudioSource{});
                     }
-                    if (!world.has<AudioListener>(selected) && ImGui::MenuItem("Audio Listener")) {
+                    if (!world.has<AudioListener>(selected) && ui::menuItem("Audio Listener")) {
                         if (!world.has<Transform>(selected)) {
                             world.add(selected, Transform{});
                         }
                         world.add(selected, AudioListener{});
                     }
-                    ImGui::EndMenu();
+                    ui::endMenu();
                 }
-                if (!world.has<Skybox>(selected) && ImGui::MenuItem("Skybox")) {
+                if (!world.has<Skybox>(selected) && ui::menuItem("Skybox")) {
                     world.add(selected, Skybox{});
                 }
-                if (!world.has<Transform>(selected) && ImGui::MenuItem("Transform")) {
+                if (!world.has<Transform>(selected) && ui::menuItem("Transform")) {
                     world.add(selected, Transform{});
                 }
-                if (!world.has<MeshRenderer>(selected) && ImGui::MenuItem("MeshRenderer")) {
+                if (!world.has<MeshRenderer>(selected) && ui::menuItem("MeshRenderer")) {
                     world.add(selected, MeshRenderer{meshes[0]});
                 }
-                if (ImGui::BeginMenu("Collider", !world.has<Collider>(selected))) {
+                if (ui::beginMenu("Collider", !world.has<Collider>(selected))) {
                     const char* names[]{"Box", "Sphere", "Capsule", "Cone", "Mesh"};
                     for (int shape = 0; shape < 5; ++shape) {
-                        if (ImGui::MenuItem(names[shape])) {
+                        if (ui::menuItem(names[shape])) {
                             if (!world.has<Transform>(selected)) {
                                 world.add(selected, Transform{});
                             }
@@ -1751,13 +1766,13 @@ inline void drawInspector(World& world,
                             world.add(selected, collider);
                         }
                     }
-                    ImGui::EndMenu();
+                    ui::endMenu();
                 }
                 if (!world.has<Camera>(selected) && world.has<Transform>(selected) &&
-                    ImGui::MenuItem("Camera")) {
+                    ui::menuItem("Camera")) {
                     world.add(selected, Camera{});
                 }
-                if (ImGui::MenuItem("LegacyScript")) {
+                if (ui::menuItem("LegacyScript")) {
                     if (auto* scripts = world.tryGet<LuaScript>(selected)) {
                         if (scripts->additional.size() < 63) {
                             scripts->additional.push_back({});
@@ -1766,11 +1781,11 @@ inline void drawInspector(World& world,
                         world.add(selected, LuaScript{});
                     }
                 }
-                ImGui::EndPopup();
+                ui::endPopup();
             }
-            ImGui::EndDisabled();
-            ImGui::PopID();
+            ui::endDisabled();
+            ui::popId();
         }
     }
-    ImGui::End();
+    ui::endWindow();
 }

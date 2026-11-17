@@ -54,36 +54,38 @@ int main() {
     assert(!matches.count(hierarchyKey(e)));
     assert(hierarchyMatches(world,levelObjects(world),"no-such-name").empty());
     assert(world.entities().size()==beforeSearch);
-    ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;
-    io.DisplaySize=ImVec2(1000,700);io.DeltaTime=1.0f/60;io.Fonts->Build();
+    ui::createContext();auto& io=ui::io();
+    io.DisplaySize=ui::Vec2(1000,700);io.DeltaTime=1.0f/60;
     AssetBrowser browser;browser.assets.root=temp;ScriptEditor editor;assert(editor.source().empty());
     int request=-1;EditorRect hierarchy{500,20,400,500};
     bool focusHierarchy=false,focusAssets=false;
     auto frame=[&] {
-        ImGui::NewFrame();ImGui::SetNextWindowPos(ImVec2(20,20));ImGui::SetNextWindowSize(ImVec2(420,500));
-        if(focusAssets){ImGui::SetNextWindowFocus();focusAssets=false;}
+        ui::newFrame();ui::setNextWindowPos(ui::Vec2(20,20));ui::setNextWindowSize(ui::Vec2(420,500));
+        if(focusAssets){ui::setNextWindowFocus();focusAssets=false;}
         browser.draw(nullptr,world,e,editor,true,&history);
-        if(focusHierarchy){ImGui::SetNextWindowFocus();focusHierarchy=false;}
+        if(focusHierarchy){ui::setNextWindowFocus();focusHierarchy=false;}
         drawLevelObjects(world,selection,true,&hierarchy,nullptr,&request);
-        ImGui::Render();
+        ui::render();
     };
     frame();frame();
-    auto rightClick=[&](float x,float y){io.AddMousePosEvent(x,y);frame();io.AddMouseButtonEvent(1,true);frame();io.AddMouseButtonEvent(1,false);frame();};
-    rightClick(700,430);assert(ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId));
-    io.AddKeyEvent(ImGuiKey_Escape,true);frame();io.AddKeyEvent(ImGuiKey_Escape,false);frame();
-    rightClick(200,450);assert(ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId));
-    io.AddKeyEvent(ImGuiKey_Escape,true);frame();io.AddKeyEvent(ImGuiKey_Escape,false);frame();
+    auto rightClick=[&](float x,float y){ui::injectMousePos(x,y);frame();ui::injectMouseButton(1,true);frame();ui::injectMouseButton(1,false);frame();};
+    rightClick(700,430);assert(ui::isPopupOpen("",ui::PopupFlags_AnyPopupId));
+    ui::injectKey(ui::Key_Escape,true);frame();ui::injectKey(ui::Key_Escape,false);frame();
+    assert(!ui::isPopupOpen("",ui::PopupFlags_AnyPopupId));
+    rightClick(200,450);assert(ui::isPopupOpen("",ui::PopupFlags_AnyPopupId));
+    ui::injectKey(ui::Key_Escape,true);frame();ui::injectKey(ui::Key_Escape,false);frame();
+    assert(!ui::isPopupOpen("",ui::PopupFlags_AnyPopupId));
     selection=child;focusHierarchy=true;frame();
-    io.AddKeyEvent(ImGuiKey_F2,true);frame();io.AddKeyEvent(ImGuiKey_F2,false);frame();
-    assert(ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId));
-    io.AddInputCharactersUTF8("Renamed Camera");frame();
-    io.AddKeyEvent(ImGuiKey_Enter,true);frame();io.AddKeyEvent(ImGuiKey_Enter,false);frame();
+    ui::injectKey(ui::Key_F2,true);frame();ui::injectKey(ui::Key_F2,false);frame();
+    assert(ui::isPopupOpen("",ui::PopupFlags_AnyPopupId));
+    ui::injectTextUtf8("Renamed Camera");frame();
+    ui::injectKey(ui::Key_Enter,true);frame();ui::injectKey(ui::Key_Enter,false);frame();
     assert(world.get<ObjectName>(child).value=="Renamed Camera");
     browser.selected="A.ls";focusAssets=true;frame();
-    io.AddKeyEvent(ImGuiKey_F2,true);frame();io.AddKeyEvent(ImGuiKey_F2,false);frame();
-    assert(ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId));
-    io.AddInputCharactersUTF8("Renamed.ls");frame();
-    io.AddKeyEvent(ImGuiKey_Enter,true);frame();io.AddKeyEvent(ImGuiKey_Enter,false);frame();
+    ui::injectKey(ui::Key_F2,true);frame();ui::injectKey(ui::Key_F2,false);frame();
+    assert(ui::isPopupOpen("",ui::PopupFlags_AnyPopupId));
+    ui::injectTextUtf8("Renamed.ls");frame();
+    ui::injectKey(ui::Key_Enter,true);frame();ui::injectKey(ui::Key_Enter,false);frame();
     assert(browser.selected=="Renamed.ls" && std::filesystem::exists(temp/"Renamed.ls"));
     assert(world.get<LuaScript>(e).path=="Renamed.ls");
     std::filesystem::create_directories(temp/"Folder"/"Nested");
@@ -95,10 +97,10 @@ int main() {
     ScriptField exported;exported.name="image";exported.type="Texture";exported.text="Folder/Nested/image.png";world.get<LuaScript>(e).fields.push_back(exported);
     browser.openedScript="Folder/Nested/Test.ls";
     browser.selected="Folder";focusAssets=true;frame();
-    io.AddKeyEvent(ImGuiKey_F2,true);frame();io.AddKeyEvent(ImGuiKey_F2,false);frame();
-    assert(ImGui::IsPopupOpen("",ImGuiPopupFlags_AnyPopupId));
-    io.AddInputCharactersUTF8("Renamed Folder");frame();
-    io.AddKeyEvent(ImGuiKey_Enter,true);frame();io.AddKeyEvent(ImGuiKey_Enter,false);frame();
+    ui::injectKey(ui::Key_F2,true);frame();ui::injectKey(ui::Key_F2,false);frame();
+    assert(ui::isPopupOpen("",ui::PopupFlags_AnyPopupId));
+    ui::injectTextUtf8("Renamed Folder");frame();
+    ui::injectKey(ui::Key_Enter,true);frame();ui::injectKey(ui::Key_Enter,false);frame();
     assert(browser.selected=="Renamed Folder" && std::filesystem::exists(temp/"Renamed Folder/Nested/Test.ls"));
     assert(world.get<LuaScript>(e).path=="Renamed Folder/Nested/Test.ls");
     assert(world.get<LuaScript>(e).fields.back().text=="Renamed Folder/Nested/image.png");
@@ -116,6 +118,6 @@ int main() {
     assert(browser.selected=="Final/Nested/Player.ls" && browser.openedScript==browser.selected);
     assert(std::filesystem::exists(temp/"Final/Nested/Player.ls"));
     browser.renameSelected(world,"PlayerTwo.ls");assert(browser.selected=="Final/Nested/PlayerTwo.ls");
-    ImGui::DestroyContext();
+    ui::destroyContext();
     std::filesystem::remove_all(temp);
 }

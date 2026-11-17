@@ -119,14 +119,14 @@ int main() {
     assert(copiedObjectName(copiedWorld,"Other (text)")=="Other (text) (2)");
     assert(copiedObjectName(copiedWorld,"")==" (2)");
     // Icon controls generate geometry without requiring Unicode font glyphs.
-    ImGui::CreateContext();auto& io=ImGui::GetIO();
-    io.DisplaySize=ImVec2(800,600);io.DeltaTime=1.0f/60;
-    io.Fonts->Build();ImGui::NewFrame();
-    ImGui::SetNextWindowSize(ImVec2(400,120));ImGui::Begin("Controls");
+    ui::createContext();auto& io=ui::io();
+    io.DisplaySize=ui::Vec2(800,600);io.DeltaTime=1.0f/60;
+    ui::newFrame();
+    ui::setNextWindowSize(ui::Vec2(400,120));ui::beginWindow("Controls");
     playbackButton("##Play","Play",PlaybackIcon::Play);
     playbackButton("##Pause","Pause",PlaybackIcon::Pause);
     playbackButton("##Stop","Stop",PlaybackIcon::Stop);
-    ImGui::End();ImGui::Render();
-    assert(ImGui::GetDrawData()->TotalVtxCount>0);
-    ImGui::DestroyContext();
+    ui::endWindow();ui::render();
+    assert(ui::lastFrameVertexCount() > 0);
+    ui::destroyContext();
 }

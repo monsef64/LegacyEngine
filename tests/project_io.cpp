@@ -20,7 +20,7 @@ int main() {
     OrbitCamera camera;camera.distance=42;camera.target={7,8,9};
     const std::string script="-- source\nprint(\"hello\\world\")\n";
     const auto text=encode(world,script,camera,meshes);
-    auto json=parseJson(text);assert(json.at("format")=="LegacyEngine" && json.at("version")==9 && json.at("objects").is_array());
+    auto json=parseJson(text);assert(json.at("format")=="LegacyEngine" && json.at("version")==21 && json.at("objects").is_array());
     assert(json.at("objects")[0].at("components").contains("Transform"));
     Loaded legacy;decode(encodeLegacy(world,script,camera,meshes),legacy,meshes);assert(legacy.source==script);
     Loaded loaded;decode(text,loaded,meshes);

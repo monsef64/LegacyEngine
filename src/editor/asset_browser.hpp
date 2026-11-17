@@ -17,7 +17,7 @@
 #include "project/project_assets.hpp"
 #include <deque>
 #include <future>
-#include <imgui_internal.h>
+#include "ui/mygui_ui.hpp"
 #include <set>
 
 class AssetBrowser {
@@ -54,7 +54,7 @@ class AssetBrowser {
     EditorSettings settings;
     std::filesystem::path projectFolder;
     ProjectDialog dialog;
-    ImGuiTextFilter search;
+    ui::TextFilter search;
     AudioPreview preview;
     TexturePreviewCache thumbnails;
     struct ImportResult {
@@ -554,73 +554,73 @@ class AssetBrowser {
         }
         if (beginEditorPanel("Assets")) {
             if (importing()) {
-                ImGui::Text("Importing assets: %zu waiting", importQueue_.size());
-                ImGui::TextWrapped("%s", activeImportPath_.c_str());
-                ImGui::TextDisabled(
+                ui::text("Importing assets: %zu waiting", importQueue_.size());
+                ui::textWrapped("%s", activeImportPath_.c_str());
+                ui::textDisabled(
                     "One worker is converting and compressing meshes. Asset edits are paused.");
-                ImGui::End();
+                ui::endWindow();
                 return;
             }
 
             const bool shortcutFocus =
-                ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
-                !ImGui::GetIO().WantTextInput &&
-                !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) && editable &&
+                ui::isWindowFocused(ui::FocusedFlags_RootAndChildWindows) &&
+                !ui::io().WantTextInput &&
+                !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId) && editable &&
                 !dialog.pending();
-            ImGui::TextDisabled(
+            ui::textDisabled(
                 "%s",
                 currentFolder.empty()
                     ? "Assets"
                     : std::filesystem::path(currentFolder).filename().string().c_str());
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", (assets.root / currentFolder).string().c_str());
+            if (ui::isItemHovered()) {
+                ui::setTooltip("%s", (assets.root / currentFolder).string().c_str());
             }
-            ImGui::SameLine();
-            if (!currentFolder.empty() && ImGui::ArrowButton("##UpFolder", ImGuiDir_Up)) {
+            ui::sameLine();
+            if (!currentFolder.empty() && ui::arrowButton("##UpFolder", ui::Dir_Up)) {
                 currentFolder = std::filesystem::path(currentFolder).parent_path().generic_string();
                 selected.clear();
             }
-            if (!currentFolder.empty() && ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Up one folder");
+            if (!currentFolder.empty() && ui::isItemHovered()) {
+                ui::setTooltip("Up one folder");
             }
             if (!currentFolder.empty()) {
-                ImGui::SameLine();
+                ui::sameLine();
             }
-            ImGui::BeginDisabled(!editable || dialog.pending());
-            ImGui::SetCursorPosX(
-                std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 112));
-            if (ImGui::Button("\xef\x95\xad##Import", ImVec2(32, 26))) {
-                ImGui::OpenPopup("Import assets");
+            ui::beginDisabled(!editable || dialog.pending());
+            ui::setCursorPosX(
+                std::max(ui::cursorPosX(), ui::windowContentRegionMax().x - 112));
+            if (ui::button("\xef\x95\xad##Import", ui::Vec2(32, 26))) {
+                ui::openPopup("Import assets");
             }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Import files");
+            if (ui::isItemHovered()) {
+                ui::setTooltip("Import files");
             }
-            if (ImGui::BeginPopup("Import assets")) {
-                if (ImGui::MenuItem("Files / Models")) {
+            if (ui::beginPopup("Import assets")) {
+                if (ui::menuItem("Files / Models")) {
                     dialog.showImport(window);
                 }
-                if (ImGui::MenuItem("Directory (full structure)")) {
+                if (ui::menuItem("Directory (full structure)")) {
                     dialog.showImportDirectory(window);
                 }
-                ImGui::EndPopup();
+                ui::endPopup();
             }
-            ImGui::SameLine();
-            if (ImGui::Button("\xef\x87\x89##NewScript", ImVec2(32, 26))) {
+            ui::sameLine();
+            if (ui::button("\xef\x87\x89##NewScript", ui::Vec2(32, 26))) {
                 createFile(".ls");
             }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("New LegacyScript");
+            if (ui::isItemHovered()) {
+                ui::setTooltip("New LegacyScript");
             }
-            ImGui::SameLine();
-            if (ImGui::Button("\xef\x99\x9e##NewFolder", ImVec2(32, 26))) {
+            ui::sameLine();
+            if (ui::button("\xef\x99\x9e##NewFolder", ui::Vec2(32, 26))) {
                 createFolder();
             }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("New Folder");
+            if (ui::isItemHovered()) {
+                ui::setTooltip("New Folder");
             }
             if (!openedScript.empty()) {
-                ImGui::TextWrapped("Editing asset: %s", openedScript.c_str());
-                if (ImGui::Button("Save script asset")) {
+                ui::textWrapped("Editing asset: %s", openedScript.c_str());
+                if (ui::button("Save script asset")) {
                     try {
                         assets.writeScript(openedScript, scripts.source());
                     } catch (const std::exception& e) {
@@ -628,23 +628,23 @@ class AssetBrowser {
                     }
                 }
             }
-            ImGui::EndDisabled();
+            ui::endDisabled();
             if (!assets.error.empty() || !preview.error.empty()) {
                 transientError_ = assets.error.empty() ? preview.error : assets.error;
                 assets.error.clear();
                 preview.error.clear();
-                errorUntil_ = ImGui::GetTime() + 5;
+                errorUntil_ = ui::timeSeconds() + 5;
             }
-            search.Draw("Search assets", -1);
+            search.draw("Search assets", -1);
             if (!currentFolder.empty() &&
                 !std::filesystem::is_directory(assets.resolve(currentFolder))) {
                 currentFolder.clear();
             }
-            ImGui::BeginChild("Asset files", ImVec2(0, -32));
+            ui::beginChild("Asset files", ui::Vec2(0, -32));
             try {
                 std::vector<std::string> files;
                 const auto folder = assets.resolve(currentFolder);
-                if (search.IsActive()) {
+                if (search.active()) {
                     for (const auto& path : assets.files()) {
                         if (currentFolder.empty() || path.rfind(currentFolder + "/", 0) == 0) {
                             files.push_back(path);
@@ -716,7 +716,7 @@ class AssetBrowser {
                     grouped.push_back(file);
                     const auto group = modelGroups_.find(file);
                     if (group != modelGroups_.end() &&
-                        (expandedModels_.count(file) || search.IsActive())) {
+                        (expandedModels_.count(file) || search.active())) {
                         for (const auto& child : group->second.children) {
                             if (childOwners[child] == file &&
                                 std::filesystem::is_regular_file(assets.resolve(child))) {
@@ -728,20 +728,20 @@ class AssetBrowser {
                 files = std::move(grouped);
                 const int columns =
                     grid_ ? std::clamp(
-                                static_cast<int>(ImGui::GetContentRegionAvail().x /
+                                static_cast<int>(ui::contentRegionAvail().x /
                                                  (std::max(100.f, iconSize_ + 40) + gridSpacing_)),
                                 1,
                                 64)
                           : 1;
-                if (ImGui::BeginTable("Asset items", columns, ImGuiTableFlags_SizingStretchSame)) {
+                if (ui::beginTable("Asset items", columns, ui::TableFlags_SizingStretchSame)) {
                     for (const auto& file : files) {
                         const bool folderItem = std::filesystem::is_directory(assets.resolve(file));
                         const auto assetPath = std::filesystem::path(file);
                         const std::string fullName = childNames.count(file) ? childNames.at(file)
                                                      : folderItem ? assetPath.filename().string()
                                                                   : assetPath.stem().string();
-                        if (!search.PassFilter(file.c_str()) &&
-                            !search.PassFilter(fullName.c_str())) {
+                        if (!search.passFilter(file.c_str()) &&
+                            !search.passFilter(fullName.c_str())) {
                             continue;
                         }
                         const bool expandable =
@@ -762,40 +762,40 @@ class AssetBrowser {
                             folderItem
                                 ? fullName
                                 : fullName.substr(0, end) + (end < fullName.size() ? "..." : "");
-                        ImGui::TableNextColumn();
-                        ImGui::PushID(file.c_str());
+                        ui::tableNextColumn();
+                        ui::pushId(file.c_str());
                         if (!grid_ && childItem) {
-                            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 18);
+                            ui::setCursorPosX(ui::cursorPosX() + 18);
                         }
-                        const auto iconPosition = ImGui::GetCursorScreenPos();
+                        const auto iconPosition = ui::cursorScreenPos();
                         if (!grid_) {
-                            ImGui::Dummy(ImVec2(iconSize_ + 4, iconSize_));
-                            ImGui::SameLine();
+                            ui::dummy(ui::Vec2(iconSize_ + 4, iconSize_));
+                            ui::sameLine();
                         }
-                        const bool clicked = ImGui::Selectable(
+                        const bool clicked = ui::selectable(
                             "##tile",
                             selected == file,
-                            ImGuiSelectableFlags_AllowDoubleClick |
-                                ImGuiSelectableFlags_AllowOverlap,
-                            ImVec2(0,
-                                   grid_ ? iconSize_ + ImGui::GetFontSize() + 24 + gridSpacing_
+                            ui::SelectableFlags_AllowDoubleClick |
+                                ui::SelectableFlags_AllowOverlap,
+                            ui::Vec2(0,
+                                   grid_ ? iconSize_ + ui::fontSize() + 24 + gridSpacing_
                                          : iconSize_ + 4));
-                        const auto itemMin = ImGui::GetItemRectMin(),
-                                   itemMax = ImGui::GetItemRectMax();
-                        unsigned thumbnail = folderItem || !ImGui::IsItemVisible()
+                        const auto itemMin = ui::itemRectMin(),
+                                   itemMax = ui::itemRectMax();
+                        unsigned thumbnail = folderItem || !ui::isItemVisible()
                                                  ? 0
                                                  : thumbnails.texture(assets, file);
-                        if (!folderItem && modelAsset(file) && ImGui::IsItemVisible() &&
+                        if (!folderItem && modelAsset(file) && ui::isItemVisible() &&
                             assetPreview) {
                             thumbnail = assetPreview(assets, file, 2).texture;
                         }
                         if (!grid_) {
                             fileBadge(file, iconPosition, folderItem, thumbnail, iconSize_);
                         }
-                        const bool itemHovered = ImGui::IsMouseHoveringRect(itemMin, itemMax);
-                        if (itemHovered && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) &&
-                            GImGui->HoveredIdTimer >= 1.5f && ImGui::BeginTooltip()) {
-                            ImGui::TextUnformatted(fullName.c_str());
+                        const bool itemHovered = ui::isMouseHoveringRect(itemMin, itemMax);
+                        if (itemHovered && ui::isItemHovered(ui::HoveredFlags_ForTooltip) &&
+                            ui::hoveredIdTimer() >= 1.5f && ui::beginTooltip()) {
+                            ui::textUnformatted(fullName.c_str());
                             const std::string type = folderItem                   ? "Folder"
                                                      : modelAsset(file)           ? "3D Model"
                                                      : materialAsset(file)        ? "Material"
@@ -806,55 +806,55 @@ class AssetBrowser {
                                                      : AssetManager::extension(file) == ".prefab"
                                                          ? "Prefab"
                                                          : AssetManager::extension(file);
-                            ImGui::Text("Type: %s", type.c_str());
+                            ui::text("Type: %s", type.c_str());
                             if (!folderItem) {
                                 drawAssetPreview(
                                     assets,
                                     file,
-                                    std::min(384.f, ImGui::GetMainViewport()->WorkSize.x * .65f),
+                                    std::min(384.f, ui::mainViewport()->WorkSize.x * .65f),
                                     0);
                             }
-                            ImGui::EndTooltip();
+                            ui::endTooltip();
                         }
                         {
                             const auto a = itemMin, b = itemMax;
-                            auto* draw = ImGui::GetWindowDrawList();
-                            draw->PushClipRect(a, b, true);
+                            auto* draw = ui::windowDrawList();
+                            draw->pushClipRect(a, b, true);
                             if (childItem) {
-                                draw->AddRect(a, b, IM_COL32(95, 125, 150, 120), 4);
+                                draw->addRect(a, b, UI_COL32(95, 125, 150, 120), 4);
                             }
                             if (grid_) {
                                 fileBadge(file,
-                                          ImVec2((a.x + b.x - iconSize_) * .5f, a.y + 4),
+                                          ui::Vec2((a.x + b.x - iconSize_) * .5f, a.y + 4),
                                           folderItem,
                                           thumbnail,
                                           iconSize_);
                             }
-                            const auto text = ImGui::CalcTextSize(display.c_str());
-                            draw->AddText(
-                                ImVec2(grid_ ? (a.x + b.x - text.x) * .5f
-                                             : a.x + ImGui::GetStyle().FramePadding.x,
+                            const auto text = ui::calcTextSize(display.c_str());
+                            draw->addText(
+                                ui::Vec2(grid_ ? (a.x + b.x - text.x) * .5f
+                                             : a.x + ui::style().FramePadding.x,
                                        grid_ ? a.y + iconSize_ + 10 : (a.y + b.y - text.y) * .5f),
-                                ImGui::GetColorU32(ImGuiCol_Text),
+                                ui::colorU32(ui::Col_Text),
                                 display.c_str());
-                            draw->PopClipRect();
+                            draw->popClipRect();
                         }
                         bool toggleGroup = false;
                         if (expandable) {
-                            const ImVec2 center{itemMax.x - 10, itemMin.y + 12};
-                            auto* draw = ImGui::GetWindowDrawList();
+                            const ui::Vec2 center{itemMax.x - 10, itemMin.y + 12};
+                            auto* draw = ui::windowDrawList();
                             if (expandedModels_.count(file)) {
-                                draw->AddTriangleFilled({center.x - 5, center.y - 3},
+                                draw->addTriangleFilled({center.x - 5, center.y - 3},
                                                         {center.x + 5, center.y - 3},
                                                         {center.x, center.y + 4},
-                                                        IM_COL32_WHITE);
+                                                        UI_COL32_WHITE);
                             } else {
-                                draw->AddTriangleFilled({center.x - 3, center.y - 5},
+                                draw->addTriangleFilled({center.x - 3, center.y - 5},
                                                         {center.x - 3, center.y + 5},
                                                         {center.x + 4, center.y},
-                                                        IM_COL32_WHITE);
+                                                        UI_COL32_WHITE);
                             }
-                            const auto mouse = ImGui::GetIO().MousePos;
+                            const auto mouse = ui::io().MousePos;
                             toggleGroup =
                                 clicked && mouse.x >= itemMax.x - 24 && mouse.y < itemMin.y + 26;
                             if (toggleGroup) {
@@ -866,26 +866,26 @@ class AssetBrowser {
                         if (clicked && !toggleGroup) {
                             selected = file;
                             if (!folderItem && AssetManager::extension(file) == ".leanim" &&
-                                ImGui::IsMouseDoubleClicked(0)) {
+                                ui::isMouseDoubleClicked(0)) {
                                 editAnimationRequest = file;
                             }
-                            if (!folderItem && modelAsset(file) && ImGui::IsMouseDoubleClicked(0)) {
+                            if (!folderItem && modelAsset(file) && ui::isMouseDoubleClicked(0)) {
                                 previewModelRequest = file;
                             }
                             if (!folderItem && cubemapAsset(file) &&
-                                ImGui::IsMouseDoubleClicked(0)) {
+                                ui::isMouseDoubleClicked(0)) {
                                 editCubemapRequest = file;
                             }
                             if (!folderItem && AssetManager::extension(file) == ".prefab" &&
-                                ImGui::IsMouseDoubleClicked(0)) {
+                                ui::isMouseDoubleClicked(0)) {
                                 editPrefabRequest = file;
                             }
-                            if (folderItem && ImGui::IsMouseDoubleClicked(0)) {
+                            if (folderItem && ui::isMouseDoubleClicked(0)) {
                                 currentFolder = file;
                                 selected.clear();
                             }
                             if (!folderItem && AssetManager::script(file) &&
-                                ImGui::IsMouseDoubleClicked(0)) {
+                                ui::isMouseDoubleClicked(0)) {
                                 try {
                                     if (settings.external) {
                                         if (!settings.openScript(projectFolder,
@@ -897,7 +897,7 @@ class AssetBrowser {
                                         scripts.setSource(assets.readScript(file));
                                         openedScript = file;
                                         panelOpen[3] = true;
-                                        ImGui::SetWindowFocus("Script Editor");
+                                        ui::setWindowFocus("Script Editor");
                                     }
                                 } catch (const std::exception& e) {
                                     assets.error = e.what();
@@ -905,9 +905,9 @@ class AssetBrowser {
                             }
                         }
                         if (!folderItem && modelAsset(file) &&
-                            ImGui::BeginPopupContextItem("Model actions")) {
+                            ui::beginPopupContextItem("Model actions")) {
                             selected = file;
-                            if (ImGui::MenuItem(folderItem ? "Open folder location"
+                            if (ui::menuItem(folderItem ? "Open folder location"
                                                            : "Open asset location")) {
                                 try {
                                     openLocation(assets.resolve(file));
@@ -915,16 +915,16 @@ class AssetBrowser {
                                     assets.error = e.what();
                                 }
                             }
-                            ImGui::Separator();
-                            if (ImGui::MenuItem("Instantiate in level")) {
+                            ui::separator();
+                            if (ui::menuItem("Instantiate in level")) {
                                 spawnModelRequest = file;
                             }
-                            ImGui::EndPopup();
+                            ui::endPopup();
                         }
                         if (!folderItem && AssetManager::extension(file) == ".prefab" &&
-                            ImGui::BeginPopupContextItem("Prefab actions")) {
+                            ui::beginPopupContextItem("Prefab actions")) {
                             selected = file;
-                            if (ImGui::MenuItem(folderItem ? "Open folder location"
+                            if (ui::menuItem(folderItem ? "Open folder location"
                                                            : "Open asset location")) {
                                 try {
                                     openLocation(assets.resolve(file));
@@ -932,24 +932,24 @@ class AssetBrowser {
                                     assets.error = e.what();
                                 }
                             }
-                            ImGui::Separator();
-                            if (ImGui::MenuItem("Edit Prefab", nullptr, false, editable)) {
+                            ui::separator();
+                            if (ui::menuItem("Edit Prefab", nullptr, false, editable)) {
                                 editPrefabRequest = file;
                             }
-                            if (ImGui::MenuItem("Instantiate in level")) {
+                            if (ui::menuItem("Instantiate in level")) {
                                 spawnPrefabRequest = file;
                             }
-                            ImGui::EndPopup();
+                            ui::endPopup();
                         }
-                        if (!folderItem && ImGui::BeginDragDropSource()) {
-                            ImGui::SetDragDropPayload("ASSET_PATH", file.c_str(), file.size() + 1);
+                        if (!folderItem && ui::beginDragDropSource()) {
+                            ui::setDragDropPayload("ASSET_PATH", file.c_str(), file.size() + 1);
                             fileIcon(file);
-                            ImGui::TextUnformatted(file.c_str());
-                            ImGui::EndDragDropSource();
+                            ui::textUnformatted(file.c_str());
+                            ui::endDragDropSource();
                         }
-                        if (editable && ImGui::BeginPopupContextItem("Asset actions")) {
+                        if (editable && ui::beginPopupContextItem("Asset actions")) {
                             selected = file;
-                            if (ImGui::MenuItem(folderItem ? "Open folder location"
+                            if (ui::menuItem(folderItem ? "Open folder location"
                                                            : "Open asset location")) {
                                 try {
                                     openLocation(assets.resolve(file));
@@ -957,107 +957,106 @@ class AssetBrowser {
                                     assets.error = e.what();
                                 }
                             }
-                            ImGui::Separator();
+                            ui::separator();
                             if (!folderItem && AssetManager::extension(file) == ".leanim" &&
-                                ImGui::IsMouseDoubleClicked(0)) {
+                                ui::isMouseDoubleClicked(0)) {
                                 editAnimationRequest = file;
                             }
                             if (!folderItem &&
-                                ImGui::MenuItem("Attach LegacyScript to selected object",
+                                ui::menuItem("Attach LegacyScript to selected object",
                                                 nullptr,
                                                 false,
                                                 world.alive(selectedObject) &&
                                                     AssetManager::script(file))) {
                                 attachScriptAsset(world, selectedObject, file);
                             }
-                            if (ImGui::MenuItem("Copy", "Ctrl+C")) {
+                            if (ui::menuItem("Copy", "Ctrl+C")) {
                                 copySelected(false);
                             }
-                            if (ImGui::MenuItem("Move (Cut)", "Ctrl+X")) {
+                            if (ui::menuItem("Move (Cut)", "Ctrl+X")) {
                                 copySelected(true);
                             }
-                            if (folderItem && ImGui::MenuItem("Paste into folder",
+                            if (folderItem && ui::menuItem("Paste into folder",
                                                               "Ctrl+V",
                                                               false,
                                                               !clipboardPath_.empty())) {
                                 pasteFolder_ = file;
                                 pasteRequested_ = true;
                             }
-                            if (ImGui::MenuItem("Rename...", "F2")) {
+                            if (ui::menuItem("Rename...", "F2")) {
                                 selected = file;
                                 if (!folderItem && AssetManager::extension(file) == ".leanim" &&
-                                    ImGui::IsMouseDoubleClicked(0)) {
+                                    ui::isMouseDoubleClicked(0)) {
                                     editAnimationRequest = file;
                                 }
                                 renameRequested_ = true;
                             }
-                            if (ImGui::MenuItem("Move to Trash", "Del")) {
+                            if (ui::menuItem("Move to Trash", "Del")) {
                                 selected = file;
                                 if (!folderItem && AssetManager::extension(file) == ".leanim" &&
-                                    ImGui::IsMouseDoubleClicked(0)) {
+                                    ui::isMouseDoubleClicked(0)) {
                                     editAnimationRequest = file;
                                 }
                                 deleteRequested_ = true;
                             }
-                            ImGui::EndPopup();
+                            ui::endPopup();
                         }
                         if (audioAsset(file) && (itemHovered || preview.playing(file))) {
-                            const auto cursor = ImGui::GetCursorScreenPos();
+                            const auto cursor = ui::cursorScreenPos();
                             const bool active = preview.playing(file);
-                            ImVec2 position(itemMax.x - 26, itemMin.y + 2);
-                            ImGui::SetCursorScreenPos(position);
-                            if (ImGui::InvisibleButton("##preview", ImVec2(24, 24))) {
+                            ui::Vec2 position(itemMax.x - 26, itemMin.y + 2);
+                            ui::setCursorScreenPos(position);
+                            if (ui::invisibleButton("##preview", ui::Vec2(24, 24))) {
                                 preview.toggle(assets, file);
                             }
-                            auto* draw = ImGui::GetWindowDrawList();
-                            draw->AddRectFilled(position,
-                                                ImVec2(position.x + 24, position.y + 24),
-                                                IM_COL32(40, 50, 65, 240),
+                            auto* draw = ui::windowDrawList();
+                            draw->addRectFilled(position,
+                                                ui::Vec2(position.x + 24, position.y + 24),
+                                                UI_COL32(40, 50, 65, 240),
                                                 3);
                             if (active) {
-                                draw->AddRectFilled(ImVec2(position.x + 7, position.y + 7),
-                                                    ImVec2(position.x + 17, position.y + 17),
-                                                    IM_COL32_WHITE);
+                                draw->addRectFilled(ui::Vec2(position.x + 7, position.y + 7),
+                                                    ui::Vec2(position.x + 17, position.y + 17),
+                                                    UI_COL32_WHITE);
                             } else {
-                                draw->AddTriangleFilled(ImVec2(position.x + 8, position.y + 5),
-                                                        ImVec2(position.x + 8, position.y + 19),
-                                                        ImVec2(position.x + 19, position.y + 12),
-                                                        IM_COL32_WHITE);
+                                draw->addTriangleFilled(ui::Vec2(position.x + 8, position.y + 5),
+                                                        ui::Vec2(position.x + 8, position.y + 19),
+                                                        ui::Vec2(position.x + 19, position.y + 12),
+                                                        UI_COL32_WHITE);
                             }
-                            if (ImGui::IsItemHovered()) {
-                                ImGui::SetTooltip(active ? "Stop preview" : "Play preview");
+                            if (ui::isItemHovered()) {
+                                ui::setTooltip(active ? "Stop preview" : "Play preview");
                             }
-                            ImGui::SetCursorScreenPos(cursor);
-                            // Submit an item after restoring layout: ImGui 1.92 rejects
-                            // SetCursorScreenPos extending a child/table without an item.
-                            ImGui::Dummy(ImVec2(0, 0));
+                            ui::setCursorScreenPos(cursor);
+                            // Consume the restored cursor position after custom drawing so
+                            // the retained child/table layout remains synchronized.
+                            ui::dummy(ui::Vec2(0, 0));
                         }
-                        ImGui::PopID();
+                        ui::popId();
                     }
-                    ImGui::EndTable();
+                    ui::endTable();
                 }
                 // Cover the browser child, including blank space, as a hierarchy drop target.
                 if (editable &&
-                    ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect,
-                                                     ImGui::GetID("PrefabDrop"))) {
-                    if (const auto* payload = ImGui::AcceptDragDropPayload("LEVEL_OBJECT")) {
-                        prefabCreation = *static_cast<const Entity*>(payload->Data);
+                    ui::beginDragDropTargetCustom(ui::currentWindowInnerRect(),
+                                                     ui::getId("PrefabDrop"))) {
+                    if (const auto* payload = ui::acceptDragDropPayload("LEVEL_OBJECT")) {
+                        prefabCreation = *static_cast<const Entity*>(payload->data());
                     }
-                    ImGui::EndDragDropTarget();
+                    ui::endDragDropTarget();
                 }
-                if (editable &&
-                    ImGui::BeginPopupContextWindow("Assets empty actions",
-                                                   ImGuiPopupFlags_MouseButtonRight |
-                                                       ImGuiPopupFlags_NoOpenOverItems)) {
-                    if (ImGui::MenuItem("Paste", "Ctrl+V", false, !clipboardPath_.empty())) {
+                if (editable && ui::beginPopupContextWindow("Assets empty actions",
+                                                   ui::PopupFlags_MouseButtonRight |
+                                                       ui::PopupFlags_NoOpenOverItems)) {
+                    if (ui::menuItem("Paste", "Ctrl+V", false, !clipboardPath_.empty())) {
                         pasteFolder_ = currentFolder;
                         pasteRequested_ = true;
                     }
-                    if (ImGui::MenuItem("New Folder")) {
+                    if (ui::menuItem("New Folder")) {
                         createFolder();
                     }
-                    if (ImGui::BeginMenu("Create")) {
-                        if (ImGui::MenuItem("Cubemap (.cubemap)")) {
+                    if (ui::beginMenu("Create")) {
+                        if (ui::menuItem("Cubemap (.cubemap)")) {
                             try {
                                 auto path =
                                     (std::filesystem::path(currentFolder) / "Cubemap.cubemap")
@@ -1075,39 +1074,39 @@ class AssetBrowser {
                                 assets.error = e.what();
                             }
                         }
-                        if (ImGui::MenuItem("Material (.mat)")) {
+                        if (ui::menuItem("Material (.mat)")) {
                             try {
                                 selected = createMaterial(assets, currentFolder);
                             } catch (const std::exception& e) {
                                 assets.error = e.what();
                             }
                         }
-                        if (ImGui::MenuItem("LegacyScript (.ls)")) {
+                        if (ui::menuItem("LegacyScript (.ls)")) {
                             createFile(".ls");
                         }
-                        if (ImGui::MenuItem("Text file (.txt)")) {
+                        if (ui::menuItem("Text file (.txt)")) {
                             createFile(".txt");
                         }
-                        ImGui::EndMenu();
+                        ui::endMenu();
                     }
-                    ImGui::EndPopup();
+                    ui::endPopup();
                 }
                 if (shortcutFocus && !selected.empty()) {
-                    if (ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
+                    if (ui::isKeyPressed(ui::Key_F2, false)) {
                         renameRequested_ = true;
                     }
-                    if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+                    if (ui::io().KeyCtrl && ui::isKeyPressed(ui::Key_C, false)) {
                         copySelected(false);
                     }
-                    if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X, false)) {
+                    if (ui::io().KeyCtrl && ui::isKeyPressed(ui::Key_X, false)) {
                         copySelected(true);
                     }
-                    if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+                    if (ui::isKeyPressed(ui::Key_Delete, false)) {
                         deleteRequested_ = true;
                     }
                 }
-                if (shortcutFocus && ImGui::GetIO().KeyCtrl &&
-                    ImGui::IsKeyPressed(ImGuiKey_V, false)) {
+                if (shortcutFocus && ui::io().KeyCtrl &&
+                    ui::isKeyPressed(ui::Key_V, false)) {
                     pasteFolder_ = currentFolder;
                     pasteRequested_ = true;
                 }
@@ -1131,8 +1130,8 @@ class AssetBrowser {
                                        : std::filesystem::path(selected).stem())
                                       .string()
                                       .c_str());
-                    ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Appearing);
-                    ImGui::OpenPopup("Rename asset");
+                    ui::setNextWindowPos(ui::mousePos(), ui::Cond_Appearing);
+                    ui::openPopup("Rename asset");
                     renameRequested_ = false;
                     renameFocus_ = true;
                 }
@@ -1252,97 +1251,97 @@ class AssetBrowser {
                         assets.error = "Asset deletion requires editor history";
                     }
                 }
-                if (editable &&
-                    ImGui::BeginPopup("Rename asset", ImGuiWindowFlags_AlwaysAutoResize)) {
+                if (editable && ui::beginPopup("Rename asset", ui::WindowFlags_AlwaysAutoResize)) {
                     if (renameFocus_) {
-                        ImGui::SetKeyboardFocusHere();
+                        ui::setKeyboardFocusHere();
                         renameFocus_ = false;
                     }
-                    const bool renameEnter = ImGui::InputText(
+                    const bool renameEnter = ui::inputText(
                         "Name",
                         rename_,
                         sizeof(rename_),
-                        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
-                    if (ImGui::Button("Rename") || renameEnter) {
+                        ui::InputTextFlags_EnterReturnsTrue | ui::InputTextFlags_AutoSelectAll);
+                    if (ui::button("Rename") || renameEnter) {
                         try {
                             renameSelected(world, rename_);
-                            ImGui::CloseCurrentPopup();
+                            ui::closeCurrentPopup();
                         } catch (const std::exception& e) {
                             assets.error = e.what();
                         }
                     }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                        ImGui::CloseCurrentPopup();
+                    ui::sameLine();
+                    if (ui::button("Cancel") || ui::isKeyPressed(ui::Key_Escape)) {
+                        ui::closeCurrentPopup();
                     }
-                    ImGui::EndPopup();
+                    ui::endPopup();
                 }
             } catch (const std::exception& e) {
                 assets.error = e.what();
             }
-            ImGui::EndChild();
-            ImGui::SetCursorPosX(
-                std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 360));
-            ImGui::SetNextItemWidth(std::max(45.f, (ImGui::GetContentRegionAvail().x - 80) * .5f));
-            ImGui::SliderFloat("##IconSize", &iconSize_, 20, 96, "Icons %.0f");
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Asset icon size (grid and list)");
+            ui::endChild();
+            ui::endDisabled();
+            ui::setCursorPosX(
+                std::max(ui::cursorPosX(), ui::windowContentRegionMax().x - 360));
+            ui::setNextItemWidth(std::max(45.f, (ui::contentRegionAvail().x - 80) * .5f));
+            ui::sliderFloat("##IconSize", &iconSize_, 20, 96, "Icons %.0f");
+            if (ui::isItemHovered()) {
+                ui::setTooltip("Asset icon size (grid and list)");
             }
-            ImGui::SameLine();
-            ImGui::BeginDisabled(!grid_);
-            ImGui::SetNextItemWidth(
-                std::min(140.f, std::max(40.f, ImGui::GetContentRegionAvail().x - 80)));
-            ImGui::SliderFloat("##GridSpacing", &gridSpacing_, 0, 64, "Spacing %.0f");
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip("Grid spacing (grid view only)");
+            ui::sameLine();
+            ui::beginDisabled(!grid_);
+            ui::setNextItemWidth(
+                std::min(140.f, std::max(40.f, ui::contentRegionAvail().x - 80)));
+            ui::sliderFloat("##GridSpacing", &gridSpacing_, 0, 64, "Spacing %.0f");
+            if (ui::isItemHovered(ui::HoveredFlags_AllowWhenDisabled)) {
+                ui::setTooltip("Grid spacing (grid view only)");
             }
-            ImGui::EndDisabled();
-            ImGui::SameLine();
-            ImGui::SetCursorPosX(
-                std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 60));
+            ui::endDisabled();
+            ui::sameLine();
+            ui::setCursorPosX(
+                std::max(ui::cursorPosX(), ui::windowContentRegionMax().x - 60));
             for (int mode = 0; mode < 2; ++mode) {
                 if (mode) {
-                    ImGui::SameLine();
+                    ui::sameLine();
                 }
-                ImGui::PushID(mode);
-                auto pos = ImGui::GetCursorScreenPos();
-                if (ImGui::InvisibleButton("View mode", ImVec2(26, 26))) {
+                ui::pushId(mode);
+                auto pos = ui::cursorScreenPos();
+                if (ui::invisibleButton("View mode", ui::Vec2(26, 26))) {
                     grid_ = mode == 1;
                 }
-                auto* draw = ImGui::GetWindowDrawList();
-                const auto color = ImGui::GetColorU32(
-                    (grid_ == (mode == 1)) ? ImGuiCol_CheckMark : ImGuiCol_TextDisabled);
+                auto* draw = ui::windowDrawList();
+                const auto color = ui::colorU32(
+                    (grid_ == (mode == 1)) ? ui::Col_CheckMark : ui::Col_TextDisabled);
                 if (mode) {
                     for (int y = 0; y < 2; ++y) {
                         for (int x = 0; x < 2; ++x) {
-                            draw->AddRect(ImVec2(pos.x + 5 + x * 9, pos.y + 6 + y * 9),
-                                          ImVec2(pos.x + 11 + x * 9, pos.y + 11 + y * 9),
+                            draw->addRect(ui::Vec2(pos.x + 5 + x * 9, pos.y + 6 + y * 9),
+                                          ui::Vec2(pos.x + 11 + x * 9, pos.y + 11 + y * 9),
                                           color);
                         }
                     }
                 } else {
                     for (int y = 0; y < 3; ++y) {
-                        draw->AddLine(ImVec2(pos.x + 5, pos.y + 6 + y * 6),
-                                      ImVec2(pos.x + 22, pos.y + 6 + y * 6),
+                        draw->addLine(ui::Vec2(pos.x + 5, pos.y + 6 + y * 6),
+                                      ui::Vec2(pos.x + 22, pos.y + 6 + y * 6),
                                       color,
                                       2);
                     }
                 }
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(mode ? "Grid view" : "List view");
+                if (ui::isItemHovered()) {
+                    ui::setTooltip(mode ? "Grid view" : "List view");
                 }
-                ImGui::PopID();
+                ui::popId();
             }
-            if (ImGui::GetTime() < errorUntil_ &&
-                ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
-                ImGui::BeginTooltip();
-                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 32);
-                ImGui::TextColored(ImVec4(1, .25f, .25f, 1), "%s", transientError_.c_str());
-                ImGui::PopTextWrapPos();
-                ImGui::EndTooltip();
+            if (ui::timeSeconds() < errorUntil_ &&
+                ui::isWindowHovered(ui::HoveredFlags_ChildWindows)) {
+                ui::beginTooltip();
+                ui::pushTextWrapPos(ui::fontSize() * 32);
+                ui::textColored(ui::Color(1, .25f, .25f, 1), "%s", transientError_.c_str());
+                ui::popTextWrapPos();
+                ui::endTooltip();
             }
         }
-        ImGui::End();
+        ui::endWindow();
     }
 
   private:

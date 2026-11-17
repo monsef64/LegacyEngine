@@ -60,9 +60,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-#include <imgui.h>
-#include <imgui_impl_opengl3.h>
-#include <imgui_impl_sdl3.h>
+#include "ui/mygui_ui.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -308,7 +306,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
     };
     Entity mouseOver, mousePressedObject;
-    ImVec2 gameImageOrigin{}, gameImageSize{};
+    ui::Vec2 gameImageOrigin{}, gameImageSize{};
     bool showFPS = false, showGameColliders = false, showProfiler = false;
     FrameProfiler profiler;
     activeProfiler = &profiler;
@@ -329,17 +327,27 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     std::optional<Vec3> lastOrbitPivot;
     while (running) {
         const Uint64 frameStarted = SDL_GetTicksNS();
+        const float seconds = std::clamp(static_cast<float>(frameStarted - lastTicks) * 1e-9f,
+                                         1.0f / 1000.0f,
+                                         0.25f);
+        lastTicks = frameStarted;
         if (!playMode.active()) {
             if (const auto* pose = world.tryGet<Transform>(selectedEntity)) {
                 lastOrbitPivot = pose->position;
             }
         }
         profiler.begin(showProfiler);
-        int windowWidth = 1, windowHeight = 1;
+        int windowWidth = 1, windowHeight = 1, framebufferWidth = 1, framebufferHeight = 1;
         SDL_GetWindowSize(window, &windowWidth, &windowHeight);
+        SDL_GetWindowSizeInPixels(window, &framebufferWidth, &framebufferHeight);
+        ui::setDisplaySize(static_cast<float>(windowWidth),
+                           static_cast<float>(windowHeight),
+                           static_cast<float>(framebufferWidth) / std::max(1, windowWidth),
+                           static_cast<float>(framebufferHeight) / std::max(1, windowHeight));
+        ui::setDeltaTime(seconds);
         EditorLayout layout = EditorLayout::calculate(static_cast<float>(windowWidth),
                                                       static_cast<float>(windowHeight),
-                                                      std::max(20.0f, ImGui::GetFrameHeight()));
+                                                      std::max(20.0f, ui::frameHeight()));
         layout.scene = sceneRect;
         scripts.console().setAssetRoot(browser.assets.root);
         inputSettings.load(browser.assets, input);
@@ -406,7 +414,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         input.enabled = ((SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) || externalFocus) &&
                         playMode.playing() && !cameraLooking &&
                         (gameFocused || externalFocus || input.mouseLocked) &&
-                        (!ImGui::GetIO().WantTextInput || input.mouseLocked) &&
+                        (!ui::io().WantTextInput || input.mouseLocked) &&
                         !inputSettings.visible;
         input.mouseEnabled = externalFocus || gameHovered || sceneHovered || input.mouseLocked;
         input.beginFrame();
@@ -468,7 +476,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 SDL_SetWindowMouseGrab(window, false);
                 SDL_SetWindowMouseRect(window, nullptr);
             }
-            ImGui_ImplSDL3_ProcessEvent(&event);
+            ui::processSdlEvent(event);
             input.event(event);
             const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                                     event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
@@ -485,13 +493,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
             if (mouseEvent &&
                 (projectDialog.pending() || browser.dialog.pending() ||
-                 (ImGui::GetIO().WantCaptureMouse && !sceneHovered && !cameraLooking) ||
+                 (ui::io().WantCaptureMouse && !sceneHovered && !cameraLooking) ||
                  (editor.capturesMouse() && !cameraLooking &&
                   !(SDL_GetModState() & SDL_KMOD_ALT)))) {
                 clicking = false;
                 continue;
             }
-            if (event.type == SDL_EVENT_KEY_DOWN && ImGui::GetIO().WantCaptureKeyboard) {
+            if (event.type == SDL_EVENT_KEY_DOWN && ui::io().WantCaptureKeyboard) {
                 continue;
             }
             switch (event.type) {
@@ -517,7 +525,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if (event.button.button == SDL_BUTTON_RIGHT && sceneHovered &&
                     layout.scene.contains(event.button.x, event.button.y) &&
-                    !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
+                    !ui::io().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
                     cameraLooking = input.lockSceneCursor();
                     clicking = false;
                 }
@@ -591,7 +599,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
                 if ((sceneHovered || cameraLooking) &&
-                    !cameraModifiersHeld(SDL_GetModState()) && !ImGui::GetIO().WantTextInput) {
+                    !cameraModifiersHeld(SDL_GetModState()) && !ui::io().WantTextInput) {
                     if (cameraLooking) {
                         if (SDL_GetModState() & SDL_KMOD_SHIFT) {
                             cameraBoost = adjustSceneCameraBoost(cameraBoost, event.wheel.y);
@@ -611,10 +619,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
 
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplSDL3_NewFrame();
-        ImGui::NewFrame();
-        ImGuizmo::BeginFrame();
+        ui::newFrame();
         static RecentProjects recentProjects;
         static bool confirmOpen = false, confirmExit = false;
         static std::string pendingRecent;
@@ -625,29 +630,29 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                     !playMode.active() && !editor.dragging() &&
                                     !projectDialog.pending() && !browser.dialog.pending();
         profiler.checkpoint(ProfilePart::Events);
-        if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("File")) {
-                openProject = ImGui::MenuItem("Open Project...", "Ctrl+O", false, projectEnabled);
-                if (ImGui::BeginMenu("Open Recent", projectEnabled)) {
+        if (ui::beginMainMenuBar()) {
+            if (ui::beginMenu("File")) {
+                openProject = ui::menuItem("Open Project...", "Ctrl+O", false, projectEnabled);
+                if (ui::beginMenu("Open Recent", projectEnabled)) {
                     if (recentProjects.paths().empty()) {
-                        ImGui::TextDisabled("No recent projects");
+                        ui::textDisabled("No recent projects");
                     }
                     for (const auto& path : recentProjects.paths()) {
-                        if (ImGui::MenuItem(path.c_str())) {
+                        if (ui::menuItem(path.c_str())) {
                             selectedRecent = path;
                             openProject = true;
                         }
                     }
-                    ImGui::EndMenu();
+                    ui::endMenu();
                 }
-                saveProject = ImGui::MenuItem("Save Project", "Ctrl+S", false, projectEnabled);
+                saveProject = ui::menuItem("Save Project", "Ctrl+S", false, projectEnabled);
                 saveAsProject =
-                    ImGui::MenuItem("Save Project As...", "Ctrl+Shift+S", false, projectEnabled);
-                ImGui::Separator();
-                if (ImGui::MenuItem("New Level...", nullptr, false, projectEnabled)) {
+                    ui::menuItem("Save Project As...", "Ctrl+Shift+S", false, projectEnabled);
+                ui::separator();
+                if (ui::menuItem("New Level...", nullptr, false, projectEnabled)) {
                     newLevelPopup = true;
                 }
-                if (ImGui::MenuItem("Save Level", nullptr, false, projectEnabled)) {
+                if (ui::menuItem("Save Level", nullptr, false, projectEnabled)) {
                     try {
                         if (!animationWindow.saveIfDirty(browser.assets)) {
                             throw std::runtime_error(animationWindow.error());
@@ -658,20 +663,20 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         levels.error = e.what();
                     }
                 }
-                ImGui::Separator();
-                if (ImGui::MenuItem("Quit")) {
+                ui::separator();
+                if (ui::menuItem("Quit")) {
                     SDL_Log("Shutdown requested: File > Quit");
                     exitRequested = true;
                 }
-                ImGui::EndMenu();
+                ui::endMenu();
             }
-            ImGui::EndMainMenuBar();
+            ui::endMainMenuBar();
         }
-        if (projectEnabled && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive()) {
-            openProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
-            saveProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteGlobal);
-            saveAsProject |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S,
-                                             ImGuiInputFlags_RouteGlobal);
+        if (projectEnabled && !ui::io().WantTextInput && !ui::isAnyItemActive()) {
+            openProject |= ui::shortcut(ui::Mod_Ctrl | ui::Key_O, ui::InputFlags_RouteGlobal);
+            saveProject |= ui::shortcut(ui::Mod_Ctrl | ui::Key_S, ui::InputFlags_RouteGlobal);
+            saveAsProject |= ui::shortcut(ui::Mod_Ctrl | ui::Mod_Shift | ui::Key_S,
+                                             ui::InputFlags_RouteGlobal);
         }
         auto saveTo = [&](const std::string& path) {
             bool saved = false;
@@ -746,14 +751,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
         if (confirmOpen || confirmExit) {
-            ImGui::OpenPopup("Unsaved project changes");
+            ui::openPopup("Unsaved project changes");
         }
-        ImGui::SetNextWindowSize(ImVec2(480, 0), ImGuiCond_Appearing);
-        if (ImGui::BeginPopupModal(
-                "Unsaved project changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextUnformatted("You have unsaved changes");
-            ImGui::Separator();
-            ImGui::TextWrapped(
+        ui::setNextWindowSize(ui::Vec2(480, 0), ui::Cond_Appearing);
+        if (ui::beginPopupModal(
+                "Unsaved project changes", nullptr, ui::WindowFlags_AlwaysAutoResize)) {
+            ui::textUnformatted("You have unsaved changes");
+            ui::separator();
+            ui::textWrapped(
                 confirmExit
                     ? "Save your work before closing LegacyEngine?"
                     : "Save your work before opening another project? Discarded changes cannot be recovered.");
@@ -767,9 +772,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 confirmOpen = confirmExit = false;
                 pendingRecent.clear();
-                ImGui::CloseCurrentPopup();
+                ui::closeCurrentPopup();
             };
-            if (ImGui::Button("Save and continue", ImVec2(160, 0))) {
+            if (ui::button("Save and continue", ui::Vec2(160, 0))) {
                 if (!currentProject.empty()) {
                     if (saveTo(currentProject)) {
                         proceed();
@@ -777,25 +782,25 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 } else {
                     continueAfterSave = confirmExit ? 2 : 1;
                     confirmOpen = confirmExit = false;
-                    ImGui::CloseCurrentPopup();
+                    ui::closeCurrentPopup();
                     projectDialog.show(window, true, currentProject);
                 }
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Discard", ImVec2(120, 0))) {
+            ui::sameLine();
+            if (ui::button("Discard", ui::Vec2(120, 0))) {
                 proceed();
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel", ImVec2(120, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            ui::sameLine();
+            if (ui::button("Cancel", ui::Vec2(120, 0)) || ui::isKeyPressed(ui::Key_Escape)) {
                 confirmOpen = confirmExit = false;
                 pendingRecent.clear();
-                ImGui::CloseCurrentPopup();
+                ui::closeCurrentPopup();
             }
             if (!projectError.empty()) {
-                ImGui::Spacing();
-                ImGui::TextWrapped("%s", projectError.c_str());
+                ui::spacing();
+                ui::textWrapped("%s", projectError.c_str());
             }
-            ImGui::EndPopup();
+            ui::endPopup();
         }
         if (auto result = projectDialog.poll()) {
             if (result->path.empty() || !result->error.empty()) {
@@ -880,7 +885,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             projectError.clear();
         }
         drawWorkspace(layout.toolbar, resetWorkspace);
-        ImGui::BeginDisabled(projectDialog.pending() || browser.dialog.pending());
+        ui::beginDisabled(projectDialog.pending() || browser.dialog.pending());
         const int created = drawCreateMenu();
         auto createObject = [&](int created) {
             editor.finish(world);
@@ -920,50 +925,50 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         const bool editAllowed =
             !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
         const bool objectSelected = world.alive(selectedEntity);
-        if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("Edit")) {
+        if (ui::beginMainMenuBar()) {
+            if (ui::beginMenu("Edit")) {
                 undoRequested =
-                    ImGui::MenuItem("Undo",
-                                    "Ctrl+Z",
-                                    false,
-                                    editAllowed && !playMode.active() && history.canUndo());
-                redoRequested =
-                    ImGui::MenuItem("Redo",
-                                    "Ctrl+Y / Ctrl+Shift+Z",
-                                    false,
-                                    editAllowed && !playMode.active() && history.canRedo());
-                ImGui::Separator();
+                    ui::menuItem("Undo",
+                                 "Ctrl+Z",
+                                 false,
+                                 editAllowed && !playMode.active() && history.canUndo());
+                redoRequested = ui::menuItem(
+                    "Redo",
+                    "Ctrl+Y / Ctrl+Shift+Z",
+                    false,
+                    editAllowed && !playMode.active() && history.canRedo());
+                ui::separator();
                 duplicateRequested =
-                    ImGui::MenuItem("Duplicate", "Ctrl+D", false, editAllowed && objectSelected);
+                    ui::menuItem("Duplicate", "Ctrl+D", false, editAllowed && objectSelected);
                 copyRequested =
-                    ImGui::MenuItem("Copy", "Ctrl+C", false, editAllowed && objectSelected);
+                    ui::menuItem("Copy", "Ctrl+C", false, editAllowed && objectSelected);
                 pasteRequested =
-                    ImGui::MenuItem("Paste", "Ctrl+V", false, editAllowed && clipboard.available());
-                parentRequested = ImGui::MenuItem(
+                    ui::menuItem("Paste", "Ctrl+V", false, editAllowed && clipboard.available());
+                parentRequested = ui::menuItem(
                     "Parent / Unparent", "Ctrl+P", false, editAllowed && objectSelected);
-                ImGui::EndMenu();
+                ui::endMenu();
             }
-            ImGui::EndMainMenuBar();
+            ui::endMainMenuBar();
         }
-        if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("Windows")) {
+        if (ui::beginMainMenuBar()) {
+            if (ui::beginMenu("Windows")) {
                 for (int i = 0; i < 7; ++i) {
-                    ImGui::MenuItem(panelNames[i], nullptr, &panelOpen[i]);
+                    ui::menuItem(panelNames[i], nullptr, &panelOpen[i]);
                 }
-                ImGui::MenuItem("Animation", nullptr, &animationWindow.visible);
-                ImGui::MenuItem("Lighting", nullptr, &lightmappingWindow.visible);
-                ImGui::Separator();
-                if (ImGui::MenuItem("Reset layout")) {
+                ui::menuItem("Animation", nullptr, &animationWindow.visible);
+                ui::menuItem("Lighting", nullptr, &lightmappingWindow.visible);
+                ui::separator();
+                if (ui::menuItem("Reset layout")) {
                     resetWorkspace = true;
                 }
-                ImGui::EndMenu();
+                ui::endMenu();
             }
-            ImGui::EndMainMenuBar();
+            ui::endMainMenuBar();
         }
         bool showAbout = false;
-        if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("Project", !prefabLevel)) {
-                if (ImGui::MenuItem("Open in VS Code", nullptr, false, projectEnabled)) {
+        if (ui::beginMainMenuBar()) {
+            if (ui::beginMenu("Project", !prefabLevel)) {
+                if (ui::menuItem("Open in VS Code", nullptr, false, projectEnabled)) {
                     const auto folder =
                         currentProject.empty()
                             ? browser.assets.root
@@ -972,7 +977,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         projectError = browser.settings.error;
                     }
                 }
-                if (ImGui::MenuItem(
+                if (ui::menuItem(
                         "Backup", nullptr, false, projectEnabled && !currentProject.empty())) {
                     try {
                         if (saveTo(currentProject)) {
@@ -984,13 +989,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     }
                 }
                 if (!backupStatus.empty()) {
-                    ImGui::TextDisabled("Last backup created");
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("%s", backupStatus.c_str());
+                    ui::textDisabled("Last backup created");
+                    if (ui::isItemHovered()) {
+                        ui::setTooltip("%s", backupStatus.c_str());
                     }
                 }
 
-                if (ImGui::MenuItem(
+                if (ui::menuItem(
                         "Fix Project", nullptr, false, projectEnabled && !currentProject.empty())) {
                     try {
                         if (!std::filesystem::exists(currentProject + ".before-fix.bak")) {
@@ -1003,20 +1008,20 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         projectError = e.what();
                     }
                 }
-                if (ImGui::MenuItem("Input Settings")) {
+                if (ui::menuItem("Input Settings")) {
                     inputSettings.visible = true;
                 }
-                if (ImGui::MenuItem("Layers")) {
+                if (ui::menuItem("Layers")) {
                     layerSettings.visible = true;
                 }
-                if (ImGui::MenuItem("Rendering")) {
+                if (ui::menuItem("Rendering")) {
                     renderingSettings.visible = true;
                 }
-                if (ImGui::BeginMenu("Levels",
+                if (ui::beginMenu("Levels",
                                      !playMode.active() && !levels.busy() &&
                                          !projectDialog.pending())) {
                     for (const auto& name : std::vector<std::string>(levels.names())) {
-                        if (ImGui::MenuItem(name.c_str(), nullptr, name == levels.current())) {
+                        if (ui::menuItem(name.c_str(), nullptr, name == levels.current())) {
                             try {
                                 scripts.saveFile(browser.assets);
                                 levels.saveCurrent(world, embeddedLegacySource, camera);
@@ -1026,23 +1031,23 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                             }
                         }
                     }
-                    ImGui::EndMenu();
+                    ui::endMenu();
                 }
-                ImGui::EndMenu();
+                ui::endMenu();
             }
-            if (ImGui::BeginMenu("Settings")) {
-                if (ImGui::MenuItem("Editor Settings")) {
+            if (ui::beginMenu("Settings")) {
+                if (ui::menuItem("Editor Settings")) {
                     browser.settings.visible = true;
                 }
-                ImGui::EndMenu();
+                ui::endMenu();
             }
-            if (ImGui::BeginMenu("Debug")) {
-                ImGui::MenuItem("Show FPS", nullptr, &showFPS);
-                ImGui::MenuItem("Profiler", nullptr, &showProfiler);
-                ImGui::MenuItem("Show Game Colliders", nullptr, &showGameColliders);
-                ImGui::EndMenu();
+            if (ui::beginMenu("Debug")) {
+                ui::menuItem("Show FPS", nullptr, &showFPS);
+                ui::menuItem("Profiler", nullptr, &showProfiler);
+                ui::menuItem("Show Game Colliders", nullptr, &showGameColliders);
+                ui::endMenu();
             }
-            if (ImGui::BeginMenu("Help")) {
+            if (ui::beginMenu("Help")) {
                 auto openManual = [&](const char* page) {
                     // Release packages place docs beside the executable, independent of project
                     // cwd.
@@ -1075,86 +1080,86 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
                     }
                 };
-                if (ImGui::MenuItem("Documentation")) {
+                if (ui::menuItem("Documentation")) {
                     openManual("index.html");
                 }
-                if (ImGui::MenuItem("Scripting Reference")) {
+                if (ui::menuItem("Scripting Reference")) {
                     openManual("scripting-reference.html");
                 }
-                if (ImGui::MenuItem("GitHub")) {
+                if (ui::menuItem("GitHub")) {
                     SDL_OpenURL("https://github.com/monsef64/LegacyEngine");
                 }
-                showAbout = ImGui::MenuItem("About");
-                ImGui::EndMenu();
+                showAbout = ui::menuItem("About");
+                ui::endMenu();
             }
-            ImGui::EndMainMenuBar();
+            ui::endMainMenuBar();
         }
         if (renameLevelPopup) {
             std::snprintf(renameLevelName,
                           sizeof(renameLevelName),
                           "%s",
                           levels.current().empty() ? "Main" : levels.current().c_str());
-            ImGui::OpenPopup("Rename Level");
+            ui::openPopup("Rename Level");
             renameLevelPopup = false;
         }
-        if (ImGui::BeginPopupModal("Rename Level", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            const bool enter = ImGui::InputText("Name",
+        if (ui::beginPopupModal("Rename Level", nullptr, ui::WindowFlags_AlwaysAutoResize)) {
+            const bool enter = ui::inputText("Name",
                                                 renameLevelName,
                                                 sizeof(renameLevelName),
-                                                ImGuiInputTextFlags_EnterReturnsTrue);
-            if (ImGui::Button("Rename") || enter) {
+                                                ui::InputTextFlags_EnterReturnsTrue);
+            if (ui::button("Rename") || enter) {
                 try {
                     scripts.saveFile(browser.assets);
                     levels.saveCurrent(world, embeddedLegacySource, camera);
                     levels.renameCurrent(renameLevelName);
-                    ImGui::CloseCurrentPopup();
+                    ui::closeCurrentPopup();
                 } catch (const std::exception& e) {
                     levels.error = e.what();
                 }
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel")) {
-                ImGui::CloseCurrentPopup();
+            ui::sameLine();
+            if (ui::button("Cancel")) {
+                ui::closeCurrentPopup();
             }
             if (!levels.error.empty()) {
-                ImGui::TextWrapped("%s", levels.error.c_str());
+                ui::textWrapped("%s", levels.error.c_str());
             }
-            ImGui::EndPopup();
+            ui::endPopup();
         }
         if (newLevelPopup) {
-            ImGui::OpenPopup("New Level");
+            ui::openPopup("New Level");
             newLevelPopup = false;
         }
-        if (ImGui::BeginPopupModal("New Level", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextUnformatted("The current level is saved before creating an empty level.");
-            ImGui::InputText("Name", newLevelName, sizeof(newLevelName));
-            if (ImGui::Button("Create")) {
+        if (ui::beginPopupModal("New Level", nullptr, ui::WindowFlags_AlwaysAutoResize)) {
+            ui::textUnformatted("The current level is saved before creating an empty level.");
+            ui::inputText("Name", newLevelName, sizeof(newLevelName));
+            if (ui::button("Create")) {
                 try {
                     scripts.saveFile(browser.assets);
                     levels.saveCurrent(world, embeddedLegacySource, camera);
                     levels.create(newLevelName);
                     levels.load(newLevelName);
-                    ImGui::CloseCurrentPopup();
+                    ui::closeCurrentPopup();
                 } catch (const std::exception& e) {
                     levels.error = e.what();
                 }
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel")) {
-                ImGui::CloseCurrentPopup();
+            ui::sameLine();
+            if (ui::button("Cancel")) {
+                ui::closeCurrentPopup();
             }
             if (!levels.error.empty()) {
-                ImGui::TextWrapped("%s", levels.error.c_str());
+                ui::textWrapped("%s", levels.error.c_str());
             }
-            ImGui::EndPopup();
+            ui::endPopup();
         }
         if (renderingSettings.visible) {
-            ImGui::SetNextWindowSize(ImVec2(540, 320), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(360, 220),
-                                                ImGui::GetMainViewport()->WorkSize);
-            if (ImGui::Begin("Rendering", &renderingSettings.visible)) {
-                ImGui::SeparatorText("Rendering");
-                if (ImGui::Checkbox("Enable VSync", &renderingSettings.vsync)) {
+            ui::setNextWindowSize(ui::Vec2(540, 320), ui::Cond_FirstUseEver);
+            ui::setNextWindowSizeConstraints(ui::Vec2(360, 220),
+                                                ui::mainViewport()->WorkSize);
+            if (ui::beginWindow("Rendering", &renderingSettings.visible)) {
+                ui::separatorText("Rendering");
+                if (ui::checkbox("Enable VSync", &renderingSettings.vsync)) {
                     const bool after = renderingSettings.vsync;
                     renderingSettings.vsync = !after;
                     history.perform(world, selectedEntity, [&, after](bool forward) {
@@ -1166,11 +1171,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     });
                 }
                 const auto shadowsBefore = renderingSettings.shadows;
-                bool shadowChanged = ImGui::Combo("Shadow mapping",
+                bool shadowChanged = ui::combo("Shadow mapping",
                                                   &renderingSettings.shadows.mode,
                                                   "Cascaded (CSM)\0Single-map PCF (PCM)\0");
                 int filtering = renderingSettings.shadows.soft ? 1 : 0;
-                if (ImGui::Combo("Shadow filtering", &filtering, "Hard\0Soft (PCF)\0")) {
+                if (ui::combo("Shadow filtering", &filtering, "Hard\0Soft (PCF)\0")) {
                     renderingSettings.shadows.soft = filtering == 1;
                     shadowChanged = true;
                 }
@@ -1181,7 +1186,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         resolution = i;
                     }
                 }
-                if (ImGui::Combo(
+                if (ui::combo(
                         "Shadow resolution", &resolution, "256\000512\0001024\0002048\0")) {
                     renderingSettings.shadows.resolution = sizes[resolution];
                     shadowChanged = true;
@@ -1196,34 +1201,34 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                                           : "Undo shadow settings");
                     });
                 }
-                ImGui::TextWrapped(
+                ui::textWrapped(
                     "CSM uses four directional cascades. Point/spot lights retain PCF. Light quality scales the project resolution; Off disables that light's shadows.");
                 int interval = 0;
                 if (SDL_GL_GetSwapInterval(&interval)) {
-                    ImGui::Text("Driver swap interval: %d", interval);
+                    ui::text("Driver swap interval: %d", interval);
                 }
-                ImGui::TextWrapped(
+                ui::textWrapped(
                     "Disable VSync to measure uncapped performance. Use Debug > Profiler to distinguish rendering cost from presentation wait.");
                 if (!renderingSettings.error.empty()) {
-                    ImGui::TextWrapped("%s", renderingSettings.error.c_str());
+                    ui::textWrapped("%s", renderingSettings.error.c_str());
                 }
             }
-            ImGui::End();
+            ui::endWindow();
         }
         if (layerSettings.visible) {
-            const auto area = ImGui::GetMainViewport()->WorkSize;
-            ImGui::SetNextWindowSize(ImVec2(std::min(460.f, area.x), std::min(420.f, area.y)),
-                                     ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSizeConstraints(
-                ImVec2(std::min(320.f, area.x), std::min(240.f, area.y)), area);
-            if (ImGui::Begin("Layers", &layerSettings.visible)) {
-                ImGui::TextUnformatted("Default (built-in)");
+            const auto area = ui::mainViewport()->WorkSize;
+            ui::setNextWindowSize(ui::Vec2(std::min(460.f, area.x), std::min(420.f, area.y)),
+                                     ui::Cond_FirstUseEver);
+            ui::setNextWindowSizeConstraints(
+                ui::Vec2(std::min(320.f, area.x), std::min(240.f, area.y)), area);
+            if (ui::beginWindow("Layers", &layerSettings.visible)) {
+                ui::textUnformatted("Default (built-in)");
                 for (int i = 1; i < 32; ++i) {
                     if (!LayerSettings::names[i].empty()) {
-                        ImGui::PushID(i);
-                        ImGui::TextUnformatted(LayerSettings::names[i].c_str());
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton("Remove")) {
+                        ui::pushId(i);
+                        ui::textUnformatted(LayerSettings::names[i].c_str());
+                        ui::sameLine();
+                        if (ui::smallButton("Remove")) {
                             LayerSettings::names[i].clear();
                             world.each<ObjectLayer>([&](Entity, ObjectLayer& layer) {
                                 if (layer.value == i) {
@@ -1234,14 +1239,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                 [&](Entity, Raycast& query) { query.layerMask &= ~(1u << i); });
                             layerSettings.save(browser.assets);
                         }
-                        ImGui::PopID();
+                        ui::popId();
                     }
                 }
                 static char newLayer[65]{};
-                ImGui::SetNextItemWidth(std::max(60.f, ImGui::GetContentRegionAvail().x - 50));
-                ImGui::InputText("##LayerName", newLayer, sizeof(newLayer));
-                ImGui::SameLine();
-                if (ImGui::Button("Add") && newLayer[0]) {
+                ui::setNextItemWidth(std::max(60.f, ui::contentRegionAvail().x - 50));
+                ui::inputText("##LayerName", newLayer, sizeof(newLayer));
+                ui::sameLine();
+                if (ui::button("Add") && newLayer[0]) {
                     if (LayerSettings::find(newLayer) >= 0) {
                         layerSettings.error = "Layer already exists";
                     } else {
@@ -1259,43 +1264,43 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     }
                 }
                 if (!layerSettings.error.empty()) {
-                    ImGui::TextWrapped("%s", layerSettings.error.c_str());
+                    ui::textWrapped("%s", layerSettings.error.c_str());
                 }
             }
-            ImGui::End();
+            ui::endWindow();
         }
         if (showAbout) {
-            ImGui::OpenPopup("About LegacyEngine");
+            ui::openPopup("About LegacyEngine");
         }
-        if (ImGui::BeginPopupModal(
-                "About LegacyEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextUnformatted("LegacyEngine");
-            ImGui::TextUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
-            ImGui::TextUnformatted("SDL3 / OpenGL / Dear ImGui / Jolt");
-            if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                ImGui::CloseCurrentPopup();
+        if (ui::beginPopupModal(
+                "About LegacyEngine", nullptr, ui::WindowFlags_AlwaysAutoResize)) {
+            ui::textUnformatted("LegacyEngine");
+            ui::textUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
+            ui::textUnformatted("SDL3 / OpenGL / MyGUI / Jolt");
+            if (ui::button("Close") || ui::isKeyPressed(ui::Key_Escape)) {
+                ui::closeCurrentPopup();
             }
-            ImGui::EndPopup();
+            ui::endPopup();
         }
         drawProfiler(profiler, showProfiler);
         // Let text widgets own editing shortcuts while typing. Global routing
         // otherwise makes shortcuts independent of which editor panel has focus.
-        if (editAllowed && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive()) {
-            const auto flags = ImGuiInputFlags_RouteGlobal;
-            undoRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z, flags);
-            redoRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Y, flags) ||
-                             ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z, flags);
-            duplicateRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_D, flags);
-            copyRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C, flags);
-            pasteRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_V, flags);
-            parentRequested |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_P, flags);
+        if (editAllowed && !ui::io().WantTextInput && !ui::isAnyItemActive()) {
+            const auto flags = ui::InputFlags_RouteGlobal;
+            undoRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_Z, flags);
+            redoRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_Y, flags) ||
+                             ui::shortcut(ui::Mod_Ctrl | ui::Mod_Shift | ui::Key_Z, flags);
+            duplicateRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_D, flags);
+            copyRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_C, flags);
+            pasteRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_V, flags);
+            parentRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_P, flags);
         }
-        ImGui::SetNextWindowPos(ImVec2(layout.toolbar.x, layout.toolbar.y));
-        ImGui::SetNextWindowSize(ImVec2(layout.toolbar.width, layout.toolbar.height));
-        ImGui::Begin("Scene controls",
+        ui::setNextWindowPos(ui::Vec2(layout.toolbar.x, layout.toolbar.y));
+        ui::setNextWindowSize(ui::Vec2(layout.toolbar.width, layout.toolbar.height));
+        ui::beginWindow("Scene controls",
                      nullptr,
-                     fixedPanelFlags | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoDocking |
-                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+                     fixedPanelFlags | ui::WindowFlags_NoTitleBar | ui::WindowFlags_NoDocking |
+                         ui::WindowFlags_NoScrollbar | ui::WindowFlags_NoScrollWithMouse);
         if (editAllowed) {
             if (copyRequested && objectSelected) {
                 clipboard.copy(world, selectedEntity);
@@ -1317,26 +1322,26 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     setParent(world, selectedEntity, {});
                     history.commit(world, selectedEntity);
                 } else {
-                    ImGui::OpenPopup("Choose parent");
+                    ui::openPopup("Choose parent");
                 }
             }
         }
-        if (ImGui::BeginPopup("Choose parent")) {
-            ImGui::TextUnformatted("Choose parent for selected GameObject");
-            ImGui::Separator();
+        if (ui::beginPopup("Choose parent")) {
+            ui::textUnformatted("Choose parent for selected GameObject");
+            ui::separator();
             for (const auto& object : levelObjects(world)) {
                 if (!editAllowed || !canParent(world, selectedEntity, object.entity)) {
                     continue;
                 }
-                ImGui::PushID(static_cast<int>(object.entity.index));
-                if (ImGui::Selectable(object.name.c_str())) {
+                ui::pushId(static_cast<int>(object.entity.index));
+                if (ui::selectable(object.name.c_str())) {
                     history.commit(world, selectedEntity);
                     setParent(world, selectedEntity, object.entity);
                     history.commit(world, selectedEntity);
                 }
-                ImGui::PopID();
+                ui::popId();
             }
-            ImGui::EndPopup();
+            ui::endPopup();
         }
         if ((undoRequested || redoRequested) && !playMode.active()) {
             editor.finish(world);
@@ -1353,17 +1358,17 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 history.error.clear();
             }
         }
-        const bool playbackKeys = !ImGui::GetIO().WantTextInput && !editor.dragging() &&
+        const bool playbackKeys = !ui::io().WantTextInput && !editor.dragging() &&
                                   !projectDialog.pending() && !browser.dialog.pending();
         const bool playKey =
-            playbackKeys && ImGui::Shortcut(ImGuiKey_F5, ImGuiInputFlags_RouteGlobal);
+            playbackKeys && ui::shortcut(ui::Key_F5, ui::InputFlags_RouteGlobal);
         const bool pauseKey =
-            playbackKeys && ImGui::Shortcut(ImGuiKey_F6, ImGuiInputFlags_RouteGlobal);
+            playbackKeys && ui::shortcut(ui::Key_F6, ui::InputFlags_RouteGlobal);
         const bool stopKey =
-            playbackKeys && ImGui::Shortcut(ImGuiKey_F7, ImGuiInputFlags_RouteGlobal);
-        const float playbackWidth = 90 + 2 * ImGui::GetStyle().ItemSpacing.x;
-        ImGui::SetCursorPosX((layout.toolbar.width - playbackWidth) * 0.5f);
-        ImGui::BeginDisabled(prefabLevel || playMode.active() || levels.busy());
+            playbackKeys && ui::shortcut(ui::Key_F7, ui::InputFlags_RouteGlobal);
+        const float playbackWidth = 90 + 2 * ui::style().ItemSpacing.x;
+        ui::setCursorPosX((layout.toolbar.width - playbackWidth) * 0.5f);
+        ui::beginDisabled(prefabLevel || playMode.active() || levels.busy());
         if (playbackButton("##Play", "Play (F5)", PlaybackIcon::Play, playMode.active()) ||
             (playKey && !prefabLevel && !playMode.active() && !levels.busy())) {
             editor.finish(world);
@@ -1405,9 +1410,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 LuaConsole::postEvent("onLevelLoaded", {levels.current()});
             }
         }
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-        ImGui::BeginDisabled(!playMode.active());
+        ui::endDisabled();
+        ui::sameLine();
+        ui::beginDisabled(!playMode.active());
         if (playbackButton("##Pause",
                            playMode.state() == PlayMode::State::Paused ? "Resume (F6)"
                                                                        : "Pause (F6)",
@@ -1421,7 +1426,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 input.releaseMouse();
             }
         }
-        ImGui::SameLine();
+        ui::sameLine();
         if (playbackButton("##Stop", "Stop (F7)", PlaybackIcon::Stop) ||
             (stopKey && playMode.active())) {
             editor.finish(world);
@@ -1456,23 +1461,23 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             levels.suspended = false;
             selectedEntity = world.alive(editSelection) ? editSelection : Entity{};
         }
-        ImGui::EndDisabled();
-        ImGui::SameLine();
-        ImGui::BeginDisabled(playMode.active());
-        ImGui::Checkbox("Separate Game window", &separateGame);
-        ImGui::EndDisabled();
+        ui::endDisabled();
+        ui::sameLine();
+        ui::beginDisabled(playMode.active());
+        ui::checkbox("Separate Game window", &separateGame);
+        ui::endDisabled();
         if (gameWindow) {
-            ImGui::SameLine();
+            ui::sameLine();
             const bool fullscreen = (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_FULLSCREEN) != 0;
-            if (ImGui::Button(fullscreen ? "Windowed Game" : "Fullscreen Game")) {
+            if (ui::button(fullscreen ? "Windowed Game" : "Fullscreen Game")) {
                 toggleGameFullscreen();
             }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip(
+            if (ui::isItemHovered()) {
+                ui::setTooltip(
                     "Toggle separate Game fullscreen (F11 or Alt+Enter in Game window)");
             }
         }
-        ImGui::End();
+        ui::endWindow();
         bool hierarchyFocused = false;
         int hierarchyCreate = -1;
         Entity hierarchyCreateParent;
@@ -1503,7 +1508,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         static Entity lastInspectedEntity;
         if (selectedEntity != lastInspectedEntity ||
-            (hierarchyFocused && ImGui::IsMouseClicked(0))) {
+            (hierarchyFocused && ui::isMouseClicked(0))) {
             browser.selected.clear();
             lastInspectedEntity = selectedEntity;
         }
@@ -1521,9 +1526,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             world, selectedEntity, browser.assets, history, editAllowed, !playMode.active());
         scripts.componentOutput = componentScripts.messages();
         scripts.setAssetContext(browser.openedScript, selectedEntity);
-        ImGui::BeginDisabled(playMode.active());
+        ui::beginDisabled(playMode.active());
         scripts.draw(&layout, playMode.playing(), &browser.assets, &browser.openedScript);
-        ImGui::EndDisabled();
+        ui::endDisabled();
         browser.projectFolder = currentProject.empty()
                                     ? browser.assets.root
                                     : std::filesystem::absolute(currentProject).parent_path();
@@ -1539,7 +1544,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             modelPreviewWindow.open(
                 browser.assets, std::exchange(browser.previewModelRequest, {}), renderer);
         }
-        modelPreviewWindow.draw(browser.assets, renderer, ImGui::GetIO().DeltaTime);
+        modelPreviewWindow.draw(browser.assets, renderer, ui::io().DeltaTime);
         lightmappingWindow.draw(world,
                                 selectedEntity,
                                 browser.assets,
@@ -1556,7 +1561,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                              renderer,
                              history,
                              editAllowed && !playMode.active(),
-                             ImGui::GetIO().DeltaTime);
+                             ui::io().DeltaTime);
         if (!browser.editCubemapRequest.empty()) {
             const auto path = std::exchange(browser.editCubemapRequest, {});
             try {
@@ -1568,10 +1573,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         if (!editingCubemap.empty()) {
             bool open = true;
-            ImGui::SetNextWindowSize(ImVec2(540, 340), ImGuiCond_FirstUseEver);
-            ImGui::Begin("Cubemap Editor", &open);
-            ImGui::TextWrapped("%s", editingCubemap.c_str());
-            ImGui::TextWrapped(
+            ui::setNextWindowSize(ui::Vec2(540, 340), ui::Cond_FirstUseEver);
+            ui::beginWindow("Cubemap Editor", &open);
+            ui::textWrapped("%s", editingCubemap.c_str());
+            ui::textWrapped(
                 "Assign six square textures of matching size. Front is -Z, back is +Z.");
             for (int i = 0; i < 6; ++i) {
                 auto& path = cubemapDraft.faces[i];
@@ -1579,26 +1584,26 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                             path,
                             &browser.assets,
                             [](const std::string& file) { return materialTexturePath(file); });
-                if (ImGui::BeginDragDropTarget()) {
-                    if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                        std::string value = static_cast<const char*>(drop->Data);
+                if (ui::beginDragDropTarget()) {
+                    if (const auto* drop = ui::acceptDragDropPayload("ASSET_PATH")) {
+                        std::string value = static_cast<const char*>(drop->data());
                         if (materialTexturePath(value)) {
                             path = value;
                         }
                     }
-                    ImGui::EndDragDropTarget();
+                    ui::endDragDropTarget();
                 }
             }
-            ImGui::BeginDisabled(playMode.active());
-            if (ImGui::Button("Save Cubemap")) {
+            ui::beginDisabled(playMode.active());
+            if (ui::button("Save Cubemap")) {
                 try {
                     saveCubemap(browser.assets, editingCubemap, cubemapDraft);
                 } catch (const std::exception& e) {
                     browser.assets.error = e.what();
                 }
             }
-            ImGui::EndDisabled();
-            ImGui::End();
+            ui::endDisabled();
+            ui::endWindow();
             if (!open) {
                 editingCubemap.clear();
             }
@@ -1734,20 +1739,20 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 physics.reset();
                 scripts.resetRuntime();
                 camera.focus(world.get<Transform>(selectedEntity).position, 3);
-                ImGui::SetWindowFocus("Scene");
+                ui::setWindowFocus("Scene");
             } catch (const std::exception& e) {
                 browser.assets.error = e.what();
             }
         }
         if (prefabLevel) {
-            ImGui::SetNextWindowSize(ImVec2(440, 180), ImGuiCond_FirstUseEver);
-            ImGui::Begin("Prefab Window");
-            ImGui::TextWrapped("Editing %s", editingPrefab.c_str());
-            ImGui::TextWrapped(
+            ui::setNextWindowSize(ui::Vec2(440, 180), ui::Cond_FirstUseEver);
+            ui::beginWindow("Prefab Window");
+            ui::textWrapped("Editing %s", editingPrefab.c_str());
+            ui::textWrapped(
                 "Hierarchy and Scene contain only this prefab. Save updates linked instances; Exit restores the level. Unsaved edits are discarded on Exit.");
-            if (ImGui::Button("Save Prefab") ||
-                (!ImGui::GetIO().WantTextInput &&
-                 ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteGlobal))) {
+            if (ui::button("Save Prefab") ||
+                (!ui::io().WantTextInput &&
+                 ui::shortcut(ui::Mod_Ctrl | ui::Key_S, ui::InputFlags_RouteGlobal))) {
                 try {
                     auto root = Prefabs::root(world);
                     Prefabs::save(browser.assets, editingPrefab, world, root, projectMeshes);
@@ -1758,8 +1763,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     browser.assets.error = e.what();
                 }
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Exit Prefab Mode")) {
+            ui::sameLine();
+            if (ui::button("Exit Prefab Mode")) {
                 editor.finish(world);
                 scripts.shutdown();
                 world.restore(*prefabLevel);
@@ -1774,16 +1779,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 levels.suspended = false;
                 physics.reset();
             }
-            ImGui::End();
+            ui::endWindow();
         }
         const auto settingsBefore = browser.settings;
-        ImGui::BeginDisabled(playMode.active());
+        ui::beginDisabled(playMode.active());
         browser.settings.draw(browser.projectFolder);
-        ImGui::EndDisabled();
+        ui::endDisabled();
         if (settingsBefore.signature() != browser.settings.signature() && !settingsGesture) {
             settingsGesture = settingsBefore;
         }
-        if (!playMode.active() && settingsGesture && !ImGui::IsAnyItemActive()) {
+        if (!playMode.active() && settingsGesture && !ui::isAnyItemActive()) {
             const auto before = *settingsGesture;
             settingsGesture.reset();
             const auto after = browser.settings;
@@ -1830,48 +1835,48 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         terminalErrors.report("History", history.error);
         terminalErrors.report("Levels", levels.error);
         terminalErrors.report("Rendering settings", renderingSettings.error);
-        ImDrawList* sceneDrawList = nullptr;
+        ui::DrawList* sceneDrawList = nullptr;
         bool sceneVisible = false, sceneFocused = false;
         sceneHovered = false;
         sceneRect = {};
         orientationInteracting = false;
         if (panelOpen[2]) {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            ui::pushStyleVar(ui::StyleVar_WindowPadding, ui::Vec2(0, 0));
             if (beginEditorPanel("Scene",
                                  0,
-                                 ImGuiWindowFlags_NoScrollbar |
-                                     ImGuiWindowFlags_NoScrollWithMouse)) {
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 3));
-                ImGui::BeginChild("Scene toolbar",
-                                  ImVec2(0,
-                                         (ImGui::GetContentRegionAvail().x < 620 ? 3.f : 2.f) *
-                                                 ImGui::GetFrameHeightWithSpacing() +
+                                 ui::WindowFlags_NoScrollbar |
+                                     ui::WindowFlags_NoScrollWithMouse)) {
+                ui::pushStyleVar(ui::StyleVar_WindowPadding, ui::Vec2(6, 3));
+                ui::beginChild("Scene toolbar",
+                               ui::Vec2(0,
+                                        (ui::contentRegionAvail().x < 620 ? 3.f : 2.f) *
+                                                ui::frameHeightWithSpacing() +
                                              6),
-                                  ImGuiChildFlags_AlwaysUseWindowPadding,
-                                  ImGuiWindowFlags_NoScrollbar |
-                                      ImGuiWindowFlags_NoScrollWithMouse);
+                                  ui::ChildFlags_AlwaysUseWindowPadding,
+                                  ui::WindowFlags_NoScrollbar |
+                                      ui::WindowFlags_NoScrollWithMouse);
                 editor.drawToolbar();
-                ImGui::SetNextItemWidth(100);
-                if (ImGui::SliderFloat(
+                ui::setNextItemWidth(100);
+                if (ui::sliderFloat(
                         "Scroll zoom", &browser.settings.scrollZoomSpeed, .1f, 5.f, "%.1fx")) {
                     browser.settings.save();
                 }
-                ImGui::EndChild();
-                ImGui::PopStyleVar();
-                sceneFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-                const auto pos = ImGui::GetCursorScreenPos(), size = ImGui::GetContentRegionAvail();
+                ui::endChild();
+                ui::popStyleVar();
+                sceneFocused = ui::isWindowFocused(ui::FocusedFlags_RootAndChildWindows);
+                const auto pos = ui::cursorScreenPos(), size = ui::contentRegionAvail();
                 sceneRect = {pos.x, pos.y, std::max(size.x, 1.0f), std::max(size.y, 1.0f)};
                 layout.scene = sceneRect;
                 sceneVisible = true;
-                sceneDrawList = ImGui::GetWindowDrawList();
+                sceneDrawList = ui::windowDrawList();
                 int dw = 0, dh = 0;
                 SDL_GetWindowSizeInPixels(window, &dw, &dh);
                 auto pixels = scenePixels(sceneRect, windowWidth, windowHeight, dw, dh);
                 sceneSurface.resize(pixels.width, pixels.height);
-                ImGui::Image(static_cast<ImTextureID>(sceneSurface.texture),
-                             ImVec2(sceneRect.width, sceneRect.height),
-                             ImVec2(0, 1),
-                             ImVec2(1, 0));
+                ui::image(static_cast<ui::TextureID>(sceneSurface.texture),
+                             ui::Vec2(sceneRect.width, sceneRect.height),
+                             ui::Vec2(0, 1),
+                             ui::Vec2(1, 0));
                 if (world.has<Camera>(selectedEntity) && world.has<Transform>(selectedEntity)) {
                     const auto& selectedCamera = world.get<Camera>(selectedEntity);
                     const float aspect = std::clamp(selectedCamera.aspect, .25f, 4.f);
@@ -1882,24 +1887,24 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         width = height * aspect;
                     }
                     cameraPreviewSurface.resize(std::max(1, int(width)), std::max(1, int(height)));
-                    const ImVec2 a(sceneRect.x + sceneRect.width - width - 10,
+                    const ui::Vec2 a(sceneRect.x + sceneRect.width - width - 10,
                                    sceneRect.y + sceneRect.height - height - 10),
                         b(a.x + width, a.y + height);
-                    sceneDrawList->AddRectFilled(ImVec2(a.x - 2, a.y - 20),
-                                                 ImVec2(b.x + 2, b.y + 2),
-                                                 IM_COL32(24, 24, 24, 245));
-                    sceneDrawList->AddText(ImVec2(a.x, a.y - 18), IM_COL32_WHITE, "Camera preview");
-                    sceneDrawList->AddImage(static_cast<ImTextureID>(cameraPreviewSurface.texture),
+                    sceneDrawList->addRectFilled(ui::Vec2(a.x - 2, a.y - 20),
+                                                 ui::Vec2(b.x + 2, b.y + 2),
+                                                 UI_COL32(24, 24, 24, 245));
+                    sceneDrawList->addText(ui::Vec2(a.x, a.y - 18), UI_COL32_WHITE, "Camera preview");
+                    sceneDrawList->addImage(static_cast<ui::TextureID>(cameraPreviewSurface.texture),
                                             a,
                                             b,
-                                            ImVec2(0, 1),
-                                            ImVec2(1, 0));
+                                            ui::Vec2(0, 1),
+                                            ui::Vec2(1, 0));
                 }
-                const bool imageHovered = ImGui::IsItemHovered();
-                sceneHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_None) && imageHovered;
-                if (ImGui::BeginDragDropTarget()) {
-                    if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                        const std::string path = static_cast<const char*>(asset->Data);
+                const bool imageHovered = ui::isItemHovered();
+                sceneHovered = ui::isWindowHovered(ui::HoveredFlags_None) && imageHovered;
+                if (ui::beginDragDropTarget()) {
+                    if (const auto* asset = ui::acceptDragDropPayload("ASSET_PATH")) {
+                        const std::string path = static_cast<const char*>(asset->data());
                         if (modelAsset(path)) {
                             browser.spawnModelRequest = path;
                         } else if (Prefabs::asset(path)) {
@@ -1908,25 +1913,25 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                             attachScriptAsset(world, selectedEntity, path);
                         }
                     }
-                    ImGui::EndDragDropTarget();
+                    ui::endDragDropTarget();
                 }
                 const bool playbackHovered = drawParticlePlayback(
                     world, selectedEntity, sceneRect, playMode.active(), particlePreviewSpeed);
                 sceneHovered &= !playbackHovered;
-                if (sceneHovered && ImGui::IsMouseClicked(0)) {
+                if (sceneHovered && ui::isMouseClicked(0)) {
                     browser.selected.clear();
                 }
                 if (editAllowed && (sceneFocused || sceneHovered) && !cameraLooking &&
-                    !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+                    !ui::io().WantTextInput && !ui::isAnyItemActive() &&
                     !cameraModifiersHeld(SDL_GetModState()) &&
-                    !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
-                    if (ImGui::IsKeyPressed(ImGuiKey_W, false)) {
+                    !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId)) {
+                    if (ui::isKeyPressed(ui::Key_W, false)) {
                         editor.setTool(TransformTool::Move);
                     }
-                    if (ImGui::IsKeyPressed(ImGuiKey_E, false)) {
+                    if (ui::isKeyPressed(ui::Key_E, false)) {
                         editor.setTool(TransformTool::Rotate);
                     }
-                    if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+                    if (ui::isKeyPressed(ui::Key_R, false)) {
                         editor.setTool(TransformTool::Scale);
                     }
                 }
@@ -1949,15 +1954,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     clicking = false;
                 }
             }
-            ImGui::End();
-            ImGui::PopStyleVar();
+            ui::endWindow();
+            ui::popStyleVar();
         }
         {
             Ray terrainRay;
-            const auto mouse = ImGui::GetIO().MousePos;
+            const auto mouse = ui::io().MousePos;
             const bool brushHover = editAllowed && sceneHovered && !cameraLooking &&
                                     !(SDL_GetModState() & SDL_KMOD_ALT);
-            const bool brushDown = brushHover && ImGui::IsMouseDown(0);
+            const bool brushDown = brushHover && ui::isMouseDown(0);
             bool rayValid =
                 brushHover && mouseRay(window, camera, mouse.x, mouse.y, terrainRay, layout.scene);
             if (rayValid && sceneSurface.width > 0 && sceneSurface.height > 0) {
@@ -1974,32 +1979,32 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                  history,
                                  rayValid ? &terrainRay : nullptr,
                                  brushDown,
-                                 ImGui::GetIO().DeltaTime);
+                                 ui::io().DeltaTime);
         }
         bool gameVisible = false;
         gameHovered = false;
         gameFocused = false;
         if (panelOpen[6] && !gameWindow) {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            ui::pushStyleVar(ui::StyleVar_WindowPadding, ui::Vec2(0, 0));
             if (focusGame || (smokeTest && renderedFrames == 0)) {
                 focusGame = false;
-                ImGui::SetNextWindowFocus();
+                ui::setNextWindowFocus();
             }
             if (beginEditorPanel("Game")) {
-                gameHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
-                gameFocused = ImGui::IsWindowFocused();
+                gameHovered = ui::isWindowHovered(ui::HoveredFlags_ChildWindows);
+                gameFocused = ui::isWindowFocused();
                 const auto active = activeCamera(world);
                 if (active == Entity{}) {
                     const char* message = "No active camera available";
-                    const auto size = ImGui::GetContentRegionAvail();
-                    const auto textSize = ImGui::CalcTextSize(message);
-                    const auto origin = ImGui::GetCursorPos();
-                    ImGui::SetCursorPos(
-                        ImVec2(origin.x + std::max(0.0f, (size.x - textSize.x) * 0.5f),
+                    const auto size = ui::contentRegionAvail();
+                    const auto textSize = ui::calcTextSize(message);
+                    const auto origin = ui::cursorPos();
+                    ui::setCursorPos(
+                        ui::Vec2(origin.x + std::max(0.0f, (size.x - textSize.x) * 0.5f),
                                origin.y + std::max(0.0f, (size.y - textSize.y) * 0.5f)));
-                    ImGui::TextUnformatted(message);
+                    ui::textUnformatted(message);
                 } else {
-                    auto size = ImGui::GetContentRegionAvail();
+                    auto size = ui::contentRegionAvail();
                     size.x = std::max(size.x, 1.0f);
                     size.y = std::max(size.y, 1.0f);
                     int dw = 0, dh = 0;
@@ -2009,43 +2014,43 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     world.each<Camera>([&](Entity, Camera& c) {
                         c.aspect = static_cast<float>(gameSurface.width) / gameSurface.height;
                     });
-                    gameImageOrigin = ImGui::GetCursorScreenPos();
+                    gameImageOrigin = ui::cursorScreenPos();
                     gameImageSize = size;
-                    ImGui::Image(static_cast<ImTextureID>(gameSurface.texture),
+                    ui::image(static_cast<ui::TextureID>(gameSurface.texture),
                                  size,
-                                 ImVec2(0, 1),
-                                 ImVec2(1, 0));
+                                 ui::Vec2(0, 1),
+                                 ui::Vec2(1, 0));
                     gameVisible = true;
                     if (showFPS) {
-                        const auto a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+                        const auto a = ui::itemRectMin(), b = ui::itemRectMax();
                         char label[64];
-                        std::snprintf(label, sizeof(label), "FPS: %.0f", ImGui::GetIO().Framerate);
-                        const auto text = ImGui::CalcTextSize(label);
-                        const ImVec2 position(a.x + 8, a.y + 8);
-                        auto* draw = ImGui::GetWindowDrawList();
-                        draw->PushClipRect(a, b, true);
-                        draw->AddRectFilled(
-                            ImVec2(position.x - 4, position.y - 3),
-                            ImVec2(position.x + text.x + 4, position.y + text.y + 3),
-                            IM_COL32(0, 0, 0, 180),
+                        std::snprintf(label, sizeof(label), "FPS: %.0f", ui::io().Framerate);
+                        const auto text = ui::calcTextSize(label);
+                        const ui::Vec2 position(a.x + 8, a.y + 8);
+                        auto* draw = ui::windowDrawList();
+                        draw->pushClipRect(a, b, true);
+                        draw->addRectFilled(
+                            ui::Vec2(position.x - 4, position.y - 3),
+                            ui::Vec2(position.x + text.x + 4, position.y + text.y + 3),
+                            UI_COL32(0, 0, 0, 180),
                             3);
-                        draw->AddText(position, IM_COL32(255, 255, 255, 255), label);
-                        draw->PopClipRect();
+                        draw->addText(position, UI_COL32(255, 255, 255, 255), label);
+                        draw->popClipRect();
                     }
                 }
             }
-            ImGui::End();
-            ImGui::PopStyleVar();
+            ui::endWindow();
+            ui::popStyleVar();
         }
         if (!sceneVisible) {
             editor.finish(world);
             layout.scene = {};
         }
         if (editAllowed && sceneVisible && (hierarchyFocused || sceneFocused) && !cameraLooking &&
-            !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+            !ui::io().WantTextInput && !ui::isAnyItemActive() &&
             !cameraModifiersHeld(SDL_GetModState()) &&
-            !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) &&
-            ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+            !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId) &&
+            ui::isKeyPressed(ui::Key_F, false)) {
             if (const auto* transform = world.tryGet<Transform>(selectedEntity)) {
                 editor.finish(world);
                 clicking = false;
@@ -2078,9 +2083,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
         if (editAllowed && (hierarchyFocused || sceneFocused) && world.alive(selectedEntity) &&
-            !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
-            !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) &&
-            ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+            !ui::io().WantTextInput && !ui::isAnyItemActive() &&
+            !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId) &&
+            ui::isKeyPressed(ui::Key_Delete, false)) {
             editor.finish(world);
             clicking = false;
             history.commit(world, selectedEntity);
@@ -2093,21 +2098,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             updateHierarchy(world);
             history.observe(world,
                             selectedEntity,
-                            editor.dragging() || ImGui::IsAnyItemActive() ||
-                                ImGui::IsMouseDown(ImGuiMouseButton_Left));
+                            editor.dragging() || ui::isAnyItemActive() ||
+                                ui::isMouseDown(ui::MouseButton_Left));
         }
-        ImGui::EndDisabled();
+        ui::endDisabled();
         if (renderedFrames == 0) {
-            ImGui::SetWindowFocus("Assets");
+            ui::setWindowFocus("Assets");
         }
-        ImGui::Render();
-        finishEditorTheme(ImGui::GetDrawData());
+        ui::dockWorkspaceEnd();
         profiler.checkpoint(ProfilePart::Editor);
-
-        // The time that has passed since the previous frame.
-        const Uint64 ticks = SDL_GetTicksNS();
-        const float seconds = static_cast<float>(ticks - lastTicks) * 1e-9f;
-        lastTicks = ticks;
 
         if (cameraLooking &&
             (!sceneVisible || browser.dialog.pending() || projectDialog.pending() ||
@@ -2117,7 +2116,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         if (cameraLooking && !browser.dialog.pending() && !projectDialog.pending() &&
             !cameraModifiersHeld(SDL_GetModState()) && !editor.dragging() &&
-            !ImGui::GetIO().WantTextInput &&
+            !ui::io().WantTextInput &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             const float speed =
@@ -2440,27 +2439,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                       GL_COLOR_BUFFER_BIT,
                                       GL_LINEAR);
                     if (showFPS) {
-                        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                        ImDrawList overlay(ImGui::GetDrawListSharedData());
-                        overlay._ResetForNewFrame();
-                        overlay.PushClipRect(ImVec2(0, 0), ImVec2(float(w), float(h)));
-                        overlay.PushTexture(ImGui::GetIO().Fonts->TexRef);
                         char label[64];
-                        std::snprintf(label, sizeof(label), "FPS: %.0f", ImGui::GetIO().Framerate);
-                        const auto text = ImGui::CalcTextSize(label);
-                        overlay.AddRectFilled(
-                            ImVec2(4, 4), ImVec2(text.x + 16, text.y + 16), IM_COL32(0, 0, 0, 180));
-                        overlay.AddText(ImVec2(8, 8), IM_COL32_WHITE, label);
-                        overlay.PopTexture();
-                        overlay.PopClipRect();
-                        ImDrawData data;
-                        data.Valid = true;
-                        data.DisplayPos = ImVec2(0, 0);
-                        data.DisplaySize = ImVec2(float(w), float(h));
-                        data.FramebufferScale = ImVec2(1, 1);
-                        data.Textures = ImGui::GetDrawData()->Textures;
-                        data.AddDrawList(&overlay);
-                        ImGui_ImplOpenGL3_RenderDrawData(&data);
+                        std::snprintf(label, sizeof(label), "FPS: %.0f", ui::io().Framerate);
+                        ui::renderStandaloneFpsOverlay(w, h, label);
                     }
                     // Present only once with VSync per frame. Waiting for both
                     // windows can halve the frame rate on multi-window drivers.
@@ -2482,7 +2463,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             glDisable(GL_SCISSOR_TEST);
             glClearColor(.07f, .08f, .10f, 1);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            ui::render();
             profiler.checkpoint(ProfilePart::UI);
         }
 
@@ -2560,7 +2541,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (input.lockedWindow == gameWindow && gameWindow) {
                 SDL_GetWindowSize(gameWindow, &rect.w, &rect.h);
             } else {
-                const auto origin = ImGui::GetMainViewport()->Pos;
+                const auto origin = ui::mainViewport()->Pos;
                 rect = cameraLooking ? SDL_Rect{int(sceneRect.x - origin.x),
                                                 int(sceneRect.y - origin.y),
                                                 int(sceneRect.width),
@@ -2676,34 +2657,20 @@ int engineMain(int argc, char** argv) {
     const bool rendererReady = renderer.init();
     bool runSucceeded = false;
     if (rendererReady) {
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-        ImGui::GetIO().ConfigDebugHighlightIdConflicts = false;
-        GImGui->ErrorCallback = +[](ImGuiContext*, void*, const char* message) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "ImGui: %s", message);
-        };
-        ImGui::GetIO().ConfigErrorRecoveryEnableTooltip = false;
-        ImGui::GetIO().ConfigErrorRecoveryEnableAssert = false;
-        ImGui::GetIO().ConfigErrorRecoveryEnableDebugLog = true;
-        dockedEditor = true;
-        ImGui::GetIO().IniFilename = "legacy-layout.ini";
-        applyEditorTheme();
-        if (!ImGui_ImplSDL3_InitForOpenGL(window, context) ||
-            !ImGui_ImplOpenGL3_Init("#version 330 core")) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not initialise Dear ImGui");
-            ImGui::DestroyContext();
+        if (!ui::createContext(true) || !ui::initGl(window)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not initialise the MyGUI editor layer");
+            ui::destroyContext();
             renderer.shutdown();
             SDL_GL_DestroyContext(context);
             SDL_DestroyWindow(window);
             SDL_Quit();
             return 1;
         }
-        SDL_Log("Editor started");
+        dockedEditor = true;
+        applyEditorTheme();
+        SDL_Log("Editor started with MyGUI");
         runSucceeded = run(window, renderer, smokeTest);
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplSDL3_Shutdown();
-        ImGui::DestroyContext();
+        ui::destroyContext();
         renderer.shutdown();
     }
 

@@ -4,43 +4,34 @@
 #include <limits>
 
 namespace {
-// Vector-drawn icons: no font-dependent Unicode symbols or external icon files.
 void toolButton(const char* id, const char* tooltip, TransformTool value, TransformTool& current) {
-    const ImVec2 p = ImGui::GetCursorScreenPos();
-    if (ImGui::Button(id, ImVec2(26, 24))) {
-        current = value;
-    }
-    auto* draw = ImGui::GetWindowDrawList();
-    const ImU32 color = IM_COL32(235, 240, 245, 255);
-    auto point = [&](float x, float y) { return ImVec2(p.x + x * .6f + 1, p.y + y * .55f + 1); };
-    auto line = [&](float x, float y, float a, float b) {
-        draw->AddLine(point(x, y), point(a, b), color, 2);
-    };
+    const ui::Vec2 p = ui::cursorScreenPos();
+    if (ui::button(id, {26, 24})) current = value;
+    auto* draw = ui::windowDrawList();
+    const uint32_t color = UI_COL32(235, 240, 245, 255);
+    auto point = [&](float x, float y) { return ui::Vec2(p.x + x * .6f + 1, p.y + y * .55f + 1); };
+    auto line = [&](float x, float y, float a, float b) { draw->addLine(point(x, y), point(a, b), color, 2); };
     if (value == TransformTool::Move) {
-        line(9, 20, 31, 20);
-        line(20, 9, 20, 31);
-        line(9, 20, 13, 16);
-        line(9, 20, 13, 24);
-        line(31, 20, 27, 16);
-        line(31, 20, 27, 24);
-        line(20, 9, 16, 13);
-        line(20, 9, 24, 13);
-        line(20, 31, 16, 27);
-        line(20, 31, 24, 27);
+        line(9, 20, 31, 20); line(20, 9, 20, 31);
+        line(9, 20, 13, 16); line(9, 20, 13, 24); line(31, 20, 27, 16);
+        line(31, 20, 27, 24); line(20, 9, 16, 13); line(20, 9, 24, 13);
+        line(20, 31, 16, 27); line(20, 31, 24, 27);
     } else if (value == TransformTool::Rotate) {
-        draw->PathArcTo(point(20, 20), 6, -kPi * 0.8f, kPi * 0.65f, 24);
-        draw->PathStroke(color, 0, 2);
-        line(13, 29, 19, 29);
-        line(13, 29, 13, 23);
+        draw->pathArcTo(point(20, 20), 6, -kPi * .8f, kPi * .65f, 24);
+        draw->pathStroke(color, false, 2);
+        line(13, 29, 19, 29); line(13, 29, 13, 23);
     } else {
-        draw->AddRect(point(10, 22), point(18, 30), color, 0, 0, 2);
-        line(19, 21, 30, 10);
-        line(30, 10, 22, 10);
-        line(30, 10, 30, 18);
+        draw->addRect(point(10, 22), point(18, 30), color, 0, 2);
+        line(19, 21, 30, 10); line(30, 10, 22, 10); line(30, 10, 30, 18);
     }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("%s", tooltip);
-    }
+    if (ui::isItemHovered()) ui::setTooltip("%s", tooltip);
+}
+
+float component(const Vec3& value, int axis) {
+    return axis == 0 ? value.x : axis == 1 ? value.y : value.z;
+}
+float& component(Vec3& value, int axis) {
+    return axis == 0 ? value.x : axis == 1 ? value.y : value.z;
 }
 } // namespace
 
@@ -50,67 +41,54 @@ void TransformEditor::draw(World& world,
                            const OrbitCamera& camera,
                            float aspect,
                            const EditorRect* scene,
-                           ImDrawList* drawList,
+                           ui::DrawList* drawList,
                            const AssetManager* assets) {
     if (!enabled || !world.alive(entity) || !world.has<Transform>(entity)) {
         finish(world);
         return;
     }
-    if ((heldBody_ || face_ >= 0) && heldEntity_ != entity) {
-        finish(world);
-    }
-    if (scene && drawColliderFaces(world,
-                                   entity,
-                                   camera,
-                                   aspect,
-                                   *scene,
-                                   drawList ? drawList : ImGui::GetBackgroundDrawList())) {
-        ImGuizmo::Enable(false);
+    if ((heldBody_ || face_ >= 0) && heldEntity_ != entity) finish(world);
+    auto* draw = drawList ? drawList : ui::backgroundDrawList();
+    if (scene && drawColliderFaces(world, entity, camera, aspect, *scene, draw)) {
+        ui::cancelGizmo();
         return;
     }
+
     Transform& transform = world.get<Transform>(entity);
     if (!dragging_) {
         pivotLocal_ = {};
         if (centerPivot_) {
             const auto center = selectionCenter(world, entity, assets);
-            auto local = rotateVector(Quat{-transform.rotation.x,
-                                           -transform.rotation.y,
-                                           -transform.rotation.z,
-                                           transform.rotation.w},
-                                      center - transform.position);
+            const Quat inverse{-transform.rotation.x, -transform.rotation.y, -transform.rotation.z,
+                               transform.rotation.w};
+            const auto local = rotateVector(inverse, center - transform.position);
             pivotLocal_ = {std::abs(transform.scale.x) > 1e-8f ? local.x / transform.scale.x : 0,
                            std::abs(transform.scale.y) > 1e-8f ? local.y / transform.scale.y : 0,
                            std::abs(transform.scale.z) > 1e-8f ? local.z / transform.scale.z : 0};
         }
     }
-    const auto pivot =
-        transform.position + rotateVector(transform.rotation, pivotLocal_ * transform.scale);
-    Mat4 model = transformMatrix(pivot, transform.rotation, transform.scale);
-    const Mat4 view = lookAt(camera.position(), camera.target, {0, 1, 0});
-    const Mat4 projection = perspective(camera.fieldOfView, aspect, 0.1f, 200);
-    const ImGuizmo::OPERATION operations[]{ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE};
-    ImGuizmo::Enable(true);
-    ImGuizmo::SetOrthographic(false);
-    ImGuizmo::SetDrawlist(drawList ? drawList : ImGui::GetBackgroundDrawList());
-    const auto* viewport = ImGui::GetMainViewport();
-    ImGuizmo::SetRect(scene ? scene->x : viewport->Pos.x,
-                      scene ? scene->y : viewport->Pos.y,
-                      scene ? scene->width : viewport->Size.x,
-                      scene ? scene->height : viewport->Size.y);
+    const Vec3 pivot = transform.position + rotateVector(transform.rotation, pivotLocal_ * transform.scale);
+    const auto* viewport = ui::mainViewport();
+    const ui::Rect rect = scene
+        ? ui::Rect{scene->x, scene->y, scene->width, scene->height}
+        : ui::Rect{viewport->Pos.x, viewport->Pos.y, viewport->Size.x, viewport->Size.y};
+    const auto operation = tool_ == TransformTool::Move ? ui::GizmoOperation::Translate
+                           : tool_ == TransformTool::Rotate ? ui::GizmoOperation::Rotate
+                                                            : ui::GizmoOperation::Scale;
     const bool wasDragging = dragging_;
-    const float snapValues[3]{snap_, snap_, snap_};
-    const bool changed = ImGuizmo::Manipulate(view.m,
-                                              projection.m,
-                                              operations[static_cast<int>(tool_)],
-                                              localSpace_ ? ImGuizmo::LOCAL : ImGuizmo::WORLD,
-                                              model.m,
-                                              nullptr,
-                                              ImGui::GetIO().KeyCtrl ? snapValues : nullptr);
-    hovered_ = ImGuizmo::IsOver(operations[static_cast<int>(tool_)]);
-    dragging_ = ImGuizmo::IsUsing();
-    if (dragging_ && !wasDragging) {
-        scaleAtStart_ = transform.scale;
-    }
+    const auto result = ui::manipulateGizmo(draw,
+                                            rect,
+                                            camera.viewProjection(aspect),
+                                            pivot,
+                                            transform.rotation,
+                                            transform.scale,
+                                            operation,
+                                            localSpace_,
+                                            ui::io().KeyCtrl,
+                                            snap_);
+    hovered_ = result.hovered;
+    dragging_ = result.usingHandle;
+    if (dragging_ && !wasDragging) scaleAtStart_ = transform.scale;
     if (dragging_ && !heldBody_ && world.has<RigidBody>(entity)) {
         savedBody_ = world.get<RigidBody>(entity);
         savedBody_.linearVelocity = savedBody_.angularVelocity = {};
@@ -118,24 +96,24 @@ void TransformEditor::draw(World& world,
         heldBody_ = true;
         world.remove<RigidBody>(entity);
     }
-    if (changed) {
+    if (result.changed) {
         const auto* collider = world.tryGet<Collider>(entity);
         const bool round = collider && (collider->shape == ColliderShape::Sphere ||
                                         collider->shape == ColliderShape::Capsule ||
                                         collider->shape == ColliderShape::Cone);
         Transform candidate = transform;
         candidate.position = pivot;
-        if (round && tool_ == TransformTool::Scale) {
-            candidate.scale = scaleAtStart_;
-        }
-        if (applyGizmoMatrix(candidate, model, tool_, round && tool_ == TransformTool::Scale)) {
+        if (round && tool_ == TransformTool::Scale) candidate.scale = scaleAtStart_;
+        if (applyGizmoMatrix(candidate,
+                             result.matrix,
+                             tool_,
+                             round && tool_ == TransformTool::Scale)) {
             candidate.position = candidate.position -
                                  rotateVector(candidate.rotation, pivotLocal_ * candidate.scale);
             transform = candidate;
         }
     }
     if (!dragging_ && heldBody_) {
-        // Keep this frame's hover state when restoring the physics body.
         const bool hovered = hovered_;
         finish(world);
         hovered_ = hovered;
@@ -143,100 +121,70 @@ void TransformEditor::draw(World& world,
 }
 
 void TransformEditor::drawToolbar() {
-    const bool compact = ImGui::GetContentRegionAvail().x < 620;
+    const bool compact = ui::contentRegionAvail().x < 620;
     const char* ids[]{"##move", "##rotate", "##scale"};
-    const char* tips[]{
-        "Move: drag an axis arrow", "Rotate: drag an axis ring", "Scale: drag an axis handle"};
+    const char* tips[]{"Move: drag an axis arrow", "Rotate: drag an axis ring", "Scale: drag an axis handle"};
     for (int i = 0; i < 3; ++i) {
-        if (i) {
-            ImGui::SameLine();
-        }
+        if (i) ui::sameLine();
         const auto tool = static_cast<TransformTool>(i);
         const bool active = tool_ == tool;
-        if (active) {
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.42f, 0.64f, 1));
-        }
+        if (active) ui::pushStyleColor(ui::Col_Button, {.20f, .42f, .64f, 1});
         toolButton(ids[i], tips[i], tool, tool_);
-        if (active) {
-            ImGui::PopStyleColor();
-        }
+        if (active) ui::popStyleColor();
     }
-    ImGui::SameLine();
-    ImGui::BeginDisabled(dragging_);
-    if (ImGui::RadioButton("World", !localSpace_)) {
-        localSpace_ = false;
-    }
-    ImGui::SameLine();
-    if (ImGui::RadioButton("Local", localSpace_)) {
-        localSpace_ = true;
-    }
-    if (compact) {
-        ImGui::NewLine();
-    } else {
-        ImGui::SameLine();
-    }
-    ImGui::SetNextItemWidth(85);
+    ui::sameLine();
+    ui::beginDisabled(dragging_);
+    if (ui::radioButton("World", !localSpace_)) localSpace_ = false;
+    ui::sameLine();
+    if (ui::radioButton("Local", localSpace_)) localSpace_ = true;
+    if (compact) ui::newLine(); else ui::sameLine();
+    ui::setNextItemWidth(85);
     int pivot = centerPivot_ ? 1 : 0;
-    if (ImGui::Combo("##Pivot", &pivot, "Origin\0Center\0")) {
-        centerPivot_ = pivot == 1;
+    if (ui::combo("##Pivot", &pivot, "Origin\0Center\0")) centerPivot_ = pivot == 1;
+    if (ui::isItemHovered()) {
+        ui::setTooltip("Origin: object position. Center: combined mesh bounds of this object and its children.");
     }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Origin: object position. Center: combined mesh bounds of this object and its children.");
-    }
-    ImGui::SameLine();
-    const float width = ImGui::GetContentRegionAvail().x;
-    if (width > 180) {
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - 180);
-    }
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Snap");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(130);
-    if (ImGui::InputFloat("##Snap", &snap_, .25f, .25f, "%.2f")) {
+    ui::sameLine();
+    const float width = ui::contentRegionAvail().x;
+    if (width > 180) ui::setCursorPosX(ui::cursorPosX() + width - 180);
+    ui::alignTextToFramePadding();
+    ui::textUnformatted("Snap");
+    ui::sameLine();
+    ui::setNextItemWidth(130);
+    if (ui::inputFloat("##Snap", &snap_, .25f, .25f, "%.2f")) {
         snap_ = std::isfinite(snap_) ? std::clamp(std::round(snap_ * 4) / 4, .25f, 10000.f) : .5f;
     }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip(
-            "Hold Ctrl while dragging: move in world units, rotate in degrees, scale in increments. Step 0.25; minimum 0.25.");
+    if (ui::isItemHovered()) {
+        ui::setTooltip("Hold Ctrl while dragging: move in world units, rotate in degrees, and scale in increments.");
     }
-    ImGui::EndDisabled();
+    ui::endDisabled();
 }
 
-// Face gestures edit the collider, never the object's Transform. Ray/axis closest
-// points give perspective-correct motion, including rotated and mirrored objects.
 bool TransformEditor::drawColliderFaces(World& world,
                                         Entity entity,
                                         const OrbitCamera& camera,
                                         float aspect,
                                         const EditorRect& scene,
-                                        ImDrawList* draw) {
+                                        ui::DrawList* draw) {
     auto* collider = world.tryGet<Collider>(entity);
-    if (!collider || collider->shape != ColliderShape::Box || scene.width <= 0 ||
-        scene.height <= 0) {
-        if (face_ >= 0) {
-            finish(world);
-        }
+    if (!collider || collider->shape != ColliderShape::Box || scene.width <= 0 || scene.height <= 0) {
+        if (face_ >= 0) finish(world);
         return false;
     }
-    auto component = [](Vec3& v, int axis) -> float& {
-        return axis == 0 ? v.x : axis == 1 ? v.y : v.z;
-    };
     const auto pose = world.get<Transform>(entity);
-    const auto mouse = ImGui::GetIO().MousePos;
+    const auto mouse = ui::io().MousePos;
     auto parameter = [&](Vec3 origin, Vec3 axis, float& value) {
-        const auto ray = camera.rayThrough(
-            (mouse.x - scene.x) / scene.width, (mouse.y - scene.y) / scene.height, aspect);
+        const auto ray = camera.rayThrough((mouse.x - scene.x) / scene.width,
+                                           (mouse.y - scene.y) / scene.height,
+                                           aspect);
         const auto delta = origin - ray.origin;
         const float c = dot(axis, ray.direction), denominator = 1 - c * c;
-        if (denominator < .0001f) {
-            return false;
-        }
+        if (denominator < .0001f) return false;
         value = (c * dot(ray.direction, delta) - dot(axis, delta)) / denominator;
         return std::isfinite(value);
     };
     if (face_ >= 0) {
-        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        if (!ui::isMouseDown(ui::MouseButton_Left)) {
             finish(world);
             return true;
         }
@@ -249,63 +197,52 @@ bool TransformEditor::drawColliderFaces(World& world,
             const float size = std::max(.001f, component(faceStart_.size, axis) + sign * delta);
             *collider = faceStart_;
             component(collider->size, axis) = size;
-            component(collider->center, axis) +=
-                sign * (size - component(faceStart_.size, axis)) * .5f;
+            component(collider->center, axis) += sign * (size - component(faceStart_.size, axis)) * .5f;
         }
     }
     const auto vp = camera.viewProjection(aspect);
-    ImVec2 points[6];
+    ui::Vec2 points[6];
     bool visible[6]{};
     Vec3 worldPoints[6];
     int hovered = -1;
     float nearest = 64, depth = std::numeric_limits<float>::max();
-    draw->PushClipRect(
-        ImVec2(scene.x, scene.y), ImVec2(scene.x + scene.width, scene.y + scene.height), true);
+    draw->pushClipRect({scene.x, scene.y}, {scene.x + scene.width, scene.y + scene.height}, true);
     for (int face = 0; face < 6; ++face) {
         const int axis = face / 2;
         auto local = collider->center;
-        component(local, axis) +=
-            (face % 2 ? 1.f : -1.f) * std::abs(component(collider->size, axis)) * .5f;
+        component(local, axis) += (face % 2 ? 1.f : -1.f) * std::abs(component(collider->size, axis)) * .5f;
         const auto p = pose.position + rotateVector(pose.rotation, local * pose.scale);
         worldPoints[face] = p;
         const auto& m = vp.m;
         const float w = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
-        if (w <= .001f) {
-            continue;
-        }
-        const float x = (m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12]) / w,
-                    y = (m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13]) / w;
+        if (w <= .001f) continue;
+        const float x = (m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12]) / w;
+        const float y = (m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13]) / w;
         const float z = (m[2] * p.x + m[6] * p.y + m[10] * p.z + m[14]) / w;
-        if (z < -1 || z > 1) {
-            continue;
-        }
-        points[face] =
-            ImVec2(scene.x + (x + 1) * .5f * scene.width, scene.y + (1 - y) * .5f * scene.height);
+        if (z < -1 || z > 1) continue;
+        points[face] = {scene.x + (x + 1) * .5f * scene.width, scene.y + (1 - y) * .5f * scene.height};
         visible[face] = true;
-        const float dx = mouse.x - points[face].x, dy = mouse.y - points[face].y,
-                    d = dx * dx + dy * dy;
+        const float dx = mouse.x - points[face].x, dy = mouse.y - points[face].y;
+        const float d = dx * dx + dy * dy;
         if (d <= nearest && (d < nearest - .01f || w < depth) && scene.contains(mouse.x, mouse.y) &&
-            ImGui::IsWindowHovered()) {
+            ui::isWindowHovered()) {
             nearest = d;
             depth = w;
             hovered = face;
         }
     }
     for (int face = 0; face < 6; ++face) {
-        if (visible[face]) {
-            const bool active = face == face_ || (face_ < 0 && face == hovered);
-            draw->AddCircleFilled(points[face],
-                                  active ? 6.f : 4.f,
-                                  active ? IM_COL32(255, 210, 70, 255)
-                                         : IM_COL32(80, 245, 130, 255));
-            draw->AddCircle(points[face], active ? 6.f : 4.f, IM_COL32(10, 30, 15, 255), 0, 1.5f);
-        }
+        if (!visible[face]) continue;
+        const bool active = face == face_ || (face_ < 0 && face == hovered);
+        draw->addCircleFilled(points[face], active ? 6.f : 4.f,
+                              active ? UI_COL32(255, 210, 70, 255) : UI_COL32(80, 245, 130, 255));
+        draw->addCircle(points[face], active ? 6.f : 4.f, UI_COL32(10, 30, 15, 255), 0, 1.5f);
     }
-    draw->PopClipRect();
+    draw->popClipRect();
     if (face_ < 0 && !dragging_ && hovered >= 0) {
         hovered_ = true;
-        ImGui::SetTooltip("Drag to resize this collider face (opposite face stays fixed)");
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        ui::setTooltip("Drag to resize this collider face (opposite face stays fixed)");
+        if (ui::isMouseClicked(ui::MouseButton_Left)) {
             faceTransform_ = pose;
             const int axis = hovered / 2;
             if (std::abs(component(faceTransform_.scale, axis)) >= 1e-8f) {
