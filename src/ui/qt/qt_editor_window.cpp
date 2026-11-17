@@ -152,6 +152,10 @@ EditorWindow::EditorWindow(SDL_Window* sdlWindow, QWidget* parent)
     buildStatusBar();
     buildToolbar();
     applyTheme(0);
+    // A first-run window with no saved layout would otherwise take its size
+    // from the docks' size hints, which can be smaller than the 3D views need
+    // to show anything. Start at a size that makes the Scene view useful.
+    resize(1280, 800);
     restoreLayout();
 }
 
