@@ -120,6 +120,24 @@ target_link_libraries(legacy_models PUBLIC assimp::assimp legacy_json)
 add_library(glad STATIC third_party/glad/src/gl.c)
 target_include_directories(glad SYSTEM PUBLIC third_party/glad/include)
 
+# --- The engine core the editor draws on ------------------------------------
+#
+# The renderer, the mesh builders, physics and the transform and script editors
+# were a list inside the LegacyEngine executable, but the Qt panels call into
+# them too: building the widget tree asks for mesh data and renderer bounds.
+# Putting them in a library lets the editor and the shell test link the same
+# objects instead of duplicating them.
+
+add_library(legacy_engine_core STATIC
+  src/rendering/mesh.cpp
+  src/physics/physics.cpp
+  src/rendering/renderer.cpp
+  src/editor/transform_editor.cpp
+  src/editor/script_editor.cpp)
+target_include_directories(legacy_engine_core PUBLIC src)
+target_link_libraries(legacy_engine_core PUBLIC SDL3::SDL3 Jolt glad
+  lua_console legacy_material_textures legacy_models)
+
 # --- Qt 6 Widgets (native editor UI) ----------------------------------------
 #
 # The editor's widget layer is Qt 6. Widgets come from the system SDK on Linux
@@ -150,8 +168,8 @@ target_include_directories(legacy_editor PUBLIC src "${CMAKE_CURRENT_BINARY_DIR}
   PRIVATE third_party/stb)
 target_compile_definitions(legacy_editor PUBLIC QT_NO_KEYWORDS)
 target_link_libraries(legacy_editor PUBLIC SDL3::SDL3 glad Qt6::Widgets
-  legacy_thumbnails legacy_json legacy_levels legacy_material_textures legacy_models
-  ${CMAKE_DL_LIBS})
+  legacy_engine_core legacy_thumbnails legacy_json legacy_levels
+  legacy_material_textures legacy_models ${CMAKE_DL_LIBS})
 
 # --- Lua (embedded, no external interpreter installation needed) -------------
 FetchContent_Declare(lua
@@ -203,20 +221,6 @@ target_include_directories(legacy_material_textures PUBLIC src PRIVATE third_par
 target_link_libraries(legacy_material_textures PUBLIC legacy_thumbnails)
 
 # --- LegacyEngine -----------------------------------------------------------
-
-# Everything the editor builds on apart from main(): the renderer, the mesh
-# builders, physics and the transform/script editors. The Qt panels call into
-# all of it, so it is a library rather than a list inside the executable; the
-# shell test links the same objects.
-add_library(legacy_engine_core STATIC
-  src/rendering/mesh.cpp
-  src/physics/physics.cpp
-  src/rendering/renderer.cpp
-  src/editor/transform_editor.cpp
-  src/editor/script_editor.cpp)
-target_include_directories(legacy_engine_core PUBLIC src)
-target_link_libraries(legacy_engine_core PUBLIC legacy_editor lua_console
-  legacy_material_textures legacy_models SDL3::SDL3 Jolt glad)
 
 add_executable(LegacyEngine src/app/main.cpp)
 # The Qt shell takes its fonts and icons from the platform theme, so the
@@ -287,7 +291,7 @@ if(BUILD_TESTING)
   # Builds the whole Qt widget tree offscreen: catches a dock that never gets
   # its widget, a panel pointer left null, or a signal that was never connected.
   add_executable(qt_editor_shell_tests tests/qt_editor_shell.cpp)
-  target_link_libraries(qt_editor_shell_tests PRIVATE legacy_engine_core)
+  target_link_libraries(qt_editor_shell_tests PRIVATE legacy_editor legacy_engine_core)
   add_test(NAME qt_editor_shell COMMAND qt_editor_shell_tests)
   set_tests_properties(qt_editor_shell PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120)
