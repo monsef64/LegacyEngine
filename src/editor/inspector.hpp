@@ -244,7 +244,12 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4);
     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(.16f, .23f, .31f, 1));
-    const bool open = ImGui::CollapsingHeader(name, ImGuiTreeNodeFlags_DefaultOpen);
+    const char* display = !std::strcmp(name, "CloudSystem")     ? "Clouds"
+                          : !std::strcmp(name, "CameraEffects") ? "Camera Effects"
+                          : !std::strcmp(name, "FPSCamera")     ? "FPS"
+                                                                : name;
+    const std::string title = std::string(display) + "###" + name;
+    const bool open = ImGui::CollapsingHeader(title.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
     const auto header = ImGui::GetItemRectMin(), end = ImGui::GetItemRectMax();
     ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(header.x, header.y + 3),
                                               ImVec2(header.x + 3, end.y - 3),
@@ -1195,8 +1200,8 @@ inline void drawInspector(World& world,
                         EditorValues::DragFloat("Width", &r->width, .1f, .05f, 1000);
                         EditorValues::SliderFloat("Opacity", &r->opacity, 0, 1);
                         EditorValues::DragFloat("Flow speed", &r->speed, .1f, -100, 100);
-                        EditorValues::DragFloat("Wave scale", &r->waveScale, .05f, .01f, 100);
-                        EditorValues::SliderFloat("Wave strength", &r->waveStrength, 0, 1);
+                        EditorValues::DragFloat("Ripple scale", &r->waveScale, .05f, .01f, 100);
+                        EditorValues::SliderFloat("Surface detail", &r->waveStrength, 0, 1);
                         EditorValues::SliderFloat("Edge foam", &r->foam, 0, 1);
                         EditorValues::SliderInt("Curve subdivisions", &r->subdivisions, 2, 32);
                         if (r->points.size() < 64 && ImGui::Button("Add curve point")) {
@@ -1217,7 +1222,7 @@ inline void drawInspector(World& world,
                             ImGui::PopID();
                         }
                         ImGui::TextWrapped(
-                            "Scene: drag point circles on a horizontal plane; edit height here. Points are local to Transform. No automatic terrain carving, collision or physical fluid simulation.");
+                            "Scene: enable curve editing there or here. Drag points on XZ; Ctrl-drag changes height. Shift-click places a point. Points are local to Transform. No automatic terrain carving, collision or physical fluid simulation.");
                         if (Environment::valid(edited)) {
                             *component = edited;
                         }
@@ -1722,27 +1727,36 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
-                if (!world.has<CloudSystem>(selected) && ImGui::MenuItem("CloudSystem")) {
-                    if (!world.has<Transform>(selected)) {
-                        world.add(selected, Transform{{0, 20, 0}});
+                if (ImGui::BeginMenu("Environment")) {
+                    if (!world.has<CloudSystem>(selected) && ImGui::MenuItem("Clouds")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{{0, 20, 0}});
+                        }
+                        world.add(selected, CloudSystem{});
                     }
-                    world.add(selected, CloudSystem{});
-                }
-                if (!world.has<River>(selected) && ImGui::MenuItem("River")) {
-                    if (!world.has<Transform>(selected)) {
-                        world.add(selected, Transform{});
+                    if (!world.has<Fog>(selected) && ImGui::MenuItem("Fog")) {
+                        world.add(selected, Fog{});
                     }
-                    world.add(selected, River{});
+                    if (!world.has<River>(selected) && ImGui::MenuItem("River")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
+                        world.add(selected, River{});
+                    }
+                    if (!world.has<Terrain>(selected) && ImGui::MenuItem("Terrain")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
+                        world.add(selected, Terrain{});
+                        Terrains::openTools = true;
+                    }
+                    if (!world.has<Skybox>(selected) && ImGui::MenuItem("Skybox")) {
+                        world.add(selected, Skybox{});
+                    }
+                    ImGui::EndMenu();
                 }
-                if (!world.has<Fog>(selected) && ImGui::MenuItem("Fog")) {
-                    world.add(selected, Fog{});
-                }
-                if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("CameraEffects")) {
+                if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("Camera Effects")) {
                     world.add(selected, CameraEffects{});
-                }
-                if (!world.has<Terrain>(selected) && ImGui::MenuItem("Terrain")) {
-                    world.add(selected, Terrain{});
-                    Terrains::openTools = true;
                 }
                 if (!world.has<LightShafts>(selected) && ImGui::MenuItem("LightShafts")) {
                     if (!world.has<Transform>(selected)) {
@@ -1784,20 +1798,39 @@ inline void drawInspector(World& world,
                     }
                     ImGui::EndMenu();
                 }
-                if (!world.has<FPSCamera>(selected) && ImGui::MenuItem("FPSCamera")) {
-                    addFPSCamera(world, selected);
+                if (ImGui::BeginMenu("Cameras")) {
+                    if (!world.has<Camera>(selected) && ImGui::MenuItem("Camera")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
+                        world.add(selected, Camera{});
+                    }
+                    if (!world.has<FPSCamera>(selected) && ImGui::MenuItem("FPS")) {
+                        addFPSCamera(world, selected);
+                    }
+                    ImGui::EndMenu();
                 }
-                if (world.has<Transform>(selected)) {
+                if (ImGui::BeginMenu("Lights")) {
                     if (!world.has<DirectionalLight>(selected) &&
                         ImGui::MenuItem("DirectionalLight")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
                         world.add(selected, DirectionalLight{});
                     }
                     if (!world.has<PointLight>(selected) && ImGui::MenuItem("PointLight")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
                         world.add(selected, PointLight{});
                     }
                     if (!world.has<SpotLight>(selected) && ImGui::MenuItem("SpotLight")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
                         world.add(selected, SpotLight{});
                     }
+                    ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("Audio")) {
                     if (!world.has<AudioSource>(selected) && ImGui::MenuItem("Audio Source")) {
@@ -1810,9 +1843,6 @@ inline void drawInspector(World& world,
                         world.add(selected, AudioListener{});
                     }
                     ImGui::EndMenu();
-                }
-                if (!world.has<Skybox>(selected) && ImGui::MenuItem("Skybox")) {
-                    world.add(selected, Skybox{});
                 }
                 if (!world.has<Transform>(selected) && ImGui::MenuItem("Transform")) {
                     world.add(selected, Transform{});
@@ -1833,10 +1863,6 @@ inline void drawInspector(World& world,
                         }
                     }
                     ImGui::EndMenu();
-                }
-                if (!world.has<Camera>(selected) && world.has<Transform>(selected) &&
-                    ImGui::MenuItem("Camera")) {
-                    world.add(selected, Camera{});
                 }
                 if (ImGui::MenuItem("LegacyScript")) {
                     if (auto* scripts = world.tryGet<LuaScript>(selected)) {

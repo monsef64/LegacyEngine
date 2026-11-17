@@ -277,7 +277,7 @@ class FoliageRenderer {
                         if (proto.asset.empty()) {
                             continue;
                         }
-                        std::string key = trees ? proto.asset : "@grass";
+                        std::string key = trees ? proto.asset : (proto.billboard ? "@billboard" : "@grass");
                         if (failures_.count(key)) {
                             continue;
                         }
@@ -293,18 +293,20 @@ class FoliageRenderer {
                                     load(assets, proto.asset, "", parts, 0, vertices);
                                 } else {
                                     MeshData mesh;
-                                    for (int plane = 0; plane < 2; ++plane) {
+                                    for (int plane = 0; plane < (proto.billboard ? 1 : 2); ++plane) {
                                         Vec3 a = plane ? Vec3{0, 0, -.5f} : Vec3{-.5f, 0, 0},
                                              b = plane ? Vec3{0, 0, .5f} : Vec3{.5f, 0, 0},
                                              c = b + Vec3{0, 1, 0}, dd = a + Vec3{0, 1, 0},
                                              n = plane ? Vec3{1, 0, 0} : Vec3{0, 0, 1};
+                                        // MaterialTextureCache flips image rows for GL: base v=0,
+                                        // tips v=1.
                                         mesh.vertices.insert(mesh.vertices.end(),
-                                                             {{a, n, 0, 1},
-                                                              {b, n, 1, 1},
-                                                              {c, n, 1, 0},
-                                                              {a, n, 0, 1},
-                                                              {c, n, 1, 0},
-                                                              {dd, n, 0, 0}});
+                                                             {{a, n, 0, 0},
+                                                              {b, n, 1, 0},
+                                                              {c, n, 1, 1},
+                                                              {a, n, 0, 0},
+                                                              {c, n, 1, 1},
+                                                              {dd, n, 0, 1}});
                                     }
                                     parts.push_back(upload(mesh, MaterialProperties{}));
                                 }
@@ -347,7 +349,8 @@ class FoliageRenderer {
                                      visible.data(),
                                      GL_STREAM_DRAW);
                         glUniform2f(dimensions_, proto.width, proto.height);
-                        glUniform1i(grass_, trees ? 0 : 1);
+                        glUniform1i(grass_, trees ? 0 : (proto.billboard ? 2 : 1));
+                        glUniform3f(glGetUniformLocation(program_, "eye"), eye.x, eye.y, eye.z);
                         for (const auto& part : found->second) {
                             auto path = trees ? part.material.texture : proto.asset;
                             GLuint texture = path.empty() ? 0 : textures_.get(assets, path, error);

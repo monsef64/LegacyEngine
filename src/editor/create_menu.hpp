@@ -5,8 +5,9 @@
 #include <imgui.h>
 
 // IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox; 12
-// character; 13 FPS camera; 14 raycast; 15 particles; 16 laser.
-inline constexpr int editorObjectTypeCount = 19;
+// character; 13 FPS camera; 14 raycast; 15 particles; 16 laser; 17 shafts; 18 terrain;
+// 19 clouds; 20 fog; 21 river.
+inline constexpr int editorObjectTypeCount = 22;
 inline bool validEditorObjectType(int item) {
     return item >= 0 && item < editorObjectTypeCount;
 }
@@ -18,11 +19,32 @@ inline int drawCreateItems() {
     if (ImGui::MenuItem("Character Controller")) {
         item = 12;
     }
-    if (ImGui::MenuItem("FPS Camera")) {
-        item = 13;
+    if (ImGui::BeginMenu("Cameras")) {
+        if (ImGui::MenuItem("Camera")) {
+            item = 5;
+        }
+        if (ImGui::MenuItem("FPS")) {
+            item = 13;
+        }
+        ImGui::EndMenu();
     }
-    if (ImGui::MenuItem("Terrain")) {
-        item = 18;
+    if (ImGui::BeginMenu("Environment")) {
+        if (ImGui::MenuItem("Clouds")) {
+            item = 19;
+        }
+        if (ImGui::MenuItem("Fog")) {
+            item = 20;
+        }
+        if (ImGui::MenuItem("River")) {
+            item = 21;
+        }
+        if (ImGui::MenuItem("Terrain")) {
+            item = 18;
+        }
+        if (ImGui::MenuItem("Skybox")) {
+            item = 11;
+        }
+        ImGui::EndMenu();
     }
     if (ImGui::MenuItem("LightShafts")) {
         item = 17;
@@ -42,23 +64,14 @@ inline int drawCreateItems() {
         }
         ImGui::EndMenu();
     }
-    if (ImGui::BeginMenu("Rendering")) {
-        if (ImGui::MenuItem("Skybox")) {
-            item = 11;
-        }
-        if (ImGui::MenuItem("Camera")) {
-            item = 5;
-        }
-        ImGui::EndMenu();
-    }
-    if (ImGui::BeginMenu("Light")) {
-        if (ImGui::MenuItem("Directional Light")) {
+    if (ImGui::BeginMenu("Lights")) {
+        if (ImGui::MenuItem("DirectionalLight")) {
             item = 7;
         }
-        if (ImGui::MenuItem("Point Light")) {
+        if (ImGui::MenuItem("PointLight")) {
             item = 8;
         }
-        if (ImGui::MenuItem("Spot Light")) {
+        if (ImGui::MenuItem("SpotLight")) {
             item = 9;
         }
         ImGui::EndMenu();
@@ -133,7 +146,10 @@ inline Entity createEditorObject(World& world,
                                "Particles",
                                "Laser",
                                "LightShafts",
-                               "Terrain"};
+                               "Terrain",
+                               "Clouds",
+                               "Fog",
+                               "River"};
     static_assert(sizeof(names) / sizeof(names[0]) == editorObjectTypeCount);
     if (!validEditorObjectType(item)) {
         return {};
@@ -150,6 +166,16 @@ inline Entity createEditorObject(World& world,
                                     item > 0 && item < 5 ? meshes[item] : MeshHandle{},
                                     item > 0 && item < 5 ? shapes[item] : ColliderShape::Box,
                                     item == 0 || item >= 5);
+    if (item == 19) {
+        world.get<Transform>(entity).position.y += 20;
+        world.add(entity, CloudSystem{});
+    }
+    if (item == 20) {
+        world.add(entity, Fog{});
+    }
+    if (item == 21) {
+        world.add(entity, River{});
+    }
     if (item == 18) {
         world.add(entity, Terrain{});
         Terrains::openTools = true;

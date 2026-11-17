@@ -19,7 +19,8 @@ inline Json foliageTypes(const std::vector<FoliagePrototype>& types) {
                      {"height", p.height},
                      {"minScale", p.minScale},
                      {"maxScale", p.maxScale},
-                     {"distance", p.distance}});
+                     {"distance", p.distance},
+                     {"billboard", p.billboard}});
     }
     return j;
 }
@@ -40,6 +41,7 @@ inline void parseFoliage(const Json& j, Data& d, bool trees) {
     }
     for (const auto& p : t) {
         FoliagePrototype f;
+        f.billboard = !trees && p.value("billboard", false);
         f.asset = p.at("asset").get<std::string>();
         auto c = p.at("color").get<std::array<float, 3>>();
         f.color = {c[0], c[1], c[2]};

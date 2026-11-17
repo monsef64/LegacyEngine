@@ -110,6 +110,13 @@ class Editor {
                                            return trees ? (ext == ".mesh" || ext == ".lemesh")
                                                         : materialTexturePath(path);
                                        });
+            if (!trees) {
+                int style = edited.billboard ? 1 : 0;
+                if (ImGui::Combo("Grass type", &style, "Crossed cards\0Billboard\0")) {
+                    edited.billboard = style == 1;
+                    changed = true;
+                }
+            }
             changed |= EditorValues::ColorEdit3("Tint", &edited.color.x);
             changed |= EditorValues::DragFloat("Width multiplier",
                                                &edited.width,

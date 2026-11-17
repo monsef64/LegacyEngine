@@ -32,7 +32,9 @@ per-prototype distance limits and per-instance frustum culling. Visible instance
 placements are uploaded for each view. Geometry is cached across placements and
 terrain objects; model reimport invalidates the geometry cache.
 
-Grass is two crossed alpha-tested cards with inexpensive wind sway. Trees use
+Grass is two crossed alpha-tested cards with inexpensive wind sway. Grass UVs
+use V=0 at the base and V=1 at the tips, matching the material loader's OpenGL
+row flip; tree-model UVs are unchanged. Trees use
 static bind-pose mesh parts, diffuse colors and albedo textures from imported
 materials. This supports multi-part models; no individual tree GameObjects are
 created. Instances follow terrain height edits automatically, and transform with
