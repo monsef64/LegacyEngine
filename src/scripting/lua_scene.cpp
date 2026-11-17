@@ -41,12 +41,17 @@ struct Vector {
     Component component;
     char field[32];
 };
-const char* types[]{"Transform",     "RigidBody",           "Collider",   "MeshRenderer",
-                    "ObjectName",    "LuaScript",           "Camera",     "AudioSource",
-                    "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
-                    "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
-                    "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
-                    "CameraEffects"};
+const char* types[]{"Transform",     "RigidBody",
+                    "Collider",      "MeshRenderer",
+                    "ObjectName",    "LuaScript",
+                    "Camera",        "AudioSource",
+                    "AudioListener", "DirectionalLight",
+                    "PointLight",    "SpotLight",
+                    "Skybox",        "CharacterController",
+                    "FPSCamera",     "Raycast",
+                    "Animation",     "ParticleSystem",
+                    "Laser",         "LightShafts",
+                    "CameraEffects", "Fog"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -55,7 +60,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 21; ++i) {
+    for (int i = 0; i < 22; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -101,6 +106,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<CharacterController>(h.entity);
     case 14:
         return h.world->has<FPSCamera>(h.entity);
+    case 21:
+        return h.world->has<Fog>(h.entity);
     case 20:
         return h.world->has<CameraEffects>(h.entity);
     case 19:
@@ -443,7 +450,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 21; ++i) {
+    for (int i = 0; i < 22; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -478,6 +485,9 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushlightuserdata(L, this);
     lua_pushcclosure(L, skyboxFadeAPI, 1);
     lua_setglobal(L, "fadeSkybox");
+    lua_pushlightuserdata(L, this);
+    lua_pushcclosure(L, fadeColorAPI, 1);
+    lua_setglobal(L, "fadeToColor");
     lua_pushcfunction(
         L, +[](lua_State* L) -> int {
             luaL_checkstring(L, 1);
@@ -654,6 +664,9 @@ int LuaScene::api(lua_State* L) {
             self.world_.each<CharacterController>(
                 [&](Entity e, CharacterController&) { collect(e); });
             break;
+        case 21:
+            self.world_.each<Fog>([&](Entity e, Fog&) { collect(e); });
+            break;
         case 20:
             self.world_.each<CameraEffects>([&](Entity e, CameraEffects&) { collect(e); });
             break;
@@ -814,6 +827,9 @@ int LuaScene::api(lua_State* L) {
         case 13:
             self.world_.remove<CharacterController>(h.entity);
             break;
+        case 21:
+            self.world_.remove<Fog>(h.entity);
+            break;
         case 20:
             self.world_.remove<CameraEffects>(h.entity);
             break;
@@ -881,6 +897,9 @@ int LuaScene::api(lua_State* L) {
             break;
         case 13:
             addCharacterController(self.world_, h.entity);
+            break;
+        case 21:
+            self.world_.add(h.entity, Fog{});
             break;
         case 20:
             self.world_.add(h.entity, CameraEffects{});
@@ -1178,6 +1197,29 @@ int LuaScene::componentIndex(lua_State* L) {
             component(L, c.object, 0);
         } else {
             lua_pushnil(L);
+        }
+        return 1;
+    }
+    if (c.type == 21) {
+        const auto& f = c.object.world->get<Fog>(c.object.entity);
+        if (!std::strcmp(key, "enabled")) {
+            lua_pushboolean(L, f.enabled);
+        } else if (!std::strcmp(key, "density")) {
+            lua_pushnumber(L, f.density);
+        } else if (!std::strcmp(key, "start")) {
+            lua_pushnumber(L, f.start);
+        } else if (!std::strcmp(key, "end")) {
+            lua_pushnumber(L, f.end);
+        } else if (!std::strcmp(key, "color")) {
+            lua_createtable(L, 0, 3);
+            for (auto pair : {std::pair<const char*, float>{"x", f.color.x},
+                              {"y", f.color.y},
+                              {"z", f.color.z}}) {
+                lua_pushnumber(L, pair.second);
+                lua_setfield(L, -2, pair.first);
+            }
+        } else {
+            return luaL_error(L, "Unknown Fog property: %s", key);
         }
         return 1;
     }
@@ -1623,6 +1665,33 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 21) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 21)) {
+            return luaL_error(L, "Fog no longer exists");
+        }
+        auto& f = c.object.world->get<Fog>(c.object.entity);
+        auto next = f;
+        const char* key = luaL_checkstring(L, 2);
+        if (!std::strcmp(key, "enabled")) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            next.enabled = lua_toboolean(L, 3);
+        } else if (!std::strcmp(key, "color")) {
+            next.color = vectorArgument(L, 3);
+        } else if (!std::strcmp(key, "density")) {
+            next.density = luaL_checknumber(L, 3);
+        } else if (!std::strcmp(key, "start")) {
+            next.start = luaL_checknumber(L, 3);
+        } else if (!std::strcmp(key, "end")) {
+            next.end = luaL_checknumber(L, 3);
+        } else {
+            return luaL_error(L, "Unknown Fog property: %s", key);
+        }
+        if (!Fogs::valid(next)) {
+            return luaL_error(L, "Invalid Fog value or start/end range");
+        }
+        f = next;
+        return 0;
+    }
     if (c.type == 20) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, 20)) {
             return luaL_error(L, "CameraEffects no longer exists");
@@ -3211,6 +3280,50 @@ int LuaScene::particleMethod(lua_State* L) {
         applyParticlePreset(p, index);
         break;
     }
+    }
+    return 0;
+}
+
+int LuaScene::fadeColorAPI(lua_State* L) {
+    auto& self = *static_cast<LuaScene*>(lua_touserdata(L, lua_upvalueindex(1)));
+    Vec3 color = vectorArgument(L, 1);
+    if (!std::isfinite(color.x) || !std::isfinite(color.y) || !std::isfinite(color.z) ||
+        color.x < 0 || color.x > 1 || color.y < 0 || color.y > 1 || color.z < 0 || color.z > 1) {
+        return luaL_error(L, "Fade color must be an RGB vector in 0..1");
+    }
+    Entity e = activeCamera(self.world_);
+    if (e == Entity{}) {
+        return luaL_error(L, "fadeToColor requires an active camera");
+    }
+    auto& fx = self.world_.has<CameraEffects>(e) ? self.world_.get<CameraEffects>(e)
+                                                 : self.world_.add(e, CameraEffects{});
+    fx.fadeR = color.x;
+    fx.fadeG = color.y;
+    fx.fadeB = color.z;
+    lua_createtable(L, 0, 2);
+    for (int i = 0; i < 2; ++i) {
+        self.pushObject(e);
+        lua_pushinteger(L, i == 0 ? 1 : 0);
+        lua_pushcclosure(L, fadeColorControl, 2);
+        lua_setfield(L, -2, i == 0 ? "start" : "stop");
+    }
+    return 1;
+}
+int LuaScene::fadeColorControl(lua_State* L) {
+    const auto h = handle(L, lua_upvalueindex(1));
+    if (!h.world->has<CameraEffects>(h.entity)) {
+        return luaL_error(L, "Fade camera effects no longer exist");
+    }
+    int argument = lua_istable(L, 1) ? 2 : 1;
+    double duration = luaL_optnumber(L, argument, 1);
+    if (!std::isfinite(duration) || duration < 0 || duration > 3600) {
+        return luaL_error(L, "Fade duration must be 0..3600 seconds");
+    }
+    auto& fx = h.world->get<CameraEffects>(h.entity);
+    fx.fadeTarget = float(lua_tointeger(L, lua_upvalueindex(2)));
+    fx.fadeSpeed = duration > 0 ? float(std::abs(fx.fadeTarget - fx.fadeAmount) / duration) : 0;
+    if (duration == 0) {
+        fx.fadeAmount = fx.fadeTarget;
     }
     return 0;
 }

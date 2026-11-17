@@ -176,5 +176,59 @@ The internal script editor shows line numbers alongside the source.
 - Check script gutter/caret alignment when scrolling horizontally/vertically,
   editing multiline text, and jumping to the end of a long file.
 
-Play-mode editing/history changes are not yet implemented. Stop retains its existing
-restore-pre-Play-scene behavior pending a decision on retaining runtime edits.
+Scene/Inspector editing is allowed in Play, including transforms, components,
+creation, duplication, deletion, parenting, model/prefab drops and terrain sculpting.
+These edits are temporary: Stop restores the pre-Play world, selection, editor
+camera and edit-mode history. Scene/project saves and autosave are blocked in Play.
+Disk-writing asset authoring (material/model import settings, scripts, animation
+assets, terrain save and lighting/profile bakes) is disabled rather than silently
+writing temporary runtime edits into shared project assets. Scripts/physics may
+overwrite a runtime value again on the next tick; pause to inspect it steadily.
+Runtime undo/redo remains unavailable; edit-mode history is preserved.
+
+
+## Fog and color fades
+
+Add **Fog** through Inspector > Add Component. It affects both Scene and Game,
+using scene depth and exponential distance attenuation. The first enabled, active
+Fog in entity order wins; a Transform is not required. Color is RGB 0..1, density
+is 0..10 inverse metres, start is nonnegative, and end must exceed start (up to
+1,000,000 metres). Distance is capped at end, including sky pixels. Density zero
+is clear. Fog shares the final postprocess pass, independent of CameraEffects'
+master switch, and is saved with the scene in Edit mode.
+
+```lua
+local fog = self:getComponent(Fog) or self:addComponent(Fog)
+fog.enabled = true
+fog.color = {x=0.5, y=0.6, z=0.7} -- returned color tables are copies
+fog.density = 0.025
+fog["end"] = 250 -- end is a Lua keyword
+fog.start = 10
+
+local fade = fadeToColor(color.black) -- requires an active Camera
+fade:start(1) -- reaches fully visible black after one playing second
+-- Call later, e.g. from a callback:
+fade:stop(0.5) -- fades back to invisible
+```
+
+Fade controllers bind to the active camera at creation; they do not follow later
+camera switches. Controllers for the same camera share its fade state. Creation
+sets its color but does not start the fade. Start/stop reverse smoothly from current
+opacity, accept 0..3600 seconds (default 1), and zero snaps immediately. Pause freezes
+progress. Fades are transient, rendered after fog/effects, and are not serialized.
+They do not prevent input or hide editor/debug overlays.
+
+### Manual checks for this update
+
+- Right-click Position/Rotation/Scale labels to copy/paste all three axes; test
+  narrow and wide Inspector layouts, scalar-axis copy and invalid clipboard data.
+- Copy/paste custom exported numbers, booleans, strings and asset paths.
+- Save/reopen Fog in Edit mode; duplicate/copy a subtree containing Fog and verify
+  all values survive. Try inactive Fog entities and multiple enabled components.
+- Change each Fog value from Lua; reject NaN, out-of-range colors and end <= start.
+- Start/stop a fade midway, pause/resume, use zero duration and switch cameras.
+  A destroyed camera/controller must produce a safe error, not a crash.
+- During Play modify/add/remove components, move/rotate/scale, parent, duplicate,
+  delete, drag in models/prefabs, and sculpt terrain. Verify Save/Save As/Save Level,
+  Ctrl+S and autosave cannot persist these edits; Stop restores the original scene
+  and edit-mode undo history. Repeat through the separate Game-window close path.

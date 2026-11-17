@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 26\n";
+    out << std::setprecision(9) << "LegacyEngineProject 27\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -109,7 +109,8 @@ inline std::string encodeLegacy(World& world,
             (world.has<InspectorOrder>(e) ? 262144 : 0) | (world.has<Raycast>(e) ? 524288 : 0) |
             (world.has<Animation>(e) ? 1048576 : 0) | (world.has<ParticleSystem>(e) ? 2097152 : 0) |
             (world.has<Laser>(e) ? 4194304 : 0) | (world.has<LightShafts>(e) ? 8388608 : 0) |
-            (world.has<Terrain>(e) ? 16777216 : 0) | (world.has<CameraEffects>(e) ? 33554432 : 0);
+            (world.has<Terrain>(e) ? 16777216 : 0) | (world.has<CameraEffects>(e) ? 33554432 : 0) |
+            (world.has<Fog>(e) ? 67108864 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -301,6 +302,10 @@ inline std::string encodeLegacy(World& world,
             require(CameraFx::valid(*c));
             out << std::quoted(CameraFx::settings(*c).dump()) << ' ';
         }
+        if (const auto* f = world.tryGet<Fog>(e)) {
+            require(Fogs::valid(*f));
+            out << std::quoted(Fogs::settings(*f).dump()) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -318,7 +323,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 26));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 27));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -387,7 +392,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 24 ? 8388607u
                          : version < 25 ? 16777215u
                          : version < 26 ? 33554431u
-                                        : 67108863u) &&
+                         : version < 27 ? 67108863u
+                                        : 134217727u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -651,7 +657,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= (version >= 26   ? 22u
+            require(types.size() <= (version >= 27   ? 23u
+                                     : version >= 26 ? 22u
                                      : version >= 25 ? 21u
                                      : version >= 24 ? 20u
                                      : version >= 23 ? 19u
@@ -659,7 +666,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::vector<int> seen;
             for (int id : types) {
                 require(id >= 0 &&
-                        id < (version >= 26   ? 22
+                        id < (version >= 27   ? 23
+                              : version >= 26 ? 22
                               : version >= 25 ? 21
                               : version >= 24 ? 20
                               : version >= 23 ? 19
@@ -723,6 +731,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> std::quoted(text);
             require(text.size() <= 16384);
             result.world.add(e, CameraFx::parse(parseJson(text)));
+        }
+        if (mask & 67108864) {
+            std::string text;
+            in >> std::quoted(text);
+            require(text.size() <= 16384);
+            result.world.add(e, Fogs::parse(parseJson(text)));
         }
         require(bool(in));
     }

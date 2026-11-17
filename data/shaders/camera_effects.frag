@@ -1,6 +1,7 @@
 #version 330 core
 in vec2 vUV;out vec4 fragColor;
 uniform sampler2D sourceImage,depthImage,bloomImage;
+uniform vec3 fogColor,fadeColor;uniform float fogDensity,fogStart,fogEnd,fadeAmount;
 uniform int pass,flags;uniform vec2 texel,direction;
 uniform mat4 inverseVP,previousVP;uniform vec3 eye;uniform float time,motionScale;
 uniform float nightVisionMode,nightVisionIntensity,nauseaIntensity,nauseaSpeed;
@@ -37,5 +38,7 @@ void main(){
         if(nightVisionMode<.5)vision=vec3(.05,.95,.15)*sqrt(energy)+vec3(.005,.025,.005);
         else{vision=mix(vec3(.015,.01,.12),vec3(.8,.03,.12),smoothstep(0.,.55,energy));vision=mix(vision,vec3(1.,.85,.1),smoothstep(.4,.85,energy));vision=mix(vision,vec3(1),smoothstep(.8,1.,energy));}
         c=mix(c,vision,nightVisionIntensity);}
+    if(effect(2048)){float depth=texture(depthImage,uv).r;float distanceToEye=depth>=.999999?fogEnd:length(world(uv,depth)-eye);float fogDistance=max(0.,min(distanceToEye,fogEnd)-fogStart);float opacity=1.-exp(-fogDensity*fogDistance);c=mix(c,fogColor,clamp(opacity,0.,1.));}
+    if(effect(4096))c=mix(c,fadeColor,clamp(fadeAmount,0.,1.));
     fragColor=vec4(max(c,vec3(0)),1);
 }

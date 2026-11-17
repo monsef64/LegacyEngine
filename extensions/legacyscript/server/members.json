@@ -10,12 +10,12 @@
   "GameObject": {
     "name": "string",
     "parent": "GameObject|nil",
-    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|nil",
-    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|nil",
-    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|nil",
-    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|nil",
-    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|nil",
-    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects",
+    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
+    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
+    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
+    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
+    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
+    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog",
     "removeComponent": "fun(componentType:ComponentType)",
     "onAnimationFinish": "fun()|nil",
     "onAnimationStart": "fun()|nil",
@@ -484,5 +484,16 @@
     "aberrationStrength": "number 0..0.02",
     "aoIntensity": "number 0..2",
     "aoRadius": "number 0.01..5 metres"
+  },
+  "Fog": {
+    "enabled": "boolean Global distance fog; first enabled active Fog in entity order wins",
+    "color": "table RGB 0..1; assign a complete x/y/z or three-element table (read returns a copy)",
+    "density": "number 0..10 inverse metres; zero is clear",
+    "start": "number Distance before fog begins, 0 or greater and less than end",
+    "end": "number Distance cap, greater than start and at most 1000000 metres; use fog[\"end\"] in Lua"
+  },
+  "ColorFade": {
+    "start": "fun(self:ColorFade,seconds?:number) Fade to fully visible color, default one second; zero is immediate",
+    "stop": "fun(self:ColorFade,seconds?:number) Fade back to transparent, default one second; zero is immediate"
   }
 }

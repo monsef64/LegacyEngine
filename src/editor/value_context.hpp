@@ -8,9 +8,11 @@
 #include <limits>
 #include <type_traits>
 namespace EditorValues {
-template <class T> inline bool context(T* values, int count, T low = T{}, T high = T{}) {
+template <class T>
+inline bool
+context(T* values, int count, T low = T{}, T high = T{}, const char* popupID = nullptr) {
     bool changed = false;
-    if (ImGui::BeginPopupContextItem()) {
+    if (ImGui::BeginPopupContextItem(popupID)) {
         if (ImGui::MenuItem("Copy")) {
             Json j;
             if (count == 1) {
@@ -71,6 +73,40 @@ template <class T> inline bool context(T* values, int count, T low = T{}, T high
         ImGui::EndPopup();
     }
     return changed;
+}
+inline bool textContext(char* value, std::size_t capacity) {
+    bool changed = false;
+    if (ImGui::BeginPopupContextItem()) {
+        if (ImGui::MenuItem("Copy")) {
+            auto text = Json(std::string(value)).dump();
+            ImGui::SetClipboardText(text.c_str());
+        }
+        std::string candidate;
+        bool valid = false;
+        try {
+            const char* text = ImGui::GetClipboardText();
+            if (text && std::strlen(text) <= 65536) {
+                auto j = Json::parse(text);
+                if (j.is_string()) {
+                    candidate = j.get<std::string>();
+                    valid =
+                        candidate.size() < capacity && candidate.find('\0') == std::string::npos;
+                }
+            }
+        } catch (const std::exception&) {
+        }
+        if (ImGui::MenuItem("Paste", nullptr, false, valid)) {
+            changed = candidate != value;
+            std::memcpy(value, candidate.c_str(), candidate.size() + 1);
+        }
+        ImGui::EndPopup();
+    }
+    return changed;
+}
+template <class... Args>
+inline bool InputText(const char* label, char* value, std::size_t capacity, Args... args) {
+    bool changed = ImGui::InputText(label, value, capacity, args...);
+    return textContext(value, capacity) || changed;
 }
 inline bool DragFloat(const char* l,
                       float* v,

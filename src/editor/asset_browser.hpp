@@ -628,6 +628,7 @@ class AssetBrowser {
                     }
                 }
             }
+            ImGui::EndDisabled();
             if (!assets.error.empty() || !preview.error.empty()) {
                 transientError_ = assets.error.empty() ? preview.error : assets.error;
                 assets.error.clear();
@@ -932,7 +933,7 @@ class AssetBrowser {
                                 }
                             }
                             ImGui::Separator();
-                            if (ImGui::MenuItem("Edit Prefab")) {
+                            if (ImGui::MenuItem("Edit Prefab", nullptr, false, editable)) {
                                 editPrefabRequest = file;
                             }
                             if (ImGui::MenuItem("Instantiate in level")) {
@@ -946,7 +947,7 @@ class AssetBrowser {
                             ImGui::TextUnformatted(file.c_str());
                             ImGui::EndDragDropSource();
                         }
-                        if (ImGui::BeginPopupContextItem("Asset actions")) {
+                        if (editable && ImGui::BeginPopupContextItem("Asset actions")) {
                             selected = file;
                             if (ImGui::MenuItem(folderItem ? "Open folder location"
                                                            : "Open asset location")) {
@@ -1044,7 +1045,8 @@ class AssetBrowser {
                     }
                     ImGui::EndDragDropTarget();
                 }
-                if (ImGui::BeginPopupContextWindow("Assets empty actions",
+                if (editable &&
+                    ImGui::BeginPopupContextWindow("Assets empty actions",
                                                    ImGuiPopupFlags_MouseButtonRight |
                                                        ImGuiPopupFlags_NoOpenOverItems)) {
                     if (ImGui::MenuItem("Paste", "Ctrl+V", false, !clipboardPath_.empty())) {
@@ -1108,6 +1110,9 @@ class AssetBrowser {
                     ImGui::IsKeyPressed(ImGuiKey_V, false)) {
                     pasteFolder_ = currentFolder;
                     pasteRequested_ = true;
+                }
+                if (!editable) {
+                    pasteRequested_ = renameRequested_ = deleteRequested_ = false;
                 }
                 if (pasteRequested_) {
                     pasteRequested_ = false;
@@ -1247,7 +1252,8 @@ class AssetBrowser {
                         assets.error = "Asset deletion requires editor history";
                     }
                 }
-                if (ImGui::BeginPopup("Rename asset", ImGuiWindowFlags_AlwaysAutoResize)) {
+                if (editable &&
+                    ImGui::BeginPopup("Rename asset", ImGuiWindowFlags_AlwaysAutoResize)) {
                     if (renameFocus_) {
                         ImGui::SetKeyboardFocusHere();
                         renameFocus_ = false;
@@ -1275,7 +1281,6 @@ class AssetBrowser {
                 assets.error = e.what();
             }
             ImGui::EndChild();
-            ImGui::EndDisabled();
             ImGui::SetCursorPosX(
                 std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 360));
             ImGui::SetNextItemWidth(std::max(45.f, (ImGui::GetContentRegionAvail().x - 80) * .5f));

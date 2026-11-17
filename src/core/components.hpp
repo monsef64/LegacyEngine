@@ -9,6 +9,7 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "effects/camera_effects.hpp"
+#include "effects/fog.hpp"
 #include "effects/laser.hpp"
 #include "effects/light_shafts.hpp"
 #include "lighting/light.hpp"

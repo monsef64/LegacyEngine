@@ -79,7 +79,8 @@ class Editor {
               Entity selected,
               const AssetManager& assets,
               EditorHistory& history,
-              bool editable) {
+              bool editable,
+              bool allowSave = true) {
         if (!world.alive(selected) || !world.has<Terrain>(selected)) {
             if (stroke_ != Entity{}) {
                 finish(world, selected, history);
@@ -139,6 +140,7 @@ class Editor {
                     history.commit(world, selected);
                 }
             }
+            ImGui::BeginDisabled(!allowSave);
             if (ImGui::Button("Save .terrain asset")) {
                 try {
                     finish(world, selected, history);
@@ -150,6 +152,7 @@ class Editor {
                     error_ = e.what();
                 }
             }
+            ImGui::EndDisabled();
             ImGui::TextWrapped(
                 "%s%s",
                 terrain.asset.empty() ? "Unsaved terrain" : terrain.asset.c_str(),

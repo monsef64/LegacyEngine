@@ -170,6 +170,7 @@ class Renderer {
         environmentType_ = -1, environmentColor_ = -1;
     Terrains::Renderer terrainRenderer_;
     CameraFx::Renderer cameraEffects_;
+    bool composingEffects_ = false;
     EditorLines editorLines_;
     int litTransparent_ = -1;
     int litTexture_ = -1, litNormalTexture_ = -1, litHasTexture_ = -1, litBumped_ = -1,
