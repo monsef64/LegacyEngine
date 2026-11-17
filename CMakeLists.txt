@@ -212,18 +212,9 @@ add_executable(LegacyEngine
   src/editor/transform_editor.cpp
   src/editor/script_editor.cpp
 )
-# Embed the UI fonts so release binaries need no external asset directory.
+# The Qt shell takes its fonts and icons from the platform theme, so the
+# engine no longer embeds a UI font and icon atlas.
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  "${CMAKE_CURRENT_SOURCE_DIR}/third_party/roboto/Roboto-Regular.ttf")
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/roboto/Roboto-Regular.ttf" LEGACY_FONT_HEX HEX)
-string(REGEX REPLACE "(..)" "0x\\1," LEGACY_FONT_BYTES "${LEGACY_FONT_HEX}")
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_font.hpp"
-  "#pragma once\ninline const unsigned char editorFontData[] = {${LEGACY_FONT_BYTES}};\n")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf")
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf" LEGACY_ICON_HEX HEX)
-string(REGEX REPLACE "(..)" "0x\\1," LEGACY_ICON_BYTES "${LEGACY_ICON_HEX}")
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma once\ninline const unsigned char editorIconData[] = {${LEGACY_ICON_BYTES}};\n")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_editor lua_console legacy_material_textures legacy_models)
 
