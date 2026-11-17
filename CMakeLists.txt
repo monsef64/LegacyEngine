@@ -137,7 +137,13 @@ qt_standard_project_setup()
 # CONFIGURE_DEPENDS re-run makes that safe.
 file(GLOB LEGACY_QT_SOURCES CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/qt/*.cpp")
-list(APPEND LEGACY_QT_SOURCES src/editor/editor_ui.cpp)
+# The headers go into the target as well: several Q_OBJECT classes live in a
+# header that has no .cpp of the same name (qt_panels.hpp holds the panels,
+# each implemented in its own file), and AUTOMOC only scans headers it can see
+# in the target's sources. Listing them is what gets them their moc output.
+file(GLOB LEGACY_QT_HEADERS CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/qt/*.hpp")
+list(APPEND LEGACY_QT_SOURCES src/editor/editor_ui.cpp ${LEGACY_QT_HEADERS})
 set(CMAKE_AUTOMOC ON)
 add_library(legacy_editor STATIC ${LEGACY_QT_SOURCES})
 target_include_directories(legacy_editor PUBLIC src "${CMAKE_CURRENT_BINARY_DIR}/generated"
