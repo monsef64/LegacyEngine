@@ -2039,6 +2039,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     }
     scripts.shutdown();
     input.releaseMouse();
+    // Tear the widgets down here, while the world, the assets, the history and
+    // the renderer they point at are still alive. Every panel holds a raw
+    // pointer to those objects, and Qt delivers paint and close events while
+    // the window is being destroyed; leaving that until after run() returns
+    // hands those events freed memory.
+    ui::qt::Application::destroy();
     return (!smokeTest || renderedFrames >= smokeFrames);
 }
 int engineMain(int argc, char** argv) {
@@ -2093,9 +2099,9 @@ int engineMain(int argc, char** argv) {
         }
         ui::qt::installInputBridge();
         SDL_Log("Editor started with Qt");
+        // run() tears the widget tree down itself, before the objects those
+        // widgets point at go out of scope.
         runSucceeded = run(window, renderer, smokeTest);
-        ui::qt::removeInputBridge();
-        ui::qt::Application::destroy();
         renderer.shutdown();
     }
 

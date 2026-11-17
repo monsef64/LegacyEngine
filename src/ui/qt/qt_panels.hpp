@@ -37,7 +37,6 @@ class QListWidgetItem;
 class QScrollArea;
 class QVBoxLayout;
 class QProgressBar;
-class QDialog;
 class QCloseEvent;
 class QKeyEvent;
 class QMouseEvent;

@@ -1,6 +1,7 @@
 #include "ui/qt/qt_application.hpp"
 
 #include "ui/qt/qt_editor_window.hpp"
+#include "ui/qt/qt_input_bridge.hpp"
 
 #include <QApplication>
 #include <QClipboard>
@@ -48,6 +49,18 @@ bool Application::create(SDL_Window* window) {
 
 void Application::destroy() {
     State& s = state();
+    if (!s.window) {
+        return;
+    }
+    // Take the window off screen and stop it painting before the tree goes
+    // away. The panels read the engine's world while they paint, so a paint
+    // delivered during teardown could touch an object that is already gone.
+    s.window->hide();
+    s.window->setAttribute(Qt::WA_DontShowOnScreen, true);
+    s.app->processEvents(QEventLoop::ExcludeUserInputEvents, 0);
+    // The input filter lives on the application, so it has to go before the
+    // application does.
+    removeInputBridge();
     s.window.reset();
     s.app.reset();
 }
