@@ -8,7 +8,7 @@ struct LuaDefinition {
 };
 inline constexpr LuaDefinition luaDefinitions[]{
     {"CloudSystem", "CloudSystem - enabled, volumetric (false=2D, true=volume), color, size, coverage, density, scale, speed, opacity, steps (4..24). Vector getters return copies; assign a complete vector table. Requires Transform."},
-    {"River", "River - enabled, color, width, opacity, speed, waveScale, waveStrength, foam, subdivisions (2..32), points (2..64 local vectors). Getters return copies; assign the complete points list to update the curve. Requires Transform; visual water, no fluid physics."},
+    {"River", "River - enabled, color, width, opacity, speed, flowing, flowAmount (0..2), transparent, collisionEffects, collisionStrength (0..2), waveScale, waveStrength, foam, subdivisions (2..32), points (2..64 local vectors). Getters return copies; assign the complete points list to update the curve. Requires Transform; visual water, no fluid physics."},
     {"Fog", "Fog - enabled, color (complete RGB vector), density (0..10), start (>=0), end (>start, <=1000000). Global distance fog; first enabled active entity wins. Use bracket notation for the end field (a Lua keyword)."},
     {"fadeToColor", "fadeToColor(rgb) -> ColorFade for the current active camera; RGB 0..1, e.g. color.black. Call start(seconds=1) to fade to opaque, stop(seconds=1) to fade to transparent; 0..3600 playing seconds, 0 immediate. Controllers share camera state."},
     {"CameraEffects",

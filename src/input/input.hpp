@@ -113,6 +113,13 @@ struct InputState {
         if (!lockCursor(true)) {
             return false;
         }
+        // Editor navigation must use true relative input, not a hidden absolute
+        // pointer that can still hover/click docked panels between warp frames.
+        warpLock = false;
+        if (!SDL_SetWindowRelativeMouseMode(lockedWindow, true)) {
+            releaseMouse();
+            return false;
+        }
         mouseLocked = false;
         sceneLocked = true;
         return true;
