@@ -227,7 +227,7 @@ add_executable(LegacyEngine src/app/main.cpp)
 # engine no longer embeds a UI font and icon atlas.
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_engine_core)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_editor legacy_engine_core)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)

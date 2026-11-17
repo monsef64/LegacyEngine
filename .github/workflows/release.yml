@@ -123,7 +123,24 @@ jobs:
           done
 
       - name: Build
-        run: cmake --build build --parallel 2
+        run: |
+          cmake --build build --parallel 2 > build.log 2>&1 || {
+            echo "build failed"; exit 1;
+          }
+      - name: Summarise build errors
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '### Build errors'
+            echo '```'
+            grep -E 'error:|fatal error|undefined reference|Error [0-9]' build.log | head -50 ||
+              tail -50 build.log 2>/dev/null || echo 'no build output'
+            echo '```'
+          } > build-report.md
+          cat build-report.md >> "$GITHUB_STEP_SUMMARY"
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file build-report.md || true
 
       # The widget tree on its own, with no engine and no GPU: this is the
       # test that catches a dock that never gets its widget or a panel left
