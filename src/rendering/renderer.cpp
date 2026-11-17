@@ -395,12 +395,53 @@ void Renderer::draw(World& world,
                     bool editorView,
                     const CameraEffects* effects,
                     std::uint64_t cameraKey) {
-    if (effects && CameraFx::mask(*effects) && CameraFx::valid(*effects)) {
-        cameraEffects_.render(
-            *effects, width, height, x, y, viewProjection, cameraPosition, cameraKey, [&] {
-                draw(world, viewProjection, width, height, cameraPosition, 0, 0, editorView);
-            });
-        return;
+    CameraEffects composed = effects ? *effects : CameraEffects{};
+    if (!composingEffects_) {
+        bool found = false;
+        world.each<Fog>([&](Entity e, const Fog& f) {
+            if (!found && isActive(world, e) && f.enabled && Fogs::valid(f)) {
+                found = true;
+                composed.fog = true;
+                composed.fogR = f.color.x;
+                composed.fogG = f.color.y;
+                composed.fogB = f.color.z;
+                composed.fogDensity = f.density;
+                composed.fogStart = f.start;
+                composed.fogEnd = f.end;
+            }
+        });
+        // Scene fog is independent of the camera's optional effect master switch.
+        if (!composed.enabled) {
+            bool fog = composed.fog;
+            auto copy = composed;
+            composed = CameraEffects{};
+            composed.fog = fog;
+            composed.fogR = copy.fogR;
+            composed.fogG = copy.fogG;
+            composed.fogB = copy.fogB;
+            composed.fogDensity = copy.fogDensity;
+            composed.fogStart = copy.fogStart;
+            composed.fogEnd = copy.fogEnd;
+            composed.fadeR = copy.fadeR;
+            composed.fadeG = copy.fadeG;
+            composed.fadeB = copy.fadeB;
+            composed.fadeAmount = copy.fadeAmount;
+        }
+        if (CameraFx::mask(composed) && CameraFx::valid(composed)) {
+            composingEffects_ = true;
+            try {
+                cameraEffects_.render(
+                    composed, width, height, x, y, viewProjection, cameraPosition, cameraKey, [&] {
+                        draw(
+                            world, viewProjection, width, height, cameraPosition, 0, 0, editorView);
+                    });
+            } catch (...) {
+                composingEffects_ = false;
+                throw;
+            }
+            composingEffects_ = false;
+            return;
+        }
     }
     if (modelRevision_ != modelAssetRevision) {
         clearModelCache();

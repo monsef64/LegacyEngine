@@ -675,6 +675,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         auto saveTo = [&](const std::string& path) {
             bool saved = false;
+            if (playMode.active()) {
+                projectError = "Stop Play before saving; runtime edits are temporary.";
+                return saved;
+            }
             auto assetRoot = projectAssetsPath(path);
             try {
                 if (browser.importing()) {
@@ -913,15 +917,21 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         bool undoRequested = false, redoRequested = false;
         bool duplicateRequested = false, copyRequested = false, pasteRequested = false,
              parentRequested = false;
-        const bool editAllowed = !playMode.active() && !editor.dragging() &&
-                                 !projectDialog.pending() && !browser.dialog.pending();
+        const bool editAllowed =
+            !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
         const bool objectSelected = world.alive(selectedEntity);
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("Edit")) {
                 undoRequested =
-                    ImGui::MenuItem("Undo", "Ctrl+Z", false, editAllowed && history.canUndo());
-                redoRequested = ImGui::MenuItem(
-                    "Redo", "Ctrl+Y / Ctrl+Shift+Z", false, editAllowed && history.canRedo());
+                    ImGui::MenuItem("Undo",
+                                    "Ctrl+Z",
+                                    false,
+                                    editAllowed && !playMode.active() && history.canUndo());
+                redoRequested =
+                    ImGui::MenuItem("Redo",
+                                    "Ctrl+Y / Ctrl+Shift+Z",
+                                    false,
+                                    editAllowed && !playMode.active() && history.canRedo());
                 ImGui::Separator();
                 duplicateRequested =
                     ImGui::MenuItem("Duplicate", "Ctrl+D", false, editAllowed && objectSelected);
@@ -1478,7 +1488,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                              &hierarchyFocused,
                              editAllowed ? &hierarchyCreate : nullptr,
                              hierarchyLevelName.c_str(),
-                             editAllowed && !prefabLevel ? &renameLevelPopup : nullptr,
+                             editAllowed && !playMode.active() && !prefabLevel ? &renameLevelPopup
+                                                                               : nullptr,
                              &hierarchyCreateParent)) {
             editor.finish(world);
             clicking = false;
@@ -1504,15 +1515,20 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                       editor.dragging(),
                       &browser.assets,
                       5,
-                      browser.selected);
-        terrainEditor.draw(world, selectedEntity, browser.assets, history, editAllowed);
+                      browser.selected,
+                      playMode.active());
+        terrainEditor.draw(
+            world, selectedEntity, browser.assets, history, editAllowed, !playMode.active());
         scripts.componentOutput = componentScripts.messages();
         scripts.setAssetContext(browser.openedScript, selectedEntity);
+        ImGui::BeginDisabled(playMode.active());
         scripts.draw(&layout, playMode.playing(), &browser.assets, &browser.openedScript);
+        ImGui::EndDisabled();
         browser.projectFolder = currentProject.empty()
                                     ? browser.assets.root
                                     : std::filesystem::absolute(currentProject).parent_path();
-        browser.draw(window, world, selectedEntity, scripts, editAllowed, &history);
+        browser.draw(
+            window, world, selectedEntity, scripts, editAllowed && !playMode.active(), &history);
         if (!browser.movedAsset.first.empty()) {
             const auto moved = std::exchange(browser.movedAsset, {});
             animationWindow.remapAssetPaths(moved.first, moved.second);
@@ -1529,7 +1545,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                 browser.assets,
                                 projectMeshes,
                                 history,
-                                editAllowed && !prefabLevel,
+                                editAllowed && !playMode.active() && !prefabLevel,
                                 levels.current());
         if (!browser.editAnimationRequest.empty()) {
             animationWindow.open(browser.assets, std::exchange(browser.editAnimationRequest, {}));
@@ -1539,7 +1555,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                              browser.assets,
                              renderer,
                              history,
-                             editAllowed,
+                             editAllowed && !playMode.active(),
                              ImGui::GetIO().DeltaTime);
         if (!browser.editCubemapRequest.empty()) {
             const auto path = std::exchange(browser.editCubemapRequest, {});
@@ -1573,6 +1589,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     ImGui::EndDragDropTarget();
                 }
             }
+            ImGui::BeginDisabled(playMode.active());
             if (ImGui::Button("Save Cubemap")) {
                 try {
                     saveCubemap(browser.assets, editingCubemap, cubemapDraft);
@@ -1580,6 +1597,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     browser.assets.error = e.what();
                 }
             }
+            ImGui::EndDisabled();
             ImGui::End();
             if (!open) {
                 editingCubemap.clear();
@@ -1616,7 +1634,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 browser.assets.error = e.what();
             }
         }
-        if (!browser.spawnModelRequest.empty() && !playMode.active()) {
+        if (!browser.spawnModelRequest.empty()) {
             const auto path = std::exchange(browser.spawnModelRequest, {});
             try {
                 const auto document = modelDocument(browser.assets, path);
@@ -1683,7 +1701,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 browser.assets.error = e.what();
             }
         }
-        if (!browser.spawnPrefabRequest.empty() && !playMode.active()) {
+        if (!browser.spawnPrefabRequest.empty()) {
             const auto path = std::exchange(browser.spawnPrefabRequest, {});
             try {
                 history.commit(world, selectedEntity);
@@ -1759,7 +1777,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             ImGui::End();
         }
         const auto settingsBefore = browser.settings;
+        ImGui::BeginDisabled(playMode.active());
         browser.settings.draw(browser.projectFolder);
+        ImGui::EndDisabled();
         if (settingsBefore.signature() != browser.settings.signature() && !settingsGesture) {
             settingsGesture = settingsBefore;
         }
@@ -1780,8 +1800,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         const auto buttonsBefore = input.buttons;
         const auto alternativesBefore = input.alternatives;
-        inputSettings.draw(browser.assets, input, editAllowed);
-        if (editAllowed &&
+        inputSettings.draw(browser.assets, input, editAllowed && !playMode.active());
+        if (editAllowed && !playMode.active() &&
             (buttonsBefore != input.buttons || alternativesBefore != input.alternatives)) {
             const auto buttonsAfter = input.buttons;
             const auto alternativesAfter = input.alternatives;
@@ -1916,9 +1936,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     editAllowed && !playbackHovered && !cameraLooking && !editor.dragging());
                 editor.draw(world,
                             selectedEntity,
-                            !playMode.active() && !projectDialog.pending() &&
-                                !browser.dialog.pending() && !orientationInteracting &&
-                                !playbackHovered && !cameraLooking &&
+                            !projectDialog.pending() && !browser.dialog.pending() &&
+                                !orientationInteracting && !playbackHovered && !cameraLooking &&
                                 !terrainEditor.active(world, selectedEntity) &&
                                 !(SDL_GetModState() & SDL_KMOD_ALT),
                             camera,
@@ -2120,6 +2139,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
         if (playMode.playing()) {
+            world.each<CameraEffects>([&](Entity, CameraEffects& fx) {
+                float step = fx.fadeSpeed * std::min(seconds, .25f);
+                if (fx.fadeAmount < fx.fadeTarget) {
+                    fx.fadeAmount = std::min(fx.fadeTarget, fx.fadeAmount + step);
+                } else {
+                    fx.fadeAmount = std::max(fx.fadeTarget, fx.fadeAmount - step);
+                }
+            });
             Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
             scripts.update(std::min(seconds, 0.25f));
             componentScripts.update(std::min(seconds, 0.25f));

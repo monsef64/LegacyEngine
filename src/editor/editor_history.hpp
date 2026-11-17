@@ -123,6 +123,7 @@ inline std::string sceneSignature(World& world) {
         });
         component(
             e, LightShafts{}, [&](const LightShafts& s) { result += Shafts::settings(s).dump(); });
+        component(e, Fog{}, [&](const Fog& f) { result += Fogs::settings(f).dump(); });
         component(e, CameraEffects{}, [&](const CameraEffects& c) {
             for (const auto& f : CameraFx::boolFields) {
                 scalar(c.*f.member);

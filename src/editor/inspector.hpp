@@ -37,6 +37,7 @@ inline bool editVector(const char* label,
     const bool narrow = ImGui::GetContentRegionAvail().x < 340;
     if (narrow) {
         ImGui::TextUnformatted(label);
+        changed |= EditorValues::context(v, 3, minimum, maximum, "Vector values");
     }
     if (ImGui::BeginTable("##Vector",
                           narrow ? 2 : 4,
@@ -55,6 +56,7 @@ inline bool editVector(const char* label,
             ImGui::TableSetColumnIndex(0);
             ImGui::AlignTextToFramePadding();
             ImGui::TextUnformatted(label);
+            changed |= EditorValues::context(v, 3, minimum, maximum, "Vector values");
         }
         for (int i = 0; i < 3; ++i) {
             if (narrow) {
@@ -275,9 +277,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
                       !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) &&
                       !world.has<SpotLight>(entity) && !world.has<Laser>(entity) &&
-                      !world.has<CameraEffects>(entity) && !world.has<Terrain>(entity) &&
-                      !world.has<LightShafts>(entity) && !world.has<CharacterController>(entity) &&
-                      !world.has<FPSCamera>(entity);
+                      !world.has<Fog>(entity) && !world.has<CameraEffects>(entity) &&
+                      !world.has<Terrain>(entity) && !world.has<LightShafts>(entity) &&
+                      !world.has<CharacterController>(entity) && !world.has<FPSCamera>(entity);
         }
         if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
             allowed = !world.has<CharacterController>(entity);
@@ -348,6 +350,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Laser>) {
             type = 18;
         }
+        if constexpr (std::is_same_v<T, Fog>) {
+            type = 22;
+        }
         if constexpr (std::is_same_v<T, CameraEffects>) {
             type = 21;
         }
@@ -372,8 +377,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                 "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
                 "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
                 "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
-                "Terrain",       "CameraEffects"};
-            for (int i = 0; i < 22; ++i) {
+                "Terrain",       "CameraEffects",       "Fog"};
+            for (int i = 0; i < 23; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -428,7 +433,7 @@ inline void drawScriptExports(World& world,
         "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
         "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
         "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
-        "Terrain",       "CameraEffects"};
+        "Terrain",       "CameraEffects",       "Fog"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -445,7 +450,7 @@ inline void drawScriptExports(World& world,
         } else if (field.type == "string") {
             char value[4097];
             std::snprintf(value, sizeof(value), "%s", field.text.c_str());
-            if (ImGui::InputText("##value", value, sizeof(value))) {
+            if (EditorValues::InputText("##value", value, sizeof(value))) {
                 field.text = value;
             }
         } else {
@@ -487,7 +492,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 22 &&
+                        if (target.type >= 0 && target.type < 23 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -651,18 +656,19 @@ inline void drawInspector(World& world,
                           bool editingGizmo,
                           const AssetManager* assets = nullptr,
                           int meshCount = 4,
-                          const std::string& selectedAsset = {}) {
+                          const std::string& selectedAsset = {},
+                          bool runtime = false) {
     if (dockedEditor && !panelOpen[1]) {
         return;
     }
     placeEditorPanel(rect);
     if (beginEditorPanel("Inspector", fixedPanelFlags)) {
         if (assets && modelAsset(selectedAsset)) {
-            ImGui::BeginDisabled(editingGizmo);
+            ImGui::BeginDisabled(editingGizmo || runtime);
             drawModelImportInspector(world, *assets, selectedAsset);
             ImGui::EndDisabled();
         } else if (assets && materialAsset(selectedAsset)) {
-            ImGui::BeginDisabled(editingGizmo);
+            ImGui::BeginDisabled(editingGizmo || runtime);
             drawMaterialAssetInspector(*assets, selectedAsset);
             ImGui::EndDisabled();
         } else if (!world.alive(selected)) {
@@ -681,7 +687,7 @@ inline void drawInspector(World& world,
             char name[257];
             std::snprintf(name, sizeof(name), "%s", objectName ? objectName->value.c_str() : "");
             ImGui::SetNextItemWidth(std::max(30.f, available - ImGui::GetFrameHeight() - 100.f));
-            if (ImGui::InputText("##Name", name, sizeof(name))) {
+            if (EditorValues::InputText("##Name", name, sizeof(name))) {
                 world.add(selected, ObjectName{name});
             }
             ImGui::SameLine();
@@ -702,10 +708,10 @@ inline void drawInspector(World& world,
             ImGui::Separator();
             auto ordered = world.has<InspectorOrder>(selected)
                                ? world.get<InspectorOrder>(selected).types
-                               : std::vector<int>{0, 3,  2,  1,  6,  9,  10, 11, 12, 8, 7,
-                                                  5, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+                               : std::vector<int>{0, 3,  2,  1,  6,  9,  10, 11, 12, 8,  7,
+                                                  5, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22};
             for (int id :
-                 {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19, 20, 21}) {
+                 {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -831,10 +837,12 @@ inline void drawInspector(World& world,
                             static bool focusMaterialName = false;
                             bool createRequested = false;
                             if (ImGui::BeginPopupContextItem("Material slot actions")) {
-                                createRequested = ImGui::MenuItem("Create Material");
+                                createRequested =
+                                    ImGui::MenuItem("Create Material", nullptr, false, !runtime);
                                 ImGui::EndPopup();
                             }
-                            if (r->material.empty() && ImGui::SmallButton("Create Material")) {
+                            if (!runtime && r->material.empty() &&
+                                ImGui::SmallButton("Create Material")) {
                                 createRequested = true;
                             }
                             if (createRequested) {
@@ -843,7 +851,8 @@ inline void drawInspector(World& world,
                                 focusMaterialName = true;
                                 ImGui::OpenPopup("Create Material asset");
                             }
-                            if (ImGui::BeginPopupModal("Create Material asset",
+                            if (!runtime &&
+                                ImGui::BeginPopupModal("Create Material asset",
                                                        nullptr,
                                                        ImGuiWindowFlags_AlwaysAutoResize)) {
                                 ImGui::TextUnformatted("Name the material (saved in Assets)");
@@ -852,11 +861,11 @@ inline void drawInspector(World& world,
                                     focusMaterialName = false;
                                 }
                                 const bool enter =
-                                    ImGui::InputText("Name",
-                                                     materialName,
-                                                     sizeof(materialName),
-                                                     ImGuiInputTextFlags_EnterReturnsTrue |
-                                                         ImGuiInputTextFlags_AutoSelectAll);
+                                    EditorValues::InputText("Name",
+                                                            materialName,
+                                                            sizeof(materialName),
+                                                            ImGuiInputTextFlags_EnterReturnsTrue |
+                                                                ImGuiInputTextFlags_AutoSelectAll);
                                 if (ImGui::Button("Create") || enter) {
                                     try {
                                         std::string name = materialName;
@@ -927,6 +936,10 @@ inline void drawInspector(World& world,
                             }
                             if (!r->material.empty()) {
                                 auto edited = loadMaterial(*assets, r->material);
+                                if (runtime) {
+                                    edited = applyMaterialOverrides(
+                                        edited, r->materialValues, r->materialOverrides);
+                                }
                                 if (ImGui::TreeNodeEx("Material properties",
                                                       ImGuiTreeNodeFlags_DefaultOpen)) {
                                     bool changed = false;
@@ -974,10 +987,17 @@ inline void drawInspector(World& world,
                                     changed |= EditorValues::SliderFloat(
                                         "Material specular", &edited.specular, 0, 1);
                                     ImGui::TextDisabled(
-                                        "Shared asset: edits affect all meshes using this material.");
+                                        runtime
+                                            ? "Temporary instance overrides (discarded on Stop)."
+                                            : "Shared asset: edits affect all meshes using this material.");
                                     if (changed && validMaterial(edited)) {
                                         try {
-                                            saveMaterial(*assets, r->material, edited);
+                                            if (runtime) {
+                                                r->materialValues = edited;
+                                                r->materialOverrides = 127;
+                                            } else {
+                                                saveMaterial(*assets, r->material, edited);
+                                            }
                                             materialError.clear();
                                         } catch (const std::exception& e) {
                                             materialError = e.what();
@@ -1134,6 +1154,24 @@ inline void drawInspector(World& world,
                         camera->targetEntity = {};
                     }
                 }
+                if (componentID == 22) {
+                    if (auto* f = world.tryGet<Fog>(selected);
+                        f && componentHeader<Fog>(world, selected, "Fog")) {
+                        auto edited = *f;
+                        EditorValues::Checkbox("Enabled", &edited.enabled);
+                        EditorValues::ColorEdit3("Color", &edited.color.x);
+                        EditorValues::DragFloat("Density", &edited.density, .001f, 0, 10);
+                        EditorValues::DragFloat(
+                            "Start distance", &edited.start, .1f, 0, edited.end - .001f);
+                        EditorValues::DragFloat(
+                            "End distance", &edited.end, 1, edited.start + .001f, 1000000);
+                        if (Fogs::valid(edited)) {
+                            *f = edited;
+                        }
+                        ImGui::TextWrapped(
+                            "Global distance fog. First enabled active Fog in entity order is used.");
+                    }
+                }
                 if (componentID == 21) {
                     if (auto* fx = world.tryGet<CameraEffects>(selected);
                         fx && componentHeader<CameraEffects>(world, selected, "CameraEffects")) {
@@ -1209,6 +1247,7 @@ inline void drawInspector(World& world,
                                     assets,
                                     [](const std::string& p) { return materialTexturePath(p); });
                         static std::string shaftError;
+                        ImGui::BeginDisabled(runtime);
                         if (assets && ImGui::Button("Bake profile to PNG")) {
                             try {
                                 edited.texture = Shafts::bake(*assets, selected, edited);
@@ -1218,6 +1257,7 @@ inline void drawInspector(World& world,
                                 shaftError = e.what();
                             }
                         }
+                        ImGui::EndDisabled();
                         if (!shaftError.empty()) {
                             ImGui::TextWrapped("%s", shaftError.c_str());
                         }
@@ -1613,6 +1653,9 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<Fog>(selected) && ImGui::MenuItem("Fog")) {
+                    world.add(selected, Fog{});
+                }
                 if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("CameraEffects")) {
                     world.add(selected, CameraEffects{});
                 }

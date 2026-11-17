@@ -2,6 +2,11 @@
 #include <array>
 #include <cmath>
 struct CameraEffects {
+    // Transient composition state: fog comes from the scene, fade from script controllers.
+    bool fog = false;
+    float fogR = .5f, fogG = .6f, fogB = .7f, fogDensity = .02f, fogStart = 0, fogEnd = 1000;
+    float fadeR = 0, fadeG = 0, fadeB = 0, fadeAmount = 0, fadeTarget = 0, fadeSpeed = 1;
+
     bool enabled = true, bloom = false, colorGrading = false, vignette = false,
          depthOfField = false, motionBlur = false, filmGrain = false, chromaticAberration = false,
          antiAliasing = false, ambientOcclusion = false, nightVision = false, nausea = false;
@@ -66,11 +71,12 @@ inline bool valid(const CameraEffects& c) {
     return true;
 }
 inline int mask(const CameraEffects& c) {
-    return !c.enabled ? 0
-                      : (c.bloom ? 1 : 0) | (c.colorGrading ? 2 : 0) | (c.vignette ? 4 : 0) |
-                            (c.depthOfField ? 8 : 0) | (c.motionBlur ? 16 : 0) |
-                            (c.filmGrain ? 32 : 0) | (c.chromaticAberration ? 64 : 0) |
-                            (c.antiAliasing ? 128 : 0) | (c.ambientOcclusion ? 256 : 0) |
-                            (c.nightVision ? 512 : 0) | (c.nausea ? 1024 : 0);
+    return !c.enabled
+               ? 0
+               : (c.bloom ? 1 : 0) | (c.colorGrading ? 2 : 0) | (c.vignette ? 4 : 0) |
+                     (c.depthOfField ? 8 : 0) | (c.motionBlur ? 16 : 0) | (c.filmGrain ? 32 : 0) |
+                     (c.chromaticAberration ? 64 : 0) | (c.antiAliasing ? 128 : 0) |
+                     (c.ambientOcclusion ? 256 : 0) | (c.nightVision ? 512 : 0) |
+                     (c.nausea ? 1024 : 0) | (c.fog ? 2048 : 0) | (c.fadeAmount > 0 ? 4096 : 0);
 }
 } // namespace CameraFx

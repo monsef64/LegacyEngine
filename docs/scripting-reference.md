@@ -40,7 +40,7 @@ See [LegacyScript guide](scripting.md), [input/audio details](audio-input.md),
   Up targets the object that received Down, even if released outside it.
 - Audio callbacks target scripts attached to the AudioSource owner. Finished means natural
   primary-clip completion, not pause, explicit stop, fade-out stop or one-shot completion.
-- `waitForSeconds` and `wait(secondsOrAudioEvent)` suspend the current lifecycle/object callback or independent task only.
+- `waitForSeconds` and `wait(audio.onAudioFinished)` suspend lifecycle/object callbacks only.
   Do not use them at file top-level, in custom event listeners or onDestroy. Each callback
   has at most one pending invocation. Other callbacks keep running; Play pause or object
   deactivation freezes timers, and Stop cancels waits. Audio waits observe the next event,
@@ -61,9 +61,8 @@ engine functions; this reference covers the engine-owned API.
 | --- | --- | --- |
 | `onMouseDown/Up/Enter/Exit/Over()` | Global function in the target object’s attached script, or `object.onMouseDown = function() ... end` | Active Collider and Game camera |
 | `onAudioStarted/Finished/Paused/Resumed/Stopped()` | Global function in the AudioSource owner’s attached script, or object callback | AudioSource on that owner |
-| `task(function() ... end)` | Inside a running lifecycle/object callback or task | Independent waiting block; shared 128-task cap |
-| `waitForSeconds(seconds)` / `wait(seconds)` | Inside a running lifecycle/object callback or task | Finite 0–86400 seconds |
-| `wait(audio.onAudioFinished)` | Inside a running lifecycle/object callback or task | Live AudioSource; next event only |
+| `waitForSeconds(seconds)` | Inside a running lifecycle/object callback | Finite 0–86400 seconds |
+| `wait(audio.onAudioFinished)` | Inside a running lifecycle/object callback | Live AudioSource; next event only |
 
 AudioSource event properties are opaque `AudioEvent` tokens. Define the callback as
 `function onAudioFinished() ... end`; pass `audio.onAudioFinished` to `wait` without
@@ -71,7 +70,7 @@ parentheses. Do not assign a function to the AudioSource event property.
 
 Waits are not supported at file top-level, in custom/level event listeners, or in
 `onDestroy`. Play pause and object inactivity freeze timer progress. The engine allows
-at most 128 live callbacks/tasks per runtime and coalesces repeated invocations of the
+at most 128 pending callbacks per runtime and coalesces repeated invocations of the
 same waiting callback. Shutdown/reset cancels continuations; variables survive a pause.
 
 ```lua
@@ -172,7 +171,7 @@ Use getComponent(Type) for attached self, getComponent(object, Type) for an expl
 - `overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil`
 - `overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil`
 - `overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil`
-- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
 - `overload fun(componentType:ComponentType):any`
 
 ```lua
@@ -182,7 +181,7 @@ if transform then debug.log(transform.position.x) end
 
 ### addComponent
 
-`addComponent(gameObject, componentType) -> live component`
+`addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner`
 
 - `param gameObject GameObject`
 - `param componentType ComponentType`
@@ -701,7 +700,7 @@ if isButtonDown("Jump") then debug.log("Jump action") end
 
 ### lockCursor
 
-`lockCursor() -> boolean; relative motion, cursor hidden`
+`lockCursor() -> boolean; viewport-confined motion, cursor hidden`
 
 - `return boolean`
 
@@ -1069,29 +1068,18 @@ end
 
 ### task
 
-`task(function() ... end)` starts a cooperative block immediately and lets its
-caller continue when that block waits or finishes. Use it inside a lifecycle/object
-callback or another task; not at file top-level, in custom/level event listeners or
-onDestroy. It returns no handle/results. Closures capture locals normally.
+`task(function() ... end) - run an independent cooperative block; waits pause only that task; call inside lifecycle/object callbacks or tasks`
+
+- `param block fun()`
 
 ```lua
 function onStart()
-    if self:isActive() then
-        task(function()
-            wait(2)
-            debug.log("Delayed block")
-        end)
-    end
-    debug.log("Immediate remainder of callback")
+    task(function()
+        wait(1)
+        debug.log("Independent task completed")
+    end)
 end
 ```
-
-Plain `if`/loop/do blocks do not automatically run asynchronously. Tasks share the
-runtime's 128-live-task limit and memory/instruction budgets. Pause/inactivity
-freeze their waits; owner destruction and Stop/reset cancel pending tasks. An
-unbounded loop without waits still consumes the caller's execution budget.
-See [independent waiting blocks](scripting.md#independent-waiting-blocks-with-task)
-for the guarded-update pattern and cancellation caveats.
 
 ### waitForSeconds
 
@@ -1111,11 +1099,11 @@ end
 
 ### wait
 
-`wait(seconds) / wait(audioSource.onAudioFinished) - suspend the current callback/task`
+`wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event`
 
-Takes finite seconds in [0, 86400] (same as waitForSeconds), or an opaque AudioEvent token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the AudioSource cancels its continuation.
+Takes an opaque AudioEvent token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the AudioSource cancels its continuation.
 
-- `param secondsOrEvent number|AudioEvent`
+- `param secondsOrEvent number|AudioEvent Finite 0..86400 seconds or a live audio event token`
 
 ```lua
 function onStart()
@@ -1296,6 +1284,20 @@ local camera = findComponentInChildren(Camera)
 if camera then debug.log(camera.gameObject:getName()) end
 ```
 
+### fadeToColor
+
+`fadeToColor(rgb) -> ColorFade for the current active camera; RGB 0..1, e.g. color.black. Call start(seconds=1) to fade to opaque, stop(seconds=1) to fade to transparent; 0..3600 playing seconds, 0 immediate. Controllers share camera state.`
+
+- `param rgb Vec3 RGB 0..1, e.g. color.black`
+- `return ColorFade`
+
+```lua
+local fade = fadeToColor(color.black)
+fade:start(1)
+-- Later, reverse toward transparent:
+fade:stop(0.5)
+```
+
 ### print
 
 `print(...) - log tab-separated values`
@@ -1308,7 +1310,7 @@ print("Player position", self:getPosition().x)
 
 ### GameObject.getComponent
 
-`getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+`getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
 
 - `getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
 
@@ -1319,7 +1321,7 @@ object:getComponent(Transform)
 
 ### GameObject.getComponentInParent
 
-`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
 
 - `getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent`
 
@@ -1330,7 +1332,7 @@ object:getComponentInParent(RigidBody)
 
 ### GameObject.getComponentInChildren
 
-`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
 
 - `getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants`
 
@@ -1341,7 +1343,7 @@ object:getComponentInChildren(Camera)
 
 ### GameObject.findComponentInParent
 
-`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
 
 - `findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent`
 
@@ -1352,7 +1354,7 @@ object:findComponentInParent(RigidBody)
 
 ### GameObject.findComponentInChildren
 
-`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|nil`
+`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil`
 
 - `findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren`
 
@@ -1363,9 +1365,9 @@ object:findComponentInChildren(Camera)
 
 ### GameObject.addComponent
 
-`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation`
+`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog`
 
-- `addComponent(gameObject, componentType) -> live component`
+- `addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner`
 
 ```lua
 local object = self
@@ -1966,9 +1968,9 @@ component:setMaterialNormalMap("Textures/normal.png")
 
 ### MeshRenderer.setMaterialShader
 
-`setMaterialShader(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped or Diffuse Transparent`
+`setMaterialShader(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection`
 
-- `mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent')`
+- `mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')`
 
 ```lua
 local component = self:getComponent(MeshRenderer) or self:addComponent(MeshRenderer)
@@ -3050,6 +3052,112 @@ local component = self:getComponent(Animation) or self:addComponent(Animation)
 component:reset()
 ```
 
+## ParticleSystem
+
+### ParticleSystem.play
+
+`play(self:ParticleSystem)`
+
+- `audio:play() - restart assigned clip`
+
+```lua
+local component = self:getComponent(ParticleSystem) or self:addComponent(ParticleSystem)
+component:play()
+```
+
+### ParticleSystem.pause
+
+`pause(self:ParticleSystem)`
+
+- `audio:pause()`
+
+```lua
+local component = self:getComponent(ParticleSystem) or self:addComponent(ParticleSystem)
+component:pause()
+```
+
+### ParticleSystem.resume
+
+`resume(self:ParticleSystem)`
+
+- `audio:resume()`
+
+```lua
+local component = self:getComponent(ParticleSystem) or self:addComponent(ParticleSystem)
+component:resume()
+```
+
+### ParticleSystem.stop
+
+`stop(self:ParticleSystem,clearParticles?:boolean)`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local component = self:getComponent(ParticleSystem) or self:addComponent(ParticleSystem)
+component:stop()
+```
+
+### ParticleSystem.restart
+
+`restart(self:ParticleSystem)`
+
+```lua
+local component = self:getComponent(ParticleSystem) or self:addComponent(ParticleSystem)
+component:restart()
+```
+
+### ParticleSystem.clear
+
+`clear(self:ParticleSystem)`
+
+```lua
+local component = self:getComponent(ParticleSystem) or self:addComponent(ParticleSystem)
+component:clear()
+```
+
+### ParticleSystem.emit
+
+`emit(self:ParticleSystem,count:integer)`
+
+- `emit(eventName, ...) -> boolean; queue up to eight primitive arguments`
+
+```lua
+local component = self:getComponent(ParticleSystem) or self:addComponent(ParticleSystem)
+component:emit(10)
+```
+
+### ParticleSystem.setPreset
+
+`setPreset(self:ParticleSystem,name:string) Fire, Smoke or Sparkles`
+
+```lua
+local component = self:getComponent(ParticleSystem) or self:addComponent(ParticleSystem)
+component:setPreset("Fire")
+```
+
+## ColorFade
+
+### ColorFade.start
+
+`start(self:ColorFade,seconds?:number) Fade to fully visible color, default one second; zero is immediate`
+
+```lua
+local fade = fadeToColor(color.black)
+fade:start(1)
+```
+
+### ColorFade.stop
+
+`stop(self:ColorFade,seconds?:number) Fade back to transparent, default one second; zero is immediate`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local fade = fadeToColor(color.black)
+fade:stop(1)
+```
+
 ## Component fields and type tokens
 
 Component type names such as `Transform`, `Skybox`, `PointLight` and `AudioSource`
@@ -3210,6 +3318,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
+| `cookie` | `string Project-relative PNG/JPG/JPEG/TGA/BMP; empty disables projection` |
 | `color` | `Vec3` |
 | `intensity` | `number` |
 | `enabled` | `boolean` |
@@ -3327,6 +3436,145 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `paused` | `boolean Read-only` |
 | `time` | `number Read-only seconds` |
 | `error` | `string Read-only loading error` |
+
+### ParticleSystem fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `Point` | `integer Shape constant` |
+| `Box` | `integer Shape constant` |
+| `Sphere` | `integer Shape constant` |
+| `Cone` | `integer Shape constant` |
+| `Alpha` | `integer Blend constant` |
+| `Additive` | `integer Blend constant` |
+| `Fire` | `integer Sprite constant` |
+| `Smoke` | `integer Sprite constant` |
+| `Sparkles` | `integer Sprite constant` |
+| `isPlaying` | `boolean Read-only` |
+| `paused` | `boolean Read-only` |
+| `particleCount` | `integer Read-only` |
+| `time` | `number Read-only emitter cycle time` |
+| `loop` | `boolean` |
+| `playOnAwake` | `boolean` |
+| `localSpace` | `boolean` |
+| `collision` | `boolean Optional swept-point collider physics` |
+| `restitution` | `number Bounce 0..1` |
+| `collisionFriction` | `number Tangential velocity loss 0..1` |
+| `maxParticles` | `integer` |
+| `burstCount` | `integer` |
+| `shape` | `integer` |
+| `blend` | `integer` |
+| `sprite` | `integer` |
+| `seed` | `integer` |
+| `useSpriteSheet` | `boolean Opt-in atlas animation; false by default` |
+| `sheetColumns` | `integer` |
+| `sheetRows` | `integer` |
+| `color` | `table Assign a complete x/y/z vector table; returned tables are copies` |
+| `endColor` | `table Assign a complete x/y/z vector table; returned tables are copies` |
+| `direction` | `table Assign a complete x/y/z vector table; returned tables are copies` |
+| `velocity` | `table Assign a complete x/y/z vector table; returned tables are copies` |
+| `gravity` | `table Assign a complete x/y/z vector table; returned tables are copies` |
+| `boxSize` | `table Assign a complete x/y/z vector table; returned tables are copies` |
+| `duration` | `number` |
+| `startDelay` | `number` |
+| `rate` | `number` |
+| `lifetimeMin` | `number` |
+| `lifetimeMax` | `number` |
+| `speedMin` | `number` |
+| `speedMax` | `number` |
+| `sizeMin` | `number` |
+| `sizeMax` | `number` |
+| `endSize` | `number` |
+| `alpha` | `number` |
+| `endAlpha` | `number` |
+| `radius` | `number` |
+| `coneAngle` | `number` |
+| `drag` | `number` |
+| `rotationMin` | `number` |
+| `rotationMax` | `number` |
+| `angularVelocity` | `number` |
+| `frameRate` | `number` |
+| `texture` | `string Empty selects bundled sprite; otherwise project-relative image` |
+
+### Laser fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `color` | `Vec3 Assign a complete RGB vector table (copy on read)` |
+| `intensity` | `number 0..100` |
+| `range` | `number 0.01..10000 metres` |
+| `width` | `number Core diameter 0.001..10 metres` |
+| `glowWidth` | `number Outer diameter; at least width, at most 100 metres` |
+| `impactSize` | `number Impact disc diameter 0.001..100 metres` |
+| `hit` | `boolean Read-only; latest simulation query hit a collider` |
+| `endPosition` | `Vec3 Read-only; latest beam endpoint in world space` |
+| `hitNormal` | `Vec3 Read-only; valid only when hit is true` |
+
+### LightShafts fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `direction` | `Vec3 Local emission direction; assign a complete nonzero vector` |
+| `height` | `number 0.01..1000 metres` |
+| `width` | `number Start width, 0.001..100 metres` |
+| `endWidth` | `number End width, 0.001..500 metres` |
+| `color` | `Vec3 RGB color; assign a complete vector` |
+| `intensity` | `number 0..100` |
+| `density` | `number 0..1` |
+| `falloff` | `number Profile edge exponent, 0.1..8` |
+| `streaks` | `number Profile streak frequency, 0..64` |
+| `fade` | `number Profile start fade, 0.01..1` |
+| `nearFade` | `number Camera near fade distance, 0.01..100 metres` |
+| `useBakedTexture` | `boolean Use the cached profile if available, else procedural fallback` |
+| `texture` | `string Project-relative profile image` |
+
+### CameraEffects fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `bloom` | `boolean` |
+| `colorGrading` | `boolean` |
+| `vignette` | `boolean` |
+| `depthOfField` | `boolean` |
+| `motionBlur` | `boolean Camera-only reprojection, no object velocities` |
+| `filmGrain` | `boolean` |
+| `chromaticAberration` | `boolean` |
+| `antiAliasing` | `boolean FXAA` |
+| `ambientOcclusion` | `boolean Six-tap SSAO` |
+| `nightVision` | `boolean Green or infrared-style luminance visualization` |
+| `nausea` | `boolean Animated screen distortion` |
+| `nightVisionMode` | `number 0 = green, 1 = infrared-style (not physical heat)` |
+| `nightVisionIntensity` | `number 0..1` |
+| `nauseaIntensity` | `number 0..1` |
+| `nauseaSpeed` | `number 0..5` |
+| `bloomIntensity` | `number 0..4` |
+| `bloomThreshold` | `number 0..8` |
+| `exposure` | `number -5..5 stops` |
+| `contrast` | `number 0..2` |
+| `saturation` | `number 0..2` |
+| `temperature` | `number -1..1` |
+| `vignetteIntensity` | `number 0..1` |
+| `focusDistance` | `number 0.01..10000 metres` |
+| `focusRange` | `number 0.01..10000 metres` |
+| `dofStrength` | `number 0..1` |
+| `motionStrength` | `number 0..1` |
+| `grainIntensity` | `number 0..0.2` |
+| `aberrationStrength` | `number 0..0.02` |
+| `aoIntensity` | `number 0..2` |
+| `aoRadius` | `number 0.01..5 metres` |
+
+### Fog fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean Global distance fog; first enabled active Fog in entity order wins` |
+| `color` | `table RGB 0..1; assign a complete x/y/z or three-element table (read returns a copy)` |
+| `density` | `number 0..10 inverse metres; zero is clear` |
+| `start` | `number Distance before fog begins, 0 or greater and less than end` |
+| `end` | `number Distance cap, greater than start and at most 1000000 metres; use fog["end"] in Lua` |
 
 ## Skybox1 to Skybox2 transition
 

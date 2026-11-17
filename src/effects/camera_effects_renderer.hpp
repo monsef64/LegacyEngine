@@ -288,6 +288,12 @@ class Renderer {
             glUniform1f(loc("motionScale"),
                         history ? float(std::clamp((1. / 60) / (now - it->second.time), 0., 2.))
                                 : 0);
+            glUniform3f(loc("fogColor"), c.fogR, c.fogG, c.fogB);
+            glUniform1f(loc("fogDensity"), c.fogDensity);
+            glUniform1f(loc("fogStart"), c.fogStart);
+            glUniform1f(loc("fogEnd"), c.fogEnd);
+            glUniform3f(loc("fadeColor"), c.fadeR, c.fadeG, c.fadeB);
+            glUniform1f(loc("fadeAmount"), c.fadeAmount);
             glUniform1f(loc("time"), float(std::fmod(now, 1000.)));
             glDrawArrays(GL_TRIANGLES, 0, 3);
             // Preserve scene depth for post-render debug overlays and later cameras.

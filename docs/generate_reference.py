@@ -9,6 +9,10 @@ OUTPUT = ROOT / 'docs/scripting-reference.md'
 
 # Executable fragments, not pseudo-code. Asset names are project-relative examples.
 GLOBALS = {
+ 'task': 'function onStart()\n    task(function()\n        wait(1)\n        debug.log("Independent task completed")\n    end)\nend',
+
+'fadeToColor': 'local fade = fadeToColor(color.black)\nfade:start(1)\n-- Later, reverse toward transparent:\nfade:stop(0.5)',
+
 'onCollisionEnter': 'function onCollisionEnter(collider)\n    if collider then debug.log("Hit", collider.gameObject:getName()) end\nend',
 'onCollisionStay': 'function onCollisionStay(collider)\n    if collider then debug.log("Touching", collider.gameObject:getName()) end\nend',
 'onCollisionExit': 'function onCollisionExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Removed collider", "separated")\nend',
@@ -93,6 +97,7 @@ for name in ('lockCursor', 'unlockCursor', 'hideCursor', 'showCursor', 'isCursor
     GLOBALS[name] = f'local result = {name}()\ndebug.log(result)'
 
 METHOD_ARGS = {
+'emit':'10', 'setPreset':'"Fire"',
 'getComponentInParent':'RigidBody', 'getComponentInChildren':'Camera',
 'findComponentInParent':'RigidBody', 'findComponentInChildren':'Camera',
 'addForce':'0, 10, 0', 'addImpulse':'0, 3, 0', 'setVelocity':'1, 0, 0', 'addVelocity':'0, 1, 0', 'movePosition':'0, 2, 0', 'moveRotation':'0, 90, 0', 'setLayers':"{'Default'}",
@@ -117,7 +122,7 @@ METHOD_ARGS = {
 'setCubemap':'"Sky/Evening.cubemap"', 'setHDR':'"Sky/studio.hdr"', 'setFace':'"front", "Sky/front.png"',
 'setTextures':', '.join(f'"Sky/{face}.png"' for face in ('right','left','top','bottom','front','back')),
 }
-NO_ARGS = set('reset cast castAll getVelocity getForward getBackward getRight getLeft getUp getDown jump getIsFreecam isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
+NO_ARGS = set('restart clear reset cast castAll getVelocity getForward getBackward getRight getLeft getUp getDown jump getIsFreecam isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
 
 
 def inventory():
@@ -162,6 +167,8 @@ def example(entry):
         return 'local object = GameObject.new("Player")' if name == 'new' else 'local object = GameObject.find("Player")\nif object then debug.log(object:getName()) end'
     if owner == 'CameraConstructor':
         return 'local camera = Camera.new("Player Camera")' if name == 'new' else 'local camera = Camera.getActive()\nif camera then debug.log(camera:getName()) end'
+    if owner == 'ColorFade':
+        return f'local fade = fadeToColor(color.black)\nfade:{name}(1)'
     if owner == 'LegacyDebug':
         return f'debug.{name}("Example message", self:getName())'
     if owner == 'GameObject':

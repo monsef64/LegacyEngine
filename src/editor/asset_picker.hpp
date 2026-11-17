@@ -2,6 +2,7 @@
 #include "editor/asset_icons.hpp"
 #include "editor/asset_preview_ui.hpp"
 #include "editor/script_explorer.hpp"
+#include "editor/value_context.hpp"
 #include <cfloat>
 #include <functional>
 
@@ -28,6 +29,14 @@ inline bool assetPicker(const char* label,
         search.Clear();
         inspected = value;
         root = assets ? assets->root : std::filesystem::path{};
+    }
+    {
+        char path[4097];
+        std::snprintf(path, sizeof(path), "%s", value.c_str());
+        if (EditorValues::textContext(path, sizeof(path)) && (path[0] == '\0' || supported(path))) {
+            value = path;
+            changed = true;
+        }
     }
     if (active == id) {
         if (assets && root != assets->root) {
