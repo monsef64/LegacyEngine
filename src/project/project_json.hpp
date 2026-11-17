@@ -123,7 +123,8 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"angularVelocity", 'f', 3},
       {"drag", 'f'},
       {"angularDrag", 'f'},
-      {"isKinematic", 'b'}}},
+      {"isKinematic", 'b'},
+      {"floatOnRivers", 'b'}}},
     {"LuaScript", {}},
     {"Camera",
      {{"active", 'b'},
@@ -285,7 +286,8 @@ inline void writeSchema(std::ostream& out, const Json& original, const std::vect
             out << std::quoted(std::string{}) << ' ';
             continue;
         }
-        if (!object.contains(name) && (name == "isTrigger" || name == "isKinematic")) {
+        if (!object.contains(name) &&
+            (name == "isTrigger" || name == "isKinematic" || name == "floatOnRivers")) {
             out << false << ' ';
             continue;
         }
@@ -397,7 +399,7 @@ inline std::string toLegacy(const Json& doc) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 28\n";
+    out << std::setprecision(17) << "LegacyEngineProject 29\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),

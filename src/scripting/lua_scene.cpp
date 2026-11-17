@@ -212,6 +212,7 @@ Field field(lua_State* L, const Component& c, const char* key) {
         auto& v = h.world->get<RigidBody>(h.entity);
         FIELD(mass, Number);
         FIELD(useGravity, Boolean);
+        FIELD(floatOnRivers, Boolean);
         FIELD(linearVelocity, Vec);
         FIELD(angularVelocity, Vec);
         FIELD(drag, Number);
