@@ -44,8 +44,9 @@ jobs:
           -DBUILD_TESTING=OFF
       - name: Build
         run: |
-          set -o pipefail
-          cmake --build build --target LegacyEngine --parallel 4 2>&1 | tee build.log
+          cmake --build build --target LegacyEngine --parallel 4 > build.log 2>&1 || {
+            echo "build failed"; exit 1;
+          }
       # Compiler errors are worth reading on the run page itself, not only in
       # the log download, which is not always available.
       - name: Summarise build errors

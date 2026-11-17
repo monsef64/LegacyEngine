@@ -136,8 +136,8 @@ jobs:
           cmake -S . -B build-qt -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DBUILD_TESTING=ON \
-            -DLEGACY_VENDORED_SDL=ON 2>&1 | tail -5
-          cmake --build build-qt --target qt_editor_shell_tests --parallel 2 2>&1 | tail -20
+            -DLEGACY_VENDORED_SDL=ON 2>&1 | tee shell-config.log | tail -5
+          cmake --build build-qt --target qt_editor_shell_tests --parallel 2 2>&1 | tee shell-build.log | tail -20
           ./build-qt/qt_editor_shell_tests 2>&1 | tee shell.log
       - name: Summarise the shell test
         if: failure()
@@ -147,7 +147,10 @@ jobs:
           {
             echo '### Qt editor shell test'
             echo '```'
-            tail -40 shell.log 2>/dev/null || echo 'no output captured'
+            echo '--- run ---'; tail -40 shell.log 2>/dev/null || echo 'no run output'
+            echo '--- build errors ---'
+            grep -E 'error:|fatal error|undefined reference' shell-build.log 2>/dev/null | head -40 || tail -30 shell-build.log 2>/dev/null || echo 'no build output'
+            echo '--- configure ---'; tail -15 shell-config.log 2>/dev/null || echo 'no configure output'
             echo '```'
           } > shell-report.md
           cat shell-report.md >> "$GITHUB_STEP_SUMMARY"
