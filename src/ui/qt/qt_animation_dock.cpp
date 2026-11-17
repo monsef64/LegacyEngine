@@ -434,7 +434,10 @@ void AnimationDock::build() {
         Q_EMIT changed();
     });
     clipLayout->addWidget(newClip);
-    draftPath_ = new QLineEdit(QString::fromUtf8(window_->draftPath()), clipBox);
+    // Left empty here: build() runs from the constructor, which is before
+    // bind() supplies the window, so there is nothing to read from yet.
+    // syncTimeline() fills this in from the window once it is bound.
+    draftPath_ = new QLineEdit(clipBox);
     connect(draftPath_, &QLineEdit::textEdited, this, [this](const QString& text) {
         window_->setDraftPath(text.toStdString());
     });
@@ -551,6 +554,9 @@ void AnimationDock::syncTimeline() {
     property_->setCurrentIndex(std::clamp(window_->propertyIndex(), 0,
                                           int(std::size(animationProperties)) - 1));
     target_->setText(QString::fromUtf8(window_->draftTarget()));
+    if (!draftPath_->hasFocus()) {
+        draftPath_->setText(QString::fromUtf8(window_->draftPath()));
+    }
     loading_ = false;
     update(0.0f);
 }
