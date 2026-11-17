@@ -99,3 +99,68 @@ Transparent effects do not contribute opaque depth, baked lighting or fog depth.
 - During Play change clouds/river curve, then Stop; verify the original scene returns.
 - Check OpenGL visuals, transparent overlap and GPU timings on target hardware;
   verify steady geometry is not re-uploaded when only color or flow changes.
+
+## Still/flowing water and transparent mode
+
+River Inspector controls (also available as Lua properties):
+
+- **Flowing** (`flowing`) freezes the base water animation when disabled.
+- **Flow amount** (`flowAmount`, 0–2) multiplies **Flow speed** (`speed`). Zero
+  gives still water; negative speed reverses flow. Surface detail remains a
+  separate control, so still water can retain subtle static roughness.
+- **Transparent water shader** (`transparent`) selects the clearer water mode,
+  with low face-on opacity, increasing grazing-angle Fresnel reflection and sun
+  highlights. **Opacity** and **Water color** still apply. The original mode is
+  the default for existing scenes. Transparency is alpha-blended transmission,
+  not scene refraction, depth-based absorption or real scene reflections.
+- **Collider contact effects** (`collisionEffects`) and **Contact strength**
+  (`collisionStrength`, 0–2) control animated contact rings and foam. They work
+  in either shader mode and can animate even when the base water is still.
+
+Contact effects intersect the sampled river ribbon with transformed primitive
+collider bounds, including collider offsets, rotation and scale. Boxes are
+supported; sphere/capsule/cone contacts use conservative bounds. Triggers and
+triangle-mesh colliders are excluded. Each rendered river considers at most 512
+eligible colliders and displays at most 16 contacts. Effects follow current
+surface intersections and disappear when contact ends; they are not persistent
+splash particles, buoyancy, rigid-body forces or fluid simulation. No contact
+state is serialized, and no components are modified by rendering.
+
+The added settings have backward-compatible defaults and are saved with the
+River component. Lua can set, for example, `river.flowing = false`,
+`river.transparent = true` or `river.collisionStrength = 0.8`.
+
+### Manual verification: water modes and contact
+
+1. Toggle Flowing, set Flow amount to zero, and reverse Flow speed. Confirm
+   base flow stops/reverses independently of contact effects.
+2. Toggle transparent mode over opaque underwater objects. Inspect face-on and
+   grazing angles and Opacity values. Check both modes on curved/sloped rivers.
+3. Drop a box through the surface in Play. Move/rotate/scale boxes, including
+   offset colliders, across banks and endpoints. Check rings/foam only during
+   surface overlap, not when fully above or below it.
+4. Check spheres/capsules, disabled objects and trigger exclusion; disable
+   contact effects and set Contact strength to zero.
+5. Save/reopen new settings, load an older scene, and verify Lua properties.
+   Make temporary changes in Play then Stop: normal edit-state restoration
+   must preserve the original component settings.
+
+## Scene camera capture and empty origins
+
+Scene right-drag freelook and Alt-left-drag orbit now use relative mouse input.
+While captured, mouse interaction with ImGui panels is suppressed; releasing the
+navigation button or losing window focus releases capture. Runtime/game cursor
+locking remains separate.
+
+Alt-click without motion does not re-aim the camera. During an orbit, the gizmo
+is visible but non-interactive at the selected Transform origin, including empty
+objects and particle emitters. An empty hierarchy with no meshes falls back to
+its own origin in Center mode rather than inventing a center from child positions.
+
+Manual checks: create an empty at a nonzero position, with and without children;
+compare Inspector position before/after repeated Alt-drags and Alt-clicks. Repeat
+in Origin/Center modes and with particles. During long right-drags, move toward
+Hierarchy/Inspector, click other buttons and verify no selection or editing occurs.
+Release, Alt-Tab and refocus; confirm the pointer and normal UI interaction return.
+Check Windows/MinGW and the desktop SDL backend: the console build does not
+validate native capture or rendered appearance.

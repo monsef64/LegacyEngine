@@ -13,6 +13,8 @@ struct CloudSystem {
 };
 struct River {
     bool enabled = true, editCurve = false;
+    bool flowing = true, transparent = false, collisionEffects = true;
+    float flowAmount = 1, collisionStrength = .5f;
     Vec3 color{.03f, .28f, .36f};
     float width = 3, opacity = .85f, speed = 1, waveScale = 2, waveStrength = .15f, foam = .3f;
     int subdivisions = 12;
@@ -49,6 +51,7 @@ inline bool valid(const CloudSystem& c) {
 }
 inline bool valid(const River& r) {
     if (!color(r.color) || !range(r.width, .05f, 1000) || !range(r.opacity, 0, 1) ||
+        !range(r.flowAmount, 0, 2) || !range(r.collisionStrength, 0, 2) ||
         !range(r.speed, -100, 100) || !range(r.waveScale, .01f, 100) ||
         !range(r.waveStrength, 0, 1) || !range(r.foam, 0, 1) || r.subdivisions < 2 ||
         r.subdivisions > 32 || r.points.size() < 2 || r.points.size() > 64) {
@@ -81,6 +84,11 @@ inline Json settings(const River& r) {
     }
     return {{"enabled", r.enabled},
             {"color", vec(r.color)},
+            {"flowing", r.flowing},
+            {"flowAmount", r.flowAmount},
+            {"transparent", r.transparent},
+            {"collisionEffects", r.collisionEffects},
+            {"collisionStrength", r.collisionStrength},
             {"width", r.width},
             {"opacity", r.opacity},
             {"speed", r.speed},
@@ -109,6 +117,11 @@ template <class T> T parse(const Json& j) {
             c.size = vec(j.at("size"));
         }
     } else {
+        ENV_VALUE(flowing);
+        ENV_VALUE(flowAmount);
+        ENV_VALUE(transparent);
+        ENV_VALUE(collisionEffects);
+        ENV_VALUE(collisionStrength);
         ENV_VALUE(width);
         ENV_VALUE(waveScale);
         ENV_VALUE(waveStrength);

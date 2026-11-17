@@ -52,7 +52,8 @@ class TransformEditor {
               float aspect,
               const EditorRect* scene = nullptr,
               ImDrawList* drawList = nullptr,
-              const AssetManager* assets = nullptr);
+              const AssetManager* assets = nullptr,
+              bool navigationOnly = false);
 
   private:
     bool drawColliderFaces(World& world,

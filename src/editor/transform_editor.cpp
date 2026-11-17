@@ -51,7 +51,8 @@ void TransformEditor::draw(World& world,
                            float aspect,
                            const EditorRect* scene,
                            ImDrawList* drawList,
-                           const AssetManager* assets) {
+                           const AssetManager* assets,
+                           bool navigationOnly) {
     if (!enabled || !world.alive(entity) || !world.has<Transform>(entity)) {
         finish(world);
         return;
@@ -59,19 +60,20 @@ void TransformEditor::draw(World& world,
     if ((heldBody_ || face_ >= 0) && heldEntity_ != entity) {
         finish(world);
     }
-    if (scene && drawColliderFaces(world,
-                                   entity,
-                                   camera,
-                                   aspect,
-                                   *scene,
-                                   drawList ? drawList : ImGui::GetBackgroundDrawList())) {
+    if (!navigationOnly && scene &&
+        drawColliderFaces(world,
+                          entity,
+                          camera,
+                          aspect,
+                          *scene,
+                          drawList ? drawList : ImGui::GetBackgroundDrawList())) {
         ImGuizmo::Enable(false);
         return;
     }
     Transform& transform = world.get<Transform>(entity);
     if (!dragging_) {
         pivotLocal_ = {};
-        if (centerPivot_) {
+        if (centerPivot_ && !navigationOnly) {
             const auto center = selectionCenter(world, entity, assets);
             auto local = rotateVector(Quat{-transform.rotation.x,
                                            -transform.rotation.y,
@@ -89,7 +91,7 @@ void TransformEditor::draw(World& world,
     const Mat4 view = lookAt(camera.position(), camera.target, camera.up());
     const Mat4 projection = perspective(camera.fieldOfView, aspect, 0.1f, 200);
     const ImGuizmo::OPERATION operations[]{ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE};
-    ImGuizmo::Enable(true);
+    ImGuizmo::Enable(!navigationOnly);
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist(drawList ? drawList : ImGui::GetBackgroundDrawList());
     const auto* viewport = ImGui::GetMainViewport();
@@ -106,8 +108,8 @@ void TransformEditor::draw(World& world,
                                               model.m,
                                               nullptr,
                                               ImGui::GetIO().KeyCtrl ? snapValues : nullptr);
-    hovered_ = ImGuizmo::IsOver(operations[static_cast<int>(tool_)]);
-    dragging_ = ImGuizmo::IsUsing();
+    hovered_ = !navigationOnly && ImGuizmo::IsOver(operations[static_cast<int>(tool_)]);
+    dragging_ = !navigationOnly && ImGuizmo::IsUsing();
     if (dragging_ && !wasDragging) {
         scaleAtStart_ = transform.scale;
     }
@@ -118,7 +120,7 @@ void TransformEditor::draw(World& world,
         heldBody_ = true;
         world.remove<RigidBody>(entity);
     }
-    if (changed) {
+    if (changed && !navigationOnly) {
         const auto* collider = world.tryGet<Collider>(entity);
         const bool round = collider && (collider->shape == ColliderShape::Sphere ||
                                         collider->shape == ColliderShape::Capsule ||
@@ -338,8 +340,8 @@ Vec3 TransformEditor::selectionCenter(World& world, Entity selected, const Asset
         boundsRoot_ = assets->root;
         boundsRevision_ = modelAssetRevision;
     }
-    bool haveMeshes = false, havePoints = false;
-    Vec3 low{}, high{}, pointLow{}, pointHigh{};
+    bool haveMeshes = false;
+    Vec3 low{}, high{};
     auto include = [](Vec3 p, Vec3& a, Vec3& b, bool& any) {
         if (!any) {
             a = b = p;
@@ -358,9 +360,6 @@ Vec3 TransformEditor::selectionCenter(World& world, Entity selected, const Asset
             continue;
         }
         const auto& pose = world.get<Transform>(entity);
-        if (entity != selected) {
-            include(pose.position, pointLow, pointHigh, havePoints);
-        }
         const auto* mesh = world.tryGet<MeshRenderer>(entity);
         if (!mesh) {
             continue;
@@ -399,7 +398,7 @@ Vec3 TransformEditor::selectionCenter(World& world, Entity selected, const Asset
             }
         }
     }
-    return haveMeshes   ? (low + high) * .5f
-           : havePoints ? (pointLow + pointHigh) * .5f
-                        : world.get<Transform>(selected).position;
+    // An empty hierarchy has no mesh center. Never invent an offset pivot
+    // from child origins: empties and particle emitters use their actual origin.
+    return haveMeshes ? (low + high) * .5f : world.get<Transform>(selected).position;
 }

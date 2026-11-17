@@ -48,6 +48,9 @@ void main(){localPoint=position;worldPoint=(model*vec4(position,1)).xyz;uv=texco
             f = compile(GL_FRAGMENT_SHADER, R"(#version 330 core
 in vec3 localPoint;in vec3 worldPoint;in vec2 uv;out vec4 fragColor;
 uniform mat4 vp,model,inverseModel;uniform vec3 eye,tint;uniform int mode,steps;
+uniform int transparentWater,contactCount;
+uniform vec4 contacts[16];
+uniform float contactStrength;
 uniform float handedness,time,opacity,speed,noiseScale,coverage,density,waveScale,waveStrength,foam;
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -62,6 +65,16 @@ void main(){
   vec2 p=vec2(uv.x*2.,uv.y)*waveScale;
   vec2 drift=vec2(time*speed*.027,-time*speed*.11);
   float detail=waterNoise(p+drift)*.65+waterNoise(p*2.13-drift*.7+17.)*.35;
+  float contactFoam=0.;
+  // Bounded world-space surface contacts: expanding rings and a foamy collar.
+  for(int i=0;i<16;++i){if(i>=contactCount)break;
+   float radius=contacts[i].w;
+   float d=length(worldPoint-contacts[i].xyz);
+   float band=max(0.,d-radius);
+   float envelope=exp(-band*2.)*smoothstep(radius*.6,radius,d);
+   detail+=sin(band*14.-time*5.)*envelope*contactStrength*.18;
+   contactFoam+=envelope*(.55+.45*sin(band*14.-time*5.))*contactStrength;
+  }
   vec3 dx=dFdx(worldPoint),dy=dFdy(worldPoint),viewDir=normalize(eye-worldPoint);
   vec3 n=normalize(cross(dx,dy));if(dot(n,viewDir)<0.)n=-n;
   vec3 rx=cross(dy,n),ry=cross(n,dx);float det=dot(dx,rx);
@@ -80,6 +93,15 @@ void main(){
   float edgeFoam=foam*smoothstep(.82,.99,abs(uv.x*2.-1.))*smoothstep(.48,.78,detail);
   vec3 c=mix(body,sky,fresnel)+vec3(1.,.96,.85)*specular+vec3(.65,.72,.7)*edgeFoam;
   float alpha=clamp(opacity+fresnel*(1.-opacity),0.,1.)*(1.-smoothstep(.94,1.,abs(uv.x*2.-1.)));
+  if(transparentWater!=0){
+   // Physically motivated grazing reflection, low face-on opacity and tint.
+   // Standard alpha transmission shows underlying scene geometry; no screen copy.
+   c=mix(tint*.7,sky,fresnel)+vec3(1.,.96,.85)*specular;
+   alpha=clamp(opacity*.42+fresnel*(1.-opacity*.42),0.,1.)*
+     (1.-smoothstep(.94,1.,abs(uv.x*2.-1.)));
+  }
+  c=mix(c,vec3(.78,.88,.9),clamp(contactFoam,0.,.8));
+  alpha=max(alpha,clamp(contactFoam,0.,.75)*(1.-smoothstep(.94,1.,abs(uv.x*2.-1.))));
   fragColor=vec4(c,alpha);return;
  }
  vec3 wind=vec3(time*speed,0,time*speed*.3);
@@ -186,6 +208,109 @@ void main(){
             lastR = rr;
         }
         return v;
+    }
+
+    struct Contact {
+        float x, y, z, radius;
+    };
+    // Visual surface intersections, not rigid-body forces. Bounds are deliberately
+    // conservative for round colliders; triggers and mesh colliders are excluded.
+    static std::vector<Contact>
+    riverContacts(World& world, Entity riverEntity, const Transform& pose, const River& river) {
+        std::vector<Contact> result;
+        struct Segment {
+            Vec3 a, b, side;
+        };
+        std::vector<Segment> segments;
+        auto worldPoint = [&](Vec3 p) {
+            return pose.position + rotateVector(pose.rotation, p * pose.scale);
+        };
+        const int samples = (int(river.points.size()) - 1) * river.subdivisions;
+        for (int i = 0; i < samples; ++i) {
+            const auto a = Environment::curve(river, float(i) / samples);
+            const auto b = Environment::curve(river, float(i + 1) / samples);
+            auto side = normalize(Vec3{-(b - a).z, 0, (b - a).x});
+            if (dot(side, side) < .1f) {
+                side = {1, 0, 0};
+            }
+            segments.push_back(
+                {worldPoint(a),
+                 worldPoint(b),
+                 rotateVector(pose.rotation, side * pose.scale) * (river.width * .5f)});
+        }
+        unsigned considered = 0;
+        world.eachReadOnly<Transform, Collider>(
+            [&](Entity e, const Transform& t, const Collider& c) {
+                if (e == riverEntity || result.size() >= 16 || considered >= 512 ||
+                    !isActive(world, e) || c.isTrigger || c.shape == ColliderShape::Mesh) {
+                    return;
+                }
+                ++considered;
+                Vec3 half;
+                if (c.shape == ColliderShape::Box) {
+                    auto size = c.size * t.scale;
+                    half = {std::abs(size.x) * .5f, std::abs(size.y) * .5f, std::abs(size.z) * .5f};
+                } else {
+                    const float radius =
+                        std::abs(c.radius) *
+                        std::max({std::abs(t.scale.x), std::abs(t.scale.y), std::abs(t.scale.z)});
+                    half = {radius,
+                            radius + (c.shape == ColliderShape::Capsule
+                                          ? std::abs(c.height * t.scale.y) * .5f
+                                          : 0),
+                            radius};
+                    if (c.shape == ColliderShape::Cone) {
+                        half.y = std::abs(c.height * t.scale.y) * .5f;
+                    }
+                }
+                const auto center = t.position + rotateVector(t.rotation, c.center * t.scale);
+                if (!Environment::finite(center) || !Environment::finite(half)) {
+                    return;
+                }
+                const auto ax = rotateVector(t.rotation, {1, 0, 0}),
+                           ay = rotateVector(t.rotation, {0, 1, 0}),
+                           az = rotateVector(t.rotation, {0, 0, 1});
+                auto extent = [&](Vec3 direction) {
+                    return std::abs(dot(direction, ax)) * half.x +
+                           std::abs(dot(direction, ay)) * half.y +
+                           std::abs(dot(direction, az)) * half.z;
+                };
+                float best = 1e30f;
+                Vec3 contact{};
+                float contactRadius = 0;
+                for (const auto& segment : segments) {
+                    const auto delta = segment.b - segment.a;
+                    const float len2 = dot(delta, delta);
+                    if (len2 < 1e-10f) {
+                        continue;
+                    }
+                    const auto along = normalize(delta), across = normalize(segment.side);
+                    const auto normal = normalize(cross(along, across));
+                    if (dot(normal, normal) < .1f) {
+                        continue;
+                    }
+                    const float u = std::clamp(dot(center - segment.a, delta) / len2, 0.f, 1.f);
+                    const auto nearest = segment.a + delta * u;
+                    const auto offset = center - nearest;
+                    const float width = std::sqrt(dot(segment.side, segment.side));
+                    if (std::abs(dot(offset, normal)) > extent(normal) + .03f ||
+                        std::abs(dot(offset, across)) > width + extent(across) ||
+                        std::abs(dot(offset, along)) > extent(along) + .03f) {
+                        continue;
+                    }
+                    const float score = dot(offset, offset);
+                    if (score < best) {
+                        best = score;
+                        contact = center - normal * dot(offset, normal);
+                        contactRadius =
+                            std::clamp(std::min(extent(along), extent(across)), .05f, 20.f);
+                    }
+                }
+                if (best < 1e29f) {
+                    result.push_back({contact.x, contact.y, contact.z, contactRadius});
+                }
+            });
+        return result;
     }
 
   public:
@@ -321,7 +446,16 @@ void main(){
                     keyValue(p.y);
                     keyValue(p.z);
                 }
-                scalar("speed", river->speed);
+                scalar("speed", river->flowing ? river->speed * river->flowAmount : 0);
+                glUniform1i(loc("transparentWater"), river->transparent ? 1 : 0);
+                scalar("contactStrength", river->collisionStrength);
+                const auto contacts = river->collisionEffects && river->collisionStrength > 0
+                                          ? riverContacts(world, item.e, t, *river)
+                                          : std::vector<Contact>{};
+                glUniform1i(loc("contactCount"), int(contacts.size()));
+                if (!contacts.empty()) {
+                    glUniform4fv(loc("contacts[0]"), GLsizei(contacts.size()), &contacts[0].x);
+                }
                 scalar("opacity", river->opacity);
                 scalar("waveScale", river->waveScale);
                 scalar("waveStrength", river->waveStrength);

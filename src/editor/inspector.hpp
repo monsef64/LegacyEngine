@@ -1199,7 +1199,12 @@ inline void drawInspector(World& world,
                         EditorValues::ColorEdit3("Water color", &r->color.x);
                         EditorValues::DragFloat("Width", &r->width, .1f, .05f, 1000);
                         EditorValues::SliderFloat("Opacity", &r->opacity, 0, 1);
+                        EditorValues::Checkbox("Flowing", &r->flowing);
+                        EditorValues::SliderFloat("Flow amount", &r->flowAmount, 0, 2);
                         EditorValues::DragFloat("Flow speed", &r->speed, .1f, -100, 100);
+                        EditorValues::Checkbox("Transparent water shader", &r->transparent);
+                        EditorValues::Checkbox("Collider contact effects", &r->collisionEffects);
+                        EditorValues::SliderFloat("Contact strength", &r->collisionStrength, 0, 2);
                         EditorValues::DragFloat("Ripple scale", &r->waveScale, .05f, .01f, 100);
                         EditorValues::SliderFloat("Surface detail", &r->waveStrength, 0, 1);
                         EditorValues::SliderFloat("Edge foam", &r->foam, 0, 1);
