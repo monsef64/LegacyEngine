@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <imgui.h>
+#include "ui/mygui_ui.hpp"
 #include <sstream>
 struct EditorSettings {
     bool external = false, visible = false, alwaysShowColliders = false;
@@ -71,7 +71,7 @@ struct EditorSettings {
                 maxFps = std::clamp(fps, 0, 240);
             }
         }
-        if (ImGui::GetCurrentContext()) {
+        if (ui::hasContext()) {
             applyEditorPalette(theme);
         }
     }
@@ -164,66 +164,66 @@ struct EditorSettings {
         if (!visible) {
             return;
         }
-        const auto area = ImGui::GetMainViewport()->WorkSize;
-        ImGui::SetNextWindowSize(ImVec2(std::min(540.0f, area.x), std::min(560.0f, area.y)),
-                                 ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSizeConstraints(
-            ImVec2(std::min(360.0f, area.x), std::min(380.0f, area.y)), area);
-        if (ImGui::Begin("Editor Settings", &visible, ImGuiWindowFlags_NoDocking)) {
-            ImGui::SetNextItemWidth(-120);
-            if (ImGui::Combo(
+        const auto area = ui::mainViewport()->WorkSize;
+        ui::setNextWindowSize(ui::Vec2(std::min(540.0f, area.x), std::min(560.0f, area.y)),
+                                 ui::Cond_FirstUseEver);
+        ui::setNextWindowSizeConstraints(
+            ui::Vec2(std::min(360.0f, area.x), std::min(380.0f, area.y)), area);
+        if (ui::beginWindow("Editor Settings", &visible, ui::WindowFlags_NoDocking)) {
+            ui::setNextItemWidth(-120);
+            if (ui::combo(
                     "Theme", &theme, "Legacy Dark\0Grey\0Unity 5 Classic\0Unity Dark Classic\0")) {
                 applyEditorPalette(theme);
                 save();
             }
-            if (ImGui::Checkbox("Always Show Colliders", &alwaysShowColliders)) {
+            if (ui::checkbox("Always Show Colliders", &alwaysShowColliders)) {
                 save();
             }
-            if (ImGui::SliderFloat("Raycast line thickness", &raycastThickness, 1, 8, "%.1f px")) {
+            if (ui::sliderFloat("Raycast line thickness", &raycastThickness, 1, 8, "%.1f px")) {
                 save();
             }
-            if (ImGui::SliderInt("FPS limit (VSync off)", &maxFps, 0, 240, "%d")) {
+            if (ui::sliderInt("FPS limit (VSync off)", &maxFps, 0, 240, "%d")) {
                 save();
             }
-            ImGui::TextDisabled(
+            ui::textDisabled(
                 "VSync takes priority. Limit 0 = uncapped; background target = 30 FPS.");
-            if (ImGui::InputInt("Autosave delay (seconds)", &autosaveSeconds)) {
+            if (ui::inputInt("Autosave delay (seconds)", &autosaveSeconds)) {
                 autosaveSeconds = std::clamp(autosaveSeconds, 0, 3600);
                 save();
             }
-            ImGui::TextDisabled(
+            ui::textDisabled(
                 "0 disables autosave. Only previously saved projects are autosaved.");
-            ImGui::SeparatorText("Scene Grid");
+            ui::separatorText("Scene Grid");
             auto next = grid;
-            bool changed = ImGui::Checkbox("Show grid", &next.visible);
-            changed |= ImGui::Combo("Plane", &next.plane, "XZ\0XY\0YZ\0");
-            changed |= ImGui::DragInt("Cells", &next.cells, 1, 2, 512);
-            changed |= ImGui::DragFloat("Spacing", &next.spacing, .05f, .01f, 1000);
-            changed |= ImGui::DragFloat3("Grid position (X/Y/Z)", &next.position.x, .05f);
-            changed |= ImGui::ColorEdit3("Grid color", &next.color.x);
+            bool changed = ui::checkbox("Show grid", &next.visible);
+            changed |= ui::combo("Plane", &next.plane, "XZ\0XY\0YZ\0");
+            changed |= ui::dragInt("Cells", &next.cells, 1, 2, 512);
+            changed |= ui::dragFloat("Spacing", &next.spacing, .05f, .01f, 1000);
+            changed |= ui::dragFloat3("Grid position (X/Y/Z)", &next.position.x, .05f);
+            changed |= ui::colorEdit3("Grid color", &next.color.x);
             if (changed && next.valid()) {
                 grid = next;
                 save();
             }
-            ImGui::SeparatorText("Editor");
+            ui::separatorText("Editor");
             int choice = external ? 1 : 0;
-            ImGui::SetNextItemWidth(-120);
-            if (ImGui::Combo("Code editor", &choice, "Internal\0External (VS Code)\0")) {
+            ui::setNextItemWidth(-120);
+            if (ui::combo("Code editor", &choice, "Internal\0External (VS Code)\0")) {
                 external = choice == 1;
                 save();
                 if (external) {
                     openExternal(folder);
                 }
             }
-            ImGui::TextWrapped(
+            ui::textWrapped(
                 "External mode opens the selected script in VS Code when double-clicked. VS Code's code command must be in PATH (standard Windows installations are also detected).");
-            if (external && ImGui::Button("Open project in VS Code")) {
+            if (external && ui::button("Open project in VS Code")) {
                 openExternal(folder);
             }
             if (!error.empty()) {
-                ImGui::TextWrapped("%s", error.c_str());
+                ui::textWrapped("%s", error.c_str());
             }
         }
-        ImGui::End();
+        ui::endWindow();
     }
 };

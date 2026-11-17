@@ -6,46 +6,46 @@ inline bool assetPicker(const char* label,
                         std::string& value,
                         const AssetManager* assets,
                         const std::function<bool(const std::string&)>& supported) {
-    ImGui::PushID(label);
+    ui::pushId(label);
     bool changed = false;
     if (label[0] != '#') {
-        ImGui::TextUnformatted(label);
+        ui::textUnformatted(label);
     }
-    static ImGuiID active = 0;
-    static ImGuiTextFilter search;
-    const auto id = ImGui::GetID("Asset selection");
-    if (ImGui::Button(value.empty() ? "None - select asset" : value.c_str(), ImVec2(-1, 0))) {
+    static ui::ID active = 0;
+    static ui::TextFilter search;
+    const auto id = ui::getId("Asset selection");
+    if (ui::button(value.empty() ? "None - select asset" : value.c_str(), ui::Vec2(-1, 0))) {
         active = id;
-        search.Clear();
+        search.clear();
     }
     if (active == id) {
-        ImGui::SetNextWindowSize(ImVec2(560, 420), ImGuiCond_FirstUseEver);
+        ui::setNextWindowSize(ui::Vec2(560, 420), ui::Cond_FirstUseEver);
         bool open = true;
-        if (ImGui::Begin("Select asset###MatchingAssetSelector", &open)) {
-            search.Draw("Search", -1);
-            ImGui::BeginChild("Matching assets");
-            if (ImGui::Selectable("None", value.empty())) {
+        if (ui::beginWindow("Select asset###MatchingAssetSelector", &open)) {
+            search.draw("Search", -1);
+            ui::beginChild("Matching assets");
+            if (ui::selectable("None", value.empty())) {
                 value.clear();
                 changed = true;
                 open = false;
             }
             if (assets) {
                 for (const auto& path : assets->files()) {
-                    if (supported(path) && search.PassFilter(path.c_str()) &&
-                        ImGui::Selectable(path.c_str(), value == path)) {
+                    if (supported(path) && search.passFilter(path.c_str()) &&
+                        ui::selectable(path.c_str(), value == path)) {
                         value = path;
                         changed = true;
                         open = false;
                     }
                 }
             }
-            ImGui::EndChild();
+            ui::endChild();
         }
-        ImGui::End();
+        ui::endWindow();
         if (!open) {
             active = 0;
         }
     }
-    ImGui::PopID();
+    ui::popId();
     return changed;
 }

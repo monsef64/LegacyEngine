@@ -209,8 +209,8 @@ class AssetPreviewRenderer {
     }
 
     const AssetPreviewData& get(const AssetManager& assets, const std::string& path, int index) {
-        if (iconFrame_ != ImGui::GetFrameCount()) {
-            iconFrame_ = ImGui::GetFrameCount();
+        if (iconFrame_ != ui::frameCount()) {
+            iconFrame_ = ui::frameCount();
             iconBudget_ = 4;
         }
         if (index == 2 && !icons_.count(path)) {

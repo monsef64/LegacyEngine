@@ -123,9 +123,9 @@ class ModelPreviewWindow {
         if (world_ && openedRevision_ != modelAssetRevision) {
             open(assets, path_, renderer);
         }
-        ImGui::SetNextWindowSize(ImVec2(760, 600), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Model Preview", &visible)) {
-            ImGui::TextWrapped("%s", path_.c_str());
+        ui::setNextWindowSize(ui::Vec2(760, 600), ui::Cond_FirstUseEver);
+        if (ui::beginWindow("Model Preview", &visible)) {
+            ui::textWrapped("%s", path_.c_str());
             if (world_) {
                 static const Json emptyClips = Json::array();
                 const auto& clips =
@@ -201,26 +201,26 @@ class ModelPreviewWindow {
                     streaming_ = renderer.streaming();
                     lastView_ = view;
                 }
-                float width = std::max(1.f, ImGui::GetContentRegionAvail().x);
-                ImGui::Image(static_cast<ImTextureID>(surface_.texture),
-                             ImVec2(width, width * 405 / 720),
-                             ImVec2(0, 1),
-                             ImVec2(1, 0));
-                if (ImGui::IsItemHovered()) {
-                    if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+                float width = std::max(1.f, ui::contentRegionAvail().x);
+                ui::image(static_cast<ui::TextureID>(surface_.texture),
+                             ui::Vec2(width, width * 405 / 720),
+                             ui::Vec2(0, 1),
+                             ui::Vec2(1, 0));
+                if (ui::isItemHovered()) {
+                    if (ui::isMouseDragging(ui::MouseButton_Right)) {
                         camera_.orbit(camera_.target,
-                                      ImGui::GetIO().MouseDelta.x,
-                                      ImGui::GetIO().MouseDelta.y);
+                                      ui::io().MouseDelta.x,
+                                      ui::io().MouseDelta.y);
                     }
-                    camera_.zoom(ImGui::GetIO().MouseWheel);
+                    camera_.zoom(ui::io().MouseWheel);
                 }
-                ImGui::BeginDisabled(!hasClips);
+                ui::beginDisabled(!hasClips);
                 const auto label =
                     hasClips ? clips[clip_].at("name").get<std::string>() : "No animations";
-                if (ImGui::BeginCombo("Animation", label.c_str())) {
+                if (ui::beginCombo("Animation", label.c_str())) {
                     for (int i = 0; i < int(clips.size()); ++i) {
-                        ImGui::PushID(i);
-                        if (ImGui::Selectable(clips[i].at("name").get<std::string>().c_str(),
+                        ui::pushId(i);
+                        if (ui::selectable(clips[i].at("name").get<std::string>().c_str(),
                                               clip_ == i)) {
                             if (i != clip_ && blendClips_ && playing_ && fadeSeconds_ > 0) {
                                 if (a.blendWeight < 1) {
@@ -259,33 +259,33 @@ class ModelPreviewWindow {
                             time_ = 0;
                             bind_ = false;
                         }
-                        ImGui::PopID();
+                        ui::popId();
                     }
-                    ImGui::EndCombo();
+                    ui::endCombo();
                 }
-                ImGui::Checkbox("Blend clip changes", &blendClips_);
-                ImGui::SliderFloat("Cross-fade seconds", &fadeSeconds_, 0, 5, "%.2f s");
-                if (ImGui::SliderFloat("Time", &time_, 0, std::max(duration, .001f), "%.3f s")) {
+                ui::checkbox("Blend clip changes", &blendClips_);
+                ui::sliderFloat("Cross-fade seconds", &fadeSeconds_, 0, 5, "%.2f s");
+                if (ui::sliderFloat("Time", &time_, 0, std::max(duration, .001f), "%.3f s")) {
                     bind_ = false;
                     playing_ = false;
                     fadeDuration_ = 0;
                     a.blendWeight = 1;
                     a.blendFrozenPose.clear();
                 }
-                ImGui::Text("Duration: %.3f seconds", duration);
-                if (ImGui::Button("Play")) {
+                ui::text("Duration: %.3f seconds", duration);
+                if (ui::button("Play")) {
                     if (time_ >= duration) {
                         time_ = 0;
                     }
                     playing_ = true;
                     bind_ = false;
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Pause")) {
+                ui::sameLine();
+                if (ui::button("Pause")) {
                     playing_ = false;
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Stop")) {
+                ui::sameLine();
+                if (ui::button("Stop")) {
                     fadeDuration_ = 0;
                     a.blendWeight = 1;
                     a.blendFrozenPose.clear();
@@ -293,8 +293,8 @@ class ModelPreviewWindow {
                     time_ = 0;
                     bind_ = false;
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Reset")) {
+                ui::sameLine();
+                if (ui::button("Reset")) {
                     fadeDuration_ = 0;
                     a.blendWeight = 1;
                     a.blendFrozenPose.clear();
@@ -302,16 +302,16 @@ class ModelPreviewWindow {
                     time_ = 0;
                     bind_ = true;
                 }
-                ImGui::SameLine();
-                ImGui::Checkbox("Loop", &loop_);
-                ImGui::EndDisabled();
-                ImGui::TextDisabled(
+                ui::sameLine();
+                ui::checkbox("Loop", &loop_);
+                ui::endDisabled();
+                ui::textDisabled(
                     "Right-drag to look; scroll to zoom. Reset restores bind pose.");
             }
             if (!error_.empty()) {
-                ImGui::TextWrapped("%s", error_.c_str());
+                ui::textWrapped("%s", error_.c_str());
             }
         }
-        ImGui::End();
+        ui::endWindow();
     }
 };

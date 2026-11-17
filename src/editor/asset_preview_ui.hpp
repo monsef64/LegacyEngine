@@ -2,7 +2,7 @@
 #include "assets/assets.hpp"
 #include <algorithm>
 #include <functional>
-#include <imgui.h>
+#include "ui/mygui_ui.hpp"
 #include <vector>
 
 struct AssetPreviewData {
@@ -26,30 +26,30 @@ drawAssetPreview(const AssetManager& assets, const std::string& path, float widt
     if (preview.texture) {
         const float ratio = float(preview.height) / std::max(1, preview.width);
         const float imageWidth = width * std::min(1.f, 1.5f / std::max(.001f, ratio));
-        ImGui::Image(static_cast<ImTextureID>(preview.texture),
-                     ImVec2(imageWidth, imageWidth * ratio),
-                     preview.flip ? ImVec2(0, 1) : ImVec2(0, 0),
-                     preview.flip ? ImVec2(1, 0) : ImVec2(1, 1));
+        ui::image(static_cast<ui::TextureID>(preview.texture),
+                     ui::Vec2(imageWidth, imageWidth * ratio),
+                     preview.flip ? ui::Vec2(0, 1) : ui::Vec2(0, 0),
+                     preview.flip ? ui::Vec2(1, 0) : ui::Vec2(1, 1));
     }
     if (!preview.waveform.empty()) {
-        ImGui::Text("Duration: %.2f seconds", preview.seconds);
-        ImGui::PlotHistogram("##Waveform",
+        ui::text("Duration: %.2f seconds", preview.seconds);
+        ui::plotHistogram("##Waveform",
                              preview.waveform.data(),
                              int(preview.waveform.size()),
                              0,
                              "Waveform",
                              0,
                              1,
-                             ImVec2(width, 140));
+                             ui::Vec2(width, 140));
     }
     if (!preview.text.empty()) {
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width);
-        ImGui::TextUnformatted(preview.text.c_str());
-        ImGui::PopTextWrapPos();
+        ui::pushTextWrapPos(ui::cursorPosX() + width);
+        ui::textUnformatted(preview.text.c_str());
+        ui::popTextWrapPos();
     }
     if (!preview.error.empty()) {
-        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width);
-        ImGui::TextDisabled("%s", preview.error.c_str());
-        ImGui::PopTextWrapPos();
+        ui::pushTextWrapPos(ui::cursorPosX() + width);
+        ui::textDisabled("%s", preview.error.c_str());
+        ui::popTextWrapPos();
     }
 }

@@ -1,35 +1,35 @@
 #pragma once
-#include <imgui.h>
+#include "ui/mygui_ui.hpp"
 enum class PlaybackIcon { Play, Pause, Stop };
 inline bool
 playbackButton(const char* id, const char* tooltip, PlaybackIcon icon, bool active = false) {
     if (active) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive));
+        ui::pushStyleColor(ui::Col_Button, ui::styleColor(ui::Col_HeaderActive));
     }
-    const bool clicked = ImGui::Button(id, ImVec2(30, 24));
+    const bool clicked = ui::button(id, ui::Vec2(30, 24));
     if (active) {
-        ImGui::PopStyleColor();
+        ui::popStyleColor();
     }
-    const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
-    const ImVec2 center((a.x + b.x) * .5f, (a.y + b.y) * .5f);
-    auto* draw = ImGui::GetWindowDrawList();
-    const auto color = ImGui::GetColorU32(ImGuiCol_Text);
+    const ui::Vec2 a = ui::itemRectMin(), b = ui::itemRectMax();
+    const ui::Vec2 center((a.x + b.x) * .5f, (a.y + b.y) * .5f);
+    auto* draw = ui::windowDrawList();
+    const auto color = ui::colorU32(ui::Col_Text);
     if (icon == PlaybackIcon::Play) {
-        draw->AddTriangleFilled(ImVec2(center.x - 4, center.y - 6),
-                                ImVec2(center.x - 4, center.y + 6),
-                                ImVec2(center.x + 6, center.y),
+        draw->addTriangleFilled(ui::Vec2(center.x - 4, center.y - 6),
+                                ui::Vec2(center.x - 4, center.y + 6),
+                                ui::Vec2(center.x + 6, center.y),
                                 color);
     } else if (icon == PlaybackIcon::Stop) {
-        draw->AddRectFilled(
-            ImVec2(center.x - 5, center.y - 5), ImVec2(center.x + 5, center.y + 5), color, 1);
+        draw->addRectFilled(
+            ui::Vec2(center.x - 5, center.y - 5), ui::Vec2(center.x + 5, center.y + 5), color, 1);
     } else {
-        draw->AddRectFilled(
-            ImVec2(center.x - 5, center.y - 6), ImVec2(center.x - 2, center.y + 6), color, 1);
-        draw->AddRectFilled(
-            ImVec2(center.x + 2, center.y - 6), ImVec2(center.x + 5, center.y + 6), color, 1);
+        draw->addRectFilled(
+            ui::Vec2(center.x - 5, center.y - 6), ui::Vec2(center.x - 2, center.y + 6), color, 1);
+        draw->addRectFilled(
+            ui::Vec2(center.x + 2, center.y - 6), ui::Vec2(center.x + 5, center.y + 6), color, 1);
     }
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip("%s", tooltip);
+    if (ui::isItemHovered(ui::HoveredFlags_AllowWhenDisabled)) {
+        ui::setTooltip("%s", tooltip);
     }
     return clicked;
 }

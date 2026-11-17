@@ -1,6 +1,6 @@
 #pragma once
 #include "assets/assets.hpp"
-#include <imgui.h>
+#include "ui/mygui_ui.hpp"
 #include <map>
 #include <optional>
 
@@ -29,29 +29,29 @@ struct ScriptTree {
                                     std::optional<std::string>* createScriptIn = nullptr) const {
         std::optional<std::string> result;
         for (const auto& [name, folder] : folders) {
-            const bool open = ImGui::TreeNode(name.c_str());
-            if (createScriptIn && ImGui::BeginPopupContextItem()) {
-                if (ImGui::MenuItem("New LegacyScript (.ls)")) {
+            const bool open = ui::treeNode(name.c_str());
+            if (createScriptIn && ui::beginPopupContextItem()) {
+                if (ui::menuItem("New LegacyScript (.ls)")) {
                     *createScriptIn = prefix + name;
                 }
-                ImGui::EndPopup();
+                ui::endPopup();
             }
             if (open) {
                 if (auto chosen = folder.draw(selected, prefix + name + "/", createScriptIn)) {
                     result = chosen;
                 }
-                ImGui::TreePop();
+                ui::treePop();
             }
         }
         for (const auto& name : files) {
             const auto path = prefix + name;
-            if (ImGui::Selectable(name.c_str(), selected == path)) {
+            if (ui::selectable(name.c_str(), selected == path)) {
                 result = path;
             }
-            if (ImGui::BeginDragDropSource()) {
-                ImGui::SetDragDropPayload("ASSET_PATH", path.c_str(), path.size() + 1);
-                ImGui::TextUnformatted(name.c_str());
-                ImGui::EndDragDropSource();
+            if (ui::beginDragDropSource()) {
+                ui::setDragDropPayload("ASSET_PATH", path.c_str(), path.size() + 1);
+                ui::textUnformatted(name.c_str());
+                ui::endDragDropSource();
             }
         }
         return result;

@@ -37,7 +37,7 @@ Laser components and spotlight cookies are implemented; see
   paths. File > Open Recent should list at most 12 unique canonical paths, newest
   first, and survive restart. Windows path comparison ignores case.
 - With dirty project and/or script/animation edits, open picker or recent project:
-  test ImGui Save and continue, Discard, Cancel and Escape. Repeat on Quit/Alt+F4.
+  test Save and continue, Discard, Cancel and Escape. Repeat on Quit/Alt+F4.
   Test saving a previously unnamed project, picker cancellation and save failures.
 
 ## Bakes
