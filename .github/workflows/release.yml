@@ -149,21 +149,31 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          set -o pipefail
+          set -euo pipefail
           cmake -S . -B build-qt -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DBUILD_TESTING=ON \
             -DLEGACY_VENDORED_SDL=ON 2>&1 | tee shell-config.log | tail -5
           cmake --build build-qt --target qt_editor_shell_tests --parallel 2 2>&1 | tee shell-build.log | tail -20
-          # Run under gdb when it is available: a crash here has produced no
-          # output at all, and a backtrace says more than a silent exit.
-          if command -v gdb >/dev/null; then
-            gdb -batch -ex run -ex "thread apply all bt 12" --args \
-              ./build-qt/qt_editor_shell_tests 2>&1 | tee shell.log
-          else
-            stdbuf -o0 -e0 ./build-qt/qt_editor_shell_tests 2>&1 | tee shell.log
+
+          # Run the binary directly so the step fails exactly when the test
+          # fails. gdb -batch exits 0 even when the program it ran crashed,
+          # which would let a regression here pass silently; a failing run is
+          # repeated under gdb only to turn a bare exit code into a backtrace.
+          set +e
+          stdbuf -o0 -e0 ./build-qt/qt_editor_shell_tests > shell.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && command -v gdb >/dev/null; then
+            set +e
+            gdb -batch -ex run -ex "thread apply all bt 12" \
+              --args ./build-qt/qt_editor_shell_tests > shell-gdb.log 2>&1
+            set -e
+            tail -40 shell-gdb.log
           fi
-          echo "exit status: $?" | tee -a shell.log
+          tail -60 shell.log
+          echo "exit status: $status"
+          exit "$status"
       - name: Summarise the shell test
         if: failure()
         env:
@@ -173,6 +183,7 @@ jobs:
             echo '### Qt editor shell test'
             echo '```'
             echo '--- run ---'; tail -40 shell.log 2>/dev/null || echo 'no run output'
+            echo '--- backtrace ---'; tail -40 shell-gdb.log 2>/dev/null || echo 'no backtrace'
             echo '--- configure ---'; tail -15 shell-config.log 2>/dev/null || echo 'no configure output'
             echo '```'
           } > shell-report.md
@@ -191,16 +202,27 @@ jobs:
           QT_QPA_PLATFORM: offscreen
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
-          set -o pipefail
-          # The engine logs how far it got. gdb, when present, also records
-          # where it died, which the log alone cannot say.
-          if command -v gdb >/dev/null; then
+          set -euo pipefail
+          # The engine logs how far it got. Deliberately not run under gdb:
+          # gdb -batch exits 0 even when the program it ran crashed, so a
+          # segfault would be reported as a pass. The binary's own exit code
+          # decides this step, and a failing run is repeated under gdb only to
+          # say where it died, which the log alone cannot.
+          set +e
+          xvfb-run --auto-servernum ./build/LegacyEngine --smoke-test > smoke.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && command -v gdb >/dev/null; then
+            set +e
             xvfb-run --auto-servernum gdb -batch -ex run \
               -ex "thread apply all bt 15" --args ./build/LegacyEngine --smoke-test \
-              2>&1 | tee smoke.log
-          else
-            xvfb-run --auto-servernum ./build/LegacyEngine --smoke-test 2>&1 | tee smoke.log
+              > smoke-gdb.log 2>&1
+            set -e
+            tail -50 smoke-gdb.log
           fi
+          tail -60 smoke.log
+          echo "exit status: $status"
+          exit "$status"
       # The engine logs where it got to before it died; put that on the run
       # page so a failure is readable without downloading the job log.
       - name: Summarise the smoke test
@@ -212,6 +234,10 @@ jobs:
             echo '### Smoke test output'
             echo '```'
             tail -80 smoke.log 2>/dev/null || echo 'no output captured'
+            echo '```'
+            echo '### Backtrace'
+            echo '```'
+            tail -50 smoke-gdb.log 2>/dev/null || echo 'none: the run did not leave a backtrace'
             echo '```'
           } > report.md
           cat report.md >> "$GITHUB_STEP_SUMMARY"
@@ -243,7 +269,7 @@ jobs:
 
       - name: Package
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           timestamp=$(date -u +%Y%m%d-%H%M%S)
           package=LegacyEngine-$timestamp-linux-x86_64
 
