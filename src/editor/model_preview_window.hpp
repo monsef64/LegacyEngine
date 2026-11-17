@@ -207,7 +207,8 @@ class ModelPreviewWindow {
                              ImVec2(0, 1),
                              ImVec2(1, 0));
                 if (ImGui::IsItemHovered()) {
-                    if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+                    if ((ImGui::IsMouseDragging(ImGuiMouseButton_Right) ||
+                         ImGui::IsMouseDragging(ImGuiMouseButton_Left))) {
                         camera_.orbit(camera_.target,
                                       ImGui::GetIO().MouseDelta.x,
                                       ImGui::GetIO().MouseDelta.y);
@@ -306,7 +307,7 @@ class ModelPreviewWindow {
                 ImGui::Checkbox("Loop", &loop_);
                 ImGui::EndDisabled();
                 ImGui::TextDisabled(
-                    "Right-drag to look; scroll to zoom. Reset restores bind pose.");
+                    "Left/right-drag to orbit; scroll to zoom. Reset restores bind pose.");
             }
             if (!error_.empty()) {
                 ImGui::TextWrapped("%s", error_.c_str());

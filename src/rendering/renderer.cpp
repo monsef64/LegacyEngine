@@ -210,6 +210,8 @@ void Renderer::shutdown() {
     cameraEffects_.shutdown();
     editorLines_.shutdown();
     lasers_.shutdown();
+    foliage_.shutdown();
+    environment_.shutdown();
     shafts_.shutdown();
     cookies_.shutdown();
     pendingModels_.clear();
@@ -739,6 +741,7 @@ void Renderer::draw(World& world,
         });
     // Explicit insertion order preserves equal-depth behavior without stable_sort's temporary
     // buffer.
+    foliage_.draw(world, materialAssets_, viewProjection, cameraPosition);
     std::sort(transparent.begin(), transparent.end(), [](const auto& a, const auto& b) {
         return a.distance == b.distance ? a.order < b.order : a.distance > b.distance;
     });
@@ -753,6 +756,7 @@ void Renderer::draw(World& world,
         glDisable(GL_BLEND);
     }
     transparent.clear(); // Do not retain ECS references beyond this view.
+    environment_.draw(world, viewProjection, cameraPosition);
     shafts_.draw(world, materialAssets_, viewProjection, cameraPosition);
     lasers_.draw(world, viewProjection, cameraPosition);
     particles_.draw(world, materialAssets_, viewProjection, cameraPosition, editorView);

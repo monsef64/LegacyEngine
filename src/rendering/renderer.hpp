@@ -6,6 +6,7 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "effects/camera_effects_renderer.hpp"
+#include "effects/environment_renderer.hpp"
 #include "effects/laser_renderer.hpp"
 #include "effects/light_shafts_renderer.hpp"
 #include "lighting/cookie_atlas.hpp"
@@ -20,6 +21,7 @@
 #include "rendering/mesh.hpp"
 #include "rendering/skybox_renderer.hpp"
 #include "scene/editor_grid.hpp"
+#include "terrain/foliage_renderer.hpp"
 #include "terrain/terrain_renderer.hpp"
 
 #include <future>
@@ -29,8 +31,11 @@
 class Renderer {
   public:
     std::string materialError, modelError;
+    const std::string& foliageError() const {
+        return foliage_.error;
+    }
     bool streaming() const {
-        return !pendingModels_.empty() || materialTextures_.streaming();
+        return !pendingModels_.empty() || materialTextures_.streaming() || foliage_.streaming();
     }
     void setShadowSettings(ShadowSettings settings) {
         if (settings.valid()) {
@@ -161,7 +166,9 @@ class Renderer {
     MaterialAssetCache materialCache_;
     MaterialTextureCache materialTextures_;
     ParticleRenderer particles_;
+    FoliageRenderer foliage_;
     LaserRenderer lasers_;
+    EnvironmentRenderer environment_;
     LightShaftsRenderer shafts_;
     CookieAtlas cookies_;
     int cookieSampler_ = -1, cookieRight_[16]{}, cookieUp_[16]{};

@@ -136,9 +136,9 @@ std::string importModel(AssetManager& assets,
     }
     const auto prefix = std::filesystem::path(folder);
     const auto stem = source.stem().string();
-    auto path = (prefix / (stem + ".lemesh")).generic_string();
+    auto path = (prefix / (stem + ".mesh")).generic_string();
     for (unsigned i = 2; std::filesystem::exists(assets.resolve(path)); ++i) {
-        path = (prefix / (stem + " (" + std::to_string(i) + ").lemesh")).generic_string();
+        path = (prefix / (stem + " (" + std::to_string(i) + ").mesh")).generic_string();
     }
     // Keep generated files alongside the model, grouped by its manifest in the
     // browser rather than exposing a generated directory as a separate asset.
@@ -290,7 +290,7 @@ std::string importModel(AssetManager& assets,
             if (parts.size() >= 1024) {
                 throw std::runtime_error("Model exceeds 1024 mesh parts");
             }
-            const auto meshPath = allocateChild("Mesh_" + std::to_string(instance) + ".lemesh");
+            const auto meshPath = allocateChild("Mesh_" + std::to_string(instance) + ".mesh");
             if (mesh->mName.length) {
                 subAssetNames[meshPath] = mesh->mName.C_Str();
             }

@@ -1,5 +1,13 @@
 [
   {
+    "name": "CloudSystem",
+    "signature": "CloudSystem - enabled, volumetric (false=2D, true=volume), color, size, coverage, density, scale, speed, opacity, steps (4..24). Vector getters return copies; assign a complete vector table. Requires Transform."
+  },
+  {
+    "name": "River",
+    "signature": "River - enabled, color, width, opacity, speed, waveScale, waveStrength, foam, subdivisions (2..32), points (2..64 local vectors). Getters return copies; assign the complete points list to update the curve. Requires Transform; visual water, no fluid physics."
+  },
+  {
     "name": "Fog",
     "signature": "Fog - enabled, color (complete RGB vector), density (0..10), start (>=0), end (>start, <=1000000). Global distance fog; first enabled active entity wins. Use bracket notation for the end field (a Lua keyword)."
   },
@@ -21,7 +29,7 @@
   },
   {
     "name": "ParticleSystem",
-    "signature": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"
+    "signature": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles/Blood/Explosion); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"
   },
   {
     "name": "Animation",
@@ -857,7 +865,7 @@
   },
   {
     "name": "shape",
-    "signature": "Collider.shape: Box | Sphere | Capsule | Cone | Mesh; Collider.model selects a static .lemesh triangle source"
+    "signature": "Collider.shape: Box | Sphere | Capsule | Cone | Mesh; Collider.model selects a static .mesh triangle source"
   },
   {
     "name": "radius",

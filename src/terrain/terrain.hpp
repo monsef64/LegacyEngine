@@ -18,7 +18,19 @@ struct Layer {
     std::string normalMap, material;
     float normalStrength = 1;
 };
+struct FoliagePrototype {
+    std::string asset;
+    Vec3 color{1, 1, 1};
+    float width = 1, height = 1, minScale = .8f, maxScale = 1.2f, distance = 80;
+};
+struct FoliageInstance {
+    float x = 0, z = 0, scale = 1, yaw = 0;
+    int prototype = 0;
+};
 struct Data {
+    std::vector<FoliagePrototype> grassTypes, treeTypes;
+    std::vector<FoliageInstance> grass, trees;
+
     int resolution = 129;
     float size = 128;
     std::string lightmap;

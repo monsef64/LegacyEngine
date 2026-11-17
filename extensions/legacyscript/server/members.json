@@ -10,12 +10,12 @@
   "GameObject": {
     "name": "string",
     "parent": "GameObject|nil",
-    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
-    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
-    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
-    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
-    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|nil",
-    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog",
+    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
+    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
+    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
+    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
+    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
+    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River",
     "removeComponent": "fun(componentType:ComponentType)",
     "onAnimationFinish": "fun()|nil",
     "onAnimationStart": "fun()|nil",
@@ -90,7 +90,7 @@
   },
   "Collider": {
     "shape": "'Box'|'Sphere'|'Capsule'|'Cone'|'Mesh'",
-    "model": "string Static triangle-mesh .lemesh source; empty follows the rendered model",
+    "model": "string Static triangle-mesh .mesh source; empty follows the rendered model",
     "meshDetail": "integer Mesh detail 2..15 (default 8); 15 preserves source triangles",
     "size": "Vec3",
     "center": "Vec3",
@@ -117,7 +117,7 @@
     "color": "Vec3",
     "checkerboard": "boolean",
     "specular": "number",
-    "model": "string Static .lemesh asset path; setting mesh to a primitive clears this"
+    "model": "string Static .mesh asset path; setting mesh to a primitive clears this"
   },
   "ObjectName": {
     "value": "string"
@@ -377,7 +377,7 @@
     "restart": "fun(self:ParticleSystem)",
     "clear": "fun(self:ParticleSystem)",
     "emit": "fun(self:ParticleSystem,count:integer)",
-    "setPreset": "fun(self:ParticleSystem,name:string) Fire, Smoke or Sparkles",
+    "setPreset": "fun(self:ParticleSystem,name:string) Fire, Smoke, Sparkles, Blood or Explosion",
     "isPlaying": "boolean Read-only",
     "paused": "boolean Read-only",
     "particleCount": "integer Read-only",
@@ -495,5 +495,29 @@
   "ColorFade": {
     "start": "fun(self:ColorFade,seconds?:number) Fade to fully visible color, default one second; zero is immediate",
     "stop": "fun(self:ColorFade,seconds?:number) Fade back to transparent, default one second; zero is immediate"
+  },
+  "CloudSystem": {
+    "enabled": "boolean",
+    "volumetric": "boolean False = 2D procedural layer; true = bounded volumetric box",
+    "color": "table RGB 0..1; assign a complete x/y/z or three-element table, read returns a copy",
+    "size": "table XYZ extent 0.1..10000 metres, multiplied by Transform scale; read returns a copy",
+    "coverage": "number 0..1",
+    "density": "number 0..10",
+    "scale": "number Noise frequency 0.001..10",
+    "speed": "number Wind speed -100..100",
+    "opacity": "number 0..1",
+    "steps": "integer Volumetric raymarch budget 4..24, default 12"
+  },
+  "River": {
+    "enabled": "boolean",
+    "color": "table RGB 0..1; assign a complete vector, read returns a copy",
+    "width": "number 0.05..1000 local units",
+    "opacity": "number 0..1",
+    "speed": "number Flow speed -100..100",
+    "waveScale": "number 0.01..100",
+    "waveStrength": "number 0..1 Shading only; does not displace geometry",
+    "foam": "number 0..1 Procedural edge foam",
+    "subdivisions": "integer Samples per curve span 2..32",
+    "points": "table List of 2..64 complete local vector tables; getter returns copies, assign the whole list to change"
   }
 }

@@ -368,3 +368,11 @@ avoid drift. This is a gizmo-pivot setting, not a permanent mesh-origin edit.
 
 Third-party licenses ship under **data/license/**; see its README for the source
 versions, nested dependency notices, and the refresh command.
+
+## Terrain foliage and mesh workflow
+
+Terrain tools has separate Grass and Trees painting tabs, including GPU-instanced
+placements and five generated grass test cutouts. New imported models use `.mesh`,
+with `.lemesh` backward compatibility. See the
+[terrain foliage and mesh guide](../docs/manual/terrain-foliage-and-mesh-assets.md)
+(repository) for usage, limits and manual checks.

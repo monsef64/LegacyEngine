@@ -31,6 +31,7 @@
 #include "editor/play_mode.hpp"
 #include "editor/playback_controls.hpp"
 #include "editor/profiler_window.hpp"
+#include "editor/river_editor.hpp"
 #include "editor/scene_orientation.hpp"
 #include "editor/script_editor.hpp"
 #include "editor/transform_editor.hpp"
@@ -357,6 +358,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             input.releaseMouse();
             LuaConsole::clearEvents();
             world.restore(transition->level->world);
+            resetHierarchyExpansion();
             try {
                 Prefabs::refreshAll(browser.assets, world, projectMeshes);
             } catch (const std::exception& e) {
@@ -841,6 +843,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         componentScripts.stop();
                         scripts.shutdown();
                         world.restore(loadedWorld);
+                        resetHierarchyExpansion();
                         camera = loadedCamera;
                         browser.setRoot(
                             assetDirectory.empty()
@@ -1822,6 +1825,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         terminalErrors.report("Skybox", renderer.skyboxError());
         terminalErrors.report("Material", renderer.materialError);
         terminalErrors.report("Model", renderer.modelError);
+        terminalErrors.report("Terrain foliage", renderer.foliageError());
         terminalErrors.report("Audio", audio.error);
         terminalErrors.report("Assets", browser.assets.error);
         terminalErrors.report("Asset preview", browser.preview.error);
@@ -1842,15 +1846,18 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                  ImGuiWindowFlags_NoScrollbar |
                                      ImGuiWindowFlags_NoScrollWithMouse)) {
                 ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 3));
+                ImGui::SetNextWindowContentSize(
+                    ImVec2(std::max(480.f, ImGui::GetContentRegionAvail().x - 16), 0));
                 ImGui::BeginChild("Scene toolbar",
                                   ImVec2(0,
-                                         (ImGui::GetContentRegionAvail().x < 620 ? 3.f : 2.f) *
+                                         (ImGui::GetContentRegionAvail().x < 900 ? 2.f : 1.f) *
                                                  ImGui::GetFrameHeightWithSpacing() +
                                              6),
                                   ImGuiChildFlags_AlwaysUseWindowPadding,
-                                  ImGuiWindowFlags_NoScrollbar |
+                                  ImGuiWindowFlags_HorizontalScrollbar |
                                       ImGuiWindowFlags_NoScrollWithMouse);
                 editor.drawToolbar();
+                ImGui::SameLine();
                 ImGui::SetNextItemWidth(100);
                 if (ImGui::SliderFloat(
                         "Scroll zoom", &browser.settings.scrollZoomSpeed, .1f, 5.f, "%.1fx")) {
@@ -1934,11 +1941,23 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     camera,
                     sceneRect,
                     editAllowed && !playbackHovered && !cameraLooking && !editor.dragging());
+                const auto* sceneRiver = world.tryGet<River>(selectedEntity);
+                bool curveEditing = sceneRiver && sceneRiver->editCurve;
+                bool curveInteracting =
+                    drawRiverCurve(world,
+                                   selectedEntity,
+                                   camera,
+                                   sceneRect,
+                                   history,
+                                   editAllowed && !cameraLooking && !orientationInteracting);
+                if (curveInteracting) {
+                    clicking = false;
+                }
                 editor.draw(world,
                             selectedEntity,
                             !projectDialog.pending() && !browser.dialog.pending() &&
                                 !orientationInteracting && !playbackHovered && !cameraLooking &&
-                                !terrainEditor.active(world, selectedEntity) &&
+                                !terrainEditor.active(world, selectedEntity) && !curveEditing &&
                                 !(SDL_GetModState() & SDL_KMOD_ALT),
                             camera,
                             static_cast<float>(sceneSurface.width) / sceneSurface.height,
@@ -1955,7 +1974,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         {
             Ray terrainRay;
             const auto mouse = ImGui::GetIO().MousePos;
-            const bool brushHover = editAllowed && sceneHovered && !cameraLooking &&
+            const auto* curveRiver = world.tryGet<River>(selectedEntity);
+            const bool brushHover = !(curveRiver && curveRiver->editCurve) && editAllowed &&
+                                    sceneHovered && !cameraLooking &&
                                     !(SDL_GetModState() & SDL_KMOD_ALT);
             const bool brushDown = brushHover && ImGui::IsMouseDown(0);
             bool rayValid =

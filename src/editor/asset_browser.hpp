@@ -475,8 +475,8 @@ class AssetBrowser {
             };
             auto fix = [&](const std::filesystem::path& file) {
                 const auto ext = AssetManager::extension(file);
-                if (ext != ".lemesh" && ext != ".leanim" && ext != ".mat" && ext != ".prefab" &&
-                    ext != ".level" && ext != ".cubemap" && ext != ".terrain") {
+                if (ext != ".mesh" && ext != ".lemesh" && ext != ".leanim" && ext != ".mat" &&
+                    ext != ".prefab" && ext != ".level" && ext != ".cubemap" && ext != ".terrain") {
                     return;
                 }
                 auto doc = readJsonFile(file, 256 * 1024 * 1024);
@@ -1378,6 +1378,6 @@ class AssetBrowser {
         }
     }
     char rename_[256]{};
-    float gridSpacing_ = 0, iconSize_ = 32;
-    bool renameRequested_ = false, deleteRequested_ = false, grid_ = false, renameFocus_ = false;
+    float gridSpacing_ = 0, iconSize_ = 60;
+    bool renameRequested_ = false, deleteRequested_ = false, grid_ = true, renameFocus_ = false;
 };

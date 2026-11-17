@@ -58,9 +58,8 @@ inline AnimationClip decodeAnimationClip(const Json& doc) {
     clip.duration = doc.at("duration").get<float>();
     clip.model = doc.value("model", std::string{});
     clip.modelAnimation = doc.value("modelAnimation", -1);
-    if (!clip.model.empty() &&
-        (!materialPathValid(clip.model) || AssetManager::extension(clip.model) != ".lemesh" ||
-         clip.modelAnimation < 0 || clip.modelAnimation >= 256)) {
+    if (!clip.model.empty() && (!materialPathValid(clip.model) || !modelAsset(clip.model) ||
+                                clip.modelAnimation < 0 || clip.modelAnimation >= 256)) {
         throw std::runtime_error("Invalid model animation reference");
     }
     if (!std::isfinite(clip.duration) || clip.duration <= 0 || clip.duration > 86400) {

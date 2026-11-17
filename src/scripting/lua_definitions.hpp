@@ -7,6 +7,8 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"CloudSystem", "CloudSystem - enabled, volumetric (false=2D, true=volume), color, size, coverage, density, scale, speed, opacity, steps (4..24). Vector getters return copies; assign a complete vector table. Requires Transform."},
+    {"River", "River - enabled, color, width, opacity, speed, waveScale, waveStrength, foam, subdivisions (2..32), points (2..64 local vectors). Getters return copies; assign the complete points list to update the curve. Requires Transform; visual water, no fluid physics."},
     {"Fog", "Fog - enabled, color (complete RGB vector), density (0..10), start (>=0), end (>start, <=1000000). Global distance fog; first enabled active entity wins. Use bracket notation for the end field (a Lua keyword)."},
     {"fadeToColor", "fadeToColor(rgb) -> ColorFade for the current active camera; RGB 0..1, e.g. color.black. Call start(seconds=1) to fade to opaque, stop(seconds=1) to fade to transparent; 0..3600 playing seconds, 0 immediate. Controllers share camera state."},
     {"CameraEffects",
@@ -16,7 +18,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"Laser",
      "Laser - local -Z collider-clipped beam; enabled, color, intensity, range, width, glowWidth, impactSize; hit, endPosition and hitNormal are read-only"},
     {"ParticleSystem",
-     "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"},
+     "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles/Blood/Explosion); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"},
     {"Animation",
      "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"},
     {"onAnimationFinish", "onAnimationFinish() - targeted animation lifecycle callback"},
@@ -257,7 +259,7 @@ inline constexpr LuaDefinition luaDefinitions[]{
     {"linearVelocity", "RigidBody.linearVelocity: {x,y,z}"},
     {"angularVelocity", "RigidBody.angularVelocity: {x,y,z}"},
     {"shape",
-     "Collider.shape: Box | Sphere | Capsule | Cone | Mesh; Collider.model selects a static .lemesh triangle source"},
+     "Collider.shape: Box | Sphere | Capsule | Cone | Mesh; Collider.model selects a static .mesh triangle source"},
     {"radius", "Collider.radius: number"},
     {"height", "Collider.height: number"},
     {"size", "Collider.size: {x,y,z}"},

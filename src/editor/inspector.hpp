@@ -93,10 +93,9 @@ inline bool editVector(const char* label,
     return true;
 }
 inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) {
-    const char* presets[]{"Fire", "Smoke", "Sparkles"};
     if (ImGui::BeginCombo("Preset", "Select preset...")) {
-        for (int i = 0; i < 3; ++i) {
-            if (ImGui::Selectable(presets[i])) {
+        for (int i = 0; i < particlePresetCount; ++i) {
+            if (ImGui::Selectable(particlePresetNames[i])) {
                 applyParticlePreset(p, i);
             }
         }
@@ -277,6 +276,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
                       !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) &&
                       !world.has<SpotLight>(entity) && !world.has<Laser>(entity) &&
+                      !world.has<CloudSystem>(entity) && !world.has<River>(entity) &&
                       !world.has<Fog>(entity) && !world.has<CameraEffects>(entity) &&
                       !world.has<Terrain>(entity) && !world.has<LightShafts>(entity) &&
                       !world.has<CharacterController>(entity) && !world.has<FPSCamera>(entity);
@@ -350,6 +350,12 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Laser>) {
             type = 18;
         }
+        if constexpr (std::is_same_v<T, CloudSystem>) {
+            type = 23;
+        }
+        if constexpr (std::is_same_v<T, River>) {
+            type = 24;
+        }
         if constexpr (std::is_same_v<T, Fog>) {
             type = 22;
         }
@@ -377,8 +383,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                 "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
                 "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
                 "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
-                "Terrain",       "CameraEffects",       "Fog"};
-            for (int i = 0; i < 23; ++i) {
+                "Terrain",       "CameraEffects",       "Fog",        "CloudSystem",
+                "River"};
+            for (int i = 0; i < 25; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -433,7 +440,8 @@ inline void drawScriptExports(World& world,
         "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
         "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
         "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
-        "Terrain",       "CameraEffects",       "Fog"};
+        "Terrain",       "CameraEffects",       "Fog",        "CloudSystem",
+        "River"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -492,7 +500,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 23 &&
+                        if (target.type >= 0 && target.type < 25 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -708,10 +716,10 @@ inline void drawInspector(World& world,
             ImGui::Separator();
             auto ordered = world.has<InspectorOrder>(selected)
                                ? world.get<InspectorOrder>(selected).types
-                               : std::vector<int>{0, 3,  2,  1,  6,  9,  10, 11, 12, 8,  7,
-                                                  5, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22};
-            for (int id :
-                 {0, 3, 2, 1, 6, 9, 10, 11, 12, 8, 7, 5, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22}) {
+                               : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,
+                                                  13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
+            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,
+                           13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -1061,11 +1069,11 @@ inline void drawInspector(World& world,
                                 "Lower = fewer triangles. 15 preserves source triangles. Simplification can remove small features.");
                         }
                         ImGui::TextWrapped(
-                            "Static triangle-mesh collider. None uses this object's rendered .lemesh model. An explicit source overrides it. No cube fallback. RigidBody movement is disabled for this shape.");
+                            "Static triangle-mesh collider. None uses this object's rendered .mesh model. An explicit source overrides it. No cube fallback. RigidBody movement is disabled for this shape.");
                         const auto* visual = world.tryGet<MeshRenderer>(selected);
                         if (c->model.empty() && (!visual || visual->model.empty())) {
                             ImGui::TextWrapped(
-                                "No model source: choose a .lemesh asset above, or add this collider to a model's mesh child. Primitive meshes require an explicit model source.");
+                                "No model source: choose a .mesh asset above, or add this collider to a model's mesh child. Primitive meshes require an explicit model source.");
                         }
                     } else if (c->shape == ColliderShape::Box) {
                         editVector("Size", c->size, 0.02f, 0.01f, 10000);
@@ -1152,6 +1160,67 @@ inline void drawInspector(World& world,
                         camera->tracking = false;
                         camera->following = false;
                         camera->targetEntity = {};
+                    }
+                }
+                if (componentID == 23) {
+                    if (auto* component = world.tryGet<CloudSystem>(selected);
+                        component && componentHeader<CloudSystem>(world, selected, "CloudSystem")) {
+                        auto edited = *component;
+                        auto* c = &edited;
+                        EditorValues::Checkbox("Enabled", &c->enabled);
+                        EditorValues::Checkbox("Volumetric", &c->volumetric);
+                        EditorValues::ColorEdit3("Color", &c->color.x);
+                        editVector("Size", c->size, .1f, .1f, 10000);
+                        EditorValues::SliderFloat("Coverage", &c->coverage, 0, 1);
+                        EditorValues::SliderFloat("Density", &c->density, 0, 10);
+                        EditorValues::DragFloat("Noise scale", &c->scale, .001f, .001f, 10);
+                        EditorValues::DragFloat("Wind speed", &c->speed, .1f, -100, 100);
+                        EditorValues::SliderFloat("Opacity", &c->opacity, 0, 1);
+                        EditorValues::SliderInt("Volume steps", &c->steps, 4, 24);
+                        ImGui::TextWrapped(
+                            "2D: one procedural layer. Volumetric: bounded box raymarch. Move the Transform to cloud altitude; keep volumes away from intersecting opaque geometry.");
+                        if (Environment::valid(edited)) {
+                            *component = edited;
+                        }
+                    }
+                }
+                if (componentID == 24) {
+                    if (auto* component = world.tryGet<River>(selected);
+                        component && componentHeader<River>(world, selected, "River")) {
+                        auto edited = *component;
+                        auto* r = &edited;
+                        EditorValues::Checkbox("Enabled", &r->enabled);
+                        EditorValues::Checkbox("Edit curve in Scene", &r->editCurve);
+                        EditorValues::ColorEdit3("Water color", &r->color.x);
+                        EditorValues::DragFloat("Width", &r->width, .1f, .05f, 1000);
+                        EditorValues::SliderFloat("Opacity", &r->opacity, 0, 1);
+                        EditorValues::DragFloat("Flow speed", &r->speed, .1f, -100, 100);
+                        EditorValues::DragFloat("Wave scale", &r->waveScale, .05f, .01f, 100);
+                        EditorValues::SliderFloat("Wave strength", &r->waveStrength, 0, 1);
+                        EditorValues::SliderFloat("Edge foam", &r->foam, 0, 1);
+                        EditorValues::SliderInt("Curve subdivisions", &r->subdivisions, 2, 32);
+                        if (r->points.size() < 64 && ImGui::Button("Add curve point")) {
+                            auto n = r->points.size();
+                            r->points.push_back(r->points.back() +
+                                                (r->points[n - 1] - r->points[n - 2]));
+                        }
+                        if (r->points.size() > 2 && ImGui::Button("Remove last point")) {
+                            r->points.pop_back();
+                        }
+                        for (int i = 0; i < int(r->points.size()); ++i) {
+                            ImGui::PushID(i);
+                            editVector(("Point " + std::to_string(i + 1)).c_str(),
+                                       r->points[i],
+                                       .1f,
+                                       -100000,
+                                       100000);
+                            ImGui::PopID();
+                        }
+                        ImGui::TextWrapped(
+                            "Scene: drag point circles on a horizontal plane; edit height here. Points are local to Transform. No automatic terrain carving, collision or physical fluid simulation.");
+                        if (Environment::valid(edited)) {
+                            *component = edited;
+                        }
                     }
                 }
                 if (componentID == 22) {
@@ -1653,6 +1722,18 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<CloudSystem>(selected) && ImGui::MenuItem("CloudSystem")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{{0, 20, 0}});
+                    }
+                    world.add(selected, CloudSystem{});
+                }
+                if (!world.has<River>(selected) && ImGui::MenuItem("River")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, River{});
+                }
                 if (!world.has<Fog>(selected) && ImGui::MenuItem("Fog")) {
                     world.add(selected, Fog{});
                 }
