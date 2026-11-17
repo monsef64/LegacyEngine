@@ -2,7 +2,7 @@
 #include "core/worker_pool.hpp"
 #include "editor/editor_history.hpp"
 #include "lighting/lightmap_baker.hpp"
-#include "ui/mygui_ui.hpp"
+#include <imgui.h>
 
 class LightmappingWindow {
     Lightmapping::Settings settings_;
@@ -124,12 +124,12 @@ class LightmappingWindow {
         if (!visible) {
             return;
         }
-        ui::setNextWindowSize(ui::Vec2(520, 430), ui::Cond_FirstUseEver);
-        if (!ui::beginWindow("Lighting", &visible)) {
-            ui::endWindow();
+        ImGui::SetNextWindowSize(ImVec2(520, 430), ImGuiCond_FirstUseEver);
+        if (!ImGui::Begin("Lighting", &visible)) {
+            ImGui::End();
             return;
         }
-        ui::textWrapped("Level: %s", level.empty() ? "Unsaved level" : level.c_str());
+        ImGui::TextWrapped("Level: %s", level.empty() ? "Unsaved level" : level.c_str());
         const auto staticState = Lightmapping::staticState(world, assets);
         std::vector<Lightmapping::Object> objects;
         int total = 0, baked = 0, assigned = 0;
@@ -187,43 +187,43 @@ class LightmappingWindow {
             [&](Entity e, const PointLight& l, const Transform& t) { collect(1, e, l, t); });
         world.eachReadOnly<SpotLight, Transform>(
             [&](Entity e, const SpotLight& l, const Transform& t) { collect(2, e, l, t); });
-        ui::text("Objects: %d   Eligible: %zu   Baked: %d", total, objects.size(), baked);
-        ui::text("Static lights: %zu", lights.size());
+        ImGui::Text("Objects: %d   Eligible: %zu   Baked: %d", total, objects.size(), baked);
+        ImGui::Text("Static lights: %zu", lights.size());
         if (assigned > baked) {
-            ui::textWrapped("%d stale lightmaps — rebake required.", assigned - baked);
+            ImGui::TextWrapped("%d stale lightmaps — rebake required.", assigned - baked);
         }
-        if (ui::treeNode("Eligible objects")) {
+        if (ImGui::TreeNode("Eligible objects")) {
             for (const auto& object : objects) {
                 const auto* name = world.tryGet<ObjectName>(object.entity);
-                ui::text("%s: %s",
+                ImGui::Text("%s: %s",
                             name ? name->value.c_str() : "Object",
                             validation_.valid(assets, object.renderer, staticState)
                                 ? "Valid bake"
                                 : "Not baked / stale: rebake");
             }
-            ui::treePop();
+            ImGui::TreePop();
         }
-        ui::separator();
+        ImGui::Separator();
         const bool busy = future_.valid();
-        ui::beginDisabled(busy || !editAllowed);
-        ui::combo("Lightmap quality",
+        ImGui::BeginDisabled(busy || !editAllowed);
+        ImGui::Combo("Lightmap quality",
                      &quality_,
                      "Draft (8 texels/metre)\0Medium (16 texels/metre)\0High (32 texels/metre)\0");
         settings_.tile = 8 << quality_;
-        ui::textWrapped(
+        ImGui::TextWrapped(
             "Terrain atlases: Draft 256 x 256, Medium 512 x 512, High 1024 x 1024, independent of render LOD.");
-        ui::dragFloat("Shadow ray bias",
+        ImGui::DragFloat("Shadow ray bias",
                          &settings_.bias,
                          .0001f,
                          .0001f,
                          .1f,
                          "%.4f",
-                         ui::SliderFlags_AlwaysClamp);
+                         ImGuiSliderFlags_AlwaysClamp);
         settings_.bounces = 0;
-        ui::sliderInt("Soft shadow samples", &settings_.samples, 4, 128);
-        ui::textWrapped(
+        ImGui::SliderInt("Soft shadow samples", &settings_.samples, 4, 128);
+        ImGui::TextWrapped(
             "Baked direct lighting only. Set light Source radius / Sun angular softness to soften shadows. Zero gives hard shadows. Atlases use lossless PNG compression.");
-        if (ui::button("Bake level") && !objects.empty() && !lights.empty() &&
+        if (ImGui::Button("Bake level") && !objects.empty() && !lights.empty() &&
             !assets.root.empty()) {
             try {
                 auto progress = std::make_shared<Lightmapping::Progress>();
@@ -255,8 +255,8 @@ class LightmappingWindow {
                 status_ = error.what();
             }
         }
-        ui::sameLine();
-        if (ui::button("Clear level assignments")) {
+        ImGui::SameLine();
+        if (ImGui::Button("Clear level assignments")) {
             history.commit(world, selection);
             world.each<MeshRenderer>([](Entity, MeshRenderer& r) {
                 r.lightmap.clear();
@@ -279,27 +279,27 @@ class LightmappingWindow {
             status_ =
                 "Assignments cleared. Existing atlas files remain for undo and other saved levels.";
         }
-        ui::endDisabled();
+        ImGui::EndDisabled();
         if (busy && progress_) {
             const auto count = progress_->total.load(), done = progress_->done.load();
-            ui::textUnformatted(progress_->phase == 0 ? "Preparing bake..."
+            ImGui::TextUnformatted(progress_->phase == 0 ? "Preparing bake..."
                                                          : "Baking lighting...");
-            ui::progressBar(count ? float(done) / float(count) : 0.f, ui::Vec2(-1, 0));
-            ui::text(
+            ImGui::ProgressBar(count ? float(done) / float(count) : 0.f, ImVec2(-1, 0));
+            ImGui::Text(
                 "Texels: %zu / %zu   Elapsed: %.1f s",
                 done,
                 count,
                 std::chrono::duration<float>(std::chrono::steady_clock::now() - started_).count());
-            if (ui::button("Cancel bake")) {
+            if (ImGui::Button("Cancel bake")) {
                 progress_->cancel = true;
             }
         }
         if (objects.empty() || lights.empty()) {
-            ui::textWrapped("Mark at least one mesh and light Static to bake.");
+            ImGui::TextWrapped("Mark at least one mesh and light Static to bake.");
         }
         if (!status_.empty()) {
-            ui::textWrapped("%s", status_.c_str());
+            ImGui::TextWrapped("%s", status_.c_str());
         }
-        ui::endWindow();
+        ImGui::End();
     }
 };

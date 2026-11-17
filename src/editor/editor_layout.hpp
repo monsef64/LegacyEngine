@@ -1,7 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <cstring>
-#include "ui/mygui_ui.hpp"
+#include <imgui.h>
 
 struct EditorRect {
     float x = 0, y = 0, width = 0, height = 0;
@@ -62,18 +62,18 @@ inline bool* panelVisibility(const char* name) {
     return nullptr;
 }
 inline bool
-beginEditorPanel(const char* name, ui::WindowFlags fallback = 0, ui::WindowFlags flags = 0) {
+beginEditorPanel(const char* name, ImGuiWindowFlags fallback = 0, ImGuiWindowFlags flags = 0) {
     bool* open = panelVisibility(name);
-    return ui::beginWindow(name, open, (dockedEditor ? 0 : fallback) | flags);
+    return ImGui::Begin(name, open, (dockedEditor ? 0 : fallback) | flags);
 }
-inline constexpr ui::WindowFlags fixedPanelFlags =
-    ui::WindowFlags_NoMove | ui::WindowFlags_NoResize | ui::WindowFlags_NoCollapse |
-    ui::WindowFlags_NoSavedSettings;
+inline constexpr ImGuiWindowFlags fixedPanelFlags =
+    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
+    ImGuiWindowFlags_NoSavedSettings;
 inline void placeEditorPanel(const EditorRect& rect) {
     if (dockedEditor) {
         return;
     }
-    ui::setNextWindowPos(ui::Vec2(rect.x, rect.y), ui::Cond_Always);
-    ui::setNextWindowSize(ui::Vec2(std::max(rect.width, 1.0f), std::max(rect.height, 1.0f)),
-                             ui::Cond_Always);
+    ImGui::SetNextWindowPos(ImVec2(rect.x, rect.y), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(std::max(rect.width, 1.0f), std::max(rect.height, 1.0f)),
+                             ImGuiCond_Always);
 }

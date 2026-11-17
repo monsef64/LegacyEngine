@@ -10,7 +10,7 @@
 #include <cctype>
 #include <charconv>
 #include <cstdio>
-#include "ui/mygui_ui.hpp"
+#include <imgui.h>
 #include <limits>
 #include <string>
 #include <unordered_set>
@@ -295,38 +295,38 @@ hierarchyMatches(World& world, const std::vector<LevelObject>& objects, std::str
 inline std::uint64_t hierarchyKey(Entity e) {
     return (std::uint64_t(e.generation) << 32) | e.index;
 }
-inline void hierarchyIcon(World& world, Entity e, ui::Vec2 p) {
-    auto* draw = ui::windowDrawList();
-    const auto color = ui::colorU32(ui::Col_TextDisabled);
-    auto at = [&](float x, float y) { return ui::Vec2(p.x + x, p.y + y); };
+inline void hierarchyIcon(World& world, Entity e, ImVec2 p) {
+    auto* draw = ImGui::GetWindowDrawList();
+    const auto color = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+    auto at = [&](float x, float y) { return ImVec2(p.x + x, p.y + y); };
     if (world.has<Camera>(e)) {
-        draw->addRect(at(1, 4), at(10, 12), color, 1);
-        draw->addTriangle(at(10, 6), at(15, 3), at(15, 13), color);
+        draw->AddRect(at(1, 4), at(10, 12), color, 1);
+        draw->AddTriangle(at(10, 6), at(15, 3), at(15, 13), color);
     } else if (world.has<DirectionalLight>(e) || world.has<PointLight>(e) ||
                world.has<SpotLight>(e)) {
-        draw->addCircle(at(8, 8), 3, color, 12);
+        draw->AddCircle(at(8, 8), 3, color, 12);
         for (int i = 0; i < 8; ++i) {
             float a = i * kPi / 4;
-            draw->addLine(at(8 + 5 * std::cos(a), 8 + 5 * std::sin(a)),
+            draw->AddLine(at(8 + 5 * std::cos(a), 8 + 5 * std::sin(a)),
                           at(8 + 8 * std::cos(a), 8 + 8 * std::sin(a)),
                           color);
         }
     } else if (world.has<AudioSource>(e)) {
-        draw->addRect(at(1, 6), at(5, 11), color);
-        draw->addTriangle(at(5, 6), at(10, 2), at(10, 15), color);
-        draw->addLine(at(13, 4), at(15, 8), color);
-        draw->addLine(at(15, 8), at(13, 13), color);
+        draw->AddRect(at(1, 6), at(5, 11), color);
+        draw->AddTriangle(at(5, 6), at(10, 2), at(10, 15), color);
+        draw->AddLine(at(13, 4), at(15, 8), color);
+        draw->AddLine(at(15, 8), at(13, 13), color);
     } else if (world.has<MeshRenderer>(e)) {
-        draw->addQuad(at(1, 4), at(8, 1), at(15, 4), at(8, 8), color);
-        draw->addLine(at(1, 4), at(1, 12), color);
-        draw->addLine(at(15, 4), at(15, 12), color);
-        draw->addLine(at(1, 12), at(8, 16), color);
-        draw->addLine(at(15, 12), at(8, 16), color);
-        draw->addLine(at(8, 8), at(8, 16), color);
+        draw->AddQuad(at(1, 4), at(8, 1), at(15, 4), at(8, 8), color);
+        draw->AddLine(at(1, 4), at(1, 12), color);
+        draw->AddLine(at(15, 4), at(15, 12), color);
+        draw->AddLine(at(1, 12), at(8, 16), color);
+        draw->AddLine(at(15, 12), at(8, 16), color);
+        draw->AddLine(at(8, 8), at(8, 16), color);
     } else {
-        draw->addRect(at(2, 2), at(14, 14), color, 2);
-        draw->addLine(at(5, 8), at(11, 8), color);
-        draw->addLine(at(8, 5), at(8, 11), color);
+        draw->AddRect(at(2, 2), at(14, 14), color, 2);
+        draw->AddLine(at(5, 8), at(11, 8), color);
+        draw->AddLine(at(8, 5), at(8, 11), color);
     }
 }
 
@@ -354,20 +354,20 @@ inline bool drawLevelObjects(World& world,
     if (panel) {
         placeEditorPanel(*panel);
     } else {
-        ui::setNextWindowPos(ui::Vec2(16, 360), ui::Cond_FirstUseEver);
-        ui::setNextWindowSize(ui::Vec2(250, 240), ui::Cond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(16, 360), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(250, 240), ImGuiCond_FirstUseEver);
     }
     if (beginEditorPanel(panel ? "Hierarchy" : "Level Objects", panel ? fixedPanelFlags : 0)) {
         if (focused) {
-            *focused = ui::isWindowFocused(ui::FocusedFlags_RootAndChildWindows);
+            *focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
         }
         static std::unordered_set<std::uint64_t> collapsed;
         if (createRequest) {
-            ui::beginDisabled(!selectionEnabled);
-            if (ui::button(world.alive(selected) ? "Create child..." : "Create...")) {
-                ui::openPopup("Hierarchy create");
+            ImGui::BeginDisabled(!selectionEnabled);
+            if (ImGui::Button(world.alive(selected) ? "Create child..." : "Create...")) {
+                ImGui::OpenPopup("Hierarchy create");
             }
-            if (ui::beginPopup("Hierarchy create")) {
+            if (ImGui::BeginPopup("Hierarchy create")) {
                 int item = drawCreateItems();
                 if (item >= 0) {
                     *createRequest = item;
@@ -376,9 +376,9 @@ inline bool drawLevelObjects(World& world,
                         *createParent = selected;
                     }
                 }
-                ui::endPopup();
+                ImGui::EndPopup();
             }
-            ui::endDisabled();
+            ImGui::EndDisabled();
         }
         static Entity renameTarget;
         static char renameName[256]{};
@@ -400,54 +400,54 @@ inline bool drawLevelObjects(World& world,
             }
             changed = true;
         };
-        static ui::TextFilter search;
-        search.draw("Search", -60);
-        ui::sameLine();
-        if (ui::smallButton("x##ClearSearch")) {
-            search.clear();
+        static ImGuiTextFilter search;
+        search.Draw("Search", -60);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x##ClearSearch")) {
+            search.Clear();
         }
-        if (ui::isItemHovered()) {
-            ui::setTooltip("Clear search");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Clear search");
         }
-        const auto visible = hierarchyMatches(world, objects, search.inputBuf);
+        const auto visible = hierarchyMatches(world, objects, search.InputBuf);
 
         if (!selectionEnabled) {
-            ui::textDisabled("Selection is currently disabled");
+            ImGui::TextDisabled("Selection is currently disabled");
         }
-        ui::beginDisabled(!selectionEnabled);
+        ImGui::BeginDisabled(!selectionEnabled);
         if (!panel && world.alive(selected)) {
             const Entity parent = getParent(world, selected);
             const auto* label = world.tryGet<ObjectName>(parent);
-            if (ui::beginCombo("Parent",
+            if (ImGui::BeginCombo("Parent",
                                   parent == Entity{} ? "None"
                                   : label            ? label->value.c_str()
                                                      : "Object")) {
-                if (ui::selectable("None", parent == Entity{})) {
+                if (ImGui::Selectable("None", parent == Entity{})) {
                     setParent(world, selected, {});
                 }
                 for (const auto& object : objects) {
                     if (!canParent(world, selected, object.entity)) {
                         continue;
                     }
-                    ui::pushId(static_cast<int>(object.entity.index));
-                    if (ui::selectable(object.name.c_str(), parent == object.entity)) {
+                    ImGui::PushID(static_cast<int>(object.entity.index));
+                    if (ImGui::Selectable(object.name.c_str(), parent == object.entity)) {
                         setParent(world, selected, object.entity);
                     }
-                    ui::popId();
+                    ImGui::PopID();
                 }
-                ui::endCombo();
+                ImGui::EndCombo();
             }
         }
-        ui::separator();
-        ui::beginChild("Objects", ui::Vec2(0, 0));
+        ImGui::Separator();
+        ImGui::BeginChild("Objects", ImVec2(0, 0));
         auto row = [&](auto&& self, const LevelObject& object, int depth) -> void {
             if (!world.alive(object.entity) || !visible.count(hierarchyKey(object.entity))) {
                 return;
             }
-            ui::pushId(static_cast<int>(object.entity.index));
-            ui::pushId(static_cast<int>(object.entity.generation));
+            ImGui::PushID(static_cast<int>(object.entity.index));
+            ImGui::PushID(static_cast<int>(object.entity.generation));
             if (depth) {
-                ui::indent(static_cast<float>(depth) * 12);
+                ImGui::Indent(static_cast<float>(depth) * 12);
             }
             bool prefab = false;
             for (Entity ancestor = object.entity; world.alive(ancestor);
@@ -459,10 +459,10 @@ inline bool drawLevelObjects(World& world,
             }
             const bool inactive = !isActive(world, object.entity);
             if (inactive) {
-                ui::pushStyleColor(ui::Col_Text,
-                                      ui::styleColor(ui::Col_TextDisabled));
+                ImGui::PushStyleColor(ImGuiCol_Text,
+                                      ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
             } else if (prefab) {
-                ui::pushStyleColor(ui::Col_Text, ui::Color(.35f, .65f, 1, 1));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.35f, .65f, 1, 1));
             }
             const bool hasChildren =
                 std::any_of(objects.begin(), objects.end(), [&](const LevelObject& other) {
@@ -471,31 +471,31 @@ inline bool drawLevelObjects(World& world,
             const auto key = hierarchyKey(object.entity);
             if (hasChildren) {
                 // Let the Hierarchy background show through in every button state.
-                ui::pushStyleColor(ui::Col_Button, ui::Color(0, 0, 0, 0));
-                ui::pushStyleColor(ui::Col_ButtonHovered, ui::Color(0, 0, 0, 0));
-                ui::pushStyleColor(ui::Col_ButtonActive, ui::Color(0, 0, 0, 0));
-                if (ui::arrowButton("##Fold",
-                                       collapsed.count(key) ? ui::Dir_Right : ui::Dir_Down)) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0, 0, 0, 0));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));
+                if (ImGui::ArrowButton("##Fold",
+                                       collapsed.count(key) ? ImGuiDir_Right : ImGuiDir_Down)) {
                     if (!collapsed.erase(key)) {
                         collapsed.insert(key);
                     }
                 }
-                ui::popStyleColor(3);
-                ui::sameLine(0, 2);
+                ImGui::PopStyleColor(3);
+                ImGui::SameLine(0, 2);
             } else {
-                ui::dummy(ui::Vec2(ui::frameHeight(), 1));
-                ui::sameLine(0, 2);
+                ImGui::Dummy(ImVec2(ImGui::GetFrameHeight(), 1));
+                ImGui::SameLine(0, 2);
             }
-            const auto iconPos = ui::cursorScreenPos();
+            const auto iconPos = ImGui::GetCursorScreenPos();
             drawnRows.push_back(object.entity);
             // Reserve pixels rather than spaces (font-dependent widths can overlap the icon).
-            if (ui::selectable(("##object" + std::to_string(object.entity.index)).c_str(),
+            if (ImGui::Selectable(("##object" + std::to_string(object.entity.index)).c_str(),
                                   std::find(hierarchySelection.begin(),
                                             hierarchySelection.end(),
                                             object.entity) != hierarchySelection.end(),
-                                  ui::SelectableFlags_AllowDoubleClick,
-                                  ui::Vec2(0, std::max(20.0f, ui::textLineHeight() + 4)))) {
-                if (ui::io().KeyShift && world.alive(selected)) {
+                                  ImGuiSelectableFlags_AllowDoubleClick,
+                                  ImVec2(0, std::max(20.0f, ImGui::GetTextLineHeight() + 4)))) {
+                if (ImGui::GetIO().KeyShift && world.alive(selected)) {
                     auto first = std::find(previousRows.begin(), previousRows.end(), selected),
                          last = std::find(previousRows.begin(), previousRows.end(), object.entity);
                     if (first != previousRows.end() && last != previousRows.end()) {
@@ -504,7 +504,7 @@ inline bool drawLevelObjects(World& world,
                         }
                         hierarchySelection.assign(first, last + 1);
                     }
-                } else if (ui::io().KeyCtrl) {
+                } else if (ImGui::GetIO().KeyCtrl) {
                     auto found = std::find(
                         hierarchySelection.begin(), hierarchySelection.end(), object.entity);
                     if (found != hierarchySelection.end()) {
@@ -519,11 +519,11 @@ inline bool drawLevelObjects(World& world,
                 hierarchyPrimary = selected;
                 changed = true;
             }
-            if (selectionEnabled && ui::isItemHovered() && ui::isMouseDoubleClicked(0)) {
+            if (selectionEnabled && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
                 renameTarget = object.entity;
                 renameRequested = true;
             }
-            if (ui::beginPopupContextItem("Object actions")) {
+            if (ImGui::BeginPopupContextItem("Object actions")) {
                 if (selected != object.entity) {
                     if (std::find(hierarchySelection.begin(),
                                   hierarchySelection.end(),
@@ -534,7 +534,7 @@ inline bool drawLevelObjects(World& world,
                     hierarchyPrimary = selected;
                     changed = true;
                 }
-                if (createRequest && ui::beginMenu("Create child")) {
+                if (createRequest && ImGui::BeginMenu("Create child")) {
                     int item = drawCreateItems();
                     if (item >= 0) {
                         *createRequest = item;
@@ -543,63 +543,63 @@ inline bool drawLevelObjects(World& world,
                             *createParent = object.entity;
                         }
                     }
-                    ui::endMenu();
+                    ImGui::EndMenu();
                 }
-                ui::textUnformatted(object.name.c_str());
-                ui::separator();
-                if (ui::menuItem("Rename...", "F2")) {
+                ImGui::TextUnformatted(object.name.c_str());
+                ImGui::Separator();
+                if (ImGui::MenuItem("Rename...", "F2")) {
                     renameTarget = object.entity;
                     renameRequested = true;
                 }
-                if (ui::menuItem("Duplicate")) {
+                if (ImGui::MenuItem("Duplicate")) {
                     selected = duplicateLevelObject(world, object.entity);
                     changed = true;
                 }
-                if (ui::menuItem(
+                if (ImGui::MenuItem(
                         "Unparent", nullptr, false, getParent(world, object.entity) != Entity{})) {
                     for (auto e : hierarchyBatch(world, object.entity)) {
                         setParent(world, e, {});
                     }
                     changed = true;
                 }
-                if (ui::menuItem("Delete")) {
+                if (ImGui::MenuItem("Delete")) {
                     deleteHierarchySelection(world, object.entity);
                     selected = {};
                     changed = true;
                 }
-                ui::endPopup();
+                ImGui::EndPopup();
             }
-            if (ui::beginDragDropSource()) {
-                ui::setDragDropPayload("LEVEL_OBJECT", &object.entity, sizeof(Entity));
-                ui::textUnformatted(object.name.c_str());
-                ui::endDragDropSource();
+            if (ImGui::BeginDragDropSource()) {
+                ImGui::SetDragDropPayload("LEVEL_OBJECT", &object.entity, sizeof(Entity));
+                ImGui::TextUnformatted(object.name.c_str());
+                ImGui::EndDragDropSource();
             }
-            if (ui::beginDragDropTarget()) {
-                if (const auto* asset = ui::acceptDragDropPayload("ASSET_PATH")) {
+            if (ImGui::BeginDragDropTarget()) {
+                if (const auto* asset = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                     if (attachScriptAsset(
-                            world, object.entity, static_cast<const char*>(asset->data()))) {
+                            world, object.entity, static_cast<const char*>(asset->Data))) {
                         changed = true;
                     }
                 }
-                if (const auto* payload = ui::acceptDragDropPayload("LEVEL_OBJECT")) {
-                    const Entity child = *static_cast<const Entity*>(payload->data());
+                if (const auto* payload = ImGui::AcceptDragDropPayload("LEVEL_OBJECT")) {
+                    const Entity child = *static_cast<const Entity*>(payload->Data);
                     reparentDrop(child, object.entity);
                 }
-                ui::endDragDropTarget();
+                ImGui::EndDragDropTarget();
             }
-            hierarchyIcon(world, object.entity, ui::Vec2(iconPos.x, iconPos.y + 2));
-            ui::windowDrawList()->addText(ui::Vec2(iconPos.x + 24, iconPos.y + 2),
-                                                ui::colorU32(ui::Col_Text),
+            hierarchyIcon(world, object.entity, ImVec2(iconPos.x, iconPos.y + 2));
+            ImGui::GetWindowDrawList()->AddText(ImVec2(iconPos.x + 24, iconPos.y + 2),
+                                                ImGui::GetColorU32(ImGuiCol_Text),
                                                 object.name.c_str());
             if (depth) {
-                ui::unindent(static_cast<float>(depth) * 12);
+                ImGui::Unindent(static_cast<float>(depth) * 12);
             }
             if (prefab || inactive) {
-                ui::popStyleColor();
+                ImGui::PopStyleColor();
             }
-            ui::popId();
-            ui::popId();
-            if (depth < 128 && (!collapsed.count(key) || search.inputBuf[0])) {
+            ImGui::PopID();
+            ImGui::PopID();
+            if (depth < 128 && (!collapsed.count(key) || search.InputBuf[0])) {
                 for (const auto& child : objects) {
                     if (getParent(world, child.entity) == object.entity) {
                         self(self, child, depth + 1);
@@ -608,78 +608,78 @@ inline bool drawLevelObjects(World& world,
             }
         };
         // Level root is not an entity; dropping here unparents selected roots.
-        ui::setNextItemOpen(true, search.inputBuf[0] ? ui::Cond_Always : ui::Cond_Once);
-        const auto rootPosition = ui::cursorScreenPos();
-        const bool rootOpen = ui::treeNodeEx(
-            "##LevelRoot", ui::TreeNodeFlags_SpanAvailWidth, "    %s", levelName);
-        if (ui::beginDragDropTarget()) {
-            if (const auto* payload = ui::acceptDragDropPayload("LEVEL_OBJECT")) {
-                reparentDrop(*static_cast<const Entity*>(payload->data()), {});
+        ImGui::SetNextItemOpen(true, search.InputBuf[0] ? ImGuiCond_Always : ImGuiCond_Once);
+        const auto rootPosition = ImGui::GetCursorScreenPos();
+        const bool rootOpen = ImGui::TreeNodeEx(
+            "##LevelRoot", ImGuiTreeNodeFlags_SpanAvailWidth, "    %s", levelName);
+        if (ImGui::BeginDragDropTarget()) {
+            if (const auto* payload = ImGui::AcceptDragDropPayload("LEVEL_OBJECT")) {
+                reparentDrop(*static_cast<const Entity*>(payload->Data), {});
             }
-            ui::endDragDropTarget();
+            ImGui::EndDragDropTarget();
         }
-        if (ui::beginPopupContextItem("Level root")) {
-            if (ui::menuItem("Rename Level...", nullptr, false, renameLevel != nullptr) &&
+        if (ImGui::BeginPopupContextItem("Level root")) {
+            if (ImGui::MenuItem("Rename Level...", nullptr, false, renameLevel != nullptr) &&
                 renameLevel) {
                 *renameLevel = true;
             }
-            ui::endPopup();
+            ImGui::EndPopup();
         }
-        auto* rootDraw = ui::windowDrawList();
-        rootDraw->addQuad(ui::Vec2(rootPosition.x + 22, rootPosition.y + 3),
-                          ui::Vec2(rootPosition.x + 28, rootPosition.y),
-                          ui::Vec2(rootPosition.x + 34, rootPosition.y + 3),
-                          ui::Vec2(rootPosition.x + 28, rootPosition.y + 7),
-                          ui::colorU32(ui::Col_Text));
-        rootDraw->addLine(ui::Vec2(rootPosition.x + 22, rootPosition.y + 7),
-                          ui::Vec2(rootPosition.x + 28, rootPosition.y + 11),
-                          ui::colorU32(ui::Col_Text));
-        rootDraw->addLine(ui::Vec2(rootPosition.x + 28, rootPosition.y + 11),
-                          ui::Vec2(rootPosition.x + 34, rootPosition.y + 7),
-                          ui::colorU32(ui::Col_Text));
+        auto* rootDraw = ImGui::GetWindowDrawList();
+        rootDraw->AddQuad(ImVec2(rootPosition.x + 22, rootPosition.y + 3),
+                          ImVec2(rootPosition.x + 28, rootPosition.y),
+                          ImVec2(rootPosition.x + 34, rootPosition.y + 3),
+                          ImVec2(rootPosition.x + 28, rootPosition.y + 7),
+                          ImGui::GetColorU32(ImGuiCol_Text));
+        rootDraw->AddLine(ImVec2(rootPosition.x + 22, rootPosition.y + 7),
+                          ImVec2(rootPosition.x + 28, rootPosition.y + 11),
+                          ImGui::GetColorU32(ImGuiCol_Text));
+        rootDraw->AddLine(ImVec2(rootPosition.x + 28, rootPosition.y + 11),
+                          ImVec2(rootPosition.x + 34, rootPosition.y + 7),
+                          ImGui::GetColorU32(ImGuiCol_Text));
         if (rootOpen) {
-            ui::indent(8);
+            ImGui::Indent(8);
             for (const auto& object : objects) {
                 if (getParent(world, object.entity) == Entity{}) {
                     row(row, object, 0);
                 }
             }
-            if (visible.empty() && search.inputBuf[0]) {
-                ui::textDisabled("No matching objects");
+            if (visible.empty() && search.InputBuf[0]) {
+                ImGui::TextDisabled("No matching objects");
             }
-            ui::unindent(8);
-            ui::treePop();
+            ImGui::Unindent(8);
+            ImGui::TreePop();
         }
         previousRows = drawnRows;
-        ui::invisibleButton("##HierarchyBackground",
-                               ui::Vec2(std::max(1.f, ui::contentRegionAvail().x),
-                                      std::max(32.f, ui::contentRegionAvail().y)));
-        if (ui::beginDragDropTarget()) {
-            if (const auto* payload = ui::acceptDragDropPayload("LEVEL_OBJECT")) {
-                reparentDrop(*static_cast<const Entity*>(payload->data()), {});
+        ImGui::InvisibleButton("##HierarchyBackground",
+                               ImVec2(std::max(1.f, ImGui::GetContentRegionAvail().x),
+                                      std::max(32.f, ImGui::GetContentRegionAvail().y)));
+        if (ImGui::BeginDragDropTarget()) {
+            if (const auto* payload = ImGui::AcceptDragDropPayload("LEVEL_OBJECT")) {
+                reparentDrop(*static_cast<const Entity*>(payload->Data), {});
             }
-            ui::endDragDropTarget();
+            ImGui::EndDragDropTarget();
         }
-        if (ui::isItemClicked(ui::MouseButton_Left)) {
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
             changed = selected != Entity{};
             selected = {};
             hierarchyPrimary = {};
             hierarchySelection.clear();
         }
-        if (createRequest && ui::beginPopupContextItem("Hierarchy empty actions")) {
-            if (ui::beginMenu("Create")) {
+        if (createRequest && ImGui::BeginPopupContextItem("Hierarchy empty actions")) {
+            if (ImGui::BeginMenu("Create")) {
                 int item = drawCreateItems();
                 if (item >= 0) {
                     *createRequest = item;
                 }
-                ui::endMenu();
+                ImGui::EndMenu();
             }
-            ui::endPopup();
+            ImGui::EndPopup();
         }
-        if (selectionEnabled && ui::isWindowFocused(ui::FocusedFlags_RootAndChildWindows) &&
-            !ui::io().WantTextInput && !ui::isAnyItemActive() &&
-            !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId) && world.alive(selected) &&
-            ui::isKeyPressed(ui::Key_F2, false)) {
+        if (selectionEnabled && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+            !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+            !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId) && world.alive(selected) &&
+            ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
             renameTarget = selected;
             renameRequested = true;
         }
@@ -687,43 +687,43 @@ inline bool drawLevelObjects(World& world,
             const auto* name = world.tryGet<ObjectName>(renameTarget);
             std::snprintf(
                 renameName, sizeof(renameName), "%s", name ? name->value.c_str() : "Object");
-            ui::setNextWindowPos(ui::mousePos(), ui::Cond_Appearing);
-            ui::openPopup("Rename GameObject");
+            ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Appearing);
+            ImGui::OpenPopup("Rename GameObject");
             renameFocus = true;
         }
-        if (ui::beginPopup("Rename GameObject", ui::WindowFlags_AlwaysAutoResize)) {
+        if (ImGui::BeginPopup("Rename GameObject", ImGuiWindowFlags_AlwaysAutoResize)) {
             if (renameFocus) {
-                ui::setKeyboardFocusHere();
+                ImGui::SetKeyboardFocusHere();
                 renameFocus = false;
             }
-            ui::setNextItemWidth(220);
-            const bool enter = ui::inputText("##Name",
+            ImGui::SetNextItemWidth(220);
+            const bool enter = ImGui::InputText("##Name",
                                                 renameName,
                                                 sizeof(renameName),
-                                                ui::InputTextFlags_EnterReturnsTrue |
-                                                    ui::InputTextFlags_AutoSelectAll);
-            if (enter || ui::button("Rename")) {
+                                                ImGuiInputTextFlags_EnterReturnsTrue |
+                                                    ImGuiInputTextFlags_AutoSelectAll);
+            if (enter || ImGui::Button("Rename")) {
                 if (world.alive(renameTarget) &&
                     std::string(renameName).find_first_not_of(" \t\r\n") != std::string::npos) {
                     world.add(renameTarget, ObjectName{renameName});
                     changed = true;
-                    ui::closeCurrentPopup();
+                    ImGui::CloseCurrentPopup();
                 }
             }
-            ui::sameLine();
-            if (ui::button("Cancel") || ui::isKeyPressed(ui::Key_Escape)) {
-                ui::closeCurrentPopup();
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                ImGui::CloseCurrentPopup();
             }
-            ui::endPopup();
+            ImGui::EndPopup();
         }
-        if (ui::isWindowHovered() && ui::isMouseClicked(ui::MouseButton_Left) &&
-            !ui::isAnyItemHovered()) {
+        if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+            !ImGui::IsAnyItemHovered()) {
             changed = selected != Entity{};
             selected = {};
         }
-        ui::endChild();
-        ui::endDisabled();
+        ImGui::EndChild();
+        ImGui::EndDisabled();
     }
-    ui::endWindow();
+    ImGui::End();
     return changed;
 }

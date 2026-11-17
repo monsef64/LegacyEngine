@@ -259,8 +259,8 @@ class AssetPreviewRenderer {
     }
 
     const AssetPreviewData& get(const AssetManager& assets, const std::string& path, int index) {
-        if (iconFrame_ != ui::frameCount()) {
-            iconFrame_ = ui::frameCount();
+        if (iconFrame_ != ImGui::GetFrameCount()) {
+            iconFrame_ = ImGui::GetFrameCount();
             iconBudget_ = 4;
         }
         if (index == 2 && !icons_.count(path)) {
@@ -374,8 +374,8 @@ class AssetPreviewRenderer {
         assetThumbnail = [this](const AssetManager& assets, const std::string& path) {
             AssetPreviewData image;
             if (textureAsset(path)) {
-                if (thumbnailFrame_ != ui::frameCount()) {
-                    thumbnailFrame_ = ui::frameCount();
+                if (thumbnailFrame_ != ImGui::GetFrameCount()) {
+                    thumbnailFrame_ = ImGui::GetFrameCount();
                     pickerThumbnails_.beginFrame(assets);
                 }
                 image.texture = pickerThumbnails_.texture(assets, path);

@@ -1,8 +1,8 @@
 # Build and test
-Requires a C++17 compiler, CMake 3.22+, Git and platform development libraries.
-CMake fetches SDL3 (if not installed), Jolt, Assimp, Zstandard, MyGUI with FreeType,
-and Lua. MyGUI also fetches pugixml and UTF8-CPP. GLAD, Roboto/Font Awesome fonts,
-miniaudio, simdjson, nlohmann/json and stb_image are included under `third_party/`.
+Requires a C++17 compiler, CMake 3.20+, Git and platform development libraries.
+CMake fetches SDL3 (if not installed), Jolt, Dear ImGui, ImGuizmo and Lua.
+GLAD, Roboto/Font Awesome fonts, miniaudio, simdjson, nlohmann/json and stb_image
+are included under `third_party/`.
 
 On Debian/Ubuntu, install the window/audio/OpenGL development dependencies used
 in [the engine workflow](../.github/workflows/release.yml). Then:

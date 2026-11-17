@@ -1,17 +1,17 @@
 #pragma once
 #include "core/profiler.hpp"
-#include "ui/mygui_ui.hpp"
+#include <imgui.h>
 inline void drawProfiler(FrameProfiler& profiler, bool& visible) {
     if (!visible) {
         return;
     }
-    ui::setNextWindowSize(ui::Vec2(690, 530), ui::Cond_FirstUseEver);
-    if (ui::beginWindow("Profiler", &visible)) {
-        ui::checkbox("Pause sampling", &profiler.paused);
+    ImGui::SetNextWindowSize(ImVec2(690, 530), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Profiler", &visible)) {
+        ImGui::Checkbox("Pause sampling", &profiler.paused);
         const auto frame = profiler.stats();
-        ui::sameLine();
-        ui::text("%zu / %zu frames", profiler.count, profiler.capacity);
-        ui::text("Frame: %.2f ms | Average: %.2f ms (%.0f FPS) | Peak: %.2f ms",
+        ImGui::SameLine();
+        ImGui::Text("%zu / %zu frames", profiler.count, profiler.capacity);
+        ImGui::Text("Frame: %.2f ms | Average: %.2f ms (%.0f FPS) | Peak: %.2f ms",
                     frame.last,
                     frame.average,
                     frame.average > 0 ? 1000 / frame.average : 0,
@@ -23,40 +23,40 @@ inline void drawProfiler(FrameProfiler& profiler, bool& visible) {
                                          profiler.capacity]
                                 .total);
         }
-        ui::plotLines("Frame ms",
+        ImGui::PlotLines("Frame ms",
                          plot,
                          int(profiler.count),
                          0,
                          nullptr,
                          0,
                          std::max(20.0f, float(frame.peak)),
-                         ui::Vec2(0, 75));
-        ui::textWrapped(
+                         ImVec2(0, 75));
+        ImGui::TextWrapped(
             "CPU wall time, including driver calls and vsync wait; not GPU execution time. Render sub-rows are nested within Scene/Game and must not be added to the frame total.");
-        if (ui::beginTable("Costs",
+        if (ImGui::BeginTable("Costs",
                               5,
-                              ui::TableFlags_RowBg | ui::TableFlags_Borders |
-                                  ui::TableFlags_SizingStretchProp)) {
+                              ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                                  ImGuiTableFlags_SizingStretchProp)) {
             for (const char* title : {"Subsystem", "Last ms", "Avg ms", "Peak ms", "Avg frame %"}) {
-                ui::tableSetupColumn(title);
+                ImGui::TableSetupColumn(title);
             }
-            ui::tableHeadersRow();
+            ImGui::TableHeadersRow();
             for (std::size_t i = 0; i < FrameProfiler::parts; ++i) {
                 auto stats = profiler.stats(int(i));
-                ui::tableNextRow();
-                ui::tableNextColumn();
-                ui::textUnformatted(profileNames[i]);
-                ui::tableNextColumn();
-                ui::text("%.3f", stats.last);
-                ui::tableNextColumn();
-                ui::text("%.3f", stats.average);
-                ui::tableNextColumn();
-                ui::text("%.3f", stats.peak);
-                ui::tableNextColumn();
-                ui::text("%.1f%%", frame.average > 0 ? 100 * stats.average / frame.average : 0);
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(profileNames[i]);
+                ImGui::TableNextColumn();
+                ImGui::Text("%.3f", stats.last);
+                ImGui::TableNextColumn();
+                ImGui::Text("%.3f", stats.average);
+                ImGui::TableNextColumn();
+                ImGui::Text("%.3f", stats.peak);
+                ImGui::TableNextColumn();
+                ImGui::Text("%.1f%%", frame.average > 0 ? 100 * stats.average / frame.average : 0);
             }
-            ui::endTable();
+            ImGui::EndTable();
         }
     }
-    ui::endWindow();
+    ImGui::End();
 }

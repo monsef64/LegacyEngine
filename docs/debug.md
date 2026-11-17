@@ -18,7 +18,7 @@ Use **Pause sampling** to inspect results without replacing them.
 
 The measured sections are events/input, editor panels/assets, script updates,
 hierarchy, physics (including fixed-update scripts), camera updates, audio/pose
-sync, Scene rendering, Game rendering, MyGUI overlay submission, presentation/vsync wait,
+sync, Scene rendering, Game rendering, ImGui submission, presentation/vsync wait,
 and other frame work. Renderer rows break out light/shadow setup, skyboxes and
 surfaces/gizmos; these are **nested** inside Scene/Game timings, not additional
 frame costs. The timings include synchronous driver work but **do not measure GPU

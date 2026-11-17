@@ -2,7 +2,7 @@
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include "core/hierarchy.hpp"
-#include "ui/mygui_ui.hpp"
+#include <imgui.h>
 
 // IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox; 12
 // character; 13 FPS camera; 14 raycast; 15 particles; 16 laser.
@@ -12,79 +12,79 @@ inline bool validEditorObjectType(int item) {
 }
 inline int drawCreateItems() {
     int item = -1;
-    if (ui::menuItem("Empty GameObject")) {
+    if (ImGui::MenuItem("Empty GameObject")) {
         item = 0;
     }
-    if (ui::menuItem("Character Controller")) {
+    if (ImGui::MenuItem("Character Controller")) {
         item = 12;
     }
-    if (ui::menuItem("FPS Camera")) {
+    if (ImGui::MenuItem("FPS Camera")) {
         item = 13;
     }
-    if (ui::menuItem("Terrain")) {
+    if (ImGui::MenuItem("Terrain")) {
         item = 18;
     }
-    if (ui::menuItem("LightShafts")) {
+    if (ImGui::MenuItem("LightShafts")) {
         item = 17;
     }
-    if (ui::menuItem("Laser")) {
+    if (ImGui::MenuItem("Laser")) {
         item = 16;
     }
-    if (ui::menuItem("Particles")) {
+    if (ImGui::MenuItem("Particles")) {
         item = 15;
     }
-    if (ui::menuItem("Raycast")) {
+    if (ImGui::MenuItem("Raycast")) {
         item = 14;
     }
-    if (ui::beginMenu("Audio")) {
-        if (ui::menuItem("Audio Source")) {
+    if (ImGui::BeginMenu("Audio")) {
+        if (ImGui::MenuItem("Audio Source")) {
             item = 6;
         }
-        ui::endMenu();
+        ImGui::EndMenu();
     }
-    if (ui::beginMenu("Rendering")) {
-        if (ui::menuItem("Skybox")) {
+    if (ImGui::BeginMenu("Rendering")) {
+        if (ImGui::MenuItem("Skybox")) {
             item = 11;
         }
-        if (ui::menuItem("Camera")) {
+        if (ImGui::MenuItem("Camera")) {
             item = 5;
         }
-        ui::endMenu();
+        ImGui::EndMenu();
     }
-    if (ui::beginMenu("Light")) {
-        if (ui::menuItem("Directional Light")) {
+    if (ImGui::BeginMenu("Light")) {
+        if (ImGui::MenuItem("Directional Light")) {
             item = 7;
         }
-        if (ui::menuItem("Point Light")) {
+        if (ImGui::MenuItem("Point Light")) {
             item = 8;
         }
-        if (ui::menuItem("Spot Light")) {
+        if (ImGui::MenuItem("Spot Light")) {
             item = 9;
         }
-        ui::endMenu();
+        ImGui::EndMenu();
     }
-    if (ui::beginMenu("Shape")) {
+    if (ImGui::BeginMenu("Shape")) {
         const char* names[]{"Capsule", "Cone", "Cube", "Sphere"};
         for (int i = 0; i < 4; ++i) {
-            if (ui::menuItem(names[i])) {
+            if (ImGui::MenuItem(names[i])) {
                 item = i + 1;
             }
         }
-        if (ui::menuItem("Plane")) {
+        if (ImGui::MenuItem("Plane")) {
             item = 10;
         }
-        ui::endMenu();
+        ImGui::EndMenu();
     }
     return item;
 }
 inline int drawCreateMenu() {
     int item = -1;
-    if (ui::beginMainMenuBar()) {
-        if (ui::beginMenu("Create")) {
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("Create")) {
             item = drawCreateItems();
-            ui::endMenu();
+            ImGui::EndMenu();
         }
-        ui::endMainMenuBar();
+        ImGui::EndMainMenuBar();
     }
     return item;
 }

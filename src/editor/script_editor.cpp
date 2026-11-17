@@ -4,76 +4,8 @@
 #include "scripting/lua_highlight.hpp"
 #include <cctype>
 #include <cstring>
-#include "ui/mygui_ui.hpp"
-
-void script_editor_detail::drawLuaSyntaxOverlay(ui::DrawList* draw,
-                                               std::string_view source,
-                                               const ui::MultilineEditInfo& editInfo) {
-    if (!draw) return;
-    draw->pushClipRect(editInfo.innerRect.min(), editInfo.innerRect.max(), true);
-    const uint32_t colors[]{ui::colorU32(ui::Col_Text),
-                            UI_COL32(195, 140, 245, 255),
-                            UI_COL32(210, 180, 125, 255),
-                            UI_COL32(105, 165, 110, 255),
-                            UI_COL32(120, 200, 190, 255),
-                            UI_COL32(110, 175, 240, 255)};
-    const auto origin = editInfo.textOrigin;
-    float x = origin.x - editInfo.scrollX;
-    float y = origin.y - editInfo.scrollY;
-    const float glyphHeight = ui::fontSize();
-    for (const auto token : luaTokens(source)) {
-        std::size_t pos = token.begin;
-        while (pos < token.end) {
-            auto lineEnd = source.find('\n', pos);
-            if (lineEnd == source.npos || lineEnd > token.end) lineEnd = token.end;
-            if (y + glyphHeight >= editInfo.innerRect.y &&
-                y <= editInfo.innerRect.y + editInfo.innerRect.height) {
-                draw->addText(glyphHeight,
-                              {x, y},
-                              colors[token.kind],
-                              source.data() + pos,
-                              source.data() + lineEnd);
-            }
-            const std::string line(source.data() + pos, lineEnd - pos);
-            x += ui::calcTextSize(line.c_str()).x;
-            pos = lineEnd;
-            if (pos < token.end && source[pos] == '\n') {
-                ++pos;
-                x = origin.x - editInfo.scrollX;
-                y += glyphHeight;
-            }
-        }
-    }
-    draw->popClipRect();
-}
-
-namespace {
-void drawLuaLineNumbers(ui::DrawList* draw,
-                        std::string_view source,
-                        const ui::MultilineEditInfo& editInfo) {
-    if (!draw || editInfo.gutterRect.width <= 0.0f) return;
-    const auto& gutter = editInfo.gutterRect;
-    draw->pushClipRect(gutter.min(), gutter.max(), true);
-    draw->addRectFilled(gutter.min(), gutter.max(), UI_COL32(25, 29, 35, 255));
-    const float lineHeight = ui::fontSize();
-    float y = editInfo.textOrigin.y - editInfo.scrollY;
-    int line = 1;
-    for (std::size_t i = 0; i <= source.size(); ++i) {
-        if (i != 0 && source[i - 1] != '\n') continue;
-        if (y + lineHeight >= gutter.y && y <= gutter.y + gutter.height) {
-            char number[24];
-            std::snprintf(number, sizeof(number), "%d", line);
-            const auto width = ui::calcTextSize(number).x;
-            draw->addText({gutter.x + gutter.width - width - 6.0f, y},
-                          UI_COL32(125, 140, 155, 255),
-                          number);
-        }
-        ++line;
-        y += lineHeight;
-    }
-    draw->popClipRect();
-}
-} // namespace
+#include <imgui.h>
+#include <imgui_internal.h>
 
 ScriptEditor::ScriptEditor() = default;
 
@@ -81,39 +13,39 @@ void ScriptEditor::draw(const EditorLayout* layout,
                         bool executionEnabled,
                         AssetManager* assets,
                         std::string* openedScript) {
-    const auto* viewport = ui::mainViewport();
+    const auto* viewport = ImGui::GetMainViewport();
     if (!dockedEditor || panelOpen[3]) {
         if (layout) {
             placeEditorPanel(layout->lua);
         } else {
-            ui::setNextWindowPos(
-                ui::Vec2(viewport->WorkPos.x + viewport->WorkSize.x - 16, viewport->WorkPos.y + 16),
-                ui::Cond_FirstUseEver,
-                ui::Vec2(1, 0));
-            ui::setNextWindowSize(ui::Vec2(450, 320), ui::Cond_FirstUseEver);
+            ImGui::SetNextWindowPos(
+                ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 16, viewport->WorkPos.y + 16),
+                ImGuiCond_FirstUseEver,
+                ImVec2(1, 0));
+            ImGui::SetNextWindowSize(ImVec2(450, 320), ImGuiCond_FirstUseEver);
         }
         if (beginEditorPanel("Script Editor", layout ? fixedPanelFlags : 0)) {
             if (assets) {
-                ui::beginChild(
+                ImGui::BeginChild(
                     "Script Explorer",
-                    ui::Vec2(std::min(200.0f, ui::contentRegionAvail().x * .3f), 0),
-                    ui::ChildFlags_Borders);
-                ui::textUnformatted("Scripts");
+                    ImVec2(std::min(200.0f, ImGui::GetContentRegionAvail().x * .3f), 0),
+                    ImGuiChildFlags_Borders);
+                ImGui::TextUnformatted("Scripts");
                 std::optional<std::string> createScriptIn;
-                if (ui::button("New Script", ui::Vec2(-1, 0))) {
+                if (ImGui::Button("New Script", ImVec2(-1, 0))) {
                     createScriptIn =
                         std::filesystem::path(assetPath_).parent_path().generic_string();
                 }
-                if (ui::isItemHovered()) {
-                    ui::setTooltip(
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
                         "Create a .ls file beside the open script, or in Assets if none is open");
                 }
                 try {
-                    if (treeRoot_ != assets->root || ui::timeSeconds() >= treeRefresh_) {
+                    if (treeRoot_ != assets->root || ImGui::GetTime() >= treeRefresh_) {
                         auto tree = buildScriptTree(*assets);
                         scriptTree_ = std::move(tree);
                         treeRoot_ = assets->root;
-                        treeRefresh_ = ui::timeSeconds() + .5;
+                        treeRefresh_ = ImGui::GetTime() + .5;
                     }
                     if (auto chosen = scriptTree_.draw(assetPath_, "", &createScriptIn)) {
                         saveFile(*assets);
@@ -125,13 +57,13 @@ void ScriptEditor::draw(const EditorLayout* layout,
                         }
                         fileError_.clear();
                     }
-                    if (ui::beginPopupContextWindow("Script Explorer actions",
-                                                       ui::PopupFlags_MouseButtonRight |
-                                                           ui::PopupFlags_NoOpenOverItems)) {
-                        if (ui::menuItem("New LegacyScript in Assets")) {
+                    if (ImGui::BeginPopupContextWindow("Script Explorer actions",
+                                                       ImGuiPopupFlags_MouseButtonRight |
+                                                           ImGuiPopupFlags_NoOpenOverItems)) {
+                        if (ImGui::MenuItem("New LegacyScript in Assets")) {
                             createScriptIn = "";
                         }
-                        ui::endPopup();
+                        ImGui::EndPopup();
                     }
                     if (createScriptIn) {
                         // Save the current document before switching to the newly created asset.
@@ -154,10 +86,10 @@ void ScriptEditor::draw(const EditorLayout* layout,
                 } catch (const std::exception& e) {
                     fileError_ = e.what();
                 }
-                ui::endChild();
-                ui::sameLine();
-                ui::beginChild("Script document");
-                if ((ui::button("Save") || ui::shortcut(ui::Mod_Ctrl | ui::Key_S)) &&
+                ImGui::EndChild();
+                ImGui::SameLine();
+                ImGui::BeginChild("Script document");
+                if ((ImGui::Button("Save") || ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S)) &&
                     fileOpen()) {
                     try {
                         saveFile(*assets);
@@ -166,59 +98,141 @@ void ScriptEditor::draw(const EditorLayout* layout,
                         fileError_ = e.what();
                     }
                 }
-                ui::sameLine();
-                ui::text("%s%s",
+                ImGui::SameLine();
+                ImGui::Text("%s%s",
                             fileOpen() ? assetPath_.c_str() : "Select a script file",
                             fileDirty_ ? " *" : "");
                 if (!fileError_.empty()) {
-                    ui::textWrapped("%s", fileError_.c_str());
+                    ImGui::TextWrapped("%s", fileError_.c_str());
                 }
             }
-            ui::beginDisabled(!executionEnabled || !fileOpen());
-            if (ui::button("Execute")) {
+            ImGui::BeginDisabled(!executionEnabled || !fileOpen());
+            if (ImGui::Button("Execute")) {
                 ownerError_ = !executeSource();
                 scrollToBottom_ = true;
             }
-            ui::sameLine();
-            if (ui::button("Reset Runtime")) {
+            ImGui::SameLine();
+            if (ImGui::Button("Reset Runtime")) {
                 console_.reset();
                 scrollToBottom_ = true;
             }
-            ui::endDisabled();
+            ImGui::EndDisabled();
             if (ownerError_) {
-                ui::textWrapped(
+                ImGui::TextWrapped(
                     "Execution failed. Check Console for details. Asset scripts need a unique attachment owner or its selection.");
             }
-            ui::textDisabled("Lua 5.4 | Tab: complete API names | output below");
+            ImGui::TextDisabled("Lua 5.4 | Tab: complete API names | output below");
             if (!fileOpen()) {
-                ui::textWrapped(
+                ImGui::TextWrapped(
                     "Open a .ls or .lua file to edit. Only script assets can be edited here.");
             }
-            ui::beginDisabled(!fileOpen());
-            ui::MultilineEditInfo editInfo;
-            const float gutter = ui::calcTextSize("00000").x + 12.0f;
-            ui::pushStyleColor(ui::Col_Text, ui::Color(0, 0, 0, 0));
-            const bool sourceChanged = ui::inputTextMultiline("##source",
-                                                              source_.data(),
-                                                              source_.size(),
-                                                              ui::Vec2(-1, -1),
-                                                              ui::InputTextFlags_CallbackCompletion |
-                                                                  ui::InputTextFlags_CallbackAlways,
-                                                              completion,
-                                                              this,
-                                                              &editInfo,
-                                                              gutter);
-            ui::popStyleColor();
-            if (sourceChanged) fileDirty_ = true;
-
-            // MyGUI's EditBox owns caret, selection, text input, and scrolling. The
-            // overlay adds line numbers and Lua token colours in the aligned text view.
-            if (editInfo.drawList) {
-                drawLuaLineNumbers(editInfo.drawList, source_.data(), editInfo);
-                script_editor_detail::drawLuaSyntaxOverlay(
-                    editInfo.drawList, source_.data(), editInfo);
+            ImGui::BeginDisabled(!fileOpen());
+            const auto sourceID = ImGui::GetID("##source");
+            const float gutter = ImGui::CalcTextSize("00000").x + 12;
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+                                ImVec2(ImGui::GetStyle().FramePadding.x + gutter,
+                                       ImGui::GetStyle().FramePadding.y));
+            // Render native selection/caret/scrollbars, but not a second copy of glyphs.
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0, 0, 0, 0));
+            if (ImGui::InputTextMultiline("##source",
+                                          source_.data(),
+                                          source_.size(),
+                                          ImVec2(-1, -1),
+                                          ImGuiInputTextFlags_CallbackCompletion |
+                                              ImGuiInputTextFlags_CallbackAlways,
+                                          completion,
+                                          this)) {
+                fileDirty_ = true;
             }
-            if (ui::isItemActive() && !completionPrefix_.empty()) {
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar();
+            // One colored glyph layer; ImGui retains editing, caret, selection and undo.
+            auto* parent = ImGui::GetCurrentWindow();
+            for (auto* child : parent->DC.ChildWindows) {
+                if (child->ChildId == sourceID) {
+                    auto* state = ImGui::GetInputTextState(sourceID);
+                    // Use current scroll, including InputText's same-frame caret-follow
+                    // adjustment (CursorStartPos still contains the pre-adjustment value).
+                    const auto padding = ImVec2(ImGui::GetStyle().FramePadding.x + gutter,
+                                                ImGui::GetStyle().FramePadding.y);
+                    ImVec2 origin(child->Pos.x + child->WindowPadding.x + child->DecoOuterSizeX1 +
+                                      child->DC.ColumnsOffset.x - child->Scroll.x + padding.x,
+                                  child->Pos.y + child->WindowPadding.y + child->DecoOuterSizeY1 -
+                                      child->Scroll.y + padding.y);
+                    if (state && ImGui::GetActiveID() == sourceID) {
+                        origin.x -= state->Scroll.x;
+                    }
+                    auto* draw = child->DrawList;
+                    draw->PushClipRect(child->InnerClipRect.Min, child->InnerClipRect.Max, true);
+                    draw->AddRectFilled(
+                        child->InnerClipRect.Min,
+                        ImVec2(child->InnerClipRect.Min.x + gutter, child->InnerClipRect.Max.y),
+                        IM_COL32(25, 29, 35, 255));
+                    std::string_view text(source_.data());
+                    int line = 1;
+                    float lineY = origin.y;
+                    for (std::size_t i = 0; i <= text.size(); ++i) {
+                        if (i == 0 || text[i - 1] == '\n') {
+                            if (lineY + ImGui::GetFontSize() >= child->InnerClipRect.Min.y &&
+                                lineY <= child->InnerClipRect.Max.y) {
+                                char number[24];
+                                std::snprintf(number, sizeof(number), "%d", line);
+                                draw->AddText({child->InnerClipRect.Min.x + gutter -
+                                                   ImGui::CalcTextSize(number).x - 6,
+                                               lineY},
+                                              IM_COL32(125, 140, 155, 255),
+                                              number);
+                            }
+                            ++line;
+                            lineY += ImGui::GetFontSize();
+                        }
+                    }
+                    draw->PopClipRect();
+                    draw->PushClipRect(
+                        ImVec2(child->InnerClipRect.Min.x + gutter, child->InnerClipRect.Min.y),
+                        child->InnerClipRect.Max,
+                        true);
+                    ImU32 colors[]{ImGui::GetColorU32(ImGuiCol_Text),
+                                   IM_COL32(195, 140, 245, 255),
+                                   IM_COL32(210, 180, 125, 255),
+                                   IM_COL32(105, 165, 110, 255),
+                                   IM_COL32(120, 200, 190, 255),
+                                   IM_COL32(110, 175, 240, 255)};
+                    float x = origin.x, y = origin.y;
+                    for (auto token : luaTokens(text)) {
+                        auto pos = token.begin;
+                        while (pos < token.end) {
+                            auto end = text.find('\n', pos);
+                            if (end == text.npos || end > token.end) {
+                                end = token.end;
+                            }
+                            if (y + ImGui::GetFontSize() >= child->InnerClipRect.Min.y &&
+                                y <= child->InnerClipRect.Max.y) {
+                                draw->AddText(ImVec2(x, y),
+                                              colors[token.kind],
+                                              text.data() + pos,
+                                              text.data() + end);
+                            }
+                            x += ImGui::GetFont()
+                                     ->CalcTextSizeA(ImGui::GetFontSize(),
+                                                     FLT_MAX,
+                                                     0,
+                                                     text.data() + pos,
+                                                     text.data() + end)
+                                     .x;
+                            pos = end;
+                            if (pos < token.end && text[pos] == '\n') {
+                                ++pos;
+                                x = origin.x;
+                                y += ImGui::GetFontSize();
+                            }
+                        }
+                    }
+                    draw->PopClipRect();
+                    break;
+                }
+            }
+            if (ImGui::IsItemActive() && !completionPrefix_.empty()) {
                 bool opened = false;
                 for (const auto& def : luaDefinitions) {
                     if (std::string_view(def.name).substr(0, completionPrefix_.size()) !=
@@ -226,40 +240,40 @@ void ScriptEditor::draw(const EditorLayout* layout,
                         continue;
                     }
                     if (!opened) {
-                        ui::beginTooltip();
+                        ImGui::BeginTooltip();
                         opened = true;
                     }
-                    ui::textUnformatted(def.signature);
+                    ImGui::TextUnformatted(def.signature);
                 }
                 if (opened) {
-                    ui::endTooltip();
+                    ImGui::EndTooltip();
                 }
             }
-            ui::endDisabled();
+            ImGui::EndDisabled();
             if (assets) {
-                ui::endChild();
+                ImGui::EndChild();
             }
         }
-        ui::endWindow();
+        ImGui::End();
     }
     if (!dockedEditor || panelOpen[4]) {
         if (layout) {
             placeEditorPanel(layout->console);
         } else {
-            ui::setNextWindowPos(ui::Vec2(viewport->WorkPos.x + viewport->WorkSize.x - 16,
+            ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x - 16,
                                            viewport->WorkPos.y + viewport->WorkSize.y - 16),
-                                    ui::Cond_FirstUseEver,
-                                    ui::Vec2(1, 1));
-            ui::setNextWindowSize(ui::Vec2(450, 250), ui::Cond_FirstUseEver);
+                                    ImGuiCond_FirstUseEver,
+                                    ImVec2(1, 1));
+            ImGui::SetNextWindowSize(ImVec2(450, 250), ImGuiCond_FirstUseEver);
         }
         if (beginEditorPanel("Console", layout ? fixedPanelFlags : 0)) {
-            if (ui::button("Clear")) {
+            if (ImGui::Button("Clear")) {
                 console_.clear();
             }
-            ui::sameLine();
-            ui::checkbox("Auto-scroll", &autoScroll_);
-            ui::sameLine();
-            if (ui::button("Copy all")) {
+            ImGui::SameLine();
+            ImGui::Checkbox("Auto-scroll", &autoScroll_);
+            ImGui::SameLine();
+            if (ImGui::Button("Copy all")) {
                 std::string text;
                 for (const auto& line : console_.lines()) {
                     text += line.text + "\n";
@@ -267,73 +281,73 @@ void ScriptEditor::draw(const EditorLayout* layout,
                 for (const auto& line : componentOutput) {
                     text += line + "\n";
                 }
-                ui::setClipboardText(text.c_str());
+                ImGui::SetClipboardText(text.c_str());
             }
-            ui::separator();
-            ui::beginChild("Transcript",
-                              ui::Vec2(0, 0),
-                              ui::ChildFlags_None,
-                              ui::WindowFlags_HorizontalScrollbar);
-            const bool atBottom = ui::scrollY() >= ui::scrollMaxY() - 1;
+            ImGui::Separator();
+            ImGui::BeginChild("Transcript",
+                              ImVec2(0, 0),
+                              ImGuiChildFlags_None,
+                              ImGuiWindowFlags_HorizontalScrollbar);
+            const bool atBottom = ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1;
             int logIndex = 0;
             for (const auto& line : console_.lines()) {
-                ui::pushId(logIndex++);
-                const ui::Color color =
+                ImGui::PushID(logIndex++);
+                const ImVec4 color =
                     line.kind == LuaConsole::Kind::Error
-                        ? ui::Color(1, 0.4f, 0.35f, 1)
-                        : (line.kind == LuaConsole::Kind::Warning ? ui::Color(1, .78f, .3f, 1)
-                           : line.kind == LuaConsole::Kind::Info  ? ui::Color(0.55f, 0.75f, 1, 1)
-                                                                  : ui::Color(0.9f, 0.93f, 0.95f, 1));
-                ui::pushStyleColor(ui::Col_Text, color);
-                ui::textUnformatted(line.text.data(), line.text.data() + line.text.size());
-                if (ui::beginPopupContextItem("Message", ui::PopupFlags_MouseButtonRight)) {
-                    if (ui::menuItem("Copy message")) {
-                        ui::setClipboardText(line.text.c_str());
+                        ? ImVec4(1, 0.4f, 0.35f, 1)
+                        : (line.kind == LuaConsole::Kind::Warning ? ImVec4(1, .78f, .3f, 1)
+                           : line.kind == LuaConsole::Kind::Info  ? ImVec4(0.55f, 0.75f, 1, 1)
+                                                                  : ImVec4(0.9f, 0.93f, 0.95f, 1));
+                ImGui::PushStyleColor(ImGuiCol_Text, color);
+                ImGui::TextUnformatted(line.text.data(), line.text.data() + line.text.size());
+                if (ImGui::BeginPopupContextItem("Message", ImGuiPopupFlags_MouseButtonRight)) {
+                    if (ImGui::MenuItem("Copy message")) {
+                        ImGui::SetClipboardText(line.text.c_str());
                     }
-                    ui::endPopup();
+                    ImGui::EndPopup();
                 }
-                ui::popStyleColor();
-                ui::popId();
+                ImGui::PopStyleColor();
+                ImGui::PopID();
             }
-            ui::pushId("ComponentLogs");
+            ImGui::PushID("ComponentLogs");
             for (std::size_t i = 0; i < componentOutput.size(); ++i) {
-                ui::pushId(static_cast<int>(i));
-                ui::textUnformatted(componentOutput[i].c_str());
-                if (ui::beginPopupContextItem("Message", ui::PopupFlags_MouseButtonRight)) {
-                    if (ui::menuItem("Copy message")) {
-                        ui::setClipboardText(componentOutput[i].c_str());
+                ImGui::PushID(static_cast<int>(i));
+                ImGui::TextUnformatted(componentOutput[i].c_str());
+                if (ImGui::BeginPopupContextItem("Message", ImGuiPopupFlags_MouseButtonRight)) {
+                    if (ImGui::MenuItem("Copy message")) {
+                        ImGui::SetClipboardText(componentOutput[i].c_str());
                     }
-                    ui::endPopup();
+                    ImGui::EndPopup();
                 }
-                ui::popId();
+                ImGui::PopID();
             }
-            ui::popId();
+            ImGui::PopID();
             if (scrollToBottom_ || (autoScroll_ && atBottom)) {
-                ui::setScrollHereY(1);
+                ImGui::SetScrollHereY(1);
             }
             scrollToBottom_ = false;
-            ui::endChild();
+            ImGui::EndChild();
         }
-        ui::endWindow();
+        ImGui::End();
     }
 }
 
-int ScriptEditor::completion(ui::InputTextCallbackData* data) {
-    auto& self = *static_cast<ScriptEditor*>(data->userData);
-    int start = data->cursorPos;
-    while (start > 0 && (std::isalnum(static_cast<unsigned char>(data->buf[start - 1])) ||
-                         data->buf[start - 1] == '_')) {
+int ScriptEditor::completion(ImGuiInputTextCallbackData* data) {
+    auto& self = *static_cast<ScriptEditor*>(data->UserData);
+    int start = data->CursorPos;
+    while (start > 0 && (std::isalnum(static_cast<unsigned char>(data->Buf[start - 1])) ||
+                         data->Buf[start - 1] == '_')) {
         --start;
     }
-    self.completionPrefix_.assign(data->buf + start,
-                                  static_cast<std::size_t>(data->cursorPos - start));
-    if (data->eventFlag == ui::InputTextFlags_CallbackCompletion) {
+    self.completionPrefix_.assign(data->Buf + start,
+                                  static_cast<std::size_t>(data->CursorPos - start));
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackCompletion) {
         const std::string result = luaCompletion(self.completionPrefix_);
         if (result.size() > self.completionPrefix_.size()) {
-            data->deleteChars(start, data->cursorPos - start);
-            data->insertChars(start, result.c_str());
+            data->DeleteChars(start, data->CursorPos - start);
+            data->InsertChars(start, result.c_str());
         } else if (self.completionPrefix_.empty()) {
-            data->insertChars(data->cursorPos, "\t");
+            data->InsertChars(data->CursorPos, "\t");
         }
     }
     return 0;

@@ -38,7 +38,7 @@ python3 tools/format_code.py --check  # read-only check, also run in Actions
 `legacy_levels` owns level-file IO, registry validation and deferred transitions.
 Its implementation is compiled once in `src/levels/level_system.cpp`, rather than
 being repeated in every consumer of the public header. It links JSON and threading
-support, not Lua or editor UI rendering. The scripting adapter depends on this service, not the
+support, not Lua or ImGui. The scripting adapter depends on this service, not the
 other way around. File formats and frame-boundary transition behavior are unchanged.
 
 `src/core/frustum.hpp` contains reusable view-frustum math, independent of lights
