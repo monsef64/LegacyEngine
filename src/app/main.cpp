@@ -68,6 +68,12 @@
 #include <cstddef>
 #include <cstring>
 #include <iterator>
+// Keep the console subsystem and its stdout on every platform. SDL_main.h
+// otherwise renames main to SDL_main and expects SDL's WinMain to call it, a
+// route that only works for a -mwindows link, which builds a windowed binary
+// with no console at all. Handled here instead: our main stays main, so the
+// default entry point finds it, and we report readiness to SDL ourselves.
+#define SDL_MAIN_HANDLED 1
 #include <SDL3/SDL_main.h>
 
 // ---------------------------------------------------------------------------
@@ -2114,6 +2120,10 @@ int engineMain(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
+    // We defined SDL_MAIN_HANDLED, so nothing told SDL that the platform entry
+    // point was reached. It asks to be told before any other SDL call, and
+    // SDL_Log below is one of those, so this comes first.
+    SDL_SetMainReady();
     EngineLog::initialize();
     SDL_Log("Starting LegacyEngine");
     int result = 1;
