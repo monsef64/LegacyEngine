@@ -52,7 +52,6 @@
 #include "terrain/terrain_editor.hpp"
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_main.h>
 
 #include "ui/qt/qt_application.hpp"
 #include "ui/qt/qt_input_bridge.hpp"
@@ -69,6 +68,7 @@
 #include <cstddef>
 #include <cstring>
 #include <iterator>
+#include <SDL3/SDL_main.h>
 
 // ---------------------------------------------------------------------------
 // Scene description

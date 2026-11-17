@@ -228,6 +228,14 @@ add_executable(LegacyEngine src/app/main.cpp)
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_editor legacy_engine_core)
+# SDL_main.h renames our main() to SDL_main and SDL supplies WinMain, but only
+# a -mwindows link pulls that object out of the static archive: with the
+# default subsystem the linker looks for main instead and reports WinMain as
+# undefined. SDL's own pkg-config file carries this flag; its CMake target
+# does not.
+if(MINGW)
+  target_link_options(LegacyEngine PRIVATE -mwindows)
+endif()
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
