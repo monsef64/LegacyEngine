@@ -54,15 +54,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          errors=$(grep -E 'error:|fatal error|undefined reference|Error [0-9]' build.log |
+                   head -60 || tail -60 build.log)
+          # Annotations put each error on the run page itself.
+          while IFS= read -r line; do
+            [ -n "$line" ] && echo "::error::$line"
+          done <<< "$errors"
           {
             echo '### Windows build errors'
             echo '```'
-            grep -E 'error:|fatal error|undefined reference|Error [0-9]' build.log | head -60 ||
-              tail -60 build.log
+            printf '%s\n' "$errors"
             echo '```'
           } > report.md
           cat report.md >> "$GITHUB_STEP_SUMMARY"
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file report.md || true
+          # gh is not part of the MSYS2 image; the REST API needs only curl.
+          body=$(python3 -c 'import json; print(json.dumps({"body": open("report.md").read()}))')
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+            -d "$body" || true
+
       - name: Package executable, runtime DLLs and data
         run: |
           set -euo pipefail
