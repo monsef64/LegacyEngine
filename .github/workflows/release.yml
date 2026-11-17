@@ -125,6 +125,34 @@ jobs:
       - name: Build
         run: cmake --build build --parallel 2
 
+      # The widget tree on its own, with no engine and no GPU: this is the
+      # test that catches a dock that never gets its widget or a panel left
+      # null, which the frame loop below can only report as a crash.
+      - name: Test the Qt editor shell
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          set -o pipefail
+          cmake -S . -B build-qt -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBUILD_TESTING=ON \
+            -DLEGACY_VENDORED_SDL=ON 2>&1 | tail -5
+          cmake --build build-qt --target qt_editor_shell_tests --parallel 2 2>&1 | tail -20
+          ./build-qt/qt_editor_shell_tests 2>&1 | tee shell.log
+      - name: Summarise the shell test
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '### Qt editor shell test'
+            echo '```'
+            tail -40 shell.log 2>/dev/null || echo 'no output captured'
+            echo '```'
+          } > shell-report.md
+          cat shell-report.md >> "$GITHUB_STEP_SUMMARY"
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file shell-report.md || true
+
       # Renders 120 frames and exits on its own. A runner without a GPU still
       # exercises the whole frame path end to end: xvfb supplies the X display
       # for SDL's OpenGL context, Mesa's software rasterizer draws it, and Qt
