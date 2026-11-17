@@ -7,7 +7,7 @@ it. Play-mode edits are temporary and Stop restores the pre-Play scene.
 
 ## Clouds
 
-Add **CloudSystem** through Inspector > Add Component. Move its Transform above
+Add **Clouds** through Inspector > Add Component > Environment. The Lua and saved-scene type remains `CloudSystem` for compatibility. Move its Transform above
 the level (for example Y=20); `size` multiplies its scale. A 2D cloud layer is the
 cheapest mode: one horizontal plane with animated procedural noise and soft edges.
 Enable **Volumetric** for a noise-filled box with genuine view-ray integration,
@@ -35,12 +35,15 @@ layers or smaller coverage on low-end GPUs. Coverage or density zero is clear.
 
 ## Rivers and Scene curve editing
 
-Add **River** to a GameObject. It starts with three local-space curve points.
-Enable **Edit curve in Scene** in the Inspector. Cyan point handles and a sampled
+Add **River** through Add Component > Environment to a GameObject. It starts with three local-space curve points.
+Enable **Edit river curve** in the Scene overlay (or **Edit curve in Scene** in the Inspector). Cyan point handles and a sampled
 Catmull-Rom centerline appear in Scene; drag a handle on its world-horizontal plane.
-Use the Inspector point XYZ controls to edit elevation, or to position points when
-the camera is too close to horizontal for plane dragging. Add/remove the final point
-with Inspector buttons (2..64 points). Turn curve editing off to use the object's
+Ctrl-drag a handle vertically to edit height. Shift-click empty Scene to append a
+point on the last point's horizontal plane. Scene **+ Point** extrapolates the end;
+**− Point** deletes the selected point (or the last point). Right-click a point to
+insert after it or delete it. The Inspector XYZ and add/remove controls remain
+available, including for near-horizontal views where plane dragging is difficult
+(2..64 points). Turn curve editing off to use the object's
 normal Move/Rotate/Scale gizmo. The Transform moves the whole river.
 
 ```lua
@@ -58,8 +61,12 @@ points[2].z = 7
 river.points = points
 ```
 
-Water uses a cached triangle strip, scrolling procedural ripples, normal-based
-shading, a simple Fresnel tint and edge foam. Waves change shading, not geometry.
+Water uses a cached triangle strip, two-scale flowing noise for subtle surface
+normals, derivative filtering, Fresnel sky tint, a soft sun highlight and broken-up
+edge foam. The repeating sine-wave bands have been removed. Inspector **Ripple
+scale** / **Surface detail** retain the existing Lua `waveScale` / `waveStrength`
+fields for compatibility; surface detail changes shading, not geometry. Sky and
+sun are inexpensive analytic approximations, not actual scene reflections.
 It has no reflection/refraction cameras, render-target copies, texture dependencies,
 terrain carving, depth-based shore foam, collision, buoyancy or gameplay current.
 Keep points reasonably spaced and avoid very sharp turns or self-intersections;

@@ -327,14 +327,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     bool cameraLooking = false, orientationInteracting = false;
     unsigned renderedFrames = 0;
     constexpr unsigned smokeFrames = 120;
-    std::optional<Vec3> lastOrbitPivot;
+    std::optional<Vec3> orbitPivot;
     while (running) {
         const Uint64 frameStarted = SDL_GetTicksNS();
-        if (!playMode.active()) {
-            if (const auto* pose = world.tryGet<Transform>(selectedEntity)) {
-                lastOrbitPivot = pose->position;
-            }
-        }
         profiler.begin(showProfiler);
         int windowWidth = 1, windowHeight = 1;
         SDL_GetWindowSize(window, &windowWidth, &windowHeight);
@@ -461,6 +456,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 continue;
             }
+            if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+                orbitPivot.reset();
+            }
             if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST ||
                 (cameraLooking && event.type == SDL_EVENT_MOUSE_BUTTON_UP &&
                  event.button.button == SDL_BUTTON_RIGHT)) {
@@ -504,6 +502,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 break;
             case SDL_EVENT_WINDOW_FOCUS_LOST:
+                orbitPivot.reset();
                 editor.finish(world);
                 clicking = false;
                 break;
@@ -518,12 +517,26 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 break; // Escape is reserved for UI cancellation, never application exit.
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
                 if (event.button.button == SDL_BUTTON_RIGHT && sceneHovered &&
+                    !riverCurveOwnsPointer(world,selectedEntity,camera,layout.scene,event.button.x,event.button.y) &&
                     layout.scene.contains(event.button.x, event.button.y) &&
                     !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
                     cameraLooking = input.lockSceneCursor();
                     clicking = false;
                 }
                 if (event.button.button == SDL_BUTTON_LEFT) {
+                    orbitPivot.reset();
+                    if (sceneHovered && layout.scene.contains(event.button.x, event.button.y) &&
+                        (SDL_GetModState() & SDL_KMOD_ALT) &&
+                        !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) &&
+                        !ImGui::GetIO().WantTextInput) {
+                        editor.finish(world);
+                        if (const auto* pose = world.tryGet<Transform>(selectedEntity)) {
+                            orbitPivot = pose->position;
+                        } else {
+                            orbitPivot = camera.target;
+                        }
+                        camera.beginOrbit(*orbitPivot);
+                    }
                     clicking = !(SDL_GetModState() & SDL_KMOD_ALT) &&
                                !terrainEditor.active(world, selectedEntity);
                     pressX = event.button.x;
@@ -537,15 +550,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 // Right-drag looks around from the camera's position. Left-drag
                 // cancels a click but never moves the camera or selects.
-                if (sceneHovered && !editor.dragging() &&
-                    (event.motion.state & SDL_BUTTON_LMASK) && (SDL_GetModState() & SDL_KMOD_ALT) &&
+                if (orbitPivot && (event.motion.state & SDL_BUTTON_LMASK) &&
+                    (SDL_GetModState() & SDL_KMOD_ALT) &&
                     !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) {
                     clicking = false;
-                    if (const auto* t = world.tryGet<Transform>(selectedEntity)) {
-                        camera.orbit(t->position, event.motion.xrel, event.motion.yrel);
-                    } else if (lastOrbitPivot) {
-                        camera.orbit(*lastOrbitPivot, event.motion.xrel, event.motion.yrel);
-                    }
+                    camera.orbit(*orbitPivot, event.motion.xrel, event.motion.yrel);
                 }
                 if (event.motion.state & SDL_BUTTON_RMASK) {
                     clicking = false;
@@ -556,6 +565,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 break;
             case SDL_EVENT_MOUSE_BUTTON_UP:
+                if (event.button.button == SDL_BUTTON_LEFT) {
+                    orbitPivot.reset();
+                }
                 if (event.button.button == SDL_BUTTON_LEFT && clicking) {
                     clicking = false;
 
@@ -1949,7 +1961,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                    camera,
                                    sceneRect,
                                    history,
-                                   editAllowed && !cameraLooking && !orientationInteracting);
+                                   editAllowed && !cameraLooking && !orientationInteracting &&
+                                       !(SDL_GetModState() & SDL_KMOD_ALT));
+                curveEditing = sceneRiver && sceneRiver->editCurve;
                 if (curveInteracting) {
                     clicking = false;
                 }

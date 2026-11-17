@@ -19,6 +19,7 @@ struct Layer {
     float normalStrength = 1;
 };
 struct FoliagePrototype {
+    bool billboard = false; // Optional upright camera-facing grass; crossed cards remain default.
     std::string asset;
     Vec3 color{1, 1, 1};
     float width = 1, height = 1, minScale = .8f, maxScale = 1.2f, distance = 80;

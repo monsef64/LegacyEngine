@@ -51,22 +51,40 @@ uniform mat4 vp,model,inverseModel;uniform vec3 eye,tint;uniform int mode,steps;
 uniform float handedness,time,opacity,speed,noiseScale,coverage,density,waveScale,waveStrength,foam;
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float noise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+// Value noise with no sine/hash textures; used only for subtle water surface detail.
+float waterNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(vec3(i,0)),hash(vec3(i+vec2(1,0),0)),f.x),mix(hash(vec3(i+vec2(0,1),0)),hash(vec3(i+vec2(1),0)),f.x),f.y);}
 float cloud(vec3 p){return .65*noise(p)+.35*noise(p*2.07+11.);}
 void main(){
  gl_FragDepth=gl_FragCoord.z;
  if(mode==0){
-  float phase=uv.y*waveScale-time*speed;
-  float waves=sin(phase*6.283+sin(uv.x*9.+time))*.5+.5;
-  vec3 n=normalize(vec3(sin(phase*6.283)*waveStrength,1.,cos(phase*4.2)*waveStrength));
-  float fresnel=pow(1.-abs(dot(n,normalize(eye-worldPoint))),3.);
-  float edge=smoothstep(.65,1.,abs(uv.x*2.-1.))*foam*(.6+.4*waves);
-  vec3 c=tint*(.75+.25*waves)+vec3(.22,.3,.35)*fresnel+vec3(edge*.55);
-  float alpha=opacity*(1.-smoothstep(.88,1.,abs(uv.x*2.-1.)));
+  // No periodic wave bands or vertex displacement. Two drifting noise scales
+  // perturb the actual ribbon normal, with derivative filtering at distance.
+  vec2 p=vec2(uv.x*2.,uv.y)*waveScale;
+  vec2 drift=vec2(time*speed*.027,-time*speed*.11);
+  float detail=waterNoise(p+drift)*.65+waterNoise(p*2.13-drift*.7+17.)*.35;
+  vec3 dx=dFdx(worldPoint),dy=dFdy(worldPoint),viewDir=normalize(eye-worldPoint);
+  vec3 n=normalize(cross(dx,dy));if(dot(n,viewDir)<0.)n=-n;
+  vec3 rx=cross(dy,n),ry=cross(n,dx);float det=dot(dx,rx);
+  float detailAttenuation=1./(1.+dot(fwidth(p),fwidth(p))*4.);
+  vec3 gradient=(rx*dFdx(detail)+ry*dFdy(detail))*(sign(det)/max(abs(det),.000001));
+  n=normalize(n-gradient*waveStrength*.12*detailAttenuation);
+  float nv=clamp(dot(n,viewDir),0.,1.);float f=1.-nv;float fresnel=.02+.98*f*f*f*f*f;
+  vec3 reflected=reflect(-viewDir,n);
+  vec3 sky=mix(vec3(.48,.63,.72),vec3(.12,.27,.42),clamp(reflected.y,0.,1.));
+  float bank=smoothstep(.55,1.,abs(uv.x*2.-1.));
+  vec3 body=tint*mix(.55,.9,bank);
+  vec3 light=normalize(vec3(.4,.85,.25)),halfway=normalize(viewDir+light);
+  float nh=max(dot(n,halfway),0.),nl=max(dot(n,light),0.);
+  float roughness=clamp(.18+length(fwidth(n))*.4,.18,.45),a2=roughness*roughness;
+  float denom=nh*nh*(a2-1.)+1.;float specular=min(a2/(3.14159*denom*denom)*.018*nl,1.);
+  float edgeFoam=foam*smoothstep(.82,.99,abs(uv.x*2.-1.))*smoothstep(.48,.78,detail);
+  vec3 c=mix(body,sky,fresnel)+vec3(1.,.96,.85)*specular+vec3(.65,.72,.7)*edgeFoam;
+  float alpha=clamp(opacity+fresnel*(1.-opacity),0.,1.)*(1.-smoothstep(.94,1.,abs(uv.x*2.-1.)));
   fragColor=vec4(c,alpha);return;
  }
  vec3 wind=vec3(time*speed,0,time*speed*.3);
  if(mode==1){float n=cloud(worldPoint*noiseScale+wind);float a=smoothstep(1.-coverage-.1,1.-coverage+.1,n)*density*opacity;
-  float edge=(1.-smoothstep(.35,.5,max(abs(localPoint.x),abs(localPoint.z))));fragColor=vec4(tint*(.75+.25*n),clamp(a*edge,0.,1.));return;}
+  float edge=((1.-smoothstep(.25,.5,abs(localPoint.x)))*(1.-smoothstep(.25,.5,abs(localPoint.z))));fragColor=vec4(tint*(.75+.25*n),clamp(a*edge,0.,1.));return;}
  // Render back faces only, including when the eye is inside the box.
  if(gl_FrontFacing==(handedness>0.))discard;
  vec3 ro=(inverseModel*vec4(eye,1)).xyz,rd=normalize(localPoint-ro);
@@ -76,7 +94,7 @@ void main(){
  if(farT<=nearT)discard;
  float dt=(farT-nearT)/float(steps),alpha=0.,light=0.;
  for(int i=0;i<24;++i){if(i>=steps||alpha>.97)break;vec3 q=ro+rd*(nearT+(float(i)+.5)*dt);vec3 wp=(model*vec4(q,1)).xyz;
-  float n=cloud(wp*noiseScale+wind);float edge=(1.-smoothstep(.25,.5,max(abs(q.x),abs(q.z))))*(1.-smoothstep(.3,.5,abs(q.y)));
+  float n=cloud(wp*noiseScale+wind);float edge=(1.-smoothstep(.2,.5,abs(q.x)))*(1.-smoothstep(.2,.5,abs(q.z)))*(1.-smoothstep(.2,.5,abs(q.y)));
   float d=max(0.,n-(1.-coverage))*density*edge;
   float hit=1.-exp(-d*dt*12.);light+=(1.-alpha)*hit*(.65+.35*(q.y+.5));alpha+=(1.-alpha)*hit;
  }

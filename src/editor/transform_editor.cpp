@@ -86,7 +86,7 @@ void TransformEditor::draw(World& world,
     const auto pivot =
         transform.position + rotateVector(transform.rotation, pivotLocal_ * transform.scale);
     Mat4 model = transformMatrix(pivot, transform.rotation, transform.scale);
-    const Mat4 view = lookAt(camera.position(), camera.target, {0, 1, 0});
+    const Mat4 view = lookAt(camera.position(), camera.target, camera.up());
     const Mat4 projection = perspective(camera.fieldOfView, aspect, 0.1f, 200);
     const ImGuizmo::OPERATION operations[]{ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE};
     ImGuizmo::Enable(true);

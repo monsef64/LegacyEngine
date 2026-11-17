@@ -54,14 +54,29 @@ struct OrbitCamera {
         target = eye - offset * distance;
     }
 
-    void orbit(Vec3 pivot, float dx, float dy) {
+    // Acquire the world-space transform origin once per gesture, preserving the eye.
+    void beginOrbit(Vec3 pivot) {
+        if (!std::isfinite(pivot.x) || !std::isfinite(pivot.y) || !std::isfinite(pivot.z)) {
+            return;
+        }
         const Vec3 offset = position() - pivot;
-        distance = std::clamp(std::sqrt(dot(offset, offset)), .1f, 10000.0f);
-        yaw = std::atan2(offset.x, offset.z) - dx * .005f;
-        pitch = std::clamp(std::asin(std::clamp(offset.y / distance, -1.0f, 1.0f)) + dy * .005f,
-                           radians(-89.0f),
-                           radians(89.0f));
+        const float radius = std::sqrt(dot(offset, offset));
+        if (radius < .001f || !std::isfinite(radius)) {
+            target = pivot;
+            distance = .1f;
+            return;
+        }
+        distance = radius;
+        if (offset.x * offset.x + offset.z * offset.z > 1e-10f) {
+            yaw = std::atan2(offset.x, offset.z);
+        }
+        pitch = std::asin(std::clamp(offset.y / radius, -1.0f, 1.0f));
         target = pivot;
+    }
+    void orbit(Vec3 pivot, float dx, float dy) {
+        target = pivot;
+        yaw -= dx * .005f;
+        pitch = std::clamp(pitch + dy * .005f, radians(-89.0f), radians(89.0f));
     }
     void zoom(float wheel) {
         distance = std::clamp(distance * std::pow(.85f, wheel), .1f, 10000.0f);
