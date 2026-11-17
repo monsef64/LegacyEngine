@@ -174,6 +174,21 @@ jobs:
           tail -60 shell.log
           echo "exit status: $status"
           exit "$status"
+      # Job logs are not always retrievable afterwards; the failure report is
+      # the only durable record of what the run printed, so keep the raw files.
+      - name: Upload the shell test logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: qt-editor-shell-logs
+          path: |
+            shell.log
+            shell-gdb.log
+            shell-config.log
+            shell-build.log
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Summarise the shell test
         if: failure()
         env:
