@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   windows:
@@ -49,14 +50,18 @@ jobs:
       # the log download, which is not always available.
       - name: Summarise build errors
         if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo '### Build errors'
+            echo '### Windows build errors'
             echo '```'
             grep -E 'error:|fatal error|undefined reference|Error [0-9]' build.log | head -60 ||
               tail -60 build.log
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file report.md || true
       - name: Package executable, runtime DLLs and data
         run: |
           set -euo pipefail

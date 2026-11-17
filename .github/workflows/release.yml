@@ -33,6 +33,7 @@ on:
 
 permissions:
   contents: write # needed to create the release
+  pull-requests: write # to report a failed smoke test on the PR
 
 jobs:
   linux:
@@ -142,13 +143,17 @@ jobs:
       # page so a failure is readable without downloading the job log.
       - name: Summarise the smoke test
         if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           {
             echo '### Smoke test output'
             echo '```'
             tail -80 smoke.log 2>/dev/null || echo 'no output captured'
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file report.md || true
 
       # README.md says which glibc the binary needs. The number depends on what
       # is linked into the binary, so show it on the page of the run.
