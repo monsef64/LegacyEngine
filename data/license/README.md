@@ -8,13 +8,10 @@ license remains in the repository/package root `LICENSE`.
 | Component | Source/version used by this checkout | Notice |
 | --- | --- | --- |
 | SDL | release-3.4.20 (CMake default) | SDL3.txt |
+| Qt 6 Widgets | system SDK (qt6-base-dev, MSYS2, Homebrew); not vendored | the SDK's own licence |
 | Jolt Physics | v5.3.0 | Jolt.txt |
 | Assimp | v5.4.3 | assimp.txt |
 | Zstandard | v1.5.7 | Zstandard.txt |
-| MyGUI | v3.5.4 | MyGUI.txt |
-| FreeType | VER-2-13-3 | FreeType-License.txt, FreeType-FTL.txt |
-| pugixml | v1.16 | pugixml.txt |
-| UTF8-CPP | v4.1.1 | utfcpp.txt |
 | Lua | v5.4.8 | Lua.txt |
 | glad and generated OpenGL/Khronos headers | glad 2.0.8 | glad.txt, Khronos.txt, Apache-2.0.txt |
 | miniaudio | vendored `third_party/miniaudio` | miniaudio.txt |

@@ -243,6 +243,7 @@ jobs:
 
       - name: Package
         run: |
+          set -euxo pipefail
           timestamp=$(date -u +%Y%m%d-%H%M%S)
           package=LegacyEngine-$timestamp-linux-x86_64
 

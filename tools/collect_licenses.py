@@ -36,7 +36,7 @@ def comments(source, target):
 for folder, filename, target in [
     ('fontawesome', 'LICENSE.txt', 'FontAwesome.txt'), ('glad', 'LICENSE', 'glad.txt'),
     ('json', 'LICENSE.MIT', 'nlohmann-json.txt'), ('miniaudio', 'LICENSE', 'miniaudio.txt'),
-    ('roboto', 'LICENSE', 'Roboto.txt'), ('simdjson', 'LICENSE', 'simdjson.txt'),
+    ('simdjson', 'LICENSE', 'simdjson.txt'),
     ('stb', 'LICENSE', 'stb.txt')]:
     copy(ROOT / 'third_party' / folder / filename, target)
 comments(ROOT / 'third_party/glad/include/KHR/khrplatform.h', 'Khronos.txt')
@@ -45,10 +45,10 @@ copy(ROOT / 'third_party/simdjson/LICENSE', 'Apache-2.0.txt')
 for folder, filename, target in [
     ('sdl3', 'LICENSE.txt', 'SDL3.txt'), ('jolt', 'LICENSE', 'Jolt.txt'),
     ('assimp', 'LICENSE', 'assimp.txt'), ('zstd', 'LICENSE', 'Zstandard.txt'),
-    ('mygui', 'COPYING.MIT', 'MyGUI.txt'),
-    ('freetype', 'LICENSE.TXT', 'FreeType-License.txt'),
-    ('freetype', 'docs/FTL.TXT', 'FreeType-FTL.txt'),
-    ('pugixml', 'LICENSE.md', 'pugixml.txt'), ('utfcpp', 'LICENSE', 'utfcpp.txt')]:
+    # MyGUI, FreeType, pugixml and utf8-cpp were only used by the old MyGUI
+    # editor and left the build with it; assimp still bundles pugixml, and that
+    # copy keeps its notice under assimp-bundled.
+    ]:
     copy(args.build / '_deps' / (folder + '-src') / filename, target)
 comments(args.build / '_deps/lua-src/lua.h', 'Lua.txt')
 for dependency, subtree in [('assimp', 'contrib'), ('sdl3', 'src')]:
