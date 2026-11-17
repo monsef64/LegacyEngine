@@ -61,10 +61,10 @@ body/lens icons and these lines are Scene-only, unlit and never shadow casters;
 they never appear in Game. Like the audio-range sphere, camera gizmos use world
 units rather than inheriting arbitrary object scale.
 
-The internal code editor uses one syntax-colored text layer while retaining
-native caret, selection, scrolling, completion and undo. UI text uses embedded
-18 px Roboto with antialiased rasterization and matching icon sizing (previously
-16 px); framebuffer-density support remains enabled for high-DPI displays.
+The internal code editor is a Qt text widget, so caret, selection, scrolling,
+completion and undo are the platform's own. UI text and icons come from the
+system theme at the user's chosen size, and Qt scales the whole widget tree to
+the display's pixel density, so the editor stays sharp on high-DPI screens.
 
 
 Assets is the selected bottom tab on startup. **Script Editor** and **Console**
