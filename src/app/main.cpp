@@ -1988,7 +1988,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         // The inspector shows what the selected camera sees, as it did when the
         // preview was drawn into the ImGui panel.
-        if (world.has<Camera>(selectedEntity) && world.has<Transform>(selectedEntity)) {
+        if (cameraPreviewSurface.framebuffer && world.has<Camera>(selectedEntity) &&
+            world.has<Transform>(selectedEntity)) {
             shell.shell()->inspectorPanel()->setCameraPreview(
                 ui::qt::readFramebuffer(cameraPreviewSurface.framebuffer,
                                         cameraPreviewSurface.width,

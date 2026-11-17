@@ -12,6 +12,7 @@
 #include "ui/qt/qt_widgets.hpp"
 #include <QDialog>
 #include <QDockWidget>
+#include <QImage>
 #include <QWidget>
 #include <functional>
 #include <set>
@@ -20,7 +21,6 @@
 
 class QCheckBox;
 class QComboBox;
-class QImage;
 class QLabel;
 class QLineEdit;
 class QPushButton;
