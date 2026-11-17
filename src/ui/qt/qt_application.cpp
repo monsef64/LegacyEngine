@@ -1,5 +1,7 @@
 #include "ui/qt/qt_application.hpp"
 
+#include <SDL3/SDL.h>
+
 #include "ui/qt/qt_editor_window.hpp"
 #include "ui/qt/qt_input_bridge.hpp"
 
@@ -34,13 +36,17 @@ State& state() {
 bool Application::create(SDL_Window* window) {
     State& s = state();
     if (!s.app) {
+        SDL_Log("Creating the Qt application");
         s.app = std::make_unique<QApplication>(s.argc, s.argv);
+        SDL_Log("Qt application created");
         // The engine decides when the editor closes; Qt must not exit when the
         // last window is hidden during shutdown or prefab mode.
         s.app->setQuitOnLastWindowClosed(false);
     }
     if (!s.window) {
+        SDL_Log("Building the editor widgets");
         s.window = std::make_unique<EditorWindow>(window);
+        SDL_Log("Editor widgets built");
     }
     s.window->show();
     s.window->raise();

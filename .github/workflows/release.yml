@@ -192,7 +192,15 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
           set -o pipefail
-          xvfb-run --auto-servernum ./build/LegacyEngine --smoke-test 2>&1 | tee smoke.log
+          # The engine logs how far it got. gdb, when present, also records
+          # where it died, which the log alone cannot say.
+          if command -v gdb >/dev/null; then
+            xvfb-run --auto-servernum gdb -batch -ex run \
+              -ex "thread apply all bt 15" --args ./build/LegacyEngine --smoke-test \
+              2>&1 | tee smoke.log
+          else
+            xvfb-run --auto-servernum ./build/LegacyEngine --smoke-test 2>&1 | tee smoke.log
+          fi
       # The engine logs where it got to before it died; put that on the run
       # page so a failure is readable without downloading the job log.
       - name: Summarise the smoke test

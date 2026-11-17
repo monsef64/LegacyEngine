@@ -60,6 +60,9 @@
 #include "ui/qt/qt_framebuffer.hpp"
 #include "ui/qt/qt_panels.hpp"
 #include "ui/qt/qt_viewport.hpp"
+#include <QFileInfo>
+#include <QMessageBox>
+#include <QPushButton>
 
 #include <algorithm>
 #include <cmath>
@@ -172,9 +175,6 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
 // The scene and the main loop
 // ---------------------------------------------------------------------------
 
-#include <QFileInfo>
-#include <QMessageBox>
-#include <QPushButton>
 static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     World world;
     Physics physics;
@@ -1294,7 +1294,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (shell.shell()->takeExitConfirmed()) {
             running = false;
         }
-#include <QMessageBox>
         // Unsaved-changes confirmation. The old modal popup is a Qt question
         // box now; the answer drives exactly the same three outcomes.
         if (confirmOpen || confirmExit) {
