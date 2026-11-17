@@ -3,7 +3,6 @@
 #include "input/input.hpp"
 #include "project/json_io.hpp"
 #include <fstream>
-#include "ui/mygui_ui.hpp"
 #include <iomanip>
 struct InputSettings {
     bool visible = false;
@@ -155,113 +154,5 @@ struct InputSettings {
             return std::string("Pad ") + (name ? name : "?");
         }
         return SDL_GetScancodeName(static_cast<SDL_Scancode>(code));
-    }
-    void draw(const AssetManager& assets, InputState& input, bool editable) {
-        load(assets, input);
-        if (!visible) {
-            waiting.clear();
-            return;
-        }
-        ui::setNextWindowSize(ui::Vec2(740, 420), ui::Cond_FirstUseEver);
-        if (ui::beginWindow("Input Settings", &visible, ui::WindowFlags_NoDocking)) {
-            ui::textWrapped(
-                "Each action has three alternative bindings. Click a slot and press a keyboard key, mouse button or gamepad button. Escape cancels. Right-click a slot to clear it.");
-            ui::beginDisabled(!editable || !waiting.empty());
-            ui::inputText("New button name", name, sizeof(name));
-            ui::sameLine();
-            if (ui::button("Add mapping") && name[0] && input.buttons.size() < 256) {
-                if (!input.buttons.count(name)) {
-                    input.buttons[name] = 0;
-                    save(assets, input);
-                    name[0] = 0;
-                } else {
-                    error = "A mapping with that name already exists";
-                }
-            }
-            std::string remove, renameFrom, renameTo;
-            if (ui::beginTable("Mappings",
-                                  5,
-                                  ui::TableFlags_BordersInnerV | ui::TableFlags_RowBg |
-                                      ui::TableFlags_SizingStretchSame)) {
-                ui::tableSetupColumn("Button name");
-                ui::tableSetupColumn("Binding 1");
-                ui::tableSetupColumn("Binding 2");
-                ui::tableSetupColumn("Binding 3");
-                ui::tableSetupColumn("Actions", ui::TableColumnFlags_WidthFixed, 65);
-                ui::tableHeadersRow();
-                for (const auto& pair : input.buttons) {
-                    ui::pushId(pair.first.c_str());
-                    ui::tableNextRow();
-                    ui::tableNextColumn();
-                    char renamed[129];
-                    std::snprintf(renamed, sizeof(renamed), "%s", pair.first.c_str());
-                    ui::setNextItemWidth(-1);
-                    if (ui::inputText("##Name",
-                                         renamed,
-                                         sizeof(renamed),
-                                         ui::InputTextFlags_EnterReturnsTrue) &&
-                        renamed[0]) {
-                        renameFrom = pair.first;
-                        renameTo = renamed;
-                    }
-                    for (int slot = 0; slot < 3; ++slot) {
-                        ui::tableNextColumn();
-                        ui::pushId(slot);
-                        if (ui::button(label(input.binding(pair.first, slot)).c_str(),
-                                          ui::Vec2(-1, 0))) {
-                            waiting = pair.first;
-                            waitingSlot = slot;
-                        }
-                        if (ui::beginPopupContextItem("Binding actions")) {
-                            if (ui::menuItem("Clear binding")) {
-                                input.bind(pair.first, slot, 0);
-                                save(assets, input);
-                            }
-                            ui::endPopup();
-                        }
-                        ui::popId();
-                    }
-                    ui::tableNextColumn();
-                    if (ui::smallButton("Remove")) {
-                        remove = pair.first;
-                    }
-                    ui::popId();
-                }
-                ui::endTable();
-            }
-            if (!remove.empty()) {
-                input.buttons.erase(remove);
-                input.alternatives.erase(remove);
-                save(assets, input);
-            }
-            if (!renameFrom.empty() && renameTo != renameFrom) {
-                if (input.buttons.count(renameTo)) {
-                    error = "A mapping with that name already exists";
-                } else {
-                    auto slots = input.alternatives[renameFrom];
-                    input.buttons[renameTo] = input.buttons[renameFrom];
-                    input.alternatives[renameTo] = slots;
-                    input.buttons.erase(renameFrom);
-                    input.alternatives.erase(renameFrom);
-                    save(assets, input);
-                }
-            }
-            ui::endDisabled();
-            if (!waiting.empty()) {
-                ui::text("Press a key, mouse or gamepad button for '%s', slot %d...",
-                            waiting.c_str(),
-                            waitingSlot + 1);
-                if (ui::button("Cancel capture")) {
-                    waiting.clear();
-                }
-            }
-            if (!error.empty()) {
-                ui::textWrapped("%s", error.c_str());
-            }
-        }
-        ui::endWindow();
-        if (!visible) {
-            waiting.clear();
-        }
     }
 };

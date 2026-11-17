@@ -4,7 +4,6 @@
 #include "project/project_io.hpp"
 #include "editor/editor_history.hpp"
 #include "editor/play_mode.hpp"
-#include "editor/dock_workspace.hpp"
 #include <cassert>
 
 int main() {
@@ -48,19 +47,5 @@ int main() {
     world.get<LuaScript>(one).path="missing.lua";runtime.start(world,assets,meshes);
     bool missing=false;for(const auto& message:runtime.messages())if(message.find("missing.lua")!=std::string::npos)missing=true;
     assert(missing);runtime.stop();
-    // Exercise docking, reset/restore, close visibility, and file icon geometry.
-    ui::createContext();auto& io=ui::io();
-    io.DisplaySize=ui::Vec2(1280,720);io.DeltaTime=1.0f/60;dockedEditor=true;
-    for(int frame=0;frame<3;++frame) {
-        ui::newFrame();bool reset=frame==2;
-        if(frame==2)panelOpen[0]=false;
-        drawWorkspace(EditorRect{0,20,1280,38},reset);
-        if(frame==2)assert(panelOpen[0]);
-        if(beginEditorPanel("Assets")) {
-            fileIcon("code.lua");fileIcon("image.png");fileIcon("model.glb");fileIcon("sound.wav");fileIcon("notes.txt");
-        }
-        ui::endWindow();ui::render();
-    }
-    ui::destroyContext();dockedEditor=false;
     std::filesystem::remove_all(temp);
 }

@@ -2,7 +2,6 @@
 #include "scripting/lua_console.hpp"
 #include "audio/audio_clip.hpp"
 #include "audio/audio_preview.hpp"
-#include "editor/editor_palette.hpp"
 #include <cassert>
 int main(){
     InputState input;input.enabled=true;input.mouseEnabled=true;input.buttons={{"Jump",SDL_SCANCODE_SPACE},{"Left",SDL_SCANCODE_A},{"Right",SDL_SCANCODE_D},{"Down",SDL_SCANCODE_S},{"Up",SDL_SCANCODE_W}};
@@ -59,6 +58,5 @@ int main(){
     AssetManager fixtures;fixtures.root=TEST_FIXTURES;auto samples=decodeAudioClip(fixtures,"tone.mp3");assert(samples.size()>4800);bool audible=false;for(float s:samples){assert(std::isfinite(s));audible|=std::abs(s)>.001f;}assert(audible);
     {AudioPreview preview(true);preview.toggle(fixtures,"tone.mp3");assert(preview.error.empty());preview.stop();}
     std::filesystem::create_directories(assets.root);std::ofstream bad(assets.root/"bad.mp3");bad<<"not mp3";bad.close();bool rejected=false;try{decodeAudioClip(assets,"bad.mp3");}catch(...){rejected=true;}assert(rejected);
-    ui::createContext();ui::styleColorsDark();auto original=ui::style().Colors[ui::Col_Button];applyEditorPalette(1);auto grey=ui::style().Colors[ui::Col_Button];assert(grey.x==grey.y && grey.y==grey.z);applyEditorPalette(0);assert(ui::style().Colors[ui::Col_Button].x==original.x);ui::destroyContext();
     SDL_Quit();std::filesystem::remove_all(temp);
 }

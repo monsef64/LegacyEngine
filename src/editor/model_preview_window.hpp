@@ -18,6 +18,7 @@ class ModelPreviewWindow {
     bool blendClips_ = true;
     std::array<float, 12> lastView_{};
     bool rendered_ = false, streaming_ = false;
+    unsigned renderedRevision_ = 0;
     unsigned openedRevision_ = ~0u;
     bool playing_ = false, loop_ = true, bind_ = true;
 
@@ -111,7 +112,9 @@ class ModelPreviewWindow {
             world_.reset();
         }
     }
-    void draw(const AssetManager& assets, Renderer& renderer, float dt) {
+    // Advances the clip and redraws the 720x405 preview when anything changed.
+    // The Qt Model Preview dialog paints surface() afterwards.
+    void update(const AssetManager& assets, Renderer& renderer, float dt) {
         if (!visible) {
             return;
         }
@@ -123,195 +126,238 @@ class ModelPreviewWindow {
         if (world_ && openedRevision_ != modelAssetRevision) {
             open(assets, path_, renderer);
         }
-        ui::setNextWindowSize(ui::Vec2(760, 600), ui::Cond_FirstUseEver);
-        if (ui::beginWindow("Model Preview", &visible)) {
-            ui::textWrapped("%s", path_.c_str());
-            if (world_) {
-                static const Json emptyClips = Json::array();
-                const auto& clips =
-                    document_.contains("animations") ? document_.at("animations") : emptyClips;
-                const bool hasClips = !clips.empty();
-                float duration = hasClips ? clips.at(clip_).at("duration").get<float>() : 0;
-                if (playing_ && duration > 0) {
-                    time_ += std::clamp(dt, 0.f, .25f);
-                    if (time_ >= duration) {
-                        if (loop_) {
-                            time_ = std::fmod(time_, duration);
-                        } else {
-                            time_ = duration;
-                            playing_ = false;
-                        }
-                    }
-                }
-                auto& a = world_->get<Animation>(owner_);
-                if (playing_ && fadeDuration_ > 0) {
-                    fadeElapsed_ += std::clamp(dt, 0.f, .25f);
-                    a.blendWeight = std::min(1.f, fadeElapsed_ / fadeDuration_);
-                    a.blendSourceTime += std::clamp(dt, 0.f, .25f);
-                    if (a.blendSourceTime > sourceDuration_) {
-                        a.blendSourceTime =
-                            loop_ ? std::fmod(a.blendSourceTime, sourceDuration_) : sourceDuration_;
-                    }
-                    if (a.blendWeight >= 1) {
-                        fadeDuration_ = 0;
-                        a.blendFrozenPose.clear();
-                    }
-                }
-
-                a.model = path_;
-                a.modelAnimation = clip_;
-                a.poseActive = hasClips && !bind_;
-                a.time = time_;
-                const std::array<float, 12> view{time_,
-                                                 float(clip_),
-                                                 a.blendWeight,
-                                                 camera_.yaw,
-                                                 camera_.pitch,
-                                                 camera_.distance,
-                                                 camera_.target.x,
-                                                 camera_.target.y,
-                                                 camera_.target.z,
-                                                 bind_ ? 1.f : 0.f,
-                                                 float(modelAssetRevision),
-                                                 float(fadeDuration_)};
-                if (!rendered_ || view != lastView_ || streaming_ || renderer.streaming()) {
-                    GLint draw = 0, read = 0, viewport[4];
-                    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
-                    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
-                    glGetIntegerv(GL_VIEWPORT, viewport);
-                    try {
-                        surface_.resize(720, 405);
-                        glBindFramebuffer(GL_FRAMEBUFFER, surface_.framebuffer);
-                        renderer.setAssetRoot(assets.root);
-                        renderer.draw(*world_,
-                                      camera_.viewProjection(720.f / 405),
-                                      720,
-                                      405,
-                                      camera_.position(),
-                                      0,
-                                      0,
-                                      false);
-                    } catch (const std::exception& e) {
-                        error_ = e.what();
-                    }
-                    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
-                    glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
-                    glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
-                    rendered_ = true;
-                    streaming_ = renderer.streaming();
-                    lastView_ = view;
-                }
-                float width = std::max(1.f, ui::contentRegionAvail().x);
-                ui::image(static_cast<ui::TextureID>(surface_.texture),
-                             ui::Vec2(width, width * 405 / 720),
-                             ui::Vec2(0, 1),
-                             ui::Vec2(1, 0));
-                if (ui::isItemHovered()) {
-                    if (ui::isMouseDragging(ui::MouseButton_Right)) {
-                        camera_.orbit(camera_.target,
-                                      ui::io().MouseDelta.x,
-                                      ui::io().MouseDelta.y);
-                    }
-                    camera_.zoom(ui::io().MouseWheel);
-                }
-                ui::beginDisabled(!hasClips);
-                const auto label =
-                    hasClips ? clips[clip_].at("name").get<std::string>() : "No animations";
-                if (ui::beginCombo("Animation", label.c_str())) {
-                    for (int i = 0; i < int(clips.size()); ++i) {
-                        ui::pushId(i);
-                        if (ui::selectable(clips[i].at("name").get<std::string>().c_str(),
-                                              clip_ == i)) {
-                            if (i != clip_ && blendClips_ && playing_ && fadeSeconds_ > 0) {
-                                if (a.blendWeight < 1) {
-                                    auto source = a.blendFrozenPose.empty()
-                                                      ? modelLocalTRS(document_,
-                                                                      a.blendSourceAnimation,
-                                                                      a.blendSourceTime)
-                                                      : a.blendFrozenPose;
-                                    auto target = modelLocalTRS(document_, clip_, time_);
-                                    for (std::size_t n = 0; n < target.size(); ++n) {
-                                        float w = a.blendWeight;
-                                        target[n] = {
-                                            source[n].position +
-                                                (target[n].position - source[n].position) * w,
-                                            source[n].scale +
-                                                (target[n].scale - source[n].scale) * w,
-                                            nlerp(source[n].rotation, target[n].rotation, w)};
-                                    }
-                                    a.blendFrozenPose = std::move(target);
-                                } else {
-                                    a.blendFrozenPose.clear();
-                                }
-                                a.blendSourceAnimation = bind_ ? -1 : clip_;
-                                a.blendSourceTime = time_;
-                                sourceDuration_ = duration;
-                                fadeElapsed_ = 0;
-                                fadeDuration_ =
-                                    std::min(fadeSeconds_, clips[i].at("duration").get<float>());
-                                a.blendWeight = 0;
-                            } else {
-                                a.blendWeight = 1;
-                                a.blendFrozenPose.clear();
-                                fadeDuration_ = 0;
-                            }
-                            clip_ = i;
-                            time_ = 0;
-                            bind_ = false;
-                        }
-                        ui::popId();
-                    }
-                    ui::endCombo();
-                }
-                ui::checkbox("Blend clip changes", &blendClips_);
-                ui::sliderFloat("Cross-fade seconds", &fadeSeconds_, 0, 5, "%.2f s");
-                if (ui::sliderFloat("Time", &time_, 0, std::max(duration, .001f), "%.3f s")) {
-                    bind_ = false;
-                    playing_ = false;
-                    fadeDuration_ = 0;
-                    a.blendWeight = 1;
-                    a.blendFrozenPose.clear();
-                }
-                ui::text("Duration: %.3f seconds", duration);
-                if (ui::button("Play")) {
-                    if (time_ >= duration) {
-                        time_ = 0;
-                    }
-                    playing_ = true;
-                    bind_ = false;
-                }
-                ui::sameLine();
-                if (ui::button("Pause")) {
+        if (!world_) {
+            return;
+        }
+        static const Json emptyClips = Json::array();
+        const auto& clips = document_.contains("animations") ? document_.at("animations") : emptyClips;
+        const bool hasClips = !clips.empty();
+        const float duration = hasClips ? clips.at(clip_).at("duration").get<float>() : 0;
+        if (playing_ && duration > 0) {
+            time_ += std::clamp(dt, 0.f, .25f);
+            if (time_ >= duration) {
+                if (loop_) {
+                    time_ = std::fmod(time_, duration);
+                } else {
+                    time_ = duration;
                     playing_ = false;
                 }
-                ui::sameLine();
-                if (ui::button("Stop")) {
-                    fadeDuration_ = 0;
-                    a.blendWeight = 1;
-                    a.blendFrozenPose.clear();
-                    playing_ = false;
-                    time_ = 0;
-                    bind_ = false;
-                }
-                ui::sameLine();
-                if (ui::button("Reset")) {
-                    fadeDuration_ = 0;
-                    a.blendWeight = 1;
-                    a.blendFrozenPose.clear();
-                    playing_ = false;
-                    time_ = 0;
-                    bind_ = true;
-                }
-                ui::sameLine();
-                ui::checkbox("Loop", &loop_);
-                ui::endDisabled();
-                ui::textDisabled(
-                    "Right-drag to look; scroll to zoom. Reset restores bind pose.");
-            }
-            if (!error_.empty()) {
-                ui::textWrapped("%s", error_.c_str());
             }
         }
-        ui::endWindow();
+        auto& a = world_->get<Animation>(owner_);
+        if (playing_ && fadeDuration_ > 0) {
+            fadeElapsed_ += std::clamp(dt, 0.f, .25f);
+            a.blendWeight = std::min(1.f, fadeElapsed_ / fadeDuration_);
+            a.blendSourceTime += std::clamp(dt, 0.f, .25f);
+            if (a.blendSourceTime > sourceDuration_) {
+                a.blendSourceTime =
+                    loop_ ? std::fmod(a.blendSourceTime, sourceDuration_) : sourceDuration_;
+            }
+            if (a.blendWeight >= 1) {
+                fadeDuration_ = 0;
+                a.blendFrozenPose.clear();
+            }
+        }
+        a.model = path_;
+        a.modelAnimation = clip_;
+        a.poseActive = hasClips && !bind_;
+        a.time = time_;
+        renderFrame(assets, renderer);
+    }
+    void renderFrame(const AssetManager& assets, Renderer& renderer) {
+        if (!world_) {
+            return;
+        }
+        auto& a = world_->get<Animation>(owner_);
+        const std::array<float, 12> view{time_,
+                                         float(clip_),
+                                         a.blendWeight,
+                                         camera_.yaw,
+                                         camera_.pitch,
+                                         camera_.distance,
+                                         camera_.target.x,
+                                         camera_.target.y,
+                                         camera_.target.z,
+                                         bind_ ? 1.f : 0.f,
+                                         float(modelAssetRevision),
+                                         float(fadeDuration_)};
+        if (rendered_ && view == lastView_ && !streaming_ && !renderer.streaming()) {
+            return;
+        }
+        GLint draw = 0, read = 0, viewport[4];
+        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
+        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        try {
+            surface_.resize(720, 405);
+            glBindFramebuffer(GL_FRAMEBUFFER, surface_.framebuffer);
+            renderer.setAssetRoot(assets.root);
+            renderer.draw(*world_,
+                          camera_.viewProjection(720.f / 405),
+                          720,
+                          405,
+                          camera_.position(),
+                          0,
+                          0,
+                          false);
+        } catch (const std::exception& e) {
+            error_ = e.what();
+        }
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
+        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        rendered_ = true;
+        streaming_ = renderer.streaming();
+        lastView_ = view;
+        ++renderedRevision_;
+    }
+
+    // ---- Qt dialog accessors ---------------------------------------------
+    const std::string& path() const {
+        return path_;
+    }
+    const std::string& error() const {
+        return error_;
+    }
+    bool loaded() const {
+        return world_ != nullptr;
+    }
+    const SceneSurface& surface() const {
+        return surface_;
+    }
+    // Bumped every time the preview framebuffer is redrawn, so the Qt dialog
+    // only copies the picture when it changed.
+    unsigned renderedRevision() const {
+        return renderedRevision_;
+    }
+    OrbitCamera& camera() {
+        return camera_;
+    }
+    int clipCount() const {
+        if (!world_ || !document_.contains("animations")) {
+            return 0;
+        }
+        return int(document_.at("animations").size());
+    }
+    std::string clipName(int index) const {
+        if (index < 0 || !document_.contains("animations") ||
+            index >= int(document_.at("animations").size())) {
+            return {};
+        }
+        return document_.at("animations").at(index).value("name", std::string{});
+    }
+    float clipDuration(int index) const {
+        if (index < 0 || !document_.contains("animations") ||
+            index >= int(document_.at("animations").size())) {
+            return 0;
+        }
+        return document_.at("animations").at(index).value("duration", 0.0f);
+    }
+    int clip() const {
+        return clip_;
+    }
+    void setClip(int index) {
+        if (index < 0 || index >= clipCount() || index == clip_) {
+            return;
+        }
+        auto& a = world_->get<Animation>(owner_);
+        const float duration = clipDuration(clip_);
+        if (blendClips_ && playing_ && fadeSeconds_ > 0) {
+            if (a.blendWeight < 1) {
+                auto source = a.blendFrozenPose.empty()
+                                  ? modelLocalTRS(document_, a.blendSourceAnimation,
+                                                  a.blendSourceTime)
+                                  : a.blendFrozenPose;
+                auto target = modelLocalTRS(document_, index, time_);
+                for (std::size_t n = 0; n < target.size(); ++n) {
+                    const float w = a.blendWeight;
+                    target[n] = {
+                        source[n].position + (target[n].position - source[n].position) * w,
+                        source[n].scale + (target[n].scale - source[n].scale) * w,
+                        nlerp(source[n].rotation, target[n].rotation, w)};
+                }
+                a.blendFrozenPose = std::move(target);
+            } else {
+                a.blendFrozenPose.clear();
+            }
+            a.blendSourceAnimation = bind_ ? -1 : clip_;
+            a.blendSourceTime = time_;
+            sourceDuration_ = duration;
+            fadeElapsed_ = 0;
+            fadeDuration_ = std::min(fadeSeconds_, clipDuration(index));
+            a.blendWeight = 0;
+        } else {
+            a.blendWeight = 1;
+            a.blendFrozenPose.clear();
+            fadeDuration_ = 0;
+        }
+        clip_ = index;
+        time_ = 0;
+        bind_ = false;
+    }
+    float time() const {
+        return time_;
+    }
+    void setTime(float seconds) {
+        time_ = std::clamp(seconds, 0.0f, std::max(clipDuration(clip_), .001f));
+        bind_ = false;
+        playing_ = false;
+        fadeDuration_ = 0;
+        autoBlendReset();
+    }
+    bool playing() const {
+        return playing_;
+    }
+    void play() {
+        if (time_ >= clipDuration(clip_)) {
+            time_ = 0;
+        }
+        playing_ = true;
+        bind_ = false;
+    }
+    void pause() {
+        playing_ = false;
+    }
+    void stop() {
+        fadeDuration_ = 0;
+        autoBlendReset();
+        playing_ = false;
+        time_ = 0;
+        bind_ = false;
+    }
+    void resetPose() {
+        fadeDuration_ = 0;
+        autoBlendReset();
+        playing_ = false;
+        time_ = 0;
+        bind_ = true;
+    }
+    bool loop() const {
+        return loop_;
+    }
+    void setLoop(bool loop) {
+        loop_ = loop;
+    }
+    bool blendClips() const {
+        return blendClips_;
+    }
+    void setBlendClips(bool blend) {
+        blendClips_ = blend;
+    }
+    float fadeSeconds() const {
+        return fadeSeconds_;
+    }
+    void setFadeSeconds(float seconds) {
+        fadeSeconds_ = std::clamp(seconds, 0.0f, 5.0f);
+    }
+
+  private:
+    void autoBlendReset() {
+        if (!world_ || !world_->alive(owner_)) {
+            return;
+        }
+        auto& a = world_->get<Animation>(owner_);
+        a.blendWeight = 1;
+        a.blendFrozenPose.clear();
     }
 };

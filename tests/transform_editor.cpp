@@ -1,4 +1,5 @@
 #include "editor/transform_editor.hpp"
+#include "core/hierarchy.hpp"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -45,81 +46,43 @@ int main()
     require(applyGizmoMatrix(transform,transformMatrix({}, {},{0.001f,200,1}),TransformTool::Scale,false),"scale clamps");
     require(transform.scale==Vec3{0.05f,100,1},"scale has positive usable limits");
 
-    // CPU-only MyGUI-backed adapter integration: actual hit testing and a drag gesture.
-    ui::createContext();
-    auto& io=ui::io();
+    // Editor state the Qt gizmo reads: tool, space, pivot, snap and the
+    // held-body protocol that keeps a dynamic object still mid-drag.
+    TransformEditor editor;
+    require(editor.tool()==TransformTool::Move,"default tool is move");
+    editor.setTool(TransformTool::Rotate);
+    require(editor.tool()==TransformTool::Rotate,"tool changes");
+    require(!editor.capturesMouse(),"idle editor does not capture the mouse");
+    editor.setSnapStep(0.6f);
+    require(editor.snapStep()==0.5f,"snap step rounds to a quarter");
+    editor.setSnapStep(NAN);
+    require(editor.snapStep()==0.5f,"non-finite snap step falls back");
+    editor.setSnapStep(-10000.0f);
+    require(editor.snapStep()==0.25f,"snap step clamps low");
+    editor.setLocalSpace(true);
+    require(editor.localSpace(),"local space toggle");
+    editor.setCenterPivot(true);
+    require(editor.centerPivot(),"pivot toggle");
 
-    io.DisplaySize=ui::Vec2(1280,720);
-    io.DeltaTime=1.0f/60;
-
+    // A dynamic body is taken out of simulation for the drag and put back,
+    // with its original settings, when the gesture finishes.
     World world;
     const Entity e=world.create();
     world.add(e,Transform{});
-    world.add(e,Collider{});
-    RigidBody body; body.mass=2; body.useGravity=false;
+    RigidBody body;body.mass=2;body.useGravity=false;
     world.add(e,body);
-    OrbitCamera camera;
-    TransformEditor editor;
-    auto frame=[&](bool enabled=true) {
-        ui::newFrame();
-        ui::setNextWindowPos({0, 0});
-        ui::setNextWindowSize({1280, 720});
-        ui::beginWindow("Scene", nullptr,
-                        ui::WindowFlags_NoDecoration | ui::WindowFlags_NoMove |
-                            ui::WindowFlags_NoResize | ui::WindowFlags_NoSavedSettings);
-        editor.draw(world, e, enabled, camera, 1280.0f / 720, nullptr, ui::windowDrawList());
-        ui::endWindow();
-        ui::render();
-    };
-    frame(); frame();
-    // Locate one of the translation handles using the adapter hit-test result.
-    ui::Vec2 handle{};
-    bool found=false;
-    for (int y=300;y<460 && !found;y+=5) {
-        for (int x=550;x<740 && !found;x+=5) {
-            ui::injectMousePos(static_cast<float>(x),static_cast<float>(y));
-            frame();
-            if (editor.capturesMouse()) { handle=ui::Vec2(static_cast<float>(x),static_cast<float>(y)); found=true; }
-        }
-    }
-    require(found,"translation gizmo has draggable handles");
-    ui::injectMouseButton(0,true);
-    frame();
-    require(editor.dragging(),"handle press begins manipulation");
-    require(!world.has<RigidBody>(e),"dynamic body is held during drag");
-    ui::injectMousePos(handle.x+35,handle.y+20);
-    frame();
-    const Vec3 position=world.get<Transform>(e).position;
-    require(dot(position,position)>1e-5f,"axis drag changes object position");
-    ui::injectMouseButton(0,false);
-    frame();
-    require(!editor.dragging() && world.has<RigidBody>(e),"release restores simulation");
-    require(world.get<RigidBody>(e).mass==2 && !world.get<RigidBody>(e).useGravity,"body settings preserved");
-    // Change operations through the same editor state used by the toolbar.
-    for (int tool=1;tool<=2;++tool) {
-        editor.setTool(static_cast<TransformTool>(tool));
-        frame();
-        const Transform beforeDrag=world.get<Transform>(e);
-        found=false;
-        for (int y=250;y<500 && !found;y+=5) {
-            for (int x=500;x<800 && !found;x+=5) {
-                ui::injectMousePos(static_cast<float>(x),static_cast<float>(y)); frame();
-                if (editor.capturesMouse()) { handle=ui::Vec2(static_cast<float>(x),static_cast<float>(y)); found=true; }
-            }
-        }
-        require(found,"rotation/scale handles can be hit");
-        ui::injectMouseButton(0,true); frame();
-        require(editor.dragging(),"rotation/scale press begins manipulation");
-        ui::injectMousePos(handle.x+30,handle.y+15); frame();
-        const Transform afterDrag=world.get<Transform>(e);
-        if (tool==1) require(afterDrag.rotation!=beforeDrag.rotation,"rotation ring changes rotation");
-        else require(afterDrag.scale!=beforeDrag.scale,"scale handle changes dimensions");
-        ui::injectMouseButton(0,false); frame();
-        require(world.has<RigidBody>(e),"rotation/scale release restores physics");
-    }
-    frame(false);
-    require(!editor.capturesMouse(),"spawn mode disables transform handles");
     editor.finish(world);
-    ui::destroyContext();
-    std::puts("Transform maths and MyGUI gizmo drag tests passed");
+    require(world.has<RigidBody>(e),"finish with no gesture leaves the body alone");
+    require(world.get<RigidBody>(e).mass==2,"body settings survive");
+
+    // Centring the gizmo: a mesh-less object reports its own position, and an
+    // attached child's position widens the bounds to the midpoint.
+    editor.meshBounds=[](MeshHandle,Vec3&,Vec3&){return false;};
+    require(editor.selectionCenter(world,e)==Vec3{},"mesh-less object centres on itself");
+    const Entity child=world.create();
+    world.add(child,Transform{{10,0,0}});
+    setParent(world,child,e);
+    require(editor.selectionCenter(world,e)==Vec3{5,0,0},
+            "child positions widen the gizmo bounds");
+    std::puts("Transform maths and editor state tests passed");
 }

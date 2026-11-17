@@ -2,7 +2,6 @@
 #include "core/worker_pool.hpp"
 #include "editor/editor_history.hpp"
 #include "lighting/lightmap_baker.hpp"
-#include "ui/mygui_ui.hpp"
 
 class LightmappingWindow {
     Lightmapping::Settings settings_;
@@ -61,17 +60,18 @@ class LightmappingWindow {
             progress_->cancel = true;
         }
     }
-    void draw(World& world,
-              Entity selection,
-              const AssetManager& assets,
-              const ProjectIO::Meshes& meshes,
-              EditorHistory& history,
-              bool editAllowed,
-              const std::string& level) {
+    // Pump the background bake without drawing anything. The Qt Lighting dock
+    // calls this every frame and then reads the state below.
+    void update(World& world,
+                Entity selection,
+                const AssetManager& assets,
+                const ProjectIO::Meshes& meshes,
+                EditorHistory& history,
+                bool editAllowed,
+                const std::string& level) {
         if (progress_ && (assets.root != root_ || level != level_)) {
             progress_->cancel = true;
         }
-        // Pump even while hidden. Never publish a result into a changed scene/project.
         if (future_.valid() &&
             future_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             try {
@@ -121,37 +121,49 @@ class LightmappingWindow {
             }
             progress_.reset();
         }
-        if (!visible) {
-            return;
-        }
-        ui::setNextWindowSize(ui::Vec2(520, 430), ui::Cond_FirstUseEver);
-        if (!ui::beginWindow("Lighting", &visible)) {
-            ui::endWindow();
-            return;
-        }
-        ui::textWrapped("Level: %s", level.empty() ? "Unsaved level" : level.c_str());
+    }
+
+    struct Snapshot {
+        int totalObjects = 0, baked = 0, assigned = 0;
+        std::size_t eligibleObjects = 0, staticLights = 0;
+        bool busy = false;
+        float progress = 0.0f;
+        std::size_t texelsDone = 0, texelsTotal = 0;
+        double elapsed = 0.0;
+        int phase = 0;
+        std::string status;
+        std::string level;
+        std::vector<std::pair<std::string, bool>> objects;
+    };
+
+    Snapshot snapshot(World& world,
+                      const AssetManager& assets,
+                      const ProjectIO::Meshes& meshes,
+                      const std::string& level) {
+        Snapshot out;
+        out.level = level.empty() ? std::string("Unsaved level") : level;
+        out.status = status_;
         const auto staticState = Lightmapping::staticState(world, assets);
         std::vector<Lightmapping::Object> objects;
-        int total = 0, baked = 0, assigned = 0;
         world.eachReadOnly<Transform, MeshRenderer>(
             [&](Entity e, const Transform& t, const MeshRenderer& r) {
                 if (world.has<Terrain>(e)) {
                     return;
                 }
-                ++total;
+                ++out.totalObjects;
                 if (eligible(world, e, t, r, meshes)) {
                     objects.push_back({e, t, r});
                     if (!r.lightmap.empty()) {
-                        ++assigned;
+                        ++out.assigned;
                     }
                     if (validation_.valid(assets, r, staticState)) {
-                        ++baked;
+                        ++out.baked;
                     }
                 }
             });
         world.eachReadOnly<Transform, Terrain>(
             [&](Entity e, const Transform& t, const Terrain& terrain) {
-                ++total;
+                ++out.totalObjects;
                 MeshRenderer eligibility;
                 eligibility.mesh = meshes[1];
                 if (!terrain.data || !eligible(world, e, t, eligibility, meshes)) {
@@ -160,14 +172,8 @@ class LightmappingWindow {
                 MeshRenderer r;
                 r.lightmap = terrain.data->lightmap;
                 r.lightmapGrid = 1;
-                Lightmapping::Object object{e, t, r, terrain.data};
-                objects.push_back(object);
-                if (!r.lightmap.empty()) {
-                    ++assigned;
-                }
-                if (validation_.valid(assets, r, staticState)) {
-                    ++baked;
-                }
+                out.assigned += r.lightmap.empty() ? 0 : 1;
+                out.baked += validation_.valid(assets, r, staticState) ? 1 : 0;
             });
         std::vector<Lightmapping::Light> lights;
         auto collect = [&](int type, Entity e, const LightSettings& l, const Transform& t) {
@@ -187,119 +193,140 @@ class LightmappingWindow {
             [&](Entity e, const PointLight& l, const Transform& t) { collect(1, e, l, t); });
         world.eachReadOnly<SpotLight, Transform>(
             [&](Entity e, const SpotLight& l, const Transform& t) { collect(2, e, l, t); });
-        ui::text("Objects: %d   Eligible: %zu   Baked: %d", total, objects.size(), baked);
-        ui::text("Static lights: %zu", lights.size());
-        if (assigned > baked) {
-            ui::textWrapped("%d stale lightmaps — rebake required.", assigned - baked);
+        out.eligibleObjects = objects.size();
+        out.staticLights = lights.size();
+        for (const auto& object : objects) {
+            const auto* name = world.tryGet<ObjectName>(object.entity);
+            out.objects.emplace_back(name ? name->value : std::string("Object"),
+                                     validation_.valid(assets, object.renderer, staticState));
         }
-        if (ui::treeNode("Eligible objects")) {
-            for (const auto& object : objects) {
-                const auto* name = world.tryGet<ObjectName>(object.entity);
-                ui::text("%s: %s",
-                            name ? name->value.c_str() : "Object",
-                            validation_.valid(assets, object.renderer, staticState)
-                                ? "Valid bake"
-                                : "Not baked / stale: rebake");
-            }
-            ui::treePop();
+        if (future_.valid() && progress_) {
+            out.busy = true;
+            out.progress = progress_->total.load() ? float(progress_->done.load()) /
+                                                         float(progress_->total.load())
+                                                   : 0.0f;
+            out.texelsDone = progress_->done.load();
+            out.texelsTotal = progress_->total.load();
+            out.phase = progress_->phase;
+            out.elapsed = std::chrono::duration<float>(std::chrono::steady_clock::now() - started_)
+                              .count();
         }
-        ui::separator();
-        const bool busy = future_.valid();
-        ui::beginDisabled(busy || !editAllowed);
-        ui::combo("Lightmap quality",
-                     &quality_,
-                     "Draft (8 texels/metre)\0Medium (16 texels/metre)\0High (32 texels/metre)\0");
+        return out;
+    }
+
+    void setQuality(int quality) {
+        quality_ = std::clamp(quality, 0, 2);
         settings_.tile = 8 << quality_;
-        ui::textWrapped(
-            "Terrain atlases: Draft 256 x 256, Medium 512 x 512, High 1024 x 1024, independent of render LOD.");
-        ui::dragFloat("Shadow ray bias",
-                         &settings_.bias,
-                         .0001f,
-                         .0001f,
-                         .1f,
-                         "%.4f",
-                         ui::SliderFlags_AlwaysClamp);
+    }
+    int quality() const {
+        return quality_;
+    }
+    Lightmapping::Settings& settings() {
+        return settings_;
+    }
+
+    bool bake(World& world,
+              const AssetManager& assets,
+              const ProjectIO::Meshes& meshes,
+              const std::string& level) {
+        const auto staticState = Lightmapping::staticState(world, assets);
+        std::vector<Lightmapping::Object> objects;
+        world.eachReadOnly<Transform, MeshRenderer>(
+            [&](Entity e, const Transform& t, const MeshRenderer& r) {
+                if (!world.has<Terrain>(e) && eligible(world, e, t, r, meshes)) {
+                    objects.push_back({e, t, r});
+                }
+            });
+        world.eachReadOnly<Transform, Terrain>(
+            [&](Entity e, const Transform& t, const Terrain& terrain) {
+                MeshRenderer eligibility;
+                eligibility.mesh = meshes[1];
+                if (!terrain.data || !eligible(world, e, t, eligibility, meshes)) {
+                    return;
+                }
+                MeshRenderer r;
+                r.lightmap = terrain.data->lightmap;
+                r.lightmapGrid = 1;
+                objects.push_back(Lightmapping::Object{e, t, r, terrain.data});
+            });
+        std::vector<Lightmapping::Light> lights;
+        auto collect = [&](int type, Entity e, const LightSettings& l, const Transform& t) {
+            if (l.mode == 1 && isActive(world, e) && l.enabled && l.intensity > 0 &&
+                validLight(l)) {
+                Lightmapping::Light light{
+                    l, t.position, rotateVector(normalize(t.rotation), {0, 0, -1}), type};
+                light.entity = e;
+                light.right = rotateVector(normalize(t.rotation), {1, 0, 0});
+                light.up = rotateVector(normalize(t.rotation), {0, 1, 0});
+                lights.push_back(std::move(light));
+            }
+        };
+        world.eachReadOnly<DirectionalLight, Transform>(
+            [&](Entity e, const DirectionalLight& l, const Transform& t) { collect(0, e, l, t); });
+        world.eachReadOnly<PointLight, Transform>(
+            [&](Entity e, const PointLight& l, const Transform& t) { collect(1, e, l, t); });
+        world.eachReadOnly<SpotLight, Transform>(
+            [&](Entity e, const SpotLight& l, const Transform& t) { collect(2, e, l, t); });
         settings_.bounces = 0;
-        ui::sliderInt("Soft shadow samples", &settings_.samples, 4, 128);
-        ui::textWrapped(
-            "Baked direct lighting only. Set light Source radius / Sun angular softness to soften shadows. Zero gives hard shadows. Atlases use lossless PNG compression.");
-        if (ui::button("Bake level") && !objects.empty() && !lights.empty() &&
-            !assets.root.empty()) {
-            try {
-                auto progress = std::make_shared<Lightmapping::Progress>();
-                const auto signature = sceneSignature(world);
-                auto request = WorkerPool::shared().submit([objects = std::move(objects),
-                                                            lights = std::move(lights),
-                                                            assets,
-                                                            meshes,
-                                                            settings = settings_,
-                                                            progress,
-                                                            staticState] {
+        if (objects.empty() || lights.empty() || assets.root.empty()) {
+            status_ = "Mark at least one mesh and light Static to bake.";
+            return false;
+        }
+        try {
+            auto progress = std::make_shared<Lightmapping::Progress>();
+            const auto signature = sceneSignature(world);
+            auto request = WorkerPool::shared().submit(
+                [objects = std::move(objects),
+                 lights = std::move(lights),
+                 assets,
+                 meshes,
+                 settings = settings_,
+                 progress,
+                 staticState] {
                     return Lightmapping::bake(
                         objects, lights, assets, meshes, settings, progress, staticState);
                 });
-                if (!request) {
-                    status_ = "Background queue full; try again.";
-                } else {
-                    progress_ = std::move(progress);
-                    future_ = std::move(*request);
-                    signature_ = signature;
-                    bakingState_ = staticState;
-                    root_ = assets.root;
-                    level_ = level;
-                    revision_ = modelAssetRevision;
-                    started_ = std::chrono::steady_clock::now();
-                    status_.clear();
-                }
-            } catch (const std::exception& error) {
-                status_ = error.what();
+            if (!request) {
+                status_ = "Background queue full; try again.";
+                return false;
             }
+            progress_ = std::move(progress);
+            future_ = std::move(*request);
+            signature_ = signature;
+            bakingState_ = staticState;
+            root_ = assets.root;
+            level_ = level;
+            revision_ = modelAssetRevision;
+            started_ = std::chrono::steady_clock::now();
+            status_.clear();
+            return true;
+        } catch (const std::exception& error) {
+            status_ = error.what();
+            return false;
         }
-        ui::sameLine();
-        if (ui::button("Clear level assignments")) {
-            history.commit(world, selection);
-            world.each<MeshRenderer>([](Entity, MeshRenderer& r) {
-                r.lightmap.clear();
-                r.lightmapGrid = 0;
-            });
-            world.each<Terrain>([](Entity, Terrain& t) {
-                if (t.data && !t.data->lightmap.empty()) {
-                    if (!t.data.unique()) {
-                        t.data = std::make_shared<Terrains::Data>(*t.data);
-                    }
-                    t.data->lightmap.clear();
-                    t.data->revision = Terrains::nextRevision();
-                }
-            });
-            auto clear = [](Entity, auto& l) { l.bake.clear(); };
-            world.each<DirectionalLight>(clear);
-            world.each<PointLight>(clear);
-            world.each<SpotLight>(clear);
-            history.commit(world, selection);
-            status_ =
-                "Assignments cleared. Existing atlas files remain for undo and other saved levels.";
-        }
-        ui::endDisabled();
-        if (busy && progress_) {
-            const auto count = progress_->total.load(), done = progress_->done.load();
-            ui::textUnformatted(progress_->phase == 0 ? "Preparing bake..."
-                                                         : "Baking lighting...");
-            ui::progressBar(count ? float(done) / float(count) : 0.f, ui::Vec2(-1, 0));
-            ui::text(
-                "Texels: %zu / %zu   Elapsed: %.1f s",
-                done,
-                count,
-                std::chrono::duration<float>(std::chrono::steady_clock::now() - started_).count());
-            if (ui::button("Cancel bake")) {
-                progress_->cancel = true;
-            }
-        }
-        if (objects.empty() || lights.empty()) {
-            ui::textWrapped("Mark at least one mesh and light Static to bake.");
-        }
-        if (!status_.empty()) {
-            ui::textWrapped("%s", status_.c_str());
-        }
-        ui::endWindow();
     }
+
+    void clearAssignments(World& world, Entity selection, EditorHistory& history) {
+        history.commit(world, selection);
+        world.each<MeshRenderer>([](Entity, MeshRenderer& r) {
+            r.lightmap.clear();
+            r.lightmapGrid = 0;
+        });
+        world.each<Terrain>([](Entity, Terrain& t) {
+            if (t.data && !t.data->lightmap.empty()) {
+                if (!t.data.unique()) {
+                    t.data = std::make_shared<Terrains::Data>(*t.data);
+                }
+                t.data->lightmap.clear();
+                t.data->revision = Terrains::nextRevision();
+            }
+        });
+        auto clear = [](Entity, auto& l) { l.bake.clear(); };
+        world.each<DirectionalLight>(clear);
+        world.each<PointLight>(clear);
+        world.each<SpotLight>(clear);
+        history.commit(world, selection);
+        status_ = "Assignments cleared. Existing atlas files remain for undo and other saved levels.";
+    }
+
 };

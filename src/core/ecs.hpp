@@ -254,7 +254,7 @@ class World {
     }
 
   private:
-    // All the components of one type, packed in an array. `slots` finds the
+    // All the components of one type, packed in an array. `entitySlots` finds the
     // component of an entity without searching (this is called a sparse set).
     struct PoolBase {
         virtual ~PoolBase() = default;
@@ -268,7 +268,7 @@ class World {
     template <typename T> struct Pool final : PoolBase {
         static constexpr std::uint32_t kNone = UINT32_MAX;
 
-        std::vector<std::uint32_t> slots;  // entity index -> position in the arrays below
+        std::vector<std::uint32_t> entitySlots;  // entity index -> position in the arrays below
         std::vector<std::uint32_t> owners; // entity index of each component
         std::vector<T> components;         // same order as `owners`
 
@@ -290,25 +290,25 @@ class World {
         }
 
         bool has(std::uint32_t entityIndex) const {
-            return entityIndex < slots.size() && slots[entityIndex] != kNone;
+            return entityIndex < entitySlots.size() && entitySlots[entityIndex] != kNone;
         }
 
         T& get(std::uint32_t entityIndex) {
-            return components[slots[entityIndex]];
+            return components[entitySlots[entityIndex]];
         }
 
         const T& get(std::uint32_t entityIndex) const {
-            return components[slots[entityIndex]];
+            return components[entitySlots[entityIndex]];
         }
 
         T& set(std::uint32_t entityIndex, T&& component) {
             if (has(entityIndex)) {
                 return get(entityIndex) = std::move(component);
             }
-            if (entityIndex >= slots.size()) {
-                slots.resize(entityIndex + 1, kNone);
+            if (entityIndex >= entitySlots.size()) {
+                entitySlots.resize(entityIndex + 1, kNone);
             }
-            slots[entityIndex] = static_cast<std::uint32_t>(components.size());
+            entitySlots[entityIndex] = static_cast<std::uint32_t>(components.size());
             owners.push_back(entityIndex);
             components.push_back(std::move(component));
             return components.back();
@@ -319,14 +319,14 @@ class World {
                 return;
             }
             // Keep the arrays packed: the last component moves into the gap.
-            const std::uint32_t slot = slots[entityIndex];
+            const std::uint32_t slot = entitySlots[entityIndex];
             const std::uint32_t last = owners.back();
             if (last != entityIndex) {
                 components[slot] = std::move(components.back());
                 owners[slot] = last;
-                slots[last] = slot;
+                entitySlots[last] = slot;
             }
-            slots[entityIndex] = kNone;
+            entitySlots[entityIndex] = kNone;
             components.pop_back();
             owners.pop_back();
         }
@@ -376,6 +376,6 @@ class World {
     }
 
     std::vector<std::uint32_t> generations_;       // current generation of every slot
-    std::vector<std::uint32_t> freeSlots_;         // slots of destroyed entities
+    std::vector<std::uint32_t> freeSlots_;         // entitySlots of destroyed entities
     std::vector<std::unique_ptr<PoolBase>> pools_; // indexed by typeId<T>()
 };

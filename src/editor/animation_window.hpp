@@ -1,8 +1,6 @@
 #pragma once
 #include "animation/animation_clip.hpp"
-#include "editor/asset_picker.hpp"
 #include "editor/editor_history.hpp"
-#include "editor/value_context.hpp"
 #include "models/model_asset.hpp"
 #include "prefabs/prefab.hpp"
 #include "rendering/renderer.hpp"
@@ -15,28 +13,19 @@
 // Preview lives in a cloned world: scrubbing does not dirty the edited level,
 // execute scripts, step physics, or overwrite the user's pre-animation pose.
 class AnimationWindow {
+  public:
+    // One animated channel of the imported model, ready for a Qt tree/timeline.
+    struct SheetRow {
+        std::string label, group;
+        int indent = 0;
+        int track = -1, lane = -1;
+        std::vector<float> times;
+    };
+  private:
     AnimationClip clip_;
     std::string path_, error_;
     std::filesystem::path root_;
     bool dirty_ = false, playing_ = false, loop_ = false, resetPose_ = false;
-    struct DisabledScope {
-        explicit DisabledScope(bool disabled = true) {
-            ui::beginDisabled(disabled);
-        }
-        ~DisabledScope() {
-            ui::endDisabled();
-        }
-    };
-    struct PopupScope {
-        ~PopupScope() {
-            ui::endPopup();
-        }
-    };
-    struct TableScope {
-        ~TableScope() {
-            ui::endTable();
-        }
-    };
     float time_ = 0;
     int track_ = -1, key_ = -1, property_ = 0;
     char newPath_[512] = "Animations/NewAnimation.leanim", target_[1024]{};
@@ -48,7 +37,10 @@ class AnimationWindow {
          previewStreaming_ = false;
     float lastPreviewTime_ = -1;
     std::array<float, 7> lastCamera_{};
-    unsigned previewRevision_ = ~0u;
+    unsigned previewRevision_ = ~0u, renderedRevision_ = 0;
+    OrbitCamera& camera() {
+        return camera_;
+    }
     void rebuild(World& world, Entity owner, const AssetManager& assets, Renderer& renderer) {
         base_ = std::make_unique<World>();
         previewOwner_ = Prefabs::clone(world, owner, *base_);
@@ -102,6 +94,7 @@ class AnimationWindow {
         preview_ = base_->snapshot();
         previewDirty_ = true;
         previewRendered_ = false;
+        ++renderedRevision_;
     }
     void render(Renderer& renderer, const AssetManager& assets, float width) {
         if (!preview_ || !base_) {
@@ -154,29 +147,13 @@ class AnimationWindow {
 
             previewRendered_ = true;
             previewStreaming_ = renderer.streaming();
+            ++renderedRevision_;
             lastCamera_ = cameraState;
             previewRevision_ = modelAssetRevision;
         }
-        ui::image(static_cast<ui::TextureID>(surface_.texture),
-                     ui::Vec2(width, width * 270 / 480),
-                     ui::Vec2(0, 1),
-                     ui::Vec2(1, 0));
-        if (ui::isItemHovered()) {
-            if (ui::isMouseDragging(ui::MouseButton_Right)) {
-                camera_.look(ui::io().MouseDelta.x, ui::io().MouseDelta.y);
-            }
-            if (ui::io().MouseWheel) {
-                camera_.zoom(ui::io().MouseWheel);
-            }
-        }
+        (void)width;
     }
 
-    struct SheetRow {
-        std::string label, group;
-        int indent = 0;
-        int track = -1, lane = -1;
-        std::vector<float> times;
-    };
     std::vector<SheetRow> importedRows_;
     std::string sheetModel_;
     int sheetAnimation_ = -2;
@@ -290,63 +267,112 @@ class AnimationWindow {
         dirty_ = true;
         previewDirty_ = true;
     }
-    void drawCurves(float height) {
-        auto pos = ui::cursorScreenPos();
-        float width = std::max(1.f, ui::contentRegionAvail().x);
-        ui::invisibleButton("Curves plot", ui::Vec2(width, height));
-        auto* draw = ui::windowDrawList();
-        draw->addRectFilled(pos, ui::Vec2(pos.x + width, pos.y + height), UI_COL32(30, 33, 39, 255));
-        if (track_ < 0 || track_ >= int(clip_.tracks.size())) {
-            draw->addText(ui::Vec2(pos.x + 12, pos.y + 12),
-                          UI_COL32(180, 185, 195, 255),
-                          "Select a property track in Dope Sheet to view its curves.");
-            return;
-        }
-        const auto& track = clip_.tracks[track_];
-        const auto* property = animationProperty(track.property);
-        float low = 0, high = 1;
-        for (const auto& k : track.keys) {
-            for (int lane = 0; lane < property->lanes(); ++lane) {
-                low = std::min(low, k.value[lane]);
-                high = std::max(high, k.value[lane]);
-            }
-        }
-        uint32_t colors[]{UI_COL32(235, 100, 100, 255),
-                       UI_COL32(115, 215, 145, 255),
-                       UI_COL32(100, 155, 245, 255),
-                       UI_COL32(215, 170, 240, 255)};
-        for (int lane = 0; lane < property->lanes(); ++lane) {
-            if (selectedLane_ >= 0 && lane != selectedLane_) {
-                continue;
-            }
-            for (std::size_t k = 1; k < track.keys.size(); ++k) {
-                const auto& a = track.keys[k - 1];
-                const auto& b = track.keys[k];
-                ui::Vec2 p{pos.x + a.time / clip_.duration * width,
-                         pos.y + height - 12 -
-                             (a.value[lane] - low) / (high - low) * (height - 24)},
-                    q{pos.x + b.time / clip_.duration * width,
-                      pos.y + height - 12 - (b.value[lane] - low) / (high - low) * (height - 24)};
-                if (property->kind == AnimationValueKind::Boolean) {
-                    draw->addLine(p, ui::Vec2(q.x, p.y), colors[lane]);
-                    draw->addLine(ui::Vec2(q.x, p.y), q, colors[lane]);
-                } else {
-                    draw->addLine(p, q, colors[lane], 1.5f);
-                }
-            }
-        }
-        float x = pos.x + time_ / clip_.duration * width;
-        draw->addLine(ui::Vec2(x, pos.y), ui::Vec2(x, pos.y + height), UI_COL32(245, 190, 70, 255));
-        if (ui::isItemActive()) {
-            time_ =
-                std::clamp((ui::io().MousePos.x - pos.x) / width, 0.f, 1.f) * clip_.duration;
-            playing_ = false;
-            resetPose_ = false;
-        }
-    }
-
   public:
     bool visible = false;
+    // Rebuilds importedRows_ when the clip's model or animation changed.
+    void syncSheet(const AssetManager& assets) {
+        if (sheetModel_ == clip_.model && sheetAnimation_ == clip_.modelAnimation) {
+            return;
+        }
+        importedRows_.clear();
+        sheetModel_ = clip_.model;
+        sheetAnimation_ = clip_.modelAnimation;
+        if (clip_.model.empty()) {
+            return;
+        }
+        const auto doc = modelDocument(assets, clip_.model);
+        const auto& channels = doc.at("animations").at(clip_.modelAnimation).at("channels");
+        for (const auto& c : channels) {
+            int node = c.at("node");
+            std::string name = doc.at("nodes").at(node).value(
+                "name", std::string("Bone ") + std::to_string(node));
+            for (const auto* type : {"positions", "rotations", "scales"}) {
+                const auto& keys = c.at(type);
+                if (keys.empty()) {
+                    continue;
+                }
+                SheetRow row;
+                row.label = name + " : " + type;
+                row.indent = 1;
+                for (int parent = doc.at("nodes").at(node).at("parent");
+                     parent >= 0 && row.indent < 32;
+                     parent = doc.at("nodes").at(parent).at("parent")) {
+                    ++row.indent;
+                }
+                for (const auto& k : keys) {
+                    row.times.push_back(k.at(0));
+                }
+                importedRows_.push_back(std::move(row));
+            }
+        }
+    }
+    const std::vector<SheetRow>& sheetRows() const {
+        return importedRows_;
+    }
+    // Starts a brand new clip; the dock calls this only after a dirty check.
+    void newClip() {
+        clip_ = {};
+        previewDirty_ = true;
+        path_.clear();
+        sheetModel_.clear();
+        importedRows_.clear();
+        track_ = key_ = -1;
+        time_ = 0;
+        playing_ = false;
+        dirty_ = false;
+    }
+    // Reloads the clip from disk (Discard edits).
+    void discardEdits(const AssetManager& assets) {
+        if (path_.empty()) {
+            clip_ = {};
+            previewDirty_ = true;
+        } else {
+            clip_ = loadAnimationClip(assets, path_);
+            previewDirty_ = true;
+        }
+        dirty_ = false;
+        track_ = key_ = -1;
+        time_ = 0;
+        playing_ = false;
+    }
+    void setPath(const std::string& path) {
+        path_ = path;
+    }
+    const char* draftPath() const {
+        return newPath_;
+    }
+    void setDraftPath(const std::string& path) {
+        std::snprintf(newPath_, sizeof(newPath_), "%s", path.c_str());
+    }
+    const char* draftTarget() const {
+        return target_;
+    }
+    void setDraftTarget(const std::string& target) {
+        std::snprintf(target_, sizeof(target_), "%s", target.c_str());
+    }
+    int propertyIndex() const {
+        return property_;
+    }
+    void setPropertyIndex(int index) {
+        property_ = index;
+    }
+    int samples() const {
+        return samples_;
+    }
+    void setSamples(int samples) {
+        samples_ = std::clamp(samples, 1, 240);
+    }
+    OrbitCamera& cameraRef() {
+        return camera_;
+    }
+    // Bumped whenever the preview framebuffer is redrawn, so the dock only
+    // copies the picture when it changed.
+    unsigned renderedRevision() const {
+        return renderedRevision_;
+    }
+    void setResetPose(bool reset) {
+        resetPose_ = reset;
+    }
     void remapAssetPaths(const std::string& from, const std::string& to) {
         auto remap = [&](std::string& p) {
             if (p == from || (p.size() > from.size() && p.compare(0, from.size(), from) == 0 &&
@@ -420,689 +446,138 @@ class AnimationWindow {
             visible = true;
         }
     }
-    void draw(World& world,
-              Entity selected,
-              const AssetManager& assets,
-              Renderer& renderer,
-              EditorHistory& history,
-              bool editMode,
-              float dt) {
-        if (!visible) {
+    // ---- Data accessors used by the Qt Animation dock -------------------
+    const AnimationClip& clip() const {
+        return clip_;
+    }
+    AnimationClip& clip() {
+        return clip_;
+    }
+    const std::string& path() const {
+        return path_;
+    }
+    float time() const {
+        return time_;
+    }
+    void setTime(float seconds) {
+        time_ = std::clamp(seconds, 0.0f, clip_.duration);
+        previewDirty_ = true;
+    }
+    bool playing() const {
+        return playing_;
+    }
+    void setPlaying(bool playing) {
+        playing_ = playing;
+    }
+    bool loop() const {
+        return loop_;
+    }
+    void setLoop(bool loop) {
+        loop_ = loop;
+    }
+    int track() const {
+        return track_;
+    }
+    int key() const {
+        return key_;
+    }
+    void selectTrack(int track) {
+        track_ = track;
+    }
+    void selectKey(int key) {
+        key_ = key;
+    }
+    bool dirty() const {
+        return dirty_;
+    }
+    void markDirty() {
+        dirty_ = true;
+        previewDirty_ = true;
+    }
+    void advance(float dt) {
+        if (!playing_) {
             return;
         }
-        if (root_ != assets.root) {
-            root_ = assets.root;
-            path_.clear();
-            clip_ = {};
-            base_.reset();
-            preview_.reset();
-            owner_ = {};
-            dirty_ = false;
-            playing_ = false;
-            track_ = key_ = -1;
-            sheetModel_.clear();
-        }
-        ui::setNextWindowSize(ui::Vec2(1100, 570), ui::Cond_FirstUseEver);
-        bool openWindow = true;
-        if (ui::beginWindow(dirty_ ? "Animation*###AnimationEditor" : "Animation###AnimationEditor",
-                         &openWindow)) {
-            try {
-                if (editMode &&
-                    ui::shortcut(ui::Mod_Ctrl | ui::Key_S, ui::InputFlags_RouteFocused)) {
-                    saveClip(assets);
-                }
-                if (!ui::io().WantTextInput &&
-                    !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId)) {
-                    if (ui::shortcut(ui::Mod_Ctrl | ui::Key_C, ui::InputFlags_RouteFocused)) {
-                        copyKeys();
-                    }
-                    if (editMode &&
-                        ui::shortcut(ui::Mod_Ctrl | ui::Key_V, ui::InputFlags_RouteFocused)) {
-                        pasteKeys();
-                    }
-                }
-                {
-                    DisabledScope disabled(!editMode);
-                    if (ui::button("Save animation")) {
-                        saveClip(assets);
-                    }
-                }
-                ui::sameLine();
-                ui::textDisabled("Ctrl+S | all tracks and X/Y/Z values");
-                // Compact transport bar, with the sheet always in front rather than
-                // buried below a long stack of property controls.
-                if (ui::button("|<")) {
-                    time_ = 0;
-                    playing_ = false;
-                    resetPose_ = false;
-                }
-                ui::sameLine();
-                if (ui::button("<")) {
-                    time_ = std::max(0.f, time_ - 1.f / samples_);
-                    playing_ = false;
-                    resetPose_ = false;
-                }
-                ui::sameLine();
-                if (ui::button(playing_ ? "Pause" : "Play")) {
-                    playing_ = !playing_;
-                    resetPose_ = false;
-                }
-                ui::sameLine();
-                if (ui::button(">")) {
-                    time_ = std::min(clip_.duration, time_ + 1.f / samples_);
-                    playing_ = false;
-                    resetPose_ = false;
-                }
-                ui::sameLine();
-                if (ui::button(">|")) {
-                    time_ = clip_.duration;
-                    playing_ = false;
-                    resetPose_ = false;
-                }
-                ui::sameLine();
-                if (ui::button("Stop")) {
-                    playing_ = false;
-                    time_ = 0;
-                    resetPose_ = false;
-                }
-                ui::sameLine();
-                if (ui::button("Reset")) {
-                    playing_ = false;
-                    time_ = 0;
-                    resetPose_ = true;
-                }
-                ui::sameLine();
-                EditorValues::Checkbox("Loop", &loop_);
-                ui::sameLine();
-                ui::setNextItemWidth(75);
-                int frame = int(std::round(time_ * samples_));
-                if (EditorValues::InputInt("Frame", &frame, 0)) {
-                    time_ = std::clamp(frame / float(samples_), 0.f, clip_.duration);
-                    playing_ = false;
-                    resetPose_ = false;
-                }
-                ui::sameLine();
-                ui::textDisabled(" / %.2fs", clip_.duration);
-                if (playing_) {
-                    time_ += std::isfinite(dt) ? std::clamp(dt, 0.f, .25f) : 0;
-                    if (time_ >= clip_.duration) {
-                        if (loop_) {
-                            time_ = std::fmod(time_, clip_.duration);
-                        } else {
-                            time_ = clip_.duration;
-                            playing_ = false;
-                        }
-                    }
-                }
-                ui::separator();
-                if (ui::button("Clip / Settings")) {
-                    ui::openPopup("Clip settings");
-                }
-                ui::sameLine();
-                ui::textUnformatted(path_.empty() ? "Unsaved animation" : path_.c_str());
-                ui::sameLine();
-                ui::setNextItemWidth(65);
-                if (EditorValues::InputInt("Samples", &samples_, 0)) {
-                    samples_ = std::clamp(samples_, 1, 240);
-                }
-                ui::sameLine();
-                ui::setNextItemWidth(95);
-                EditorValues::SliderFloat("Zoom", &zoom_, 1, 12, "%.1fx");
-                if (ui::beginPopup("Clip settings")) {
-                    PopupScope popup;
-                    auto next = path_;
-                    if (assetPicker("Open clip",
-                                    next,
-                                    &assets,
-                                    [](const auto& p) { return animationAsset(p); }) &&
-                        !next.empty()) {
-                        open(assets, next);
-                    }
-                    {
-                        DisabledScope disabled(!editMode);
-                        if (ui::button("New clip")) {
-                            if (dirty_) {
-                                error_ = "Save or discard edits first.";
-                            } else {
-                                clip_ = {};
-                                previewDirty_ = true;
-                                path_.clear();
-                                sheetModel_.clear();
-                                track_ = key_ = -1;
-                                time_ = 0;
-                            }
-                        }
-                        ui::inputText("Asset path", newPath_, sizeof(newPath_));
-                        if (ui::button("Save clip")) {
-                            saveClip(assets);
-                        }
-                        ui::sameLine();
-                        if (ui::button("Discard edits")) {
-                            if (path_.empty()) {
-                                clip_ = {};
-                                previewDirty_ = true;
-                            } else {
-                                clip_ = loadAnimationClip(assets, path_);
-                            }
-                            dirty_ = false;
-                            track_ = key_ = -1;
-                            time_ = 0;
-                        }
-                        float duration = clip_.duration;
-                        {
-                            DisabledScope imported(!clip_.model.empty());
-                            if (EditorValues::InputFloat("Duration", &duration, .1f, 1) &&
-                                std::isfinite(duration)) {
-                                float last = .001f;
-                                for (const auto& t : clip_.tracks) {
-                                    if (!t.keys.empty()) {
-                                        last = std::max(last, t.keys.back().time);
-                                    }
-                                }
-                                clip_.duration = std::clamp(duration, last, 86400.f);
-                                time_ = std::min(time_, clip_.duration);
-                                dirty_ = true;
-                                previewDirty_ = true;
-                            }
-                        }
-                        if (world.alive(selected) && !path_.empty() &&
-                            ui::button("Assign to selected object")) {
-                            history.commit(world, selected);
-                            if (!world.has<Animation>(selected)) {
-                                world.add(selected, Animation{});
-                            }
-                            auto& a = world.get<Animation>(selected);
-                            a.clip = path_;
-                            a.loop = loop_;
-                            history.commit(world, selected);
-                        }
-                    }
-                }
-                if (ui::button("+ Add Property")) {
-                    ui::openPopup("Add property");
-                }
-                if (ui::beginPopup("Add property")) {
-                    PopupScope popup;
-                    DisabledScope disabled(!editMode || clip_.tracks.size() >= 64);
-                    ui::inputText("Child path (empty = self)", target_, sizeof(target_));
-                    if (ui::beginCombo("Property", animationProperties[property_].name)) {
-                        for (int i = 0;
-                             i < int(sizeof(animationProperties) / sizeof(animationProperties[0]));
-                             ++i) {
-                            if (ui::selectable(animationProperties[i].name, property_ == i)) {
-                                property_ = i;
-                            }
-                        }
-                        ui::endCombo();
-                    }
-                    if (ui::button("Add track")) {
-                        std::string target = target_,
-                                    property = animationProperties[property_].name;
-                        bool duplicate = false;
-                        for (const auto& t : clip_.tracks) {
-                            duplicate |= t.target == target && t.property == property;
-                        }
-                        if (duplicate) {
-                            error_ = "That property already has a track.";
-                        } else {
-                            clip_.tracks.push_back({target, property, {}});
-                            track_ = int(clip_.tracks.size()) - 1;
-                            key_ = -1;
-                            dirty_ = true;
-                            previewDirty_ = true;
-                        }
-                        ui::closeCurrentPopup();
-                    }
-                }
-                ui::sameLine();
-                ui::textDisabled(
-                    "Click ruler to scrub | drag diamonds to retime | double-click a lane to capture");
-                if (sheetModel_ != clip_.model || sheetAnimation_ != clip_.modelAnimation) {
-                    importedRows_.clear();
-                    sheetModel_ = clip_.model;
-                    sheetAnimation_ = clip_.modelAnimation;
-                    if (!clip_.model.empty()) {
-                        const auto doc = modelDocument(assets, clip_.model);
-                        const auto& channels =
-                            doc.at("animations").at(clip_.modelAnimation).at("channels");
-                        for (const auto& c : channels) {
-                            int node = c.at("node");
-                            std::string name = doc.at("nodes").at(node).value(
-                                "name", std::string("Bone ") + std::to_string(node));
-                            for (const auto* type : {"positions", "rotations", "scales"}) {
-                                const auto& keys = c.at(type);
-                                if (keys.empty()) {
-                                    continue;
-                                }
-                                SheetRow row;
-                                row.label = name + " : " + type;
-                                row.indent = 1;
-                                for (int parent = doc.at("nodes").at(node).at("parent");
-                                     parent >= 0 && row.indent < 32;
-                                     parent = doc.at("nodes").at(parent).at("parent")) {
-                                    ++row.indent;
-                                }
-                                for (const auto& k : keys) {
-                                    row.times.push_back(k.at(0));
-                                }
-                                importedRows_.push_back(std::move(row));
-                            }
-                        }
-                    }
-                }
-                std::vector<SheetRow> propertyRows;
-                propertyRows.reserve(clip_.tracks.size() * 5);
-                std::map<std::string, std::vector<int>> groups;
-                for (int i = 0; i < int(clip_.tracks.size()); ++i) {
-                    groups[clip_.tracks[i].target].push_back(i);
-                }
-                for (const auto& group : groups) {
-                    SheetRow header;
-                    header.track = -2;
-                    header.group = group.first;
-                    header.label = group.first.empty() ? "Self" : group.first;
-                    header.indent = int(std::count(group.first.begin(), group.first.end(), '/'));
-                    propertyRows.push_back(std::move(header));
-                    if (collapsed_[group.first]) {
-                        continue;
-                    }
-                    for (int index : group.second) {
-                        const auto& t = clip_.tracks[index];
-                        SheetRow row;
-                        row.label = t.property;
-                        row.track = index;
-                        row.indent =
-                            int(std::count(group.first.begin(), group.first.end(), '/')) + 1;
-                        for (const auto& k : t.keys) {
-                            row.times.push_back(k.time);
-                        }
-                        propertyRows.push_back(std::move(row));
-                        if (t.property == "Transform.position") {
-                            static const char* axes[]{"X", "Y", "Z"};
-                            for (int lane = 0; lane < 3; ++lane) {
-                                SheetRow axis;
-                                axis.label = axes[lane];
-                                axis.track = index;
-                                axis.lane = lane;
-                                axis.indent =
-                                    int(std::count(group.first.begin(), group.first.end(), '/')) +
-                                    2;
-                                for (const auto& key : t.keys) {
-                                    axis.times.push_back(key.time);
-                                }
-                                propertyRows.push_back(std::move(axis));
-                            }
-                        }
-                    }
-                }
-                std::vector<const SheetRow*> rows;
-                rows.reserve(propertyRows.size() + importedRows_.size());
-                for (const auto& row : propertyRows) {
-                    rows.push_back(&row);
-                }
-                for (const auto& row : importedRows_) {
-                    rows.push_back(&row);
-                }
-                const float sheetHeight = std::max(170.f, ui::contentRegionAvail().y - 130.f);
-                if (!curves_) {
-                    const float laneWidth =
-                        std::max(240.f, (ui::contentRegionAvail().x - 280.f) * zoom_);
-                    if (ui::beginTable("Dope sheet",
-                                          2,
-                                          ui::TableFlags_BordersInnerV |
-                                              ui::TableFlags_Resizable | ui::TableFlags_ScrollX |
-                                              ui::TableFlags_ScrollY | ui::TableFlags_RowBg,
-                                          ui::Vec2(0, sheetHeight))) {
-                        TableScope table;
-                        ui::tableSetupColumn(
-                            "Hierarchy / Property", ui::TableColumnFlags_WidthFixed, 260);
-                        ui::tableSetupColumn(
-                            "Timeline", ui::TableColumnFlags_WidthFixed, laneWidth);
-                        ui::tableSetupScrollFreeze(1, 1);
-                        ui::tableNextRow();
-                        ui::tableNextColumn();
-                        ui::textUnformatted("Hierarchy / Property");
-                        ui::tableNextColumn();
-                        auto ruler = ui::cursorScreenPos();
-                        ui::invisibleButton("Ruler", ui::Vec2(laneWidth, 30));
-                        auto* draw = ui::windowDrawList();
-                        if (ui::isItemActive()) {
-                            time_ = std::clamp((ui::io().MousePos.x - ruler.x) / laneWidth,
-                                               0.f,
-                                               1.f) *
-                                    clip_.duration;
-                            playing_ = false;
-                            resetPose_ = false;
-                        }
-                        const int ticks = std::clamp(int(laneWidth / 80), 2, 100);
-                        for (int i = 0; i <= ticks; ++i) {
-                            float x = ruler.x + laneWidth * i / ticks;
-                            char label[32];
-                            float t = clip_.duration * i / ticks;
-                            std::snprintf(label,
-                                          sizeof(label),
-                                          "%d:%02d",
-                                          int(t),
-                                          int(std::round((t - int(t)) * samples_)));
-                            draw->addText(
-                                ui::Vec2(x + 3, ruler.y), UI_COL32(185, 190, 200, 255), label);
-                            draw->addLine(ui::Vec2(x, ruler.y + 18),
-                                          ui::Vec2(x, ruler.y + 30),
-                                          UI_COL32(110, 115, 125, 255));
-                        }
-                        const float rulerHead = ruler.x + laneWidth * time_ / clip_.duration;
-                        draw->addTriangleFilled(ui::Vec2(rulerHead - 5, ruler.y + 18),
-                                                ui::Vec2(rulerHead + 5, ruler.y + 18),
-                                                ui::Vec2(rulerHead, ruler.y + 25),
-                                                UI_COL32(235, 90, 75, 255));
-                        // Native retained panels keep table rows as ordinary widgets.
-                        // The source collection is bounded by scene tracks, so lay out
-                        // each row and let MyGUI clip the scrollable parent.
-                        for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
-                                const auto& row = *rows[rowIndex];
-                                ui::pushId(rowIndex);
-                                ui::tableNextRow(25);
-                                ui::tableNextColumn();
-                                ui::indent(std::min(row.indent, 12) * 12.f);
-                                auto label = row.track == -2
-                                                 ? (collapsed_[row.group] ? "> " : "v ") + row.label
-                                                 : row.label;
-                                if (row.lane >= 0) {
-                                    const auto& t = clip_.tracks[row.track];
-                                    char value[48];
-                                    if (t.keys.empty()) {
-                                        std::snprintf(value, sizeof(value), "   --");
-                                    } else {
-                                        std::snprintf(value,
-                                                      sizeof(value),
-                                                      "   %.3f",
-                                                      sampleAnimationTrack(t, time_)[row.lane]);
-                                    }
-                                    label += value;
-                                }
-                                if (ui::selectable(label.c_str(),
-                                                      row.track >= 0 && track_ == row.track &&
-                                                          selectedLane_ == row.lane,
-                                                      0,
-                                                      ui::Vec2(0, 21))) {
-                                    if (row.track == -2) {
-                                        collapsed_[row.group] = !collapsed_[row.group];
-                                    } else {
-                                        track_ = row.track;
-                                        selectedLane_ = row.lane;
-                                        key_ = -1;
-                                    }
-                                }
-                                ui::unindent(std::min(row.indent, 12) * 12.f);
-                                if (ui::isItemHovered()) {
-                                    ui::setTooltip("%s%s",
-                                                      row.label.c_str(),
-                                                      row.track < 0 ? " (imported, read-only)"
-                                                                    : "");
-                                }
-                                ui::tableNextColumn();
-                                auto pos = ui::cursorScreenPos();
-                                ui::invisibleButton("Lane", ui::Vec2(laneWidth, 21));
-                                draw = ui::windowDrawList();
-                                for (int i = 0; i <= ticks; ++i) {
-                                    float x = pos.x + laneWidth * i / ticks;
-                                    draw->addLine(ui::Vec2(x, pos.y),
-                                                  ui::Vec2(x, pos.y + 25),
-                                                  UI_COL32(70, 74, 82, 100));
-                                }
-                                if (ui::isItemClicked()) {
-                                    draggingKey_ = false;
-                                    float nearest = 8;
-                                    for (int k = 0; k < int(row.times.size()); ++k) {
-                                        float distance = std::abs(
-                                            ui::io().MousePos.x -
-                                            (pos.x + laneWidth * row.times[k] / clip_.duration));
-                                        if (distance < nearest) {
-                                            nearest = distance;
-                                            track_ = row.track;
-                                            selectedLane_ = row.lane;
-                                            key_ = k;
-                                            time_ = row.times[k];
-                                            draggingKey_ = row.track >= 0 && editMode;
-                                        }
-                                    }
-                                    if (nearest == 8) {
-                                        time_ = std::clamp((ui::io().MousePos.x - pos.x) /
-                                                               laneWidth,
-                                                           0.f,
-                                                           1.f) *
-                                                clip_.duration;
-                                        track_ = row.track;
-                                        selectedLane_ = row.lane;
-                                        key_ = -1;
-                                    }
-                                    playing_ = false;
-                                    resetPose_ = false;
-                                }
-                                if (ui::isItemActive() && ui::isMouseDragging(0)) {
-                                    float t =
-                                        std::round(std::clamp((ui::io().MousePos.x - pos.x) /
-                                                                  laneWidth,
-                                                              0.f,
-                                                              1.f) *
-                                                   clip_.duration * samples_) /
-                                        samples_;
-                                    if (draggingKey_ && row.track >= 0 && key_ >= 0) {
-                                        auto& keys = clip_.tracks[row.track].keys;
-                                        float low = key_ > 0 ? keys[key_ - 1].time + .0001f : 0,
-                                              high = key_ + 1 < int(keys.size())
-                                                         ? keys[key_ + 1].time - .0001f
-                                                         : clip_.duration;
-                                        if (low <= high) {
-                                            keys[key_].time = std::clamp(t, low, high);
-                                            time_ = keys[key_].time;
-                                            dirty_ = true;
-                                            previewDirty_ = true;
-                                        }
-                                    } else {
-                                        time_ = t;
-                                    }
-                                }
-                                if (ui::isItemHovered() && ui::isMouseDoubleClicked(0) &&
-                                    row.track >= 0 && editMode) {
-                                    captureKey(world, selected, row.track);
-                                }
-                                const float firstTime =
-                                    std::max(0.f,
-                                             (draw->clipRectMin().x - pos.x - 5) / laneWidth *
-                                                 clip_.duration);
-                                const float lastTime =
-                                    std::min(clip_.duration,
-                                             (draw->clipRectMax().x - pos.x + 5) / laneWidth *
-                                                 clip_.duration);
-                                auto marker =
-                                    std::lower_bound(row.times.begin(), row.times.end(), firstTime);
-                                while (marker != row.times.end() && *marker <= lastTime) {
-                                    const int k = int(marker - row.times.begin());
-                                    const float x = pos.x + laneWidth * (*marker) / clip_.duration,
-                                                y = pos.y + 10;
-                                    const uint32_t color = row.track == track_ && k == key_
-                                                            ? UI_COL32(255, 197, 70, 255)
-                                                            : UI_COL32(175, 190, 210, 255);
-                                    draw->addQuadFilled(ui::Vec2(x, y - 4),
-                                                        ui::Vec2(x + 4, y),
-                                                        ui::Vec2(x, y + 4),
-                                                        ui::Vec2(x - 4, y),
-                                                        color);
-                                    // Dense imported clips draw at most one diamond per two
-                                    // pixels, rather than generating a million hidden quads.
-                                    const float next = (*marker) + 2.f / laneWidth * clip_.duration;
-                                    marker = std::lower_bound(marker + 1, row.times.end(), next);
-                                }
-                                float playhead = pos.x + laneWidth * time_ / clip_.duration;
-                                draw->addLine(ui::Vec2(playhead, pos.y),
-                                              ui::Vec2(playhead, pos.y + 25),
-                                              UI_COL32(235, 90, 75, 255),
-                                              1.5f);
-                                ui::popId();
-                        }
-                        if (rows.empty()) {
-                            ui::tableNextRow();
-                            ui::tableNextColumn();
-                            ui::textDisabled("Add a property to begin.");
-                        }
-                    }
-                } else {
-                    drawCurves(sheetHeight);
-                }
-                if (ui::button("Dope Sheet")) {
-                    curves_ = false;
-                }
-                ui::sameLine();
-                if (ui::button("Curves")) {
-                    curves_ = true;
-                }
-                ui::sameLine();
-                ui::textDisabled(
-                    "%zu tracks | frame %d", rows.size(), int(std::round(time_ * samples_)));
-                {
-                    DisabledScope disabled(!canCopyKeys());
-                    if (ui::button("Copy key")) {
-                        copyKeys();
-                    }
-                }
-                ui::sameLine();
-                {
-                    DisabledScope disabled(!canCopyKeys(true));
-                    if (ui::button("Copy track keys")) {
-                        copyKeys(true);
-                    }
-                }
-                ui::sameLine();
-                {
-                    DisabledScope disabled(!editMode || !canPasteKeys());
-                    if (ui::button("Paste at playhead")) {
-                        pasteKeys();
-                    }
-                }
-                if (ui::isItemHovered(ui::HoveredFlags_AllowWhenDisabled)) {
-                    ui::setTooltip(
-                        "Ctrl+C / Ctrl+V | paste onto a matching property track.\nAll XYZ lanes are copied. Matching times are replaced; other keys remain.\nTrack copies preserve relative timing and extend the clip if needed.");
-                }
-                if (!copiedKeys_.empty()) {
-                    ui::sameLine();
-                    ui::textDisabled(
-                        "%zu copied (%s)", copiedKeys_.size(), copiedProperty_.c_str());
-                }
-                if (track_ >= 0 && track_ < int(clip_.tracks.size())) {
-                    DisabledScope disabled(!editMode);
-                    auto& track = clip_.tracks[track_];
-                    if (ui::button("Capture key")) {
-                        captureKey(world, selected, track_);
-                    }
-                    ui::sameLine();
-                    if (ui::button("Delete track")) {
-                        clip_.tracks.erase(clip_.tracks.begin() + track_);
-                        track_ = key_ = -1;
-                        dirty_ = true;
-                        previewDirty_ = true;
-                    } else if (key_ >= 0 && key_ < int(track.keys.size())) {
-                        auto& key = track.keys[key_];
-                        const auto* property = animationProperty(track.property);
-                        ui::sameLine();
-                        ui::setNextItemWidth(90);
-                        float t = key.time;
-                        if (EditorValues::DragFloat(
-                                "Key time", &t, 1.f / samples_, 0, clip_.duration, "%.3f")) {
-                            float low = key_ ? track.keys[key_ - 1].time + .0001f : 0,
-                                  high = key_ + 1 < int(track.keys.size())
-                                             ? track.keys[key_ + 1].time - .0001f
-                                             : clip_.duration;
-                            if (low <= high) {
-                                key.time = std::clamp(t, low, high);
-                                time_ = key.time;
-                                dirty_ = true;
-                                previewDirty_ = true;
-                            }
-                        }
-                        if (property->kind == AnimationValueKind::Boolean) {
-                            bool v = key.value[0] >= .5f;
-                            if (EditorValues::Checkbox("Value", &v)) {
-                                key.value[0] = v ? 1.f : 0.f;
-                                dirty_ = true;
-                                previewDirty_ = true;
-                            }
-                        } else if (property->kind == AnimationValueKind::Vector) {
-                            const char* axes[]{"X", "Y", "Z"};
-                            for (int lane = 0; lane < 3; ++lane) {
-                                if (lane) {
-                                    ui::sameLine();
-                                }
-                                ui::pushId(lane);
-                                ui::setNextItemWidth(std::max(
-                                    65.f, (ui::contentRegionAvail().x - 90.f) / (3 - lane)));
-                                if (EditorValues::DragFloat(axes[lane],
-                                                            &key.value[lane],
-                                                            .01f,
-                                                            property->minimum,
-                                                            property->maximum,
-                                                            "%.3f",
-                                                            ui::SliderFlags_AlwaysClamp)) {
-                                    dirty_ = true;
-                                    previewDirty_ = true;
-                                    selectedLane_ = lane;
-                                }
-                                ui::popId();
-                            }
-                        } else if (ui::dragScalarNFloat("Value",
-
-                                                      key.value.data(),
-                                                      property->lanes(),
-                                                      .01f,
-                                                      &property->minimum,
-                                                      &property->maximum,
-                                                      "%.3f",
-                                                      ui::SliderFlags_AlwaysClamp)) {
-                            dirty_ = true;
-                            previewDirty_ = true;
-                        }
-                        ui::sameLine();
-                        if (ui::button("Delete key")) {
-                            track.keys.erase(track.keys.begin() + key_);
-                            key_ = -1;
-                            dirty_ = true;
-                            previewDirty_ = true;
-                        }
-                    }
-                }
-                if (ui::collapsingHeader("Isolated preview")) {
-                    if (world.alive(selected) && (!base_ || selected != owner_)) {
-                        rebuild(world, selected, assets, renderer);
-                    }
-                    if (ui::button("Refresh preview") && world.alive(selected)) {
-                        rebuild(world, selected, assets, renderer);
-                    }
-                    ui::sameLine();
-                    {
-                        DisabledScope disabled(!editMode || !world.alive(selected));
-                        if (ui::button("Apply frame to Scene (undoable)")) {
-                            history.commit(world, selected);
-                            applyAnimationClip(world, selected, clip_, time_);
-                            history.commit(world, selected);
-                        }
-                    }
-                    render(renderer, assets, std::min(400.f, ui::contentRegionAvail().x));
-                }
-                if (!error_.empty()) {
-                    ui::textWrapped("%s", error_.c_str());
-                }
-            } catch (const std::exception& e) {
-                error_ = e.what();
-                ui::textWrapped("%s", error_.c_str());
-            }
-        }
-        ui::endWindow();
-        if (!openWindow) {
-            if (dirty_) {
-                error_ = "Save or discard clip edits before closing.";
+        time_ += dt;
+        if (time_ >= clip_.duration) {
+            if (loop_) {
+                time_ = std::fmod(time_, std::max(clip_.duration, 0.001f));
             } else {
-                visible = false;
+                time_ = clip_.duration;
+                playing_ = false;
             }
+        }
+        previewDirty_ = true;
+    }
+    // Copies the current frame into the scene as one undoable edit.
+    bool applyCurrentFrame(World& world, Entity selected, EditorHistory& history) {
+        if (!world.alive(selected)) {
+            return false;
+        }
+        history.commit(world, selected);
+        applyAnimationClip(world, selected, clip_, time_);
+        history.commit(world, selected);
+        return true;
+    }
+    bool copyKeysPublic(bool wholeTrack = false) {
+        copyKeys(wholeTrack);
+        return !copiedKeys_.empty();
+    }
+    void pasteKeysPublic() {
+        pasteKeys();
+    }
+    bool canPasteKeysPublic() const {
+        return !copiedKeys_.empty();
+    }
+    void addTrack(const AnimationTrack& track) {
+        clip_.tracks.push_back(track);
+        markDirty();
+    }
+    void captureKeyAt(World& world, Entity selected, int index) {
+        captureKey(world, selected, index);
+    }
+    void deleteKey(int index) {
+        if (index < 0 || track_ < 0 || track_ >= int(clip_.tracks.size())) {
+            return;
+        }
+        auto& keys = clip_.tracks[std::size_t(track_)].keys;
+        if (index < int(keys.size())) {
+            keys.erase(keys.begin() + index);
+            key_ = -1;
+            markDirty();
         }
     }
+    void setKeyTime(int index, float time) {
+        if (track_ < 0 || track_ >= int(clip_.tracks.size())) {
+            return;
+        }
+        auto& keys = clip_.tracks[std::size_t(track_)].keys;
+        if (index >= 0 && index < int(keys.size()) && std::isfinite(time)) {
+            keys[std::size_t(index)].time = std::clamp(time, 0.0f, clip_.duration);
+            markDirty();
+        }
+    }
+    bool setDuration(float seconds) {
+        if (!std::isfinite(seconds) || seconds <= 0 || seconds > 86400) {
+            return false;
+        }
+        clip_.duration = seconds;
+        markDirty();
+        return true;
+    }
+    void rebuildPreview(World& world, Entity selected, const AssetManager& assets, Renderer& renderer) {
+        rebuild(world, selected, assets, renderer);
+    }
+    // Scrubs the isolated preview; the Qt dock paints sceneImage() afterwards.
+    void updatePreview(Renderer& renderer, const AssetManager& assets, float width) {
+        render(renderer, assets, width);
+    }
+    const SceneSurface& surface() const {
+        return surface_;
+    }
+    void resetPreview() {
+        previewDirty_ = true;
+        previewRendered_ = false;
+    }
+
 };

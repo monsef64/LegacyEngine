@@ -16,22 +16,16 @@
 #include "editor/asset_browser.hpp"
 #include "editor/asset_preview_renderer.hpp"
 #include "editor/create_menu.hpp"
-#include "editor/dock_workspace.hpp"
-#include "editor/editor_history.hpp"
+#include "editor/editor_geometry.hpp"
 #include "editor/editor_input.hpp"
-#include "editor/editor_layout.hpp"
-#include "editor/editor_theme.hpp"
+#include "editor/editor_ui.hpp"
+#include "editor/editor_history.hpp"
 #include "editor/fix_project.hpp"
 #include "editor/input_settings.hpp"
-#include "editor/inspector.hpp"
 #include "editor/level_objects.hpp"
 #include "editor/lightmapping_window.hpp"
 #include "editor/model_preview_window.hpp"
-#include "editor/particle_playback.hpp"
 #include "editor/play_mode.hpp"
-#include "editor/playback_controls.hpp"
-#include "editor/profiler_window.hpp"
-#include "editor/scene_orientation.hpp"
 #include "editor/script_editor.hpp"
 #include "editor/transform_editor.hpp"
 #include "gameplay/first_person.hpp"
@@ -60,7 +54,12 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
-#include "ui/mygui_ui.hpp"
+#include "ui/qt/qt_application.hpp"
+#include "ui/qt/qt_input_bridge.hpp"
+#include "ui/qt/qt_editor_window.hpp"
+#include "ui/qt/qt_framebuffer.hpp"
+#include "ui/qt/qt_panels.hpp"
+#include "ui/qt/qt_viewport.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -97,34 +96,11 @@ constexpr int kRoomSteps = 250;
 // The cubes that clicks create
 // ---------------------------------------------------------------------------
 
-// The ray from the camera through a mouse position. Returns false while the
-// window has no size (it is minimised, say).
-static bool mouseRay(SDL_Window* window,
-                     const OrbitCamera& camera,
-                     float x,
-                     float y,
-                     Ray& ray,
-                     const EditorRect& scene) {
-    // Mouse positions are counted in the units of the window's size, which are
-    // not pixels on a high-density display. The shape of the picture comes
-    // from its size in pixels, as it does for drawing.
-    int windowWidth = 0;
-    int windowHeight = 0;
-    int width = 0;
-    int height = 0;
-    SDL_GetWindowSize(window, &windowWidth, &windowHeight);
-    SDL_GetWindowSizeInPixels(window, &width, &height);
-    if (windowWidth <= 0 || windowHeight <= 0 || width <= 0 || height <= 0) {
-        return false;
-    }
-    if (!scene.contains(x, y) || scene.width <= 0 || scene.height <= 0) {
-        return false;
-    }
-    const auto pixels = scenePixels(scene, windowWidth, windowHeight, width, height);
-    ray = camera.rayThrough((x * width / windowWidth - pixels.x) / pixels.width,
-                            (y * height / windowHeight - pixels.top) / pixels.height,
-                            pixels.aspect());
-    return true;
+// The ray from the editor camera through a point of the Scene picture. The Qt
+// widget reports the point in picture coordinates (0..1 from the top left), so
+// no window-size bookkeeping is needed here.
+static Ray sceneRay(const OrbitCamera& camera, float u, float v, float aspect) {
+    return camera.rayThrough(u, v, aspect);
 }
 
 // The place nearest to `center` where a cube has room: `center` itself if
@@ -196,6 +172,9 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
 // The scene and the main loop
 // ---------------------------------------------------------------------------
 
+#include <QFileInfo>
+#include <QMessageBox>
+#include <QPushButton>
 static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     World world;
     Physics physics;
@@ -240,7 +219,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     float cameraSpeed = 5.0f;
     Entity selectedEntity;
     ScriptEditor scripts;
-    scripts.bindWorld(world, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
+    scripts.bindConsoleMeshes(world, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
     EditorHistory history(world);
     Terrains::Editor terrainEditor;
     PlayMode playMode;
@@ -259,7 +238,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     AssetPreviewRenderer assetPreviews(
         renderer, {gridMesh, planeMesh, cubeMesh, sphereMesh, capsuleMesh, coneMesh});
     EditorRect sceneRect{};
-    bool sceneHovered = false, resetWorkspace = false;
+    bool sceneHovered = false;
     Entity editSelection;
     TransformEditor editor;
     editor.meshBounds = [&renderer](MeshHandle mesh, Vec3& low, Vec3& high) {
@@ -281,10 +260,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     std::string editLevelName, editSource, editScriptPath, embeddedLegacySource, editLegacySource;
     OrbitCamera editCamera;
     EditorHistory editHistory(world);
-    bool renameLevelPopup = false;
-    char renameLevelName[129]{};
-    bool newLevelPopup = false;
-    char newLevelName[129] = "New Level";
     ProjectDialog projectDialog;
     std::string currentProject, projectError, savedProjectState, lastWindowTitle, backupStatus;
     bool projectDirty = true;
@@ -292,7 +267,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     input.window = window;
     InputSettings inputSettings;
     EngineLog::Errors terminalErrors;
-    bool gameHovered = false, gameFocused = false, focusGame = false;
+    bool gameHovered = false, gameFocused = false;
     std::optional<EditorSettings> settingsGesture;
     bool separateGame = false;
     SDL_Window* gameWindow = nullptr;
@@ -306,26 +281,548 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
     };
     Entity mouseOver, mousePressedObject;
-    ui::Vec2 gameImageOrigin{}, gameImageSize{};
+    float gameU = 0.5f, gameV = 0.5f;
     bool showFPS = false, showGameColliders = false, showProfiler = false;
+    // The Qt shell. Widgets only record what the user asked for; the engine
+    // consumes those actions at a fixed point in every frame.
+    EditorUI shell(window);
+    if (!shell.ready()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "The Qt editor shell is not available");
+        return false;
+    }
+    // Attach the shell to the engine's state once, before the first frame. The
+    // panels read and write these objects directly; nothing is copied.
+    shell.shell()->bind(world,
+                        browser,
+                        history,
+                        renderer,
+                        scripts,
+                        animationWindow,
+                        lightmappingWindow,
+                        playMode,
+                        terrainEditor,
+                        browser.settings,
+                        inputSettings,
+                        input,
+                        renderingSettings,
+                        editor,
+                        assetPreviews,
+                        modelPreviewWindow,
+                        projectMeshes,
+                        camera);
     FrameProfiler profiler;
     activeProfiler = &profiler;
     Uint64 lastTicks = SDL_GetTicksNS();
     bool running = true, exitRequested = false, exitAfterSave = false;
     auto lastAutosave = std::chrono::steady_clock::now();
 
-    // The left mouse button does two things. Pressed and released in one
-    // place, it is a click, which selects. Moving away cancels
-    // the click; camera navigation uses the right button and keyboard.
-    bool clicking = false; // the button is down and this may still be a click
-    float pressX = 0.0f;   // where the button went down
-    float pressY = 0.0f;
 
-    bool cameraLooking = false, orientationInteracting = false;
+    // The left mouse button does two things. Pressed and released in one place,
+    // it is a click, which selects. Moving away cancels the click; camera
+    // navigation uses the right button and the keyboard.
+    bool clicking = false;
+    float pressU = 0.0f, pressV = 0.0f;
+
+    bool cameraLooking = false;
     unsigned renderedFrames = 0;
     constexpr unsigned smokeFrames = 120;
     std::optional<Vec3> lastOrbitPivot;
+
+    static RecentProjects recentProjects;
+    // Viewport/focus facts the engine reads throughout the frame.
+    bool sceneVisible = true, gameVisible = false;
+    bool sceneFocused = false;
+    EditorRect gameRect{};
+    std::string selectedRecent;
+    bool confirmOpen = false, confirmExit = false;
+    int continueAfterSave = 0;
+    std::string pendingRecent;
+    // One reusable snapshot of what the shell shows; refilled every frame.
+    EditorView view;
+    EditorUIState uiState;
+    EditorUI::ActionSink actionSink;
+    auto editGuard = [&]() {
+        return !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
+    };
+    // ---- Actions: everything a widget can ask the engine to do -----------
+    // Each body is the old menu or panel handler. They run from inside the
+    // frame, after Qt's events were drained, so undo and physics see a stable
+    // world.
+    auto createObject = [&](int created) {
+        editor.finish(world);
+        clicking = false;
+        if (!validEditorObjectType(created)) {
+            return;
+        }
+        const ColliderShape shapes[]{ColliderShape::Box,
+                                     ColliderShape::Capsule,
+                                     ColliderShape::Cone,
+                                     ColliderShape::Box,
+                                     ColliderShape::Sphere};
+        Vec3 position = camera.target;
+        position.y = std::max(position.y, created == 1 ? 1.0f : created == 0 ? 0.0f : 0.5f);
+        if (created > 0 && created < 5) {
+            position = findRoom(physics, position, shapes[created]);
+        }
+        Entity prefabRoot;
+        if (prefabLevel) {
+            try {
+                prefabRoot = Prefabs::root(world);
+            } catch (const std::exception&) {
+            }
+        }
+        selectedEntity = createEditorObject(
+            world, created, position, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
+        if (prefabRoot != Entity{} && world.alive(selectedEntity)) {
+            setParent(world, selectedEntity, prefabRoot);
+        }
+    };
+    auto saveTo = [&](const std::string& path) {
+        bool saved = false;
+        if (playMode.active()) {
+            projectError = "Stop Play before saving; runtime edits are temporary.";
+            return saved;
+        }
+        auto assetRoot = projectAssetsPath(path);
+        try {
+            if (browser.importing()) {
+                throw std::runtime_error("Wait for the asset import to finish before saving");
+            }
+            if (!animationWindow.saveIfDirty(browser.assets)) {
+                throw std::runtime_error(animationWindow.error());
+            }
+            scripts.saveFile(browser.assets);
+            levels.saveCurrent(world, embeddedLegacySource, camera);
+            browser.assets.copyTo(assetRoot);
+            AssetManager destination;
+            destination.root = assetRoot;
+            Terrains::saveAll(world, destination);
+            renderingSettings.save(destination);
+            inputSettings.save(destination, input);
+            if (!inputSettings.error.empty()) {
+                throw std::runtime_error(inputSettings.error);
+            }
+        } catch (const std::exception& e) {
+            projectError = e.what();
+            exitAfterSave = false;
+            return false;
+        }
+        if (ProjectIO::save(
+                path, world, embeddedLegacySource, camera, projectMeshes, projectError)) {
+            if (std::filesystem::weakly_canonical(browser.assets.root) !=
+                std::filesystem::weakly_canonical(assetRoot)) {
+                // Old Trash receipts belong to the previous project root.
+                history = EditorHistory(world, selectedEntity);
+            }
+            browser.assets.root = assetRoot;
+            currentProject = path;
+            recentProjects.remember(path);
+            savedProjectState = projectContentState(world, embeddedLegacySource, camera);
+            projectDirty = false;
+            saved = true;
+            lastAutosave = std::chrono::steady_clock::now();
+            if (exitAfterSave) {
+                running = false;
+            }
+        }
+        exitAfterSave = false;
+        return saved;
+    };
+    auto loadProject = [&](const std::string& path) {
+        std::string source, assetDirectory;
+        World loadedWorld;
+        OrbitCamera loadedCamera;
+        if (ProjectIO::load(path,
+                            loadedWorld,
+                            source,
+                            loadedCamera,
+                            projectMeshes,
+                            projectError,
+                            &assetDirectory)) {
+            audio.clear();
+            componentScripts.stop();
+            scripts.shutdown();
+            world.restore(loadedWorld);
+            camera = loadedCamera;
+            browser.setRoot(assetDirectory.empty()
+                                ? existingProjectAssetsPath(path)
+                                : std::filesystem::absolute(path).parent_path() / assetDirectory);
+            try {
+                Prefabs::refreshAll(browser.assets, world, projectMeshes);
+            } catch (const std::exception& e) {
+                browser.assets.error = e.what();
+            }
+            levels.setRoot(browser.assets.root);
+            if (!levels.current().empty()) {
+                levels.load();
+            }
+            scripts.resetRuntime();
+            scripts.setSource("");
+            embeddedLegacySource = source;
+            selectedEntity = {};
+            history = EditorHistory(world);
+            physics.reset();
+            clicking = false;
+            currentProject = path;
+            recentProjects.remember(currentProject);
+            savedProjectState = projectContentState(world, embeddedLegacySource, camera);
+            projectDirty = false;
+            lastAutosave = std::chrono::steady_clock::now();
+            uiState.levelName = std::filesystem::path(currentProject).stem().string();
+        }
+    };
+    auto saveCurrentLevel = [&]() {
+        try {
+            if (!animationWindow.saveIfDirty(browser.assets)) {
+                throw std::runtime_error(animationWindow.error());
+            }
+            scripts.saveFile(browser.assets);
+            levels.saveCurrent(world, embeddedLegacySource, camera);
+        } catch (const std::exception& e) {
+            levels.error = e.what();
+        }
+    };
+    auto startPlay = [&]() {
+        if (prefabLevel || playMode.active() || levels.busy()) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        try {
+            scripts.saveFile(browser.assets);
+            levels.saveCurrent(world, embeddedLegacySource, camera);
+        } catch (const std::exception& e) {
+            levels.error = e.what();
+        }
+        editSelection = selectedEntity;
+        editLevelName = levels.current();
+        editSource = scripts.source();
+        editScriptPath = browser.openedScript;
+        editLegacySource = embeddedLegacySource;
+        editCamera = camera;
+        history.commit(world, selectedEntity);
+        editHistory = std::move(history);
+        history = EditorHistory(world, selectedEntity);
+        if (playMode.play(world)) {
+            Particles::reset(world);
+            lightmappingWindow.cancelBake(); // do not compete with gameplay for CPU time
+            shell.shell()->focusGameView();
+            if (separateGame && !gameWindow) {
+                gameWindow =
+                    SDL_CreateWindow("Game", 960, 540, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+                if (!gameWindow) {
+                    projectError = SDL_GetError();
+                }
+            }
+            const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
+            componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
+            scripts.console().setAssetRoot(browser.assets.root);
+            scripts.startPlay();
+            audio.start(world);
+        }
+    };
+    auto pausePlay = [&]() {
+        if (!playMode.active()) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        playMode.pause();
+        if (!playMode.playing()) {
+            input.releaseMouse();
+        }
+    };
+    auto stopPlay = [&]() {
+        if (!playMode.active()) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        // Run stop callbacks before restoring, so their edits are discarded too.
+        levels.suspended = true;
+        levels.cancel();
+        LuaConsole::clearEvents();
+        audio.clear();
+        componentScripts.stop();
+        scripts.shutdown();
+        LuaConsole::clearEvents();
+        if (gameWindow) {
+            input.releaseMouse();
+            input.window = window;
+            SDL_DestroyWindow(gameWindow);
+            gameWindow = nullptr;
+        }
+        mouseOver = {};
+        mousePressedObject = {};
+        playMode.stop(world);
+        input.releaseMouse();
+        physics.reset();
+        scripts.resetRuntime();
+        scripts.setSource(editSource);
+        embeddedLegacySource = editLegacySource;
+        browser.openedScript = editScriptPath;
+        scripts.setAssetContext(editScriptPath, editSelection);
+        camera = editCamera;
+        history = std::move(editHistory);
+        levels.commit(editLevelName, false);
+        levels.suspended = false;
+        selectedEntity = world.alive(editSelection) ? editSelection : Entity{};
+    };
+    auto deleteSelection = [&]() {
+        if (!editGuard() || !world.alive(selectedEntity)) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        history.commit(world, selectedEntity);
+        deleteHierarchySelection(world, selectedEntity);
+        selectedEntity = {};
+        history.commit(world, selectedEntity);
+        physics.reset();
+    };
+    auto focusSelection = [&]() {
+        const auto* transform = world.tryGet<Transform>(selectedEntity);
+        if (!transform || !editGuard()) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        const auto& scale = transform->scale;
+        float radius = std::max({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z), 1.0f});
+        Vec3 centre = transform->position;
+        if (const auto* collider = world.tryGet<Collider>(selectedEntity)) {
+            const auto resolved = effectiveCollider(world, selectedEntity, *collider);
+            radius = .25f;
+            if (resolved.shape == ColliderShape::Mesh && !resolved.model.empty()) {
+                try {
+                    for (const auto& vertex :
+                         loadModelAsset(browser.assets, resolved.model).vertices) {
+                        const auto p = (vertex.position + resolved.center) * scale;
+                        radius = std::max(radius, std::sqrt(dot(p, p)));
+                    }
+                } catch (const std::exception& e) {
+                    browser.assets.error = e.what();
+                }
+            } else {
+                const auto bounds = colliderWireframe(resolved, scale);
+                for (const auto& vertex : bounds.vertices) {
+                    radius = std::max(radius, std::sqrt(dot(vertex.position, vertex.position)));
+                }
+            }
+        }
+        const int w = std::max(1, view.sceneSurface.width());
+        const int h = std::max(1, view.sceneSurface.height());
+        camera.focus(centre, radius, float(w) / h);
+    };
+    auto undoEdit = [&]() {
+        if (playMode.active() || !editGuard()) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        history.commit(world, selectedEntity);
+        if (history.undo(world, selectedEntity)) {
+            scripts.console().message("Undo editor change");
+            physics.reset();
+        } else if (!history.error.empty()) {
+            projectError = history.error;
+            history.error.clear();
+        }
+    };
+    auto redoEdit = [&]() {
+        if (playMode.active() || !editGuard()) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        history.commit(world, selectedEntity);
+        if (history.redo(world, selectedEntity)) {
+            scripts.console().message("Redo editor change");
+            physics.reset();
+        } else if (!history.error.empty()) {
+            projectError = history.error;
+            history.error.clear();
+        }
+    };
+    auto duplicateSelection = [&]() {
+        if (!editGuard() || !world.alive(selectedEntity)) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        history.commit(world, selectedEntity);
+        selectedEntity = duplicateLevelObject(world, selectedEntity);
+        history.commit(world, selectedEntity);
+    };
+    auto copySelection = [&]() {
+        if (editGuard() && world.alive(selectedEntity)) {
+            clipboard.copy(world, selectedEntity);
+        }
+    };
+    auto pasteSelection = [&]() {
+        if (!editGuard() || !clipboard.available()) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        history.commit(world, selectedEntity);
+        selectedEntity = clipboard.paste(world);
+        history.commit(world, selectedEntity);
+    };
+    auto toggleParent = [&]() {
+        if (!editGuard() || !world.alive(selectedEntity)) {
+            return;
+        }
+        editor.finish(world);
+        clicking = false;
+        if (getParent(world, selectedEntity) != Entity{}) {
+            history.commit(world, selectedEntity);
+            setParent(world, selectedEntity, Entity{});
+            history.commit(world, selectedEntity);
+        } else {
+            shell.shell()->showParentChooser(world);
+        }
+    };
+    auto spawnModelAsset = [&](const std::string& path) {
+        try {
+            const auto document = modelDocument(browser.assets, path);
+            struct Part {
+                std::string name, mesh, material;
+                MeshData data;
+            };
+            std::vector<Part> parts;
+            if (document.at("version") == 2) {
+                if (!document.at("parts").is_array() || document.at("parts").empty() ||
+                    document.at("parts").size() > 1024) {
+                    throw std::runtime_error("Invalid model parts");
+                }
+                for (const auto& part : document.at("parts")) {
+                    const auto mesh = part.at("mesh").get<std::string>();
+                    parts.push_back({part.at("name").get<std::string>(),
+                                     mesh,
+                                     part.at("material").get<std::string>(),
+                                     loadModelAsset(browser.assets, mesh)});
+                }
+            } else {
+                parts.push_back({"Mesh", path, "", loadModelAsset(browser.assets, path)});
+            }
+            std::size_t totalVertices = 0;
+            for (const auto& part : parts) {
+                totalVertices += part.data.vertices.size();
+                if (part.name.size() > 4096 ||
+                    (!part.material.empty() && !materialAsset(part.material))) {
+                    throw std::runtime_error("Invalid model metadata");
+                }
+            }
+            if (totalVertices > maxModelVertices ||
+                world.entities().size() + parts.size() + 1 > ProjectIO::maxObjects) {
+                throw std::runtime_error("Model placement exceeds scene/model limits");
+            }
+            editor.finish(world);
+            const auto root = world.create();
+            world.add(root, ObjectName{std::filesystem::path(path).stem().string()});
+            world.add(root, Transform{camera.target});
+            if (document.contains("animations") && !document.at("animations").empty()) {
+                const auto firstPart = document.at("parts").at(0).at("mesh").get<std::string>();
+                Animation animation;
+                animation.clip =
+                    (std::filesystem::path(firstPart).parent_path() / "Animation_0.leanim")
+                        .generic_string();
+                world.add(root, animation);
+            }
+            if (prefabLevel) {
+                setParent(world, root, Prefabs::root(world));
+            }
+            for (const auto& part : parts) {
+                const auto child = world.create();
+                world.add(child, ObjectName{part.name});
+                world.add(child, Transform{camera.target});
+                setParent(world, child, root);
+                MeshRenderer mesh{cubeMesh};
+                mesh.model = part.mesh;
+                mesh.material = part.material;
+                world.add(child, mesh);
+            }
+            selectedEntity = root;
+            browser.selected.clear();
+        } catch (const std::exception& e) {
+            browser.assets.error = e.what();
+        }
+    };
+    auto spawnPrefabAsset = [&](const std::string& path) {
+        try {
+            history.commit(world, selectedEntity);
+            const auto parent = prefabLevel ? Prefabs::root(world) : Entity{};
+            selectedEntity = Prefabs::spawn(browser.assets, path, world, projectMeshes, {}, {});
+            if (parent != Entity{}) {
+                setParent(world, selectedEntity, parent);
+            }
+            history.commit(world, selectedEntity);
+        } catch (const std::exception& e) {
+            browser.assets.error = e.what();
+        }
+    };
+    auto enterPrefab = [&](const std::string& path) {
+        if (playMode.active() || prefabLevel || levels.busy()) {
+            return;
+        }
+        try {
+            auto loaded = Prefabs::load(browser.assets, path, projectMeshes);
+            editor.finish(world);
+            scripts.shutdown();
+            prefabLevel = world.snapshot();
+            prefabLevelSelection = selectedEntity;
+            prefabLevelCamera = camera;
+            prefabHistory.emplace(std::move(history));
+            levels.suspended = true;
+            world.restore(*loaded);
+            selectedEntity = Prefabs::root(world);
+            history = EditorHistory(world, selectedEntity);
+            editingPrefab = path;
+            physics.reset();
+            scripts.resetRuntime();
+            camera.focus(world.get<Transform>(selectedEntity).position, 3);
+            shell.shell()->focusScene();
+        } catch (const std::exception& e) {
+            browser.assets.error = e.what();
+        }
+    };
+    auto savePrefab = [&]() {
+        if (!prefabLevel) {
+            return;
+        }
+        try {
+            auto root = Prefabs::root(world);
+            Prefabs::save(browser.assets, editingPrefab, world, root, projectMeshes);
+            Prefabs::refresh(browser.assets, editingPrefab, *prefabLevel, projectMeshes);
+            Prefabs::refreshSavedLevels(browser.assets, editingPrefab, projectMeshes);
+            scripts.console().message("Saved prefab and refreshed level instances");
+        } catch (const std::exception& e) {
+            browser.assets.error = e.what();
+        }
+    };
+    auto exitPrefab = [&]() {
+        if (!prefabLevel) {
+            return;
+        }
+        editor.finish(world);
+        scripts.shutdown();
+        world.restore(*prefabLevel);
+        scripts.resetRuntime();
+        prefabLevel.reset();
+        selectedEntity = prefabLevelSelection;
+        camera = prefabLevelCamera;
+        history = std::move(*prefabHistory);
+        prefabHistory.reset();
+        history.commit(world, selectedEntity);
+        editingPrefab.clear();
+        levels.suspended = false;
+        physics.reset();
+        shell.shell()->clearPrefabMode();
+    };
+
     while (running) {
+
         const Uint64 frameStarted = SDL_GetTicksNS();
         const float seconds = std::clamp(static_cast<float>(frameStarted - lastTicks) * 1e-9f,
                                          1.0f / 1000.0f,
@@ -337,18 +834,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
         profiler.begin(showProfiler);
-        int windowWidth = 1, windowHeight = 1, framebufferWidth = 1, framebufferHeight = 1;
+        int windowWidth = 1, windowHeight = 1;
         SDL_GetWindowSize(window, &windowWidth, &windowHeight);
-        SDL_GetWindowSizeInPixels(window, &framebufferWidth, &framebufferHeight);
-        ui::setDisplaySize(static_cast<float>(windowWidth),
-                           static_cast<float>(windowHeight),
-                           static_cast<float>(framebufferWidth) / std::max(1, windowWidth),
-                           static_cast<float>(framebufferHeight) / std::max(1, windowHeight));
-        ui::setDeltaTime(seconds);
-        EditorLayout layout = EditorLayout::calculate(static_cast<float>(windowWidth),
-                                                      static_cast<float>(windowHeight),
-                                                      std::max(20.0f, ui::frameHeight()));
-        layout.scene = sceneRect;
         scripts.console().setAssetRoot(browser.assets.root);
         inputSettings.load(browser.assets, input);
         renderingSettings.load(browser.assets);
@@ -402,8 +889,507 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             LuaConsole::postEvent("onLevelFailedToLoad",
                                   {failure->name, failure->error.substr(0, 4096)});
         }
+        // ---- Qt <-> engine boundary -------------------------------------
+        // Take what the widgets recorded, report the viewport, then run every
+        // requested action through the sink above.
         const bool externalFocus =
             gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS);
+        // Viewport visibility: the dock is shown and the picture has a size.
+        sceneVisible = !view.sceneSurface.isEmpty();
+        view.sceneSurface = shell.shell()->scenePixelSize();
+        view.gameSurface = shell.shell()->gamePixelSize();
+        view.scenePointer = shell.shell()->scenePointer();
+        view.gamePointer = shell.shell()->gamePointer();
+        view.sceneFocused = shell.shell()->scenePanelFocused();
+        sceneFocused = view.sceneFocused;
+        sceneHovered = view.scenePointer.hovered;
+        gameHovered = view.gamePointer.hovered;
+        gameFocused = gameWindow ? externalFocus : gameHovered;
+        gameRect = {0, 0, float(std::max(1, view.gameSurface.width())),
+                    float(std::max(1, view.gameSurface.height()))};
+        gameU = view.gamePointer.u;
+        gameV = view.gamePointer.v;
+        const bool editAllowed = editGuard();
+        const bool objectSelected = world.alive(selectedEntity);
+        shell.shell()->setObjectActionsEnabled(objectSelected);
+        const bool projectEnabled = !browser.importing() && !prefabLevel && !levels.busy() &&
+                                    !playMode.active() && !editor.dragging() &&
+                                    !projectDialog.pending() && !browser.dialog.pending();
+
+        // Fill in the state snapshot for the shell before its events are used.
+        uiState.playActive = playMode.active();
+        uiState.playing = playMode.playing();
+        uiState.paused = playMode.state() == PlayMode::State::Paused;
+        uiState.editAllowed = editAllowed && !playMode.active();
+        uiState.separateGame = separateGame;
+        uiState.gameWindowActive = gameWindow != nullptr;
+        // Debug overlays are drawn by the engine, so the shell's toggles are
+        // read back here rather than pushed from it on every change.
+        showFPS = shell.shell()->fpsOverlayVisible();
+        showGameColliders = shell.shell()->collidersVisible();
+        showProfiler = shell.shell()->profilerVisible();
+        uiState.showFps = showFPS;
+        uiState.showColliders = showGameColliders;
+        uiState.showProfiler = showProfiler;
+        uiState.levelsEnabled = !playMode.active() && !levels.busy() && !projectDialog.pending();
+        uiState.prefabMode = prefabLevel != nullptr;
+        uiState.prefabPath = editingPrefab;
+        uiState.terrainSelected = world.alive(selectedEntity) && world.has<Terrain>(selectedEntity);
+        uiState.selection = selectedEntity;
+        uiState.fps = 1000.0f / std::max(1.0f, float(profiler.stats(int(ProfilePart::Present)).average));
+        uiState.dt = seconds;
+        uiState.frameMs = profiler.stats(int(ProfilePart::Present)).average;
+        uiState.levelName = prefabLevel ? "Prefab: " + editingPrefab
+                             : !levels.current().empty() ? levels.current()
+                             : currentProject.empty()
+                                 ? "Untitled"
+                                 : std::filesystem::path(currentProject).stem().string();
+        uiState.projectName = currentProject.empty() ? std::string{} : currentProject;
+        uiState.currentLevel = levels.current();
+        uiState.prefabPath = editingPrefab;
+        uiState.levelNames = std::vector<std::string>(levels.names().begin(), levels.names().end());
+        uiState.recentProjects = recentProjects.paths();
+        uiState.profiler = &profiler;
+        uiState.status = projectError.empty() ? std::string("Ready") : projectError;
+        uiState.detail = levels.current().empty() ? std::string{} : "Level " + levels.current();
+        shell.beginFrame(view, uiState);
+
+        // The engine renders at the size of the Qt picture, so the result maps
+        // one-to-one onto the widget and picking uses the same geometry.
+        sceneSurface.resize(view.sceneSurface.width(), view.sceneSurface.height());
+        cameraPreviewSurface.resize(320, 180);
+        if (!gameVisible) {
+            gameSurface.resize(view.gameSurface.width(), view.gameSurface.height());
+        }
+
+        const auto& pointer = view.scenePointer;
+        const int surfaceWidth = std::max(1, view.sceneSurface.width());
+        const int surfaceHeight = std::max(1, view.sceneSurface.height());
+        const float sceneAspect = float(surfaceWidth) / surfaceHeight;
+        sceneRect = {0, 0, float(view.sceneSurface.width()), float(view.sceneSurface.height())};
+
+        // Camera navigation shortcuts the old Scene window handled with keys.
+        if (editAllowed && view.sceneFocused && !cameraLooking && pointer.hovered &&
+            !cameraModifiersHeld(SDL_GetModState())) {
+            const bool* keys = SDL_GetKeyboardState(nullptr);
+            if (keys[SDL_SCANCODE_W]) {
+                editor.setTool(TransformTool::Move);
+            }
+            if (keys[SDL_SCANCODE_E]) {
+                editor.setTool(TransformTool::Rotate);
+            }
+            if (keys[SDL_SCANCODE_R]) {
+                editor.setTool(TransformTool::Scale);
+            }
+        }
+
+        // Scene picking: a click that did not move is a selection, exactly as
+        // before; the ray now comes from the Qt picture coordinates.
+        if (pointer.pressed && pointer.button == int(Qt::LeftButton) &&
+            !cameraModifiersHeld(SDL_GetModState()) && !terrainEditor.active(world, selectedEntity)) {
+            clicking = true;
+            pressU = pointer.u;
+            pressV = pointer.v;
+        }
+        if (clicking && pointer.hovered &&
+            std::hypot(pointer.u - pressU, pointer.v - pressV) >
+                kClickRadius / float(std::max(1, view.sceneSurface.width()))) {
+            clicking = false; // too far for a click: a drag from here on
+        }
+        if (pointer.pressed && pointer.button == int(Qt::RightButton) && pointer.hovered &&
+            editAllowed && !cameraModifiersHeld(SDL_GetModState())) {
+            cameraLooking = input.lockSceneCursor();
+            clicking = false;
+        }
+        if (pointer.pressed && pointer.button == int(Qt::MiddleButton)) {
+            clicking = false;
+        }
+        if (pointer.released && clicking) {
+            clicking = false;
+            // Scene clicks only select; object creation belongs to Create menus.
+            const Ray ray = sceneRay(camera, pointer.u, pointer.v, sceneAspect);
+            RayHit hit;
+            const bool found = physics.raycast(ray, kClickReach, hit);
+            selectedEntity = found ? hit.entity : Entity{};
+            float closest = found ? hit.distance : kClickReach;
+            world.each<Camera, Transform>([&](Entity e, Camera&, Transform& t) {
+                const auto offset = ray.origin - t.position;
+                const float radius =
+                    1.1f * std::max({std::abs(t.scale.x), std::abs(t.scale.y), std::abs(t.scale.z)});
+                const float b = dot(offset, ray.direction),
+                            disc = b * b - dot(offset, offset) + radius * radius;
+                if (disc >= 0) {
+                    float distance = -b - std::sqrt(disc);
+                    if (distance < 0) {
+                        distance = -b + std::sqrt(disc);
+                    }
+                    if (distance >= 0 && distance < closest) {
+                        closest = distance;
+                        selectedEntity = e;
+                    }
+                }
+            });
+            browser.selected.clear();
+        }
+        // Alt+left drag orbits around the selection; the Qt view keeps its own
+        // camera motion, but the engine must not treat the drag as a click.
+        if (pointer.down && pointer.alt && !editor.dragging() && pointer.hovered) {
+            clicking = false;
+        }
+        if (pointer.wheel != 0.0f && !cameraModifiersHeld(SDL_GetModState()) &&
+            pointer.hovered) {
+            camera.zoom(pointer.wheel * browser.settings.scrollZoomSpeed);
+        }
+
+        // Terrain sculpting: the Qt ray and a held button drive the brush, the
+        // editor owns the undo gesture and the collision refresh.
+        {
+            const bool brushHover = editAllowed && sceneHovered && !cameraLooking &&
+                                    !(SDL_GetModState() & SDL_KMOD_ALT);
+            const bool brushDown = brushHover && pointer.down;
+            Ray terrainRay;
+            const bool rayValid = brushHover;
+            if (rayValid) {
+                terrainRay = sceneRay(camera, pointer.u, pointer.v, sceneAspect);
+            }
+            if (brushHover && terrainEditor.active(world, selectedEntity)) {
+                // The overlay is painted by the Qt Scene view from brushRing().
+                (void)terrainEditor.brushRing(world,
+                                              selectedEntity,
+                                              rayValid ? &terrainRay : nullptr,
+                                              camera.viewProjection(sceneAspect),
+                                              sceneRect);
+            }
+            terrainEditor.stroke(world,
+                                 selectedEntity,
+                                 history,
+                                 rayValid ? &terrainRay : nullptr,
+                                 brushDown,
+                                 seconds);
+        }
+
+        // Focus / delete shortcuts the Qt panels do not own.
+        if (editAllowed && (shell.shell()->scenePanelFocused() || shell.shell()->hierarchyPanelFocused()) &&
+            !cameraLooking && !cameraModifiersHeld(SDL_GetModState())) {
+            const bool* keys = SDL_GetKeyboardState(nullptr);
+            if (keys[SDL_SCANCODE_F]) {
+                focusSelection();
+            }
+            if (keys[SDL_SCANCODE_DELETE]) {
+                deleteSelection();
+            }
+            if (keys[SDL_SCANCODE_P] && (SDL_GetModState() & SDL_KMOD_CTRL)) {
+                toggleParent();
+            }
+        }
+        {
+            Entity parent{};
+            if (shell.shell()->takeParentRequest(parent) && world.alive(selectedEntity) &&
+                parent != Entity{} && canParent(world, selectedEntity, parent)) {
+                editor.finish(world);
+                clicking = false;
+                history.commit(world, selectedEntity);
+                setParent(world, selectedEntity, parent);
+                history.commit(world, selectedEntity);
+            }
+        }
+
+        // Now hand the widget actions to the engine.
+        actionSink.createObject = createObject;
+        actionSink.undo = undoEdit;
+        actionSink.redo = redoEdit;
+        actionSink.duplicate = duplicateSelection;
+        actionSink.copy = copySelection;
+        actionSink.paste = pasteSelection;
+        actionSink.parentToggle = toggleParent;
+        actionSink.play = startPlay;
+        actionSink.pause = pausePlay;
+        actionSink.stop = stopPlay;
+        actionSink.separateGameWindow = [&]() {
+            if (!playMode.active()) {
+                separateGame = !separateGame;
+                if (!separateGame && gameWindow) {
+                    input.releaseMouse();
+                    input.window = window;
+                    SDL_DestroyWindow(gameWindow);
+                    gameWindow = nullptr;
+                }
+            }
+        };
+        actionSink.toggleGameFullscreen = [&]() { toggleGameFullscreen(); };
+        actionSink.openProject = [&]() {
+            projectDirty = currentProject.empty() || scripts.hasUnsavedChanges() ||
+                           animationWindow.hasUnsavedChanges() ||
+                           projectContentState(world, embeddedLegacySource, camera) !=
+                               savedProjectState;
+            if (projectDirty) {
+                confirmOpen = true;
+                pendingRecent.clear();
+            } else {
+                projectDialog.show(window, false, currentProject);
+            }
+        };
+        actionSink.saveProject = [&]() {
+            if (!projectEnabled) {
+                return;
+            }
+            if (!currentProject.empty()) {
+                saveTo(currentProject);
+            } else {
+                projectDialog.show(window, true, currentProject);
+            }
+        };
+        actionSink.saveProjectAs = [&]() {
+            if (projectEnabled) {
+                projectDialog.show(window, true, currentProject);
+            }
+        };
+        actionSink.openRecent = [&](const std::string& path) {
+            projectDirty = currentProject.empty() || scripts.hasUnsavedChanges() ||
+                           animationWindow.hasUnsavedChanges() ||
+                           projectContentState(world, embeddedLegacySource, camera) !=
+                               savedProjectState;
+            if (projectDirty) {
+                confirmOpen = true;
+                pendingRecent = path;
+            } else {
+                projectDialog.openRecent(path);
+            }
+        };
+        actionSink.saveLevel = [&]() {
+            if (projectEnabled) {
+                saveCurrentLevel();
+            }
+        };
+        actionSink.newLevel = [&]() {
+            if (!projectEnabled) {
+                return;
+            }
+            // The name comes from Qt, so the engine only needs the operation.
+            if (auto* shellWindow = shell.shell()) {
+                const QString name = shellWindow->askText(
+                    QStringLiteral("New Level"), QStringLiteral("Level name"), QStringLiteral("New Level"));
+                if (name.isEmpty()) {
+                    return;
+                }
+                try {
+                    scripts.saveFile(browser.assets);
+                    levels.saveCurrent(world, embeddedLegacySource, camera);
+                    levels.create(name.toStdString());
+                    levels.load(name.toStdString());
+                } catch (const std::exception& e) {
+                    levels.error = e.what();
+                }
+            }
+        };
+        actionSink.renameLevel = [&]() {
+            if (!projectEnabled || !shell.shell()) {
+                return;
+            }
+            const QString current = QString::fromStdString(levels.current());
+            const QString name = shell.shell()->askText(QStringLiteral("Rename Level"),
+                                                        QStringLiteral("Level name"),
+                                                        current.isEmpty()
+                                                            ? QStringLiteral("Main")
+                                                            : current);
+            if (name.isEmpty() || name == current) {
+                return;
+            }
+            try {
+                scripts.saveFile(browser.assets);
+                levels.saveCurrent(world, embeddedLegacySource, camera);
+                levels.renameCurrent(name.toStdString());
+            } catch (const std::exception& e) {
+                levels.error = e.what();
+            }
+        };
+        actionSink.openLevel = [&](const std::string& name) {
+            try {
+                scripts.saveFile(browser.assets);
+                levels.saveCurrent(world, embeddedLegacySource, camera);
+                levels.load(name);
+            } catch (const std::exception& e) {
+                levels.error = e.what();
+            }
+        };
+        actionSink.exit = [&]() { exitRequested = true; };
+        actionSink.theme = [&](int theme) {
+            browser.settings.theme = theme;
+            browser.settings.save();
+            shell.shell()->applyTheme(theme);
+        };
+        actionSink.backup = [&]() {
+            try {
+                if (saveTo(currentProject)) {
+                    backupStatus = "Backup created: " + backupProject(currentProject).u8string();
+                }
+            } catch (const std::exception& e) {
+                projectError = e.what();
+            }
+        };
+        actionSink.fixProject = [&]() {
+            if (projectEnabled && !currentProject.empty()) {
+                try {
+                    if (!std::filesystem::exists(currentProject + ".before-fix.bak")) {
+                        std::filesystem::copy_file(currentProject,
+                                                   currentProject + ".before-fix.bak");
+                    }
+                    fixProjectAssets(browser.assets, projectMeshes);
+                    saveTo(currentProject);
+                } catch (const std::exception& e) {
+                    projectError = e.what();
+                }
+            }
+        };
+        actionSink.openInVSCode = [&]() {
+            const auto folder = currentProject.empty()
+                                    ? browser.assets.root
+                                    : std::filesystem::absolute(currentProject).parent_path();
+            if (!browser.settings.openExternal(folder)) {
+                projectError = browser.settings.error;
+            }
+        };
+        actionSink.openSettingsFolder = [&]() {
+            auto folder = browser.settings.file().parent_path();
+            if (!browser.settings.openExternal(folder)) {
+                projectError = browser.settings.error;
+            }
+        };
+        actionSink.importFiles = [&]() {
+            if (!playMode.active() && !projectDialog.pending() && !levels.busy()) {
+                projectDialog.showImport(window);
+            }
+        };
+        actionSink.saveAnimation = [&]() {
+            if (!animationWindow.saveIfDirty(browser.assets)) {
+                projectError = animationWindow.error();
+            }
+        };
+        actionSink.bakeLighting = [&]() {
+            lightmappingWindow.bake(world,
+                                    browser.assets,
+                                    projectMeshes,
+                                    levels.current());
+        };
+        actionSink.prefabSave = savePrefab;
+        actionSink.prefabExit = exitPrefab;
+        actionSink.spawnModel = spawnModelAsset;
+        actionSink.spawnPrefab = spawnPrefabAsset;
+        actionSink.editPrefab = enterPrefab;
+        actionSink.editCubemap = [&](const std::string& path) { editingCubemap = path; };
+        actionSink.editAnimation = [&](const std::string& path) {
+            animationWindow.open(browser.assets, path);
+        };
+        actionSink.previewModel = [&](const std::string& path) {
+            modelPreviewWindow.open(browser.assets, path, renderer);
+        };
+        actionSink.openScript = [&](const std::string& path) {
+            browser.openedScript = path;
+            scripts.setAssetContext(path, selectedEntity);
+        };
+        shell.handleActions(actionSink);
+        if (shell.shell()->takeExitConfirmed()) {
+            running = false;
+        }
+#include <QMessageBox>
+        // Unsaved-changes confirmation. The old modal popup is a Qt question
+        // box now; the answer drives exactly the same three outcomes.
+        if (confirmOpen || confirmExit) {
+            const bool closing = confirmExit;
+            const QString question =
+                closing ? QStringLiteral("Save your work before closing LegacyEngine?")
+                        : QStringLiteral(
+                              "Save your work before opening another project? Discarded "
+                              "changes cannot be recovered.");
+            QMessageBox box(shell.shell());
+            box.setWindowTitle(QStringLiteral("Unsaved project changes"));
+            box.setIcon(QMessageBox::Warning);
+            box.setText(QStringLiteral("You have unsaved changes"));
+            box.setInformativeText(question);
+            QPushButton* save =
+                box.addButton(QStringLiteral("Save and continue"), QMessageBox::AcceptRole);
+            QAbstractButton* discard =
+                box.addButton(QStringLiteral("Discard"), QMessageBox::DestructiveRole);
+            QAbstractButton* cancel = box.addButton(QMessageBox::Cancel);
+            box.setDefaultButton(save);
+            box.exec();
+            auto proceed = [&]() {
+                if (closing) {
+                    running = false;
+                } else if (!pendingRecent.empty()) {
+                    projectDialog.openRecent(pendingRecent);
+                } else {
+                    projectDialog.show(window, false, currentProject);
+                }
+                confirmOpen = confirmExit = false;
+                pendingRecent.clear();
+            };
+            if (box.clickedButton() == save) {
+                if (!currentProject.empty()) {
+                    if (saveTo(currentProject)) {
+                        proceed();
+                    }
+                } else {
+                    continueAfterSave = closing ? 2 : 1;
+                    confirmOpen = confirmExit = false;
+                    projectDialog.show(window, true, currentProject);
+                }
+            } else if (box.clickedButton() == discard) {
+                proceed();
+            } else if (box.clickedButton() == cancel) {
+                confirmOpen = confirmExit = false;
+                pendingRecent.clear();
+            }
+        }
+        if (auto result = projectDialog.poll()) {
+            if (result->path.empty() || !result->error.empty()) {
+                exitAfterSave = false;
+                continueAfterSave = 0;
+                pendingRecent.clear();
+            }
+            if (!result->error.empty()) {
+                projectError = result->error;
+            } else if (!result->path.empty()) {
+                if (result->saving) {
+                    auto path = std::filesystem::path(result->path);
+                    if (!path.has_extension()) {
+                        path += ".legacy";
+                    }
+                    if (saveTo(path.string()) && continueAfterSave) {
+                        if (continueAfterSave == 2) {
+                            running = false;
+                        } else if (!pendingRecent.empty()) {
+                            projectDialog.openRecent(pendingRecent);
+                        } else {
+                            projectDialog.show(window, false, currentProject);
+                        }
+                        continueAfterSave = 0;
+                        pendingRecent.clear();
+                    } else if (continueAfterSave) {
+                        confirmExit = continueAfterSave == 2;
+                        confirmOpen = !confirmExit;
+                        continueAfterSave = 0;
+                    }
+                } else {
+                    loadProject(result->path);
+                }
+            }
+        }
+        if (!projectError.empty()) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Project: %s", projectError.c_str());
+            shell.showError("Project error", projectError);
+            projectError.clear();
+        }
+        // Model and cubemap dialogs the engine opened this frame follow the
+        // assets they belong to; a saved cubemap carries the new face paths
+        // back into the material that uses it.
+        if (shell.shell() && shell.shell()->cubemapSaved()) {
+            const QString path = shell.shell()->takeCubemapSaved();
+            if (!path.isEmpty()) {
+                shell.consoleMessage(
+                    QStringLiteral("Saved cubemap %1").arg(QFileInfo(path).fileName()).toStdString());
+            }
+        }
         input.window = externalFocus ? gameWindow : window;
         if (input.lockedWindow && input.lockedWindow != input.window) {
             input.releaseMouse();
@@ -414,8 +1400,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         input.enabled = ((SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) || externalFocus) &&
                         playMode.playing() && !cameraLooking &&
                         (gameFocused || externalFocus || input.mouseLocked) &&
-                        (!ui::io().WantTextInput || input.mouseLocked) &&
-                        !inputSettings.visible;
+                        (input.mouseLocked || !shell.shell()->gamePointerLocked()) && !inputSettings.visible;
         input.mouseEnabled = externalFocus || gameHovered || sceneHovered || input.mouseLocked;
         input.beginFrame();
         SDL_Event event;
@@ -476,32 +1461,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 SDL_SetWindowMouseGrab(window, false);
                 SDL_SetWindowMouseRect(window, nullptr);
             }
-            ui::processSdlEvent(event);
             input.event(event);
-            const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                                    event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
-                                    event.type == SDL_EVENT_MOUSE_MOTION ||
-                                    event.type == SDL_EVENT_MOUSE_WHEEL;
-            float pointerX = 0, pointerY = 0;
-            SDL_GetMouseState(&pointerX, &pointerY);
-            if (mouseEvent && !cameraLooking &&
-                (orientationInteracting ||
-                 (sceneHovered && layout.scene.width >= 100 && layout.scene.height >= 100 &&
-                  orientationRect(layout.scene).contains(pointerX, pointerY)))) {
-                clicking = false;
-                continue;
-            }
-            if (mouseEvent &&
-                (projectDialog.pending() || browser.dialog.pending() ||
-                 (ui::io().WantCaptureMouse && !sceneHovered && !cameraLooking) ||
-                 (editor.capturesMouse() && !cameraLooking &&
-                  !(SDL_GetModState() & SDL_KMOD_ALT)))) {
-                clicking = false;
-                continue;
-            }
-            if (event.type == SDL_EVENT_KEY_DOWN && ui::io().WantCaptureKeyboard) {
-                continue;
-            }
             switch (event.type) {
             case SDL_EVENT_DROP_FILE:
                 if (!playMode.active() && !projectDialog.pending() && !levels.busy() &&
@@ -522,94 +1482,23 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 break;
             case SDL_EVENT_KEY_DOWN:
                 break; // Escape is reserved for UI cancellation, never application exit.
-            case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                if (event.button.button == SDL_BUTTON_RIGHT && sceneHovered &&
-                    layout.scene.contains(event.button.x, event.button.y) &&
-                    !ui::io().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
-                    cameraLooking = input.lockSceneCursor();
-                    clicking = false;
-                }
-                if (event.button.button == SDL_BUTTON_LEFT) {
-                    clicking = !(SDL_GetModState() & SDL_KMOD_ALT) &&
-                               !terrainEditor.active(world, selectedEntity);
-                    pressX = event.button.x;
-                    pressY = event.button.y;
-                }
-                break;
             case SDL_EVENT_MOUSE_MOTION:
-                if (clicking &&
-                    std::hypot(event.motion.x - pressX, event.motion.y - pressY) > kClickRadius) {
-                    clicking = false; // too far for a click: a drag from here on
-                }
-                // Right-drag looks around from the camera's position. Left-drag
-                // cancels a click but never moves the camera or selects.
-                if (sceneHovered && !editor.dragging() &&
-                    (event.motion.state & SDL_BUTTON_LMASK) && (SDL_GetModState() & SDL_KMOD_ALT) &&
-                    !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) {
-                    clicking = false;
-                    if (const auto* t = world.tryGet<Transform>(selectedEntity)) {
-                        camera.orbit(t->position, event.motion.xrel, event.motion.yrel);
-                    } else if (lastOrbitPivot) {
-                        camera.orbit(*lastOrbitPivot, event.motion.xrel, event.motion.yrel);
-                    }
-                }
+                // Camera look while the pointer is grabbed: the Qt widget cannot
+                // see these deltas because SDL owns the relative mouse mode.
                 if (event.motion.state & SDL_BUTTON_RMASK) {
-                    clicking = false;
                     if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) {
                         const auto motion = input.lockedMotion(event.motion);
                         camera.look(motion.first, motion.second);
                     }
                 }
                 break;
-            case SDL_EVENT_MOUSE_BUTTON_UP:
-                if (event.button.button == SDL_BUTTON_LEFT && clicking) {
-                    clicking = false;
-
-                    // Scene clicks only select; object creation belongs to Create menus.
-                    Ray ray;
-                    if (mouseRay(
-                            window, camera, event.button.x, event.button.y, ray, layout.scene)) {
-                        {
-                            RayHit hit;
-                            const bool found = physics.raycast(ray, kClickReach, hit);
-                            selectedEntity = found ? hit.entity : Entity{};
-                            float closest = found ? hit.distance : kClickReach;
-                            world.each<Camera, Transform>([&](Entity e, Camera&, Transform& t) {
-                                const auto offset = ray.origin - t.position;
-                                const float radius = 1.1f * std::max({std::abs(t.scale.x),
-                                                                      std::abs(t.scale.y),
-                                                                      std::abs(t.scale.z)});
-                                const float b = dot(offset, ray.direction),
-                                            disc = b * b - dot(offset, offset) + radius * radius;
-                                if (disc >= 0) {
-                                    float distance = -b - std::sqrt(disc);
-                                    if (distance < 0) {
-                                        distance = -b + std::sqrt(disc);
-                                    }
-                                    if (distance >= 0 && distance < closest) {
-                                        closest = distance;
-                                        selectedEntity = e;
-                                    }
-                                }
-                            });
-                            break;
-                        }
-                    }
-                }
-                break;
             case SDL_EVENT_MOUSE_WHEEL: {
-                if ((sceneHovered || cameraLooking) &&
-                    !cameraModifiersHeld(SDL_GetModState()) && !ui::io().WantTextInput) {
-                    if (cameraLooking) {
-                        if (SDL_GetModState() & SDL_KMOD_SHIFT) {
-                            cameraBoost = adjustSceneCameraBoost(cameraBoost, event.wheel.y);
-                        } else {
-                            cameraSpeed = std::clamp(
-                                cameraSpeed * std::pow(1.2f, event.wheel.y), .1f, 500.0f);
-                        }
+                if (cameraLooking) {
+                    if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                        cameraBoost = adjustSceneCameraBoost(cameraBoost, event.wheel.y);
                     } else {
-                        camera.zoom(event.wheel.y * browser.settings.scrollZoomSpeed);
-                        camera.pan(-event.wheel.x);
+                        cameraSpeed = std::clamp(
+                            cameraSpeed * std::pow(1.2f, event.wheel.y), .1f, 500.0f);
                     }
                 }
                 break;
@@ -619,1494 +1508,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
 
-        ui::newFrame();
-        static RecentProjects recentProjects;
-        static bool confirmOpen = false, confirmExit = false;
-        static std::string pendingRecent;
-        static int continueAfterSave = 0;
-        std::string selectedRecent;
-        bool openProject = false, saveProject = false, saveAsProject = false;
-        const bool projectEnabled = !browser.importing() && !prefabLevel && !levels.busy() &&
-                                    !playMode.active() && !editor.dragging() &&
-                                    !projectDialog.pending() && !browser.dialog.pending();
-        profiler.checkpoint(ProfilePart::Events);
-        if (ui::beginMainMenuBar()) {
-            if (ui::beginMenu("File")) {
-                openProject = ui::menuItem("Open Project...", "Ctrl+O", false, projectEnabled);
-                if (ui::beginMenu("Open Recent", projectEnabled)) {
-                    if (recentProjects.paths().empty()) {
-                        ui::textDisabled("No recent projects");
-                    }
-                    for (const auto& path : recentProjects.paths()) {
-                        if (ui::menuItem(path.c_str())) {
-                            selectedRecent = path;
-                            openProject = true;
-                        }
-                    }
-                    ui::endMenu();
-                }
-                saveProject = ui::menuItem("Save Project", "Ctrl+S", false, projectEnabled);
-                saveAsProject =
-                    ui::menuItem("Save Project As...", "Ctrl+Shift+S", false, projectEnabled);
-                ui::separator();
-                if (ui::menuItem("New Level...", nullptr, false, projectEnabled)) {
-                    newLevelPopup = true;
-                }
-                if (ui::menuItem("Save Level", nullptr, false, projectEnabled)) {
-                    try {
-                        if (!animationWindow.saveIfDirty(browser.assets)) {
-                            throw std::runtime_error(animationWindow.error());
-                        }
-                        scripts.saveFile(browser.assets);
-                        levels.saveCurrent(world, embeddedLegacySource, camera);
-                    } catch (const std::exception& e) {
-                        levels.error = e.what();
-                    }
-                }
-                ui::separator();
-                if (ui::menuItem("Quit")) {
-                    SDL_Log("Shutdown requested: File > Quit");
-                    exitRequested = true;
-                }
-                ui::endMenu();
-            }
-            ui::endMainMenuBar();
-        }
-        if (projectEnabled && !ui::io().WantTextInput && !ui::isAnyItemActive()) {
-            openProject |= ui::shortcut(ui::Mod_Ctrl | ui::Key_O, ui::InputFlags_RouteGlobal);
-            saveProject |= ui::shortcut(ui::Mod_Ctrl | ui::Key_S, ui::InputFlags_RouteGlobal);
-            saveAsProject |= ui::shortcut(ui::Mod_Ctrl | ui::Mod_Shift | ui::Key_S,
-                                             ui::InputFlags_RouteGlobal);
-        }
-        auto saveTo = [&](const std::string& path) {
-            bool saved = false;
-            if (playMode.active()) {
-                projectError = "Stop Play before saving; runtime edits are temporary.";
-                return saved;
-            }
-            auto assetRoot = projectAssetsPath(path);
-            try {
-                if (browser.importing()) {
-                    throw std::runtime_error("Wait for the asset import to finish before saving");
-                }
-                if (!animationWindow.saveIfDirty(browser.assets)) {
-                    throw std::runtime_error(animationWindow.error());
-                }
-                scripts.saveFile(browser.assets);
-                levels.saveCurrent(world, embeddedLegacySource, camera);
-                browser.assets.copyTo(assetRoot);
-                AssetManager destination;
-                destination.root = assetRoot;
-                Terrains::saveAll(world, destination);
-                renderingSettings.save(destination);
-                inputSettings.save(destination, input);
-                if (!inputSettings.error.empty()) {
-                    throw std::runtime_error(inputSettings.error);
-                }
-            } catch (const std::exception& e) {
-                projectError = e.what();
-                exitAfterSave = false;
-                return false;
-            }
-            if (ProjectIO::save(
-                    path, world, embeddedLegacySource, camera, projectMeshes, projectError)) {
-                if (std::filesystem::weakly_canonical(browser.assets.root) !=
-                    std::filesystem::weakly_canonical(assetRoot)) {
-                    history = EditorHistory(
-                        world,
-                        selectedEntity); // Old Trash receipts belong to the previous project root.
-                }
-                browser.assets.root = assetRoot;
-                currentProject = path;
-                recentProjects.remember(path);
-                savedProjectState = projectContentState(world, embeddedLegacySource, camera);
-                projectDirty = false;
-                saved = true;
-                lastAutosave = std::chrono::steady_clock::now();
-                if (exitAfterSave) {
-                    running = false;
-                }
-            }
-            exitAfterSave = false;
-            return saved;
-        };
-        if (projectEnabled) {
-            if (saveProject && !currentProject.empty()) {
-                saveTo(currentProject);
-            } else if (openProject || saveProject || saveAsProject) {
-                if (openProject) {
-                    projectDirty = currentProject.empty() || scripts.hasUnsavedChanges() ||
-                                   animationWindow.hasUnsavedChanges() ||
-                                   projectContentState(world, embeddedLegacySource, camera) !=
-                                       savedProjectState;
-                }
-                if (openProject && projectDirty) {
-                    pendingRecent = selectedRecent;
-                    confirmOpen = true;
-                } else if (openProject && !selectedRecent.empty()) {
-                    projectDialog.openRecent(selectedRecent);
-                } else {
-                    projectDialog.show(window, !openProject, currentProject);
-                }
-            }
-        }
-        if (confirmOpen || confirmExit) {
-            ui::openPopup("Unsaved project changes");
-        }
-        ui::setNextWindowSize(ui::Vec2(480, 0), ui::Cond_Appearing);
-        if (ui::beginPopupModal(
-                "Unsaved project changes", nullptr, ui::WindowFlags_AlwaysAutoResize)) {
-            ui::textUnformatted("You have unsaved changes");
-            ui::separator();
-            ui::textWrapped(
-                confirmExit
-                    ? "Save your work before closing LegacyEngine?"
-                    : "Save your work before opening another project? Discarded changes cannot be recovered.");
-            auto proceed = [&]() {
-                if (confirmExit) {
-                    running = false;
-                } else if (!pendingRecent.empty()) {
-                    projectDialog.openRecent(pendingRecent);
-                } else {
-                    projectDialog.show(window, false, currentProject);
-                }
-                confirmOpen = confirmExit = false;
-                pendingRecent.clear();
-                ui::closeCurrentPopup();
-            };
-            if (ui::button("Save and continue", ui::Vec2(160, 0))) {
-                if (!currentProject.empty()) {
-                    if (saveTo(currentProject)) {
-                        proceed();
-                    }
-                } else {
-                    continueAfterSave = confirmExit ? 2 : 1;
-                    confirmOpen = confirmExit = false;
-                    ui::closeCurrentPopup();
-                    projectDialog.show(window, true, currentProject);
-                }
-            }
-            ui::sameLine();
-            if (ui::button("Discard", ui::Vec2(120, 0))) {
-                proceed();
-            }
-            ui::sameLine();
-            if (ui::button("Cancel", ui::Vec2(120, 0)) || ui::isKeyPressed(ui::Key_Escape)) {
-                confirmOpen = confirmExit = false;
-                pendingRecent.clear();
-                ui::closeCurrentPopup();
-            }
-            if (!projectError.empty()) {
-                ui::spacing();
-                ui::textWrapped("%s", projectError.c_str());
-            }
-            ui::endPopup();
-        }
-        if (auto result = projectDialog.poll()) {
-            if (result->path.empty() || !result->error.empty()) {
-                exitAfterSave = false;
-                continueAfterSave = 0;
-                pendingRecent.clear();
-            }
-            if (!result->error.empty()) {
-                projectError = result->error;
-            } else if (!result->path.empty()) {
-                if (result->saving) {
-                    auto path = std::filesystem::path(result->path);
-                    if (!path.has_extension()) {
-                        path += ".legacy";
-                    }
-                    if (saveTo(path.string()) && continueAfterSave) {
-                        if (continueAfterSave == 2) {
-                            running = false;
-                        } else if (!pendingRecent.empty()) {
-                            projectDialog.openRecent(pendingRecent);
-                        } else {
-                            projectDialog.show(window, false, currentProject);
-                        }
-                        continueAfterSave = 0;
-                        pendingRecent.clear();
-                    } else if (continueAfterSave) {
-                        confirmExit = continueAfterSave == 2;
-                        confirmOpen = !confirmExit;
-                        continueAfterSave = 0;
-                    }
-                } else {
-                    std::string source, assetDirectory;
-                    World loadedWorld;
-                    OrbitCamera loadedCamera;
-                    if (ProjectIO::load(result->path,
-                                        loadedWorld,
-                                        source,
-                                        loadedCamera,
-                                        projectMeshes,
-                                        projectError,
-                                        &assetDirectory)) {
-                        audio.clear();
-                        componentScripts.stop();
-                        scripts.shutdown();
-                        world.restore(loadedWorld);
-                        camera = loadedCamera;
-                        browser.setRoot(
-                            assetDirectory.empty()
-                                ? existingProjectAssetsPath(result->path)
-                                : std::filesystem::absolute(result->path).parent_path() /
-                                      assetDirectory);
-                        try {
-                            Prefabs::refreshAll(browser.assets, world, projectMeshes);
-                        } catch (const std::exception& e) {
-                            browser.assets.error = e.what();
-                        }
-                        levels.setRoot(browser.assets.root);
-                        if (!levels.current().empty()) {
-                            levels.load();
-                        }
-                        scripts.resetRuntime();
-                        scripts.setSource("");
-                        embeddedLegacySource = source;
-                        selectedEntity = {};
-                        history = EditorHistory(world);
-                        physics.reset();
-                        clicking = false;
-                        currentProject = result->path;
-                        recentProjects.remember(currentProject);
-                        savedProjectState =
-                            projectContentState(world, embeddedLegacySource, camera);
-                        projectDirty = false;
-                        lastAutosave = std::chrono::steady_clock::now();
-                    }
-                }
-            }
-        }
-        if (!projectError.empty()) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Project: %s", projectError.c_str());
-            SDL_ShowSimpleMessageBox(
-                SDL_MESSAGEBOX_ERROR, "Project error", projectError.c_str(), window);
-            projectError.clear();
-        }
-        drawWorkspace(layout.toolbar, resetWorkspace);
-        ui::beginDisabled(projectDialog.pending() || browser.dialog.pending());
-        const int created = drawCreateMenu();
-        auto createObject = [&](int created) {
-            editor.finish(world);
-            clicking = false;
-            if (!validEditorObjectType(created)) {
-                return;
-            }
-            const ColliderShape shapes[]{ColliderShape::Box,
-                                         ColliderShape::Capsule,
-                                         ColliderShape::Cone,
-                                         ColliderShape::Box,
-                                         ColliderShape::Sphere};
-            Vec3 position = camera.target;
-            position.y = std::max(position.y, created == 1 ? 1.0f : created == 0 ? 0.0f : 0.5f);
-            if (created > 0 && created < 5) {
-                position = findRoom(physics, position, shapes[created]);
-            }
-            Entity prefabRoot;
-            if (prefabLevel) {
-                try {
-                    prefabRoot = Prefabs::root(world);
-                } catch (const std::exception&) {
-                }
-            }
-            selectedEntity = createEditorObject(
-                world, created, position, cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh);
-            if (prefabRoot != Entity{} && world.alive(selectedEntity)) {
-                setParent(world, selectedEntity, prefabRoot);
-            }
-        };
-        if (created >= 0) {
-            createObject(created);
-        }
-        bool undoRequested = false, redoRequested = false;
-        bool duplicateRequested = false, copyRequested = false, pasteRequested = false,
-             parentRequested = false;
-        const bool editAllowed =
-            !editor.dragging() && !projectDialog.pending() && !browser.dialog.pending();
-        const bool objectSelected = world.alive(selectedEntity);
-        if (ui::beginMainMenuBar()) {
-            if (ui::beginMenu("Edit")) {
-                undoRequested =
-                    ui::menuItem("Undo",
-                                 "Ctrl+Z",
-                                 false,
-                                 editAllowed && !playMode.active() && history.canUndo());
-                redoRequested = ui::menuItem(
-                    "Redo",
-                    "Ctrl+Y / Ctrl+Shift+Z",
-                    false,
-                    editAllowed && !playMode.active() && history.canRedo());
-                ui::separator();
-                duplicateRequested =
-                    ui::menuItem("Duplicate", "Ctrl+D", false, editAllowed && objectSelected);
-                copyRequested =
-                    ui::menuItem("Copy", "Ctrl+C", false, editAllowed && objectSelected);
-                pasteRequested =
-                    ui::menuItem("Paste", "Ctrl+V", false, editAllowed && clipboard.available());
-                parentRequested = ui::menuItem(
-                    "Parent / Unparent", "Ctrl+P", false, editAllowed && objectSelected);
-                ui::endMenu();
-            }
-            ui::endMainMenuBar();
-        }
-        if (ui::beginMainMenuBar()) {
-            if (ui::beginMenu("Windows")) {
-                for (int i = 0; i < 7; ++i) {
-                    ui::menuItem(panelNames[i], nullptr, &panelOpen[i]);
-                }
-                ui::menuItem("Animation", nullptr, &animationWindow.visible);
-                ui::menuItem("Lighting", nullptr, &lightmappingWindow.visible);
-                ui::separator();
-                if (ui::menuItem("Reset layout")) {
-                    resetWorkspace = true;
-                }
-                ui::endMenu();
-            }
-            ui::endMainMenuBar();
-        }
-        bool showAbout = false;
-        if (ui::beginMainMenuBar()) {
-            if (ui::beginMenu("Project", !prefabLevel)) {
-                if (ui::menuItem("Open in VS Code", nullptr, false, projectEnabled)) {
-                    const auto folder =
-                        currentProject.empty()
-                            ? browser.assets.root
-                            : std::filesystem::absolute(currentProject).parent_path();
-                    if (!browser.settings.openExternal(folder)) {
-                        projectError = browser.settings.error;
-                    }
-                }
-                if (ui::menuItem(
-                        "Backup", nullptr, false, projectEnabled && !currentProject.empty())) {
-                    try {
-                        if (saveTo(currentProject)) {
-                            backupStatus =
-                                "Backup created: " + backupProject(currentProject).u8string();
-                        }
-                    } catch (const std::exception& e) {
-                        projectError = e.what();
-                    }
-                }
-                if (!backupStatus.empty()) {
-                    ui::textDisabled("Last backup created");
-                    if (ui::isItemHovered()) {
-                        ui::setTooltip("%s", backupStatus.c_str());
-                    }
-                }
-
-                if (ui::menuItem(
-                        "Fix Project", nullptr, false, projectEnabled && !currentProject.empty())) {
-                    try {
-                        if (!std::filesystem::exists(currentProject + ".before-fix.bak")) {
-                            std::filesystem::copy_file(currentProject,
-                                                       currentProject + ".before-fix.bak");
-                        }
-                        fixProjectAssets(browser.assets, projectMeshes);
-                        saveTo(currentProject);
-                    } catch (const std::exception& e) {
-                        projectError = e.what();
-                    }
-                }
-                if (ui::menuItem("Input Settings")) {
-                    inputSettings.visible = true;
-                }
-                if (ui::menuItem("Layers")) {
-                    layerSettings.visible = true;
-                }
-                if (ui::menuItem("Rendering")) {
-                    renderingSettings.visible = true;
-                }
-                if (ui::beginMenu("Levels",
-                                     !playMode.active() && !levels.busy() &&
-                                         !projectDialog.pending())) {
-                    for (const auto& name : std::vector<std::string>(levels.names())) {
-                        if (ui::menuItem(name.c_str(), nullptr, name == levels.current())) {
-                            try {
-                                scripts.saveFile(browser.assets);
-                                levels.saveCurrent(world, embeddedLegacySource, camera);
-                                levels.load(name);
-                            } catch (const std::exception& e) {
-                                levels.error = e.what();
-                            }
-                        }
-                    }
-                    ui::endMenu();
-                }
-                ui::endMenu();
-            }
-            if (ui::beginMenu("Settings")) {
-                if (ui::menuItem("Editor Settings")) {
-                    browser.settings.visible = true;
-                }
-                ui::endMenu();
-            }
-            if (ui::beginMenu("Debug")) {
-                ui::menuItem("Show FPS", nullptr, &showFPS);
-                ui::menuItem("Profiler", nullptr, &showProfiler);
-                ui::menuItem("Show Game Colliders", nullptr, &showGameColliders);
-                ui::endMenu();
-            }
-            if (ui::beginMenu("Help")) {
-                auto openManual = [&](const char* page) {
-                    // Release packages place docs beside the executable, independent of project
-                    // cwd.
-                    const char* base = SDL_GetBasePath();
-                    auto path = std::filesystem::path(base ? base : ".") / "docs" / page;
-                    if (!std::filesystem::is_regular_file(path)) {
-                        SDL_LogError(
-                            SDL_LOG_CATEGORY_APPLICATION,
-                            "%s",
-                            "Offline documentation missing. Build docs with python docs/build.py --output build/docs.");
-                        return;
-                    }
-                    auto raw = std::filesystem::absolute(path).generic_string();
-                    std::string url = "file://";
-                    if (raw.empty() || raw.front() != '/') {
-                        url += '/';
-                    }
-                    for (unsigned char c : raw) {
-                        if (std::isalnum(c) || c == '/' || c == ':' || c == '-' || c == '_' ||
-                            c == '.' || c == '~') {
-                            url += static_cast<char>(c);
-                        } else {
-                            const char* hex = "0123456789ABCDEF";
-                            url += '%';
-                            url += hex[c >> 4];
-                            url += hex[c & 15];
-                        }
-                    }
-                    if (!SDL_OpenURL(url.c_str())) {
-                        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
-                    }
-                };
-                if (ui::menuItem("Documentation")) {
-                    openManual("index.html");
-                }
-                if (ui::menuItem("Scripting Reference")) {
-                    openManual("scripting-reference.html");
-                }
-                if (ui::menuItem("GitHub")) {
-                    SDL_OpenURL("https://github.com/monsef64/LegacyEngine");
-                }
-                showAbout = ui::menuItem("About");
-                ui::endMenu();
-            }
-            ui::endMainMenuBar();
-        }
-        if (renameLevelPopup) {
-            std::snprintf(renameLevelName,
-                          sizeof(renameLevelName),
-                          "%s",
-                          levels.current().empty() ? "Main" : levels.current().c_str());
-            ui::openPopup("Rename Level");
-            renameLevelPopup = false;
-        }
-        if (ui::beginPopupModal("Rename Level", nullptr, ui::WindowFlags_AlwaysAutoResize)) {
-            const bool enter = ui::inputText("Name",
-                                                renameLevelName,
-                                                sizeof(renameLevelName),
-                                                ui::InputTextFlags_EnterReturnsTrue);
-            if (ui::button("Rename") || enter) {
-                try {
-                    scripts.saveFile(browser.assets);
-                    levels.saveCurrent(world, embeddedLegacySource, camera);
-                    levels.renameCurrent(renameLevelName);
-                    ui::closeCurrentPopup();
-                } catch (const std::exception& e) {
-                    levels.error = e.what();
-                }
-            }
-            ui::sameLine();
-            if (ui::button("Cancel")) {
-                ui::closeCurrentPopup();
-            }
-            if (!levels.error.empty()) {
-                ui::textWrapped("%s", levels.error.c_str());
-            }
-            ui::endPopup();
-        }
-        if (newLevelPopup) {
-            ui::openPopup("New Level");
-            newLevelPopup = false;
-        }
-        if (ui::beginPopupModal("New Level", nullptr, ui::WindowFlags_AlwaysAutoResize)) {
-            ui::textUnformatted("The current level is saved before creating an empty level.");
-            ui::inputText("Name", newLevelName, sizeof(newLevelName));
-            if (ui::button("Create")) {
-                try {
-                    scripts.saveFile(browser.assets);
-                    levels.saveCurrent(world, embeddedLegacySource, camera);
-                    levels.create(newLevelName);
-                    levels.load(newLevelName);
-                    ui::closeCurrentPopup();
-                } catch (const std::exception& e) {
-                    levels.error = e.what();
-                }
-            }
-            ui::sameLine();
-            if (ui::button("Cancel")) {
-                ui::closeCurrentPopup();
-            }
-            if (!levels.error.empty()) {
-                ui::textWrapped("%s", levels.error.c_str());
-            }
-            ui::endPopup();
-        }
-        if (renderingSettings.visible) {
-            ui::setNextWindowSize(ui::Vec2(540, 320), ui::Cond_FirstUseEver);
-            ui::setNextWindowSizeConstraints(ui::Vec2(360, 220),
-                                                ui::mainViewport()->WorkSize);
-            if (ui::beginWindow("Rendering", &renderingSettings.visible)) {
-                ui::separatorText("Rendering");
-                if (ui::checkbox("Enable VSync", &renderingSettings.vsync)) {
-                    const bool after = renderingSettings.vsync;
-                    renderingSettings.vsync = !after;
-                    history.perform(world, selectedEntity, [&, after](bool forward) {
-                        renderingSettings.vsync = forward ? after : !after;
-                        renderingSettings.apply();
-                        renderingSettings.save(browser.assets);
-                        scripts.console().message(forward ? "Set/Redo VSync setting"
-                                                          : "Undo VSync setting");
-                    });
-                }
-                const auto shadowsBefore = renderingSettings.shadows;
-                bool shadowChanged = ui::combo("Shadow mapping",
-                                                  &renderingSettings.shadows.mode,
-                                                  "Cascaded (CSM)\0Single-map PCF (PCM)\0");
-                int filtering = renderingSettings.shadows.soft ? 1 : 0;
-                if (ui::combo("Shadow filtering", &filtering, "Hard\0Soft (PCF)\0")) {
-                    renderingSettings.shadows.soft = filtering == 1;
-                    shadowChanged = true;
-                }
-                const int sizes[]{256, 512, 1024, 2048};
-                int resolution = 0;
-                for (int i = 0; i < 4; ++i) {
-                    if (sizes[i] == renderingSettings.shadows.resolution) {
-                        resolution = i;
-                    }
-                }
-                if (ui::combo(
-                        "Shadow resolution", &resolution, "256\000512\0001024\0002048\0")) {
-                    renderingSettings.shadows.resolution = sizes[resolution];
-                    shadowChanged = true;
-                }
-                if (shadowChanged) {
-                    const auto after = renderingSettings.shadows;
-                    renderingSettings.shadows = shadowsBefore;
-                    history.perform(world, selectedEntity, [&, shadowsBefore, after](bool forward) {
-                        renderingSettings.shadows = forward ? after : shadowsBefore;
-                        renderingSettings.save(browser.assets);
-                        scripts.console().message(forward ? "Set/Redo shadow settings"
-                                                          : "Undo shadow settings");
-                    });
-                }
-                ui::textWrapped(
-                    "CSM uses four directional cascades. Point/spot lights retain PCF. Light quality scales the project resolution; Off disables that light's shadows.");
-                int interval = 0;
-                if (SDL_GL_GetSwapInterval(&interval)) {
-                    ui::text("Driver swap interval: %d", interval);
-                }
-                ui::textWrapped(
-                    "Disable VSync to measure uncapped performance. Use Debug > Profiler to distinguish rendering cost from presentation wait.");
-                if (!renderingSettings.error.empty()) {
-                    ui::textWrapped("%s", renderingSettings.error.c_str());
-                }
-            }
-            ui::endWindow();
-        }
-        if (layerSettings.visible) {
-            const auto area = ui::mainViewport()->WorkSize;
-            ui::setNextWindowSize(ui::Vec2(std::min(460.f, area.x), std::min(420.f, area.y)),
-                                     ui::Cond_FirstUseEver);
-            ui::setNextWindowSizeConstraints(
-                ui::Vec2(std::min(320.f, area.x), std::min(240.f, area.y)), area);
-            if (ui::beginWindow("Layers", &layerSettings.visible)) {
-                ui::textUnformatted("Default (built-in)");
-                for (int i = 1; i < 32; ++i) {
-                    if (!LayerSettings::names[i].empty()) {
-                        ui::pushId(i);
-                        ui::textUnformatted(LayerSettings::names[i].c_str());
-                        ui::sameLine();
-                        if (ui::smallButton("Remove")) {
-                            LayerSettings::names[i].clear();
-                            world.each<ObjectLayer>([&](Entity, ObjectLayer& layer) {
-                                if (layer.value == i) {
-                                    layer.value = 0;
-                                }
-                            });
-                            world.each<Raycast>(
-                                [&](Entity, Raycast& query) { query.layerMask &= ~(1u << i); });
-                            layerSettings.save(browser.assets);
-                        }
-                        ui::popId();
-                    }
-                }
-                static char newLayer[65]{};
-                ui::setNextItemWidth(std::max(60.f, ui::contentRegionAvail().x - 50));
-                ui::inputText("##LayerName", newLayer, sizeof(newLayer));
-                ui::sameLine();
-                if (ui::button("Add") && newLayer[0]) {
-                    if (LayerSettings::find(newLayer) >= 0) {
-                        layerSettings.error = "Layer already exists";
-                    } else {
-                        int slot = 1;
-                        while (slot < 32 && !LayerSettings::names[slot].empty()) {
-                            ++slot;
-                        }
-                        if (slot == 32) {
-                            layerSettings.error = "Maximum 32 layers";
-                        } else {
-                            LayerSettings::names[slot] = newLayer;
-                            newLayer[0] = 0;
-                            layerSettings.save(browser.assets);
-                        }
-                    }
-                }
-                if (!layerSettings.error.empty()) {
-                    ui::textWrapped("%s", layerSettings.error.c_str());
-                }
-            }
-            ui::endWindow();
-        }
-        if (showAbout) {
-            ui::openPopup("About LegacyEngine");
-        }
-        if (ui::beginPopupModal(
-                "About LegacyEngine", nullptr, ui::WindowFlags_AlwaysAutoResize)) {
-            ui::textUnformatted("LegacyEngine");
-            ui::textUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
-            ui::textUnformatted("SDL3 / OpenGL / MyGUI / Jolt");
-            if (ui::button("Close") || ui::isKeyPressed(ui::Key_Escape)) {
-                ui::closeCurrentPopup();
-            }
-            ui::endPopup();
-        }
-        drawProfiler(profiler, showProfiler);
-        // Let text widgets own editing shortcuts while typing. Global routing
-        // otherwise makes shortcuts independent of which editor panel has focus.
-        if (editAllowed && !ui::io().WantTextInput && !ui::isAnyItemActive()) {
-            const auto flags = ui::InputFlags_RouteGlobal;
-            undoRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_Z, flags);
-            redoRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_Y, flags) ||
-                             ui::shortcut(ui::Mod_Ctrl | ui::Mod_Shift | ui::Key_Z, flags);
-            duplicateRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_D, flags);
-            copyRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_C, flags);
-            pasteRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_V, flags);
-            parentRequested |= ui::shortcut(ui::Mod_Ctrl | ui::Key_P, flags);
-        }
-        ui::setNextWindowPos(ui::Vec2(layout.toolbar.x, layout.toolbar.y));
-        ui::setNextWindowSize(ui::Vec2(layout.toolbar.width, layout.toolbar.height));
-        ui::beginWindow("Scene controls",
-                     nullptr,
-                     fixedPanelFlags | ui::WindowFlags_NoTitleBar | ui::WindowFlags_NoDocking |
-                         ui::WindowFlags_NoScrollbar | ui::WindowFlags_NoScrollWithMouse);
-        if (editAllowed) {
-            if (copyRequested && objectSelected) {
-                clipboard.copy(world, selectedEntity);
-            }
-            if ((duplicateRequested && objectSelected) ||
-                (pasteRequested && clipboard.available())) {
-                editor.finish(world);
-                clicking = false;
-                history.commit(world, selectedEntity);
-                selectedEntity = duplicateRequested ? duplicateLevelObject(world, selectedEntity)
-                                                    : clipboard.paste(world);
-                history.commit(world, selectedEntity);
-            }
-            if (parentRequested && objectSelected) {
-                editor.finish(world);
-                clicking = false;
-                if (getParent(world, selectedEntity) != Entity{}) {
-                    history.commit(world, selectedEntity);
-                    setParent(world, selectedEntity, {});
-                    history.commit(world, selectedEntity);
-                } else {
-                    ui::openPopup("Choose parent");
-                }
-            }
-        }
-        if (ui::beginPopup("Choose parent")) {
-            ui::textUnformatted("Choose parent for selected GameObject");
-            ui::separator();
-            for (const auto& object : levelObjects(world)) {
-                if (!editAllowed || !canParent(world, selectedEntity, object.entity)) {
-                    continue;
-                }
-                ui::pushId(static_cast<int>(object.entity.index));
-                if (ui::selectable(object.name.c_str())) {
-                    history.commit(world, selectedEntity);
-                    setParent(world, selectedEntity, object.entity);
-                    history.commit(world, selectedEntity);
-                }
-                ui::popId();
-            }
-            ui::endPopup();
-        }
-        if ((undoRequested || redoRequested) && !playMode.active()) {
-            editor.finish(world);
-            clicking = false;
-            history.commit(world, selectedEntity);
-            const bool restored = undoRequested ? history.undo(world, selectedEntity)
-                                                : history.redo(world, selectedEntity);
-            if (restored) {
-                scripts.console().message(undoRequested ? "Undo editor change"
-                                                        : "Redo editor change");
-                physics.reset();
-            } else if (!history.error.empty()) {
-                projectError = history.error;
-                history.error.clear();
-            }
-        }
-        const bool playbackKeys = !ui::io().WantTextInput && !editor.dragging() &&
-                                  !projectDialog.pending() && !browser.dialog.pending();
-        const bool playKey =
-            playbackKeys && ui::shortcut(ui::Key_F5, ui::InputFlags_RouteGlobal);
-        const bool pauseKey =
-            playbackKeys && ui::shortcut(ui::Key_F6, ui::InputFlags_RouteGlobal);
-        const bool stopKey =
-            playbackKeys && ui::shortcut(ui::Key_F7, ui::InputFlags_RouteGlobal);
-        const float playbackWidth = 90 + 2 * ui::style().ItemSpacing.x;
-        ui::setCursorPosX((layout.toolbar.width - playbackWidth) * 0.5f);
-        ui::beginDisabled(prefabLevel || playMode.active() || levels.busy());
-        if (playbackButton("##Play", "Play (F5)", PlaybackIcon::Play, playMode.active()) ||
-            (playKey && !prefabLevel && !playMode.active() && !levels.busy())) {
-            editor.finish(world);
-            clicking = false;
-            try {
-                scripts.saveFile(browser.assets);
-                levels.saveCurrent(world, embeddedLegacySource, camera);
-            } catch (const std::exception& e) {
-                levels.error = e.what();
-            }
-            editSelection = selectedEntity;
-            editLevelName = levels.current();
-            editSource = scripts.source();
-            editScriptPath = browser.openedScript;
-            editLegacySource = embeddedLegacySource;
-            editCamera = camera;
-            history.commit(world, selectedEntity);
-            editHistory = std::move(history);
-            history = EditorHistory(world, selectedEntity);
-            if (playMode.play(world)) {
-                Particles::reset(world);
-                lightmappingWindow.cancelBake(); // do not compete with gameplay for CPU time
-                focusGame = true;
-                if (separateGame && !gameWindow) {
-                    gameWindow = SDL_CreateWindow(
-                        "Game", 960, 540, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-                    if (!gameWindow) {
-                        projectError = SDL_GetError();
-                    }
-                }
-                panelOpen[6] = true;
-                physics.reset();
-                audio.start(world);
-                scripts.setAssetContext(browser.openedScript, selectedEntity);
-                scripts.console().setAssetRoot(browser.assets.root);
-                scripts.startPlay();
-                const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
-                componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
-                LuaConsole::postEvent("onLevelLoaded", {levels.current()});
-            }
-        }
-        ui::endDisabled();
-        ui::sameLine();
-        ui::beginDisabled(!playMode.active());
-        if (playbackButton("##Pause",
-                           playMode.state() == PlayMode::State::Paused ? "Resume (F6)"
-                                                                       : "Pause (F6)",
-                           PlaybackIcon::Pause,
-                           playMode.state() == PlayMode::State::Paused) ||
-            (pauseKey && playMode.active())) {
-            editor.finish(world);
-            clicking = false;
-            playMode.pause();
-            if (!playMode.playing()) {
-                input.releaseMouse();
-            }
-        }
-        ui::sameLine();
-        if (playbackButton("##Stop", "Stop (F7)", PlaybackIcon::Stop) ||
-            (stopKey && playMode.active())) {
-            editor.finish(world);
-            clicking = false;
-            // Run stop callbacks before restoring, so their edits are discarded too.
-            levels.suspended = true;
-            levels.cancel();
-            LuaConsole::clearEvents();
-            audio.clear();
-            componentScripts.stop();
-            scripts.shutdown();
-            LuaConsole::clearEvents();
-            if (gameWindow) {
-                input.releaseMouse();
-                input.window = window;
-                SDL_DestroyWindow(gameWindow);
-                gameWindow = nullptr;
-            }
-            mouseOver = {};
-            mousePressedObject = {};
-            playMode.stop(world);
-            input.releaseMouse();
-            physics.reset();
-            scripts.resetRuntime();
-            scripts.setSource(editSource);
-            embeddedLegacySource = editLegacySource;
-            browser.openedScript = editScriptPath;
-            scripts.setAssetContext(editScriptPath, editSelection);
-            camera = editCamera;
-            history = std::move(editHistory);
-            levels.commit(editLevelName, false);
-            levels.suspended = false;
-            selectedEntity = world.alive(editSelection) ? editSelection : Entity{};
-        }
-        ui::endDisabled();
-        ui::sameLine();
-        ui::beginDisabled(playMode.active());
-        ui::checkbox("Separate Game window", &separateGame);
-        ui::endDisabled();
-        if (gameWindow) {
-            ui::sameLine();
-            const bool fullscreen = (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_FULLSCREEN) != 0;
-            if (ui::button(fullscreen ? "Windowed Game" : "Fullscreen Game")) {
-                toggleGameFullscreen();
-            }
-            if (ui::isItemHovered()) {
-                ui::setTooltip(
-                    "Toggle separate Game fullscreen (F11 or Alt+Enter in Game window)");
-            }
-        }
-        ui::endWindow();
-        bool hierarchyFocused = false;
-        int hierarchyCreate = -1;
-        Entity hierarchyCreateParent;
-        const std::string hierarchyLevelName =
-            prefabLevel                 ? "Prefab: " + editingPrefab
-            : !levels.current().empty() ? levels.current()
-            : currentProject.empty()    ? "Untitled"
-                                        : std::filesystem::path(currentProject).stem().string();
-        if (drawLevelObjects(world,
-                             selectedEntity,
-                             true,
-                             &layout.hierarchy,
-                             &hierarchyFocused,
-                             editAllowed ? &hierarchyCreate : nullptr,
-                             hierarchyLevelName.c_str(),
-                             editAllowed && !playMode.active() && !prefabLevel ? &renameLevelPopup
-                                                                               : nullptr,
-                             &hierarchyCreateParent)) {
-            editor.finish(world);
-            clicking = false;
-        }
-        if (hierarchyCreate >= 0) {
-            createObject(hierarchyCreate);
-            if (world.alive(hierarchyCreateParent) && world.alive(selectedEntity)) {
-                setParent(world, selectedEntity, hierarchyCreateParent);
-                setLocalTransform(world, selectedEntity, Transform{});
-            }
-        }
-        static Entity lastInspectedEntity;
-        if (selectedEntity != lastInspectedEntity ||
-            (hierarchyFocused && ui::isMouseClicked(0))) {
-            browser.selected.clear();
-            lastInspectedEntity = selectedEntity;
-        }
-        const MeshHandle meshOptions[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh};
-        drawInspector(world,
-                      selectedEntity,
-                      layout.inspector,
-                      meshOptions,
-                      editor.dragging(),
-                      &browser.assets,
-                      5,
-                      browser.selected,
-                      playMode.active());
-        terrainEditor.draw(
-            world, selectedEntity, browser.assets, history, editAllowed, !playMode.active());
-        scripts.componentOutput = componentScripts.messages();
-        scripts.setAssetContext(browser.openedScript, selectedEntity);
-        ui::beginDisabled(playMode.active());
-        scripts.draw(&layout, playMode.playing(), &browser.assets, &browser.openedScript);
-        ui::endDisabled();
-        browser.projectFolder = currentProject.empty()
-                                    ? browser.assets.root
-                                    : std::filesystem::absolute(currentProject).parent_path();
-        browser.draw(
-            window, world, selectedEntity, scripts, editAllowed && !playMode.active(), &history);
-        if (!browser.movedAsset.first.empty()) {
-            const auto moved = std::exchange(browser.movedAsset, {});
-            animationWindow.remapAssetPaths(moved.first, moved.second);
-            modelPreviewWindow.visible = false;
-        }
-
-        if (!browser.previewModelRequest.empty()) {
-            modelPreviewWindow.open(
-                browser.assets, std::exchange(browser.previewModelRequest, {}), renderer);
-        }
-        modelPreviewWindow.draw(browser.assets, renderer, ui::io().DeltaTime);
-        lightmappingWindow.draw(world,
-                                selectedEntity,
-                                browser.assets,
-                                projectMeshes,
-                                history,
-                                editAllowed && !playMode.active() && !prefabLevel,
-                                levels.current());
-        if (!browser.editAnimationRequest.empty()) {
-            animationWindow.open(browser.assets, std::exchange(browser.editAnimationRequest, {}));
-        }
-        animationWindow.draw(world,
-                             selectedEntity,
-                             browser.assets,
-                             renderer,
-                             history,
-                             editAllowed && !playMode.active(),
-                             ui::io().DeltaTime);
-        if (!browser.editCubemapRequest.empty()) {
-            const auto path = std::exchange(browser.editCubemapRequest, {});
-            try {
-                cubemapDraft = loadCubemap(browser.assets, path);
-                editingCubemap = path;
-            } catch (const std::exception& e) {
-                browser.assets.error = e.what();
-            }
-        }
-        if (!editingCubemap.empty()) {
-            bool open = true;
-            ui::setNextWindowSize(ui::Vec2(540, 340), ui::Cond_FirstUseEver);
-            ui::beginWindow("Cubemap Editor", &open);
-            ui::textWrapped("%s", editingCubemap.c_str());
-            ui::textWrapped(
-                "Assign six square textures of matching size. Front is -Z, back is +Z.");
-            for (int i = 0; i < 6; ++i) {
-                auto& path = cubemapDraft.faces[i];
-                assetPicker(CubemapAsset::names[i],
-                            path,
-                            &browser.assets,
-                            [](const std::string& file) { return materialTexturePath(file); });
-                if (ui::beginDragDropTarget()) {
-                    if (const auto* drop = ui::acceptDragDropPayload("ASSET_PATH")) {
-                        std::string value = static_cast<const char*>(drop->data());
-                        if (materialTexturePath(value)) {
-                            path = value;
-                        }
-                    }
-                    ui::endDragDropTarget();
-                }
-            }
-            ui::beginDisabled(playMode.active());
-            if (ui::button("Save Cubemap")) {
-                try {
-                    saveCubemap(browser.assets, editingCubemap, cubemapDraft);
-                } catch (const std::exception& e) {
-                    browser.assets.error = e.what();
-                }
-            }
-            ui::endDisabled();
-            ui::endWindow();
-            if (!open) {
-                editingCubemap.clear();
-            }
-        }
-        if (browser.prefabCreation != Entity{} && !playMode.active()) {
-            const auto source = browser.prefabCreation;
-            browser.prefabCreation = {};
-            try {
-                const auto* name = world.tryGet<ObjectName>(source);
-                std::string stem = name ? name->value : "Prefab";
-                for (auto& c : stem) {
-                    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '_') {
-                        c = '_';
-                    }
-                }
-                if (stem.empty()) {
-                    stem = "Prefab";
-                }
-                auto relative = (std::filesystem::path(browser.currentFolder) / (stem + ".prefab"))
-                                    .generic_string();
-                for (unsigned n = 2; std::filesystem::exists(browser.assets.resolve(relative));
-                     ++n) {
-                    relative = (std::filesystem::path(browser.currentFolder) /
-                                (stem + "_" + std::to_string(n) + ".prefab"))
-                                   .generic_string();
-                }
-                Prefabs::save(browser.assets, relative, world, source, projectMeshes);
-                history.commit(world, selectedEntity);
-                world.add(source, PrefabInstance{relative});
-                history.commit(world, selectedEntity);
-                browser.selected = relative;
-            } catch (const std::exception& e) {
-                browser.assets.error = e.what();
-            }
-        }
-        if (!browser.spawnModelRequest.empty()) {
-            const auto path = std::exchange(browser.spawnModelRequest, {});
-            try {
-                const auto document = modelDocument(browser.assets, path);
-                struct Part {
-                    std::string name, mesh, material;
-                    MeshData data;
-                };
-                std::vector<Part> parts;
-                if (document.at("version") == 2) {
-                    if (!document.at("parts").is_array() || document.at("parts").empty() ||
-                        document.at("parts").size() > 1024) {
-                        throw std::runtime_error("Invalid model parts");
-                    }
-                    for (const auto& part : document.at("parts")) {
-                        const auto mesh = part.at("mesh").get<std::string>();
-                        parts.push_back({part.at("name").get<std::string>(),
-                                         mesh,
-                                         part.at("material").get<std::string>(),
-                                         loadModelAsset(browser.assets, mesh)});
-                    }
-                } else {
-                    parts.push_back({"Mesh", path, "", loadModelAsset(browser.assets, path)});
-                }
-                std::size_t totalVertices = 0;
-                for (const auto& part : parts) {
-                    totalVertices += part.data.vertices.size();
-                    if (part.name.size() > 4096 ||
-                        (!part.material.empty() && !materialAsset(part.material))) {
-                        throw std::runtime_error("Invalid model metadata");
-                    }
-                }
-                if (totalVertices > maxModelVertices ||
-                    world.entities().size() + parts.size() + 1 > ProjectIO::maxObjects) {
-                    throw std::runtime_error("Model placement exceeds scene/model limits");
-                }
-                editor.finish(world);
-                const auto root = world.create();
-                world.add(root, ObjectName{std::filesystem::path(path).stem().string()});
-                world.add(root, Transform{camera.target});
-                if (document.contains("animations") && !document.at("animations").empty()) {
-                    const auto firstPart = document.at("parts").at(0).at("mesh").get<std::string>();
-                    Animation animation;
-                    animation.clip =
-                        (std::filesystem::path(firstPart).parent_path() / "Animation_0.leanim")
-                            .generic_string();
-                    world.add(root, animation);
-                }
-                if (prefabLevel) {
-                    setParent(world, root, Prefabs::root(world));
-                }
-                for (const auto& part : parts) {
-                    const auto child = world.create();
-                    world.add(child, ObjectName{part.name});
-                    world.add(child, Transform{camera.target});
-                    setParent(world, child, root);
-                    MeshRenderer mesh{cubeMesh};
-                    mesh.model = part.mesh;
-                    mesh.material = part.material;
-                    world.add(child, mesh);
-                }
-                selectedEntity = root;
-                browser.selected.clear();
-            } catch (const std::exception& e) {
-                browser.assets.error = e.what();
-            }
-        }
-        if (!browser.spawnPrefabRequest.empty()) {
-            const auto path = std::exchange(browser.spawnPrefabRequest, {});
-            try {
-                history.commit(world, selectedEntity);
-                const auto parent = prefabLevel ? Prefabs::root(world) : Entity{};
-                selectedEntity = Prefabs::spawn(browser.assets, path, world, projectMeshes, {}, {});
-                if (parent != Entity{}) {
-                    setParent(world, selectedEntity, parent);
-                }
-                history.commit(world, selectedEntity);
-            } catch (const std::exception& e) {
-                browser.assets.error = e.what();
-            }
-        }
-        if (!browser.editPrefabRequest.empty() && !playMode.active() && !prefabLevel &&
-            !levels.busy()) {
-            const auto path = std::exchange(browser.editPrefabRequest, {});
-            try {
-                auto loaded = Prefabs::load(browser.assets, path, projectMeshes);
-                editor.finish(world);
-                scripts.shutdown();
-                prefabLevel = world.snapshot();
-                prefabLevelSelection = selectedEntity;
-                prefabLevelCamera = camera;
-                prefabHistory.emplace(std::move(history));
-                levels.suspended = true;
-                world.restore(*loaded);
-                selectedEntity = Prefabs::root(world);
-                history = EditorHistory(world, selectedEntity);
-                editingPrefab = path;
-                physics.reset();
-                scripts.resetRuntime();
-                camera.focus(world.get<Transform>(selectedEntity).position, 3);
-                ui::setWindowFocus("Scene");
-            } catch (const std::exception& e) {
-                browser.assets.error = e.what();
-            }
-        }
-        if (prefabLevel) {
-            ui::setNextWindowSize(ui::Vec2(440, 180), ui::Cond_FirstUseEver);
-            ui::beginWindow("Prefab Window");
-            ui::textWrapped("Editing %s", editingPrefab.c_str());
-            ui::textWrapped(
-                "Hierarchy and Scene contain only this prefab. Save updates linked instances; Exit restores the level. Unsaved edits are discarded on Exit.");
-            if (ui::button("Save Prefab") ||
-                (!ui::io().WantTextInput &&
-                 ui::shortcut(ui::Mod_Ctrl | ui::Key_S, ui::InputFlags_RouteGlobal))) {
-                try {
-                    auto root = Prefabs::root(world);
-                    Prefabs::save(browser.assets, editingPrefab, world, root, projectMeshes);
-                    Prefabs::refresh(browser.assets, editingPrefab, *prefabLevel, projectMeshes);
-                    Prefabs::refreshSavedLevels(browser.assets, editingPrefab, projectMeshes);
-                    scripts.console().message("Saved prefab and refreshed level instances");
-                } catch (const std::exception& e) {
-                    browser.assets.error = e.what();
-                }
-            }
-            ui::sameLine();
-            if (ui::button("Exit Prefab Mode")) {
-                editor.finish(world);
-                scripts.shutdown();
-                world.restore(*prefabLevel);
-                scripts.resetRuntime();
-                prefabLevel.reset();
-                selectedEntity = prefabLevelSelection;
-                camera = prefabLevelCamera;
-                history = std::move(*prefabHistory);
-                prefabHistory.reset();
-                history.commit(world, selectedEntity);
-                editingPrefab.clear();
-                levels.suspended = false;
-                physics.reset();
-            }
-            ui::endWindow();
-        }
-        const auto settingsBefore = browser.settings;
-        ui::beginDisabled(playMode.active());
-        browser.settings.draw(browser.projectFolder);
-        ui::endDisabled();
-        if (settingsBefore.signature() != browser.settings.signature() && !settingsGesture) {
-            settingsGesture = settingsBefore;
-        }
-        if (!playMode.active() && settingsGesture && !ui::isAnyItemActive()) {
-            const auto before = *settingsGesture;
-            settingsGesture.reset();
-            const auto after = browser.settings;
-            browser.settings = before;
-            history.perform(world, selectedEntity, [&, before, after](bool forward) {
-                const bool visible = browser.settings.visible;
-                browser.settings = forward ? after : before;
-                browser.settings.visible = visible;
-                applyEditorPalette(browser.settings.theme);
-                browser.settings.save();
-                scripts.console().message(forward ? "Set/Redo editor settings"
-                                                  : "Undo editor settings");
-            });
-        }
-        const auto buttonsBefore = input.buttons;
-        const auto alternativesBefore = input.alternatives;
-        inputSettings.draw(browser.assets, input, editAllowed && !playMode.active());
-        if (editAllowed && !playMode.active() &&
-            (buttonsBefore != input.buttons || alternativesBefore != input.alternatives)) {
-            const auto buttonsAfter = input.buttons;
-            const auto alternativesAfter = input.alternatives;
-            input.buttons = buttonsBefore;
-            input.alternatives = alternativesBefore;
-            history.perform(world,
-                            selectedEntity,
-                            [&, buttonsBefore, alternativesBefore, buttonsAfter, alternativesAfter](
-                                bool forward) {
-                                input.buttons = forward ? buttonsAfter : buttonsBefore;
-                                input.alternatives =
-                                    forward ? alternativesAfter : alternativesBefore;
-                                inputSettings.save(browser.assets, input);
-                                scripts.console().message(forward ? "Set/Redo input settings"
-                                                                  : "Undo input settings");
-                            });
-        }
-        terminalErrors.report("Skybox", renderer.skyboxError());
-        terminalErrors.report("Material", renderer.materialError);
-        terminalErrors.report("Model", renderer.modelError);
-        terminalErrors.report("Audio", audio.error);
-        terminalErrors.report("Assets", browser.assets.error);
-        terminalErrors.report("Asset preview", browser.preview.error);
-        terminalErrors.report("Editor settings", browser.settings.error);
-        terminalErrors.report("Input settings", inputSettings.error);
-        terminalErrors.report("History", history.error);
-        terminalErrors.report("Levels", levels.error);
-        terminalErrors.report("Rendering settings", renderingSettings.error);
-        ui::DrawList* sceneDrawList = nullptr;
-        bool sceneVisible = false, sceneFocused = false;
-        sceneHovered = false;
-        sceneRect = {};
-        orientationInteracting = false;
-        if (panelOpen[2]) {
-            ui::pushStyleVar(ui::StyleVar_WindowPadding, ui::Vec2(0, 0));
-            if (beginEditorPanel("Scene",
-                                 0,
-                                 ui::WindowFlags_NoScrollbar |
-                                     ui::WindowFlags_NoScrollWithMouse)) {
-                ui::pushStyleVar(ui::StyleVar_WindowPadding, ui::Vec2(6, 3));
-                ui::beginChild("Scene toolbar",
-                               ui::Vec2(0,
-                                        (ui::contentRegionAvail().x < 620 ? 3.f : 2.f) *
-                                                ui::frameHeightWithSpacing() +
-                                             6),
-                                  ui::ChildFlags_AlwaysUseWindowPadding,
-                                  ui::WindowFlags_NoScrollbar |
-                                      ui::WindowFlags_NoScrollWithMouse);
-                editor.drawToolbar();
-                ui::setNextItemWidth(100);
-                if (ui::sliderFloat(
-                        "Scroll zoom", &browser.settings.scrollZoomSpeed, .1f, 5.f, "%.1fx")) {
-                    browser.settings.save();
-                }
-                ui::endChild();
-                ui::popStyleVar();
-                sceneFocused = ui::isWindowFocused(ui::FocusedFlags_RootAndChildWindows);
-                const auto pos = ui::cursorScreenPos(), size = ui::contentRegionAvail();
-                sceneRect = {pos.x, pos.y, std::max(size.x, 1.0f), std::max(size.y, 1.0f)};
-                layout.scene = sceneRect;
-                sceneVisible = true;
-                sceneDrawList = ui::windowDrawList();
-                int dw = 0, dh = 0;
-                SDL_GetWindowSizeInPixels(window, &dw, &dh);
-                auto pixels = scenePixels(sceneRect, windowWidth, windowHeight, dw, dh);
-                sceneSurface.resize(pixels.width, pixels.height);
-                ui::image(static_cast<ui::TextureID>(sceneSurface.texture),
-                             ui::Vec2(sceneRect.width, sceneRect.height),
-                             ui::Vec2(0, 1),
-                             ui::Vec2(1, 0));
-                if (world.has<Camera>(selectedEntity) && world.has<Transform>(selectedEntity)) {
-                    const auto& selectedCamera = world.get<Camera>(selectedEntity);
-                    const float aspect = std::clamp(selectedCamera.aspect, .25f, 4.f);
-                    float width = std::min(240.f, sceneRect.width * .35f);
-                    float height = width / aspect;
-                    if (height > sceneRect.height * .4f) {
-                        height = sceneRect.height * .4f;
-                        width = height * aspect;
-                    }
-                    cameraPreviewSurface.resize(std::max(1, int(width)), std::max(1, int(height)));
-                    const ui::Vec2 a(sceneRect.x + sceneRect.width - width - 10,
-                                   sceneRect.y + sceneRect.height - height - 10),
-                        b(a.x + width, a.y + height);
-                    sceneDrawList->addRectFilled(ui::Vec2(a.x - 2, a.y - 20),
-                                                 ui::Vec2(b.x + 2, b.y + 2),
-                                                 UI_COL32(24, 24, 24, 245));
-                    sceneDrawList->addText(ui::Vec2(a.x, a.y - 18), UI_COL32_WHITE, "Camera preview");
-                    sceneDrawList->addImage(static_cast<ui::TextureID>(cameraPreviewSurface.texture),
-                                            a,
-                                            b,
-                                            ui::Vec2(0, 1),
-                                            ui::Vec2(1, 0));
-                }
-                const bool imageHovered = ui::isItemHovered();
-                sceneHovered = ui::isWindowHovered(ui::HoveredFlags_None) && imageHovered;
-                if (ui::beginDragDropTarget()) {
-                    if (const auto* asset = ui::acceptDragDropPayload("ASSET_PATH")) {
-                        const std::string path = static_cast<const char*>(asset->data());
-                        if (modelAsset(path)) {
-                            browser.spawnModelRequest = path;
-                        } else if (Prefabs::asset(path)) {
-                            browser.spawnPrefabRequest = path;
-                        } else {
-                            attachScriptAsset(world, selectedEntity, path);
-                        }
-                    }
-                    ui::endDragDropTarget();
-                }
-                const bool playbackHovered = drawParticlePlayback(
-                    world, selectedEntity, sceneRect, playMode.active(), particlePreviewSpeed);
-                sceneHovered &= !playbackHovered;
-                if (sceneHovered && ui::isMouseClicked(0)) {
-                    browser.selected.clear();
-                }
-                if (editAllowed && (sceneFocused || sceneHovered) && !cameraLooking &&
-                    !ui::io().WantTextInput && !ui::isAnyItemActive() &&
-                    !cameraModifiersHeld(SDL_GetModState()) &&
-                    !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId)) {
-                    if (ui::isKeyPressed(ui::Key_W, false)) {
-                        editor.setTool(TransformTool::Move);
-                    }
-                    if (ui::isKeyPressed(ui::Key_E, false)) {
-                        editor.setTool(TransformTool::Rotate);
-                    }
-                    if (ui::isKeyPressed(ui::Key_R, false)) {
-                        editor.setTool(TransformTool::Scale);
-                    }
-                }
-                orientationInteracting = drawSceneOrientation(
-                    camera,
-                    sceneRect,
-                    editAllowed && !playbackHovered && !cameraLooking && !editor.dragging());
-                editor.draw(world,
-                            selectedEntity,
-                            !projectDialog.pending() && !browser.dialog.pending() &&
-                                !orientationInteracting && !playbackHovered && !cameraLooking &&
-                                !terrainEditor.active(world, selectedEntity) &&
-                                !(SDL_GetModState() & SDL_KMOD_ALT),
-                            camera,
-                            static_cast<float>(sceneSurface.width) / sceneSurface.height,
-                            &sceneRect,
-                            sceneDrawList,
-                            &browser.assets);
-                if (editor.capturesMouse() || orientationInteracting) {
-                    clicking = false;
-                }
-            }
-            ui::endWindow();
-            ui::popStyleVar();
-        }
-        {
-            Ray terrainRay;
-            const auto mouse = ui::io().MousePos;
-            const bool brushHover = editAllowed && sceneHovered && !cameraLooking &&
-                                    !(SDL_GetModState() & SDL_KMOD_ALT);
-            const bool brushDown = brushHover && ui::isMouseDown(0);
-            bool rayValid =
-                brushHover && mouseRay(window, camera, mouse.x, mouse.y, terrainRay, layout.scene);
-            if (rayValid && sceneSurface.width > 0 && sceneSurface.height > 0) {
-                terrainEditor.preview(
-                    world,
-                    selectedEntity,
-                    rayValid ? &terrainRay : nullptr,
-                    camera.viewProjection(float(sceneSurface.width) / sceneSurface.height),
-                    layout.scene,
-                    sceneDrawList);
-            }
-            terrainEditor.stroke(world,
-                                 selectedEntity,
-                                 history,
-                                 rayValid ? &terrainRay : nullptr,
-                                 brushDown,
-                                 ui::io().DeltaTime);
-        }
-        bool gameVisible = false;
-        gameHovered = false;
-        gameFocused = false;
-        if (panelOpen[6] && !gameWindow) {
-            ui::pushStyleVar(ui::StyleVar_WindowPadding, ui::Vec2(0, 0));
-            if (focusGame || (smokeTest && renderedFrames == 0)) {
-                focusGame = false;
-                ui::setNextWindowFocus();
-            }
-            if (beginEditorPanel("Game")) {
-                gameHovered = ui::isWindowHovered(ui::HoveredFlags_ChildWindows);
-                gameFocused = ui::isWindowFocused();
-                const auto active = activeCamera(world);
-                if (active == Entity{}) {
-                    const char* message = "No active camera available";
-                    const auto size = ui::contentRegionAvail();
-                    const auto textSize = ui::calcTextSize(message);
-                    const auto origin = ui::cursorPos();
-                    ui::setCursorPos(
-                        ui::Vec2(origin.x + std::max(0.0f, (size.x - textSize.x) * 0.5f),
-                               origin.y + std::max(0.0f, (size.y - textSize.y) * 0.5f)));
-                    ui::textUnformatted(message);
-                } else {
-                    auto size = ui::contentRegionAvail();
-                    size.x = std::max(size.x, 1.0f);
-                    size.y = std::max(size.y, 1.0f);
-                    int dw = 0, dh = 0;
-                    SDL_GetWindowSizeInPixels(window, &dw, &dh);
-                    gameSurface.resize(static_cast<int>(size.x * dw / std::max(windowWidth, 1)),
-                                       static_cast<int>(size.y * dh / std::max(windowHeight, 1)));
-                    world.each<Camera>([&](Entity, Camera& c) {
-                        c.aspect = static_cast<float>(gameSurface.width) / gameSurface.height;
-                    });
-                    gameImageOrigin = ui::cursorScreenPos();
-                    gameImageSize = size;
-                    ui::image(static_cast<ui::TextureID>(gameSurface.texture),
-                                 size,
-                                 ui::Vec2(0, 1),
-                                 ui::Vec2(1, 0));
-                    gameVisible = true;
-                    if (showFPS) {
-                        const auto a = ui::itemRectMin(), b = ui::itemRectMax();
-                        char label[64];
-                        std::snprintf(label, sizeof(label), "FPS: %.0f", ui::io().Framerate);
-                        const auto text = ui::calcTextSize(label);
-                        const ui::Vec2 position(a.x + 8, a.y + 8);
-                        auto* draw = ui::windowDrawList();
-                        draw->pushClipRect(a, b, true);
-                        draw->addRectFilled(
-                            ui::Vec2(position.x - 4, position.y - 3),
-                            ui::Vec2(position.x + text.x + 4, position.y + text.y + 3),
-                            UI_COL32(0, 0, 0, 180),
-                            3);
-                        draw->addText(position, UI_COL32(255, 255, 255, 255), label);
-                        draw->popClipRect();
-                    }
-                }
-            }
-            ui::endWindow();
-            ui::popStyleVar();
-        }
-        if (!sceneVisible) {
-            editor.finish(world);
-            layout.scene = {};
-        }
-        if (editAllowed && sceneVisible && (hierarchyFocused || sceneFocused) && !cameraLooking &&
-            !ui::io().WantTextInput && !ui::isAnyItemActive() &&
-            !cameraModifiersHeld(SDL_GetModState()) &&
-            !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId) &&
-            ui::isKeyPressed(ui::Key_F, false)) {
-            if (const auto* transform = world.tryGet<Transform>(selectedEntity)) {
-                editor.finish(world);
-                clicking = false;
-                const auto& scale = transform->scale;
-                float radius =
-                    std::max({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z), 1.0f});
-                Vec3 centre = transform->position;
-                if (const auto* collider = world.tryGet<Collider>(selectedEntity)) {
-                    const auto resolved = effectiveCollider(world, selectedEntity, *collider);
-                    radius = .25f;
-                    if (resolved.shape == ColliderShape::Mesh && !resolved.model.empty()) {
-                        try {
-                            for (const auto& vertex :
-                                 loadModelAsset(browser.assets, resolved.model).vertices) {
-                                const auto p = (vertex.position + resolved.center) * scale;
-                                radius = std::max(radius, std::sqrt(dot(p, p)));
-                            }
-                        } catch (const std::exception& e) {
-                            browser.assets.error = e.what();
-                        }
-                    } else {
-                        const auto bounds = colliderWireframe(resolved, scale);
-                        for (const auto& vertex : bounds.vertices) {
-                            radius =
-                                std::max(radius, std::sqrt(dot(vertex.position, vertex.position)));
-                        }
-                    }
-                }
-                camera.focus(centre, radius, sceneRect.width / sceneRect.height);
-            }
-        }
-        if (editAllowed && (hierarchyFocused || sceneFocused) && world.alive(selectedEntity) &&
-            !ui::io().WantTextInput && !ui::isAnyItemActive() &&
-            !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId) &&
-            ui::isKeyPressed(ui::Key_Delete, false)) {
-            editor.finish(world);
-            clicking = false;
-            history.commit(world, selectedEntity);
-            deleteHierarchySelection(world, selectedEntity);
-            selectedEntity = {};
-            history.commit(world, selectedEntity);
-            physics.reset();
-        }
-        if (!playMode.active()) {
-            updateHierarchy(world);
-            history.observe(world,
-                            selectedEntity,
-                            editor.dragging() || ui::isAnyItemActive() ||
-                                ui::isMouseDown(ui::MouseButton_Left));
-        }
-        ui::endDisabled();
-        if (renderedFrames == 0) {
-            ui::setWindowFocus("Assets");
-        }
-        ui::dockWorkspaceEnd();
-        profiler.checkpoint(ProfilePart::Editor);
 
         if (cameraLooking &&
             (!sceneVisible || browser.dialog.pending() || projectDialog.pending() ||
@@ -2116,7 +1517,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         if (cameraLooking && !browser.dialog.pending() && !projectDialog.pending() &&
             !cameraModifiersHeld(SDL_GetModState()) && !editor.dragging() &&
-            !ui::io().WantTextInput &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             const float speed =
@@ -2222,9 +1622,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             const auto cameraEntity = activeCamera(world);
             float mx = 0, my = 0;
             SDL_GetMouseState(&mx, &my);
-            bool inside = gameHovered && gameImageSize.x > 0 && gameImageSize.y > 0;
-            float u = inside ? (mx - gameImageOrigin.x) / gameImageSize.x : 0;
-            float v = inside ? (my - gameImageOrigin.y) / gameImageSize.y : 0;
+            bool inside = gameHovered;
+            float u = inside ? gameU : 0;
+            float v = inside ? gameV : 0;
             if (gameWindow && externalFocus) {
                 int w = 1, h = 1;
                 SDL_GetWindowSize(gameWindow, &w, &h);
@@ -2293,6 +1693,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         scripts.console().setAssetRoot(browser.assets.root);
         renderer.setShadowSettings(renderingSettings.shadows);
         renderer.setAssetRoot(browser.assets.root);
+        bool sceneDrawn = false;
         if (width > 0 && height > 0) {
             // Keep the unfocused editor view live at 15 Hz during gameplay,
             // rather than rebuilding its full shadow atlas at the Game frame rate.
@@ -2303,6 +1704,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 sceneVisible && (!backgroundScene || sceneSurface.width != lastSceneWidth ||
                                  sceneSurface.height != lastSceneHeight ||
                                  renderTime - lastSceneRender >= std::chrono::milliseconds(66));
+            sceneDrawn = renderScene;
             if (renderScene) {
                 lastSceneRender = renderTime;
                 lastSceneWidth = sceneSurface.width;
@@ -2438,11 +1840,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                       h,
                                       GL_COLOR_BUFFER_BIT,
                                       GL_LINEAR);
-                    if (showFPS) {
-                        char label[64];
-                        std::snprintf(label, sizeof(label), "FPS: %.0f", ui::io().Framerate);
-                        ui::renderStandaloneFpsOverlay(w, h, label);
-                    }
+                    // No overlay is drawn into the separate Game window; the Qt
+                    // status bar keeps showing the frame time beside it.
                     // Present only once with VSync per frame. Waiting for both
                     // windows can halve the frame rate on multi-window drivers.
                     int interval = 0;
@@ -2463,7 +1862,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             glDisable(GL_SCISSOR_TEST);
             glClearColor(.07f, .08f, .10f, 1);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            ui::render();
+            // The Qt shell paints the finished pictures; nothing to draw here.
             profiler.checkpoint(ProfilePart::UI);
         }
 
@@ -2541,15 +1940,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (input.lockedWindow == gameWindow && gameWindow) {
                 SDL_GetWindowSize(gameWindow, &rect.w, &rect.h);
             } else {
-                const auto origin = ui::mainViewport()->Pos;
-                rect = cameraLooking ? SDL_Rect{int(sceneRect.x - origin.x),
-                                                int(sceneRect.y - origin.y),
+                // Caret is grabbed over the Scene picture (or the Game view).
+                rect = cameraLooking ? SDL_Rect{int(sceneRect.x),
+                                                int(sceneRect.y),
                                                 int(sceneRect.width),
                                                 int(sceneRect.height)}
-                                     : SDL_Rect{int(gameImageOrigin.x - origin.x),
-                                                int(gameImageOrigin.y - origin.y),
-                                                int(gameImageSize.x),
-                                                int(gameImageSize.y)};
+                                     : SDL_Rect{int(gameRect.x),
+                                                int(gameRect.y),
+                                                int(gameRect.width),
+                                                int(gameRect.height)};
                 int w, h;
                 SDL_GetWindowSize(window, &w, &h);
                 const int right = std::min(w, rect.x + rect.w),
@@ -2572,6 +1971,30 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             SDL_SetWindowTitle(window, title.c_str());
             lastWindowTitle = title;
         }
+        profiler.checkpoint(ProfilePart::UI);
+        // Hand the freshly drawn pictures to the widgets. Reading happens here,
+        // inside the frame, while the SDL context is current.
+        if (sceneDrawn) {
+            view.sceneImage =
+                ui::qt::readFramebuffer(sceneSurface.framebuffer,
+                                        sceneSurface.width,
+                                        sceneSurface.height);
+        }
+        if (gameVisible) {
+            view.gameImage =
+                ui::qt::readFramebuffer(gameSurface.framebuffer,
+                                        gameSurface.width,
+                                        gameSurface.height);
+        }
+        // The inspector shows what the selected camera sees, as it did when the
+        // preview was drawn into the ImGui panel.
+        if (world.has<Camera>(selectedEntity) && world.has<Transform>(selectedEntity)) {
+            shell.shell()->inspectorPanel()->setCameraPreview(
+                ui::qt::readFramebuffer(cameraPreviewSurface.framebuffer,
+                                        cameraPreviewSurface.width,
+                                        cameraPreviewSurface.height));
+        }
+        shell.presentFrame(view, uiState);
         profiler.checkpoint(ProfilePart::Other);
         SDL_GL_SwapWindow(window);
         const auto flags = SDL_GetWindowFlags(window);
@@ -2614,7 +2037,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     input.releaseMouse();
     return (!smokeTest || renderedFrames >= smokeFrames);
 }
-
 int engineMain(int argc, char** argv) {
     bool smokeTest = false;
     for (int i = 1; i < argc; ++i) {
@@ -2657,20 +2079,19 @@ int engineMain(int argc, char** argv) {
     const bool rendererReady = renderer.init();
     bool runSucceeded = false;
     if (rendererReady) {
-        if (!ui::createContext(true) || !ui::initGl(window)) {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not initialise the MyGUI editor layer");
-            ui::destroyContext();
+        if (!ui::qt::Application::create(window)) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not initialise the Qt editor shell");
             renderer.shutdown();
             SDL_GL_DestroyContext(context);
             SDL_DestroyWindow(window);
             SDL_Quit();
             return 1;
         }
-        dockedEditor = true;
-        applyEditorTheme();
-        SDL_Log("Editor started with MyGUI");
+        ui::qt::installInputBridge();
+        SDL_Log("Editor started with Qt");
         runSucceeded = run(window, renderer, smokeTest);
-        ui::destroyContext();
+        ui::qt::removeInputBridge();
+        ui::qt::Application::destroy();
         renderer.shutdown();
     }
 

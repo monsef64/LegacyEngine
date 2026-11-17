@@ -1,11 +1,22 @@
 # Build and test
 Requires a C++17 compiler, CMake 3.22+, Git and platform development libraries.
-CMake fetches SDL3 (if not installed), Jolt, Assimp, Zstandard, MyGUI with FreeType,
-and Lua. MyGUI also fetches pugixml and UTF8-CPP. GLAD, Roboto/Font Awesome fonts,
-miniaudio, simdjson, nlohmann/json and stb_image are included under `third_party/`.
+CMake fetches SDL3 (if not installed), Jolt, Assimp, Zstandard and Lua. GLAD,
+miniaudio, simdjson, nlohmann/json and stb_image are included under
+`third_party/`.
 
-On Debian/Ubuntu, install the window/audio/OpenGL development dependencies used
-in [the engine workflow](../.github/workflows/release.yml). Then:
+The editor is a native **Qt 6 Widgets** application, so Qt 6.2 or newer with the
+Widgets module must be installed before configuring:
+
+| Platform | Packages |
+| --- | --- |
+| Debian/Ubuntu | `qt6-base-dev` |
+| Fedora | `qt6-qtbase-devel` |
+| Arch | `qt6-base` |
+| macOS (Homebrew) | `qt` (then `-DCMAKE_PREFIX_PATH=$(brew --prefix qt)`) |
+| Windows | the official Qt 6 installer, or `-DCMAKE_PREFIX_PATH=C:/Qt/6.x.x/msvc…` |
+
+On Debian/Ubuntu, also install the window/audio/OpenGL development dependencies
+used in [the engine workflow](../.github/workflows/release.yml). Then:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release

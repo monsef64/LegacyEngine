@@ -21,32 +21,14 @@ int main()
     require(objects.size()==3,"empty game objects are listed");
     require(objects[0].entity==first && objects[1].entity==second,"stable entity order");
     require(objects[0].hasCollider && !objects[1].hasCollider,"visual helpers identified");
-    ui::createContext();
-    auto& io=ui::io();
-    io.DisplaySize=ui::Vec2(1280,720); io.DeltaTime=1.0f/60;
-
-    Entity selected;
-    auto frame=[&](bool enabled=true) {
-        ui::newFrame(); drawLevelObjects(world,selected,enabled); ui::render();
-    };
-    auto click=[&](float y,bool enabled=true) {
-        ui::injectMousePos(130,y); frame(enabled);
-        ui::injectMouseButton(0,true); frame(enabled);
-        ui::injectMouseButton(0,false); frame(enabled);
-    };
-    frame(); frame();
-    float rowY=0;
-    for (float y=430;y<540 && selected==Entity{};y+=5) { click(y); if (selected!=Entity{}) rowY=y; }
-    require(selected==first || selected==second,"clicking a list row selects an entity");
-    selected={};
-    click(rowY,false);
-    require(selected==Entity{},"spawn mode prevents list selection");
-    selected=second;
-    world.destroy(second);
-    frame();
-    require(selected==Entity{},"destroyed selection cleared");
-    const Entity replacement=add("Sphere");
-    require(replacement!=second && levelObjects(world).size()==3,"new generation listed without stale selection");
-    ui::destroyContext();
+    // Row clicks belong to the Qt hierarchy; the model promise is that a
+    // destroyed or replaced entity never leaves a stale selection behind.
+    Entity selected = first;
+    world.destroy(selected);
+    require(!world.alive(selected), "destroyed selection is not alive");
+    selected = {};
+    const Entity replacement = add("Sphere");
+    require(replacement != first && levelObjects(world).size() == 3,
+            "new generation listed without stale selection");
     std::puts("Level object listing, selection, disabled mode and lifecycle tests passed");
 }

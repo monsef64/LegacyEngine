@@ -2,7 +2,6 @@
 #include "assets/assets.hpp"
 #include <algorithm>
 #include <functional>
-#include "ui/mygui_ui.hpp"
 #include <vector>
 
 struct AssetPreviewData {
@@ -18,40 +17,3 @@ inline std::function<AssetPreviewData(const AssetManager&, const std::string&)> 
 // The running editor installs a renderer; header-only UI remains usable without GL.
 inline std::function<const AssetPreviewData&(const AssetManager&, const std::string&, int)>
     assetPreview;
-inline void
-drawAssetPreview(const AssetManager& assets, const std::string& path, float width, int slot = 0) {
-    if (!assetPreview) {
-        return;
-    }
-    const auto& preview = assetPreview(assets, path, slot);
-    width = std::max(40.f, width);
-    if (preview.texture) {
-        const float ratio = float(preview.height) / std::max(1, preview.width);
-        const float imageWidth = width * std::min(1.f, 1.5f / std::max(.001f, ratio));
-        ui::image(static_cast<ui::TextureID>(preview.texture),
-                     ui::Vec2(imageWidth, imageWidth * ratio),
-                     preview.flip ? ui::Vec2(0, 1) : ui::Vec2(0, 0),
-                     preview.flip ? ui::Vec2(1, 0) : ui::Vec2(1, 1));
-    }
-    if (!preview.waveform.empty()) {
-        ui::text("Duration: %.2f seconds", preview.seconds);
-        ui::plotHistogram("##Waveform",
-                             preview.waveform.data(),
-                             int(preview.waveform.size()),
-                             0,
-                             "Waveform",
-                             0,
-                             1,
-                             ui::Vec2(width, 140));
-    }
-    if (!preview.text.empty()) {
-        ui::pushTextWrapPos(ui::cursorPosX() + width);
-        ui::textUnformatted(preview.text.c_str());
-        ui::popTextWrapPos();
-    }
-    if (!preview.error.empty()) {
-        ui::pushTextWrapPos(ui::cursorPosX() + width);
-        ui::textDisabled("%s", preview.error.c_str());
-        ui::popTextWrapPos();
-    }
-}

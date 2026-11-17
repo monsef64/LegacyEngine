@@ -1,7 +1,8 @@
 #pragma once
+// Pure layout geometry, shared by the old immediate-mode layout and the Qt
+// editor so both map the Scene picture onto the window the same way. This
+// header deliberately includes no UI toolkit.
 #include <algorithm>
-#include <cstring>
-#include "ui/mygui_ui.hpp"
 
 struct EditorRect {
     float x = 0, y = 0, width = 0, height = 0;
@@ -46,34 +47,3 @@ struct EditorLayout {
                 {left + middle * 0.55f, y + sceneHeight, middle * 0.45f, bottom}};
     }
 };
-// Tests/legacy callers retain the fixed-layout fallback; the application opts in.
-inline bool dockedEditor = false;
-inline bool panelOpen[7]{true, true, true, true, true, true, true};
-inline const char* panelNames[]{
-    "Hierarchy", "Inspector", "Scene", "Script Editor", "Console", "Assets", "Game"};
-inline bool* panelVisibility(const char* name) {
-    if (dockedEditor) {
-        for (int i = 0; i < 7; ++i) {
-            if (!std::strcmp(name, panelNames[i])) {
-                return &panelOpen[i];
-            }
-        }
-    }
-    return nullptr;
-}
-inline bool
-beginEditorPanel(const char* name, ui::WindowFlags fallback = 0, ui::WindowFlags flags = 0) {
-    bool* open = panelVisibility(name);
-    return ui::beginWindow(name, open, (dockedEditor ? 0 : fallback) | flags);
-}
-inline constexpr ui::WindowFlags fixedPanelFlags =
-    ui::WindowFlags_NoMove | ui::WindowFlags_NoResize | ui::WindowFlags_NoCollapse |
-    ui::WindowFlags_NoSavedSettings;
-inline void placeEditorPanel(const EditorRect& rect) {
-    if (dockedEditor) {
-        return;
-    }
-    ui::setNextWindowPos(ui::Vec2(rect.x, rect.y), ui::Cond_Always);
-    ui::setNextWindowSize(ui::Vec2(std::max(rect.width, 1.0f), std::max(rect.height, 1.0f)),
-                             ui::Cond_Always);
-}

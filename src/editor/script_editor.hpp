@@ -1,7 +1,6 @@
 #pragma once
 #include "assets/assets.hpp"
 #include "core/components.hpp"
-#include "editor/editor_layout.hpp"
 #include "editor/script_explorer.hpp"
 #include "scripting/lua_console.hpp"
 #include "scripting/script_exports.hpp"
@@ -11,25 +10,53 @@
 #include <string_view>
 #include <vector>
 
-namespace script_editor_detail {
-void drawLuaSyntaxOverlay(ui::DrawList* draw,
-                          std::string_view source,
-                          const ui::MultilineEditInfo& editInfo);
-}
-
 class ScriptEditor {
   public:
     ScriptEditor();
     std::vector<std::string> componentOutput;
-    void draw(const EditorLayout* layout = nullptr,
-              bool executionEnabled = true,
-              AssetManager* assets = nullptr,
-              std::string* openedScript = nullptr);
-    void saveFile(AssetManager& assets) {
-        if (fileDirty_ && AssetManager::script(assetPath_)) {
-            assets.writeScript(assetPath_, source());
-            fileDirty_ = false;
+    // Loads an asset script into the editor buffer. Kept UI-free so the Qt
+    // Script panel can drive it directly.
+    bool loadFile(AssetManager& assets, const std::string& path) {
+        if (!AssetManager::script(path)) {
+            fileError_ = "Only .ls and .lua scripts can be opened";
+            return false;
         }
+        try {
+            setSource(assets.readScript(path));
+        } catch (const std::exception& e) {
+            fileError_ = e.what();
+            return false;
+        }
+        assetPath_ = path;
+        fileError_.clear();
+        fileDirty_ = false;
+        return true;
+    }
+    bool saveFile(AssetManager& assets) {
+        if (!AssetManager::script(assetPath_)) {
+            return false;
+        }
+        assets.writeScript(assetPath_, source());
+        fileDirty_ = false;
+        return true;
+    }
+    bool executeSource(World& world, AssetManager& assets, const std::string& path) {
+        (void)assets;
+        bindWorld(world);
+        setAssetContext(path, selected_);
+        return executeSource();
+    }
+    const std::string& error() const {
+        return fileError_;
+    }
+    const std::string& path() const {
+        return assetPath_;
+    }
+    Entity target() const {
+        return selected_;
+    }
+    void markDirty() {
+        fileDirty_ = true;
     }
     bool hasUnsavedChanges() const {
         return fileDirty_;
@@ -44,6 +71,9 @@ class ScriptEditor {
     void setAssetContext(std::string_view path, Entity selected) {
         assetPath_ = path;
         selected_ = selected;
+    }
+    void bindWorld(World& world) {
+        world_ = &world;
     }
     bool executeSource() {
         if (!fileOpen()) {
@@ -101,12 +131,14 @@ class ScriptEditor {
     void resetRuntime() {
         console_.reset();
     }
-    void bindWorld(World& world,
-                   MeshHandle cube,
-                   MeshHandle sphere,
-                   MeshHandle capsule,
-                   MeshHandle cone = {},
-                   MeshHandle plane = {}) {
+    // Binds the consoles' script helpers to the engine meshes; the Qt editor
+    // calls this once during setup, exactly where the old editor did.
+    void bindConsoleMeshes(World& world,
+                           MeshHandle cube,
+                           MeshHandle sphere,
+                           MeshHandle capsule,
+                           MeshHandle cone = {},
+                           MeshHandle plane = {}) {
         world_ = &world;
         console_.bindWorld(world, cube, sphere, capsule, cone, plane);
     }
@@ -146,8 +178,5 @@ class ScriptEditor {
     double treeRefresh_ = 0;
     LuaConsole console_;
     std::array<char, LuaConsole::maxSourceBytes + 1> source_{};
-    static int completion(ui::InputTextCallbackData* data);
     std::string completionPrefix_;
-    bool autoScroll_ = true;
-    bool scrollToBottom_ = false;
 };

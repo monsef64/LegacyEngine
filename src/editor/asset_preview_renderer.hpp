@@ -38,6 +38,20 @@ class AssetPreviewRenderer {
     TexturePreviewCache pickerThumbnails_;
     std::filesystem::path root_;
     int iconFrame_ = -1, iconBudget_ = 4;
+    // Editor frame counter: was ui::frameCount(), now owned here because the
+    // cache only needs a monotonic tick to age icons.
+    int frame_ = 0;
+    int frame() {
+        return frame_;
+    }
+
+  public:
+    // Called once per editor frame by the Qt shell.
+    void beginFrame() {
+        ++frame_;
+    }
+
+  private:
 
     void build(Slot& slot, const AssetManager& assets, const std::string& path) {
         slot.data = {};
@@ -259,8 +273,8 @@ class AssetPreviewRenderer {
     }
 
     const AssetPreviewData& get(const AssetManager& assets, const std::string& path, int index) {
-        if (iconFrame_ != ui::frameCount()) {
-            iconFrame_ = ui::frameCount();
+        if (iconFrame_ != frame()) {
+            iconFrame_ = frame();
             iconBudget_ = 4;
         }
         if (index == 2 && !icons_.count(path)) {
@@ -374,8 +388,8 @@ class AssetPreviewRenderer {
         assetThumbnail = [this](const AssetManager& assets, const std::string& path) {
             AssetPreviewData image;
             if (textureAsset(path)) {
-                if (thumbnailFrame_ != ui::frameCount()) {
-                    thumbnailFrame_ = ui::frameCount();
+                if (thumbnailFrame_ != frame()) {
+                    thumbnailFrame_ = frame();
                     pickerThumbnails_.beginFrame(assets);
                 }
                 image.texture = pickerThumbnails_.texture(assets, path);

@@ -64,6 +64,7 @@ jobs:
             libdbus-1-dev libibus-1.0-dev libudev-dev libusb-1.0-0-dev
             libasound2-dev libpulse-dev libpipewire-0.3-dev libjack-dev libsndio-dev
             libfribidi-dev libthai-dev liburing-dev
+            qt6-base-dev xvfb
           )
           sources="$RUNNER_TEMP/legacy-ubuntu.list"
           apt_options=(
@@ -123,6 +124,20 @@ jobs:
       - name: Build
         run: cmake --build build --parallel 2
 
+      # Renders 120 frames and exits on its own. A runner without a GPU still
+      # exercises the whole frame path end to end: xvfb supplies the X display
+      # for SDL's OpenGL context, Mesa's software rasterizer draws it, and Qt
+      # runs offscreen so the widget tree needs no window manager.
+      - name: Smoke test the editor
+        env:
+          # Qt draws the editor shell into its own window tree; offscreen keeps
+          # it from needing a display server. SDL still needs a real GL
+          # context, so xvfb supplies the X display it opens the window on.
+          QT_QPA_PLATFORM: offscreen
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          xvfb-run --auto-servernum ./build/LegacyEngine --smoke-test
+
       # README.md says which glibc the binary needs. The number depends on what
       # is linked into the binary, so show it on the page of the run.
       - name: Report the glibc version the binary needs
@@ -157,6 +172,12 @@ jobs:
           # Keep symbols in build/ for diagnosis, not in the shipped executable.
           strip --strip-unneeded "$package/LegacyEngine"
           cp LICENSE "$package/"
+          # Qt is a system dependency of the release: bundling the Widgets
+          # runtime and the xcb platform plugin keeps the tarball runnable on a
+          # machine that has the Qt libraries installed (see README).
+          mkdir -p "$package/qt-plugins/platforms"
+          plugin=$(find /usr/lib/x86_64-linux-gnu/qt6/plugins/platforms -name "libqxcb.so" | head -n 1)
+          if [ -n "$plugin" ]; then cp "$plugin" "$package/qt-plugins/platforms/"; fi
           cp -r build/docs "$package/docs"
           test -s "$package/docs/scripting-reference.html"
           cp -r scripts "$package/"

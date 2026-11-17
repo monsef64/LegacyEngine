@@ -1,7 +1,6 @@
 #include "editor/editor_history.hpp"
 #include "editor/play_mode.hpp"
 #include "editor/level_objects.hpp"
-#include "editor/playback_controls.hpp"
 #include <cassert>
 
 int main() {
@@ -118,15 +117,4 @@ int main() {
     assert(copiedObjectName(copiedWorld,"Other (2)")=="Other (3)");
     assert(copiedObjectName(copiedWorld,"Other (text)")=="Other (text) (2)");
     assert(copiedObjectName(copiedWorld,"")==" (2)");
-    // Icon controls generate geometry without requiring Unicode font glyphs.
-    ui::createContext();auto& io=ui::io();
-    io.DisplaySize=ui::Vec2(800,600);io.DeltaTime=1.0f/60;
-    ui::newFrame();
-    ui::setNextWindowSize(ui::Vec2(400,120));ui::beginWindow("Controls");
-    playbackButton("##Play","Play",PlaybackIcon::Play);
-    playbackButton("##Pause","Pause",PlaybackIcon::Pause);
-    playbackButton("##Stop","Stop",PlaybackIcon::Stop);
-    ui::endWindow();ui::render();
-    assert(ui::lastFrameVertexCount() > 0);
-    ui::destroyContext();
 }

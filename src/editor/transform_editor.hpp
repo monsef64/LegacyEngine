@@ -2,10 +2,9 @@
 
 #include "assets/assets.hpp"
 #include "core/ecs.hpp"
-#include "editor/editor_layout.hpp"
+#include "editor/editor_geometry.hpp"
 #include "editor/transform_edit.hpp"
 #include "scene/camera.hpp"
-#include "ui/mygui_ui.hpp"
 #include <functional>
 #include <map>
 
@@ -17,51 +16,39 @@ class TransformEditor {
     void setTool(TransformTool tool) {
         if (!dragging_ && tool_ != tool) {
             tool_ = tool;
-            ui::cancelGizmo();
         }
     }
+    TransformTool tool() const { return tool_; }
     bool localSpace() const { return localSpace_; }
     void setLocalSpace(bool value) {
         if (!dragging_ && localSpace_ != value) {
             localSpace_ = value;
-            ui::cancelGizmo();
         }
     }
+    bool centerPivot() const { return centerPivot_; }
+    void setCenterPivot(bool value) { centerPivot_ = value; }
+    float snapStep() const { return snap_; }
+    void setSnapStep(float value) {
+        snap_ = std::isfinite(value) ? std::clamp(std::round(value * 4) / 4, .25f, 10000.f) : .5f;
+    }
+    bool hovered() const { return hovered_; }
     bool dragging() const { return dragging_; }
     void finish(World& world) {
-        ui::cancelGizmo();
         if (heldBody_ && world.alive(heldEntity_)) {
             world.add(heldEntity_, savedBody_);
         }
         heldBody_ = false;
         heldEntity_ = {};
         dragging_ = hovered_ = false;
-        face_ = -1;
     }
     std::function<bool(MeshHandle, Vec3&, Vec3&)> meshBounds;
-    void drawToolbar();
-    void draw(World& world,
-              Entity entity,
-              bool enabled,
-              const OrbitCamera& camera,
-              float aspect,
-              const EditorRect* scene = nullptr,
-              ui::DrawList* drawList = nullptr,
-              const AssetManager* assets = nullptr);
+    // The pivot the gizmo is drawn at: the centre of the selection's bounds,
+    // including any children, so a group of objects drags as one.
+    Vec3 selectionCenter(World& world, Entity selected, const AssetManager* assets = nullptr);
 
   private:
-    bool drawColliderFaces(World& world,
-                           Entity entity,
-                           const OrbitCamera& camera,
-                           float aspect,
-                           const EditorRect& scene,
-                           ui::DrawList* drawList);
-    int face_ = -1;
-    Collider faceStart_;
-    Transform faceTransform_;
-    Vec3 faceOrigin_, faceAxis_;
-    float faceParameter_ = 0;
-    Vec3 selectionCenter(World& world, Entity selected, const AssetManager* assets);
+    // Collider face dragging lived in the old UI draw path; the Qt gizmo
+    // edits the collider directly, so only the state below is still shared.
     struct Bounds {
         Vec3 low, high;
         bool valid = false;

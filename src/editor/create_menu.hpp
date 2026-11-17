@@ -2,91 +2,21 @@
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include "core/hierarchy.hpp"
-#include "ui/mygui_ui.hpp"
+#include "effects/laser.hpp"
+#include "effects/light_shafts.hpp"
+#include "particles/particle_system.hpp"
+#include "rendering/skybox.hpp"
+#include "terrain/terrain.hpp"
+#include <cstddef>
 
-// IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox; 12
-// character; 13 FPS camera; 14 raycast; 15 particles; 16 laser.
+// Object creation, shared by the Qt Create menu and the Hierarchy context menu.
+//
+// IDs: 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane;
+// 11 skybox; 12 character; 13 FPS camera; 14 raycast; 15 particles; 16 laser;
+// 17 light shafts; 18 terrain.
 inline constexpr int editorObjectTypeCount = 19;
 inline bool validEditorObjectType(int item) {
     return item >= 0 && item < editorObjectTypeCount;
-}
-inline int drawCreateItems() {
-    int item = -1;
-    if (ui::menuItem("Empty GameObject")) {
-        item = 0;
-    }
-    if (ui::menuItem("Character Controller")) {
-        item = 12;
-    }
-    if (ui::menuItem("FPS Camera")) {
-        item = 13;
-    }
-    if (ui::menuItem("Terrain")) {
-        item = 18;
-    }
-    if (ui::menuItem("LightShafts")) {
-        item = 17;
-    }
-    if (ui::menuItem("Laser")) {
-        item = 16;
-    }
-    if (ui::menuItem("Particles")) {
-        item = 15;
-    }
-    if (ui::menuItem("Raycast")) {
-        item = 14;
-    }
-    if (ui::beginMenu("Audio")) {
-        if (ui::menuItem("Audio Source")) {
-            item = 6;
-        }
-        ui::endMenu();
-    }
-    if (ui::beginMenu("Rendering")) {
-        if (ui::menuItem("Skybox")) {
-            item = 11;
-        }
-        if (ui::menuItem("Camera")) {
-            item = 5;
-        }
-        ui::endMenu();
-    }
-    if (ui::beginMenu("Light")) {
-        if (ui::menuItem("Directional Light")) {
-            item = 7;
-        }
-        if (ui::menuItem("Point Light")) {
-            item = 8;
-        }
-        if (ui::menuItem("Spot Light")) {
-            item = 9;
-        }
-        ui::endMenu();
-    }
-    if (ui::beginMenu("Shape")) {
-        const char* names[]{"Capsule", "Cone", "Cube", "Sphere"};
-        for (int i = 0; i < 4; ++i) {
-            if (ui::menuItem(names[i])) {
-                item = i + 1;
-            }
-        }
-        if (ui::menuItem("Plane")) {
-            item = 10;
-        }
-        ui::endMenu();
-    }
-    return item;
-}
-inline int drawCreateMenu() {
-    int item = -1;
-    if (ui::beginMainMenuBar()) {
-        if (ui::beginMenu("Create")) {
-            item = drawCreateItems();
-            ui::endMenu();
-        }
-        ui::endMainMenuBar();
-    }
-    return item;
 }
 inline Entity createLevelObject(World& world,
                                 const char* name,
@@ -152,7 +82,6 @@ inline Entity createEditorObject(World& world,
                                     item == 0 || item >= 5);
     if (item == 18) {
         world.add(entity, Terrain{});
-        Terrains::openTools = true;
     }
     if (item == 17) {
         world.add(entity, LightShafts{});
