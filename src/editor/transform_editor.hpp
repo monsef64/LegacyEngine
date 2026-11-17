@@ -5,31 +5,36 @@
 #include "editor/editor_layout.hpp"
 #include "editor/transform_edit.hpp"
 #include "scene/camera.hpp"
-#include "ui/mygui_ui.hpp"
+#include <ImGuizmo.h>
 #include <functional>
+#include <imgui.h>
 #include <map>
 
 // Owns an edit gesture. Dynamic objects become obstacles during the drag;
 // their original mass/gravity settings are restored at rest on release.
 class TransformEditor {
   public:
-    bool capturesMouse() const { return hovered_ || dragging_; }
+    bool capturesMouse() const {
+        return hovered_ || dragging_;
+    }
     void setTool(TransformTool tool) {
-        if (!dragging_ && tool_ != tool) {
+        if (!dragging_) {
             tool_ = tool;
-            ui::cancelGizmo();
         }
     }
-    bool localSpace() const { return localSpace_; }
+    bool localSpace() const {
+        return localSpace_;
+    }
     void setLocalSpace(bool value) {
-        if (!dragging_ && localSpace_ != value) {
+        if (!dragging_) {
             localSpace_ = value;
-            ui::cancelGizmo();
         }
     }
-    bool dragging() const { return dragging_; }
+    bool dragging() const {
+        return dragging_;
+    }
     void finish(World& world) {
-        ui::cancelGizmo();
+        ImGuizmo::Enable(false); // cancel any internal gesture on focus/mode/selection changes
         if (heldBody_ && world.alive(heldEntity_)) {
             world.add(heldEntity_, savedBody_);
         }
@@ -46,7 +51,7 @@ class TransformEditor {
               const OrbitCamera& camera,
               float aspect,
               const EditorRect* scene = nullptr,
-              ui::DrawList* drawList = nullptr,
+              ImDrawList* drawList = nullptr,
               const AssetManager* assets = nullptr);
 
   private:
@@ -55,7 +60,7 @@ class TransformEditor {
                            const OrbitCamera& camera,
                            float aspect,
                            const EditorRect& scene,
-                           ui::DrawList* drawList);
+                           ImDrawList* drawList);
     int face_ = -1;
     Collider faceStart_;
     Transform faceTransform_;

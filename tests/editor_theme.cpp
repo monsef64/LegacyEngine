@@ -1,59 +1,51 @@
 #include "editor/editor_theme.hpp"
-#include "editor/editor_palette.hpp"
 #include <cassert>
 #include <cmath>
 #include <initializer_list>
 
 int main() {
-    ui::createContext();
+    ImGui::CreateContext();
     applyEditorTheme();
-    auto* font = ui::defaultFont();
-    assert(font != nullptr);
-    ui::renderStandaloneFpsOverlay(1280, 720, "FPS: 60");
-    assert(ui::fontSize() >= 18.0f && ui::fontSize() <= 24.0f);
+    auto& io = ImGui::GetIO();
+    assert(io.FontDefault != nullptr);
+    assert(io.Fonts->Fonts.Size == 1);
+    assert(io.FontDefault->LegacySize == 18.0f);
     // Exercise rasterization at both ordinary and high pixel density.
     for (float density : {1.0f, 2.0f}) {
-        ui::setDisplaySize(1280, 720, density, density);
-        ui::setDeltaTime(1.0f / 60.0f);
-
-        assert(font->hasGlyph(0xf07b) && font->hasGlyph(0xf1c9) && font->hasGlyph(0xf03e));
-        ui::newFrame();
-        ui::setNextWindowPos(ui::Vec2(10,10));
-        ui::setNextWindowSize(ui::Vec2(420,160));
-        ui::beginWindow("Typography");
-        ui::textUnformatted("Hierarchy / Inspector: Position 0.125");
-        ui::textUnformatted("\xef\x81\xbb  \xef\x87\x89  \xef\x80\xbe");
-        ui::endWindow();
-        ui::render();
-        assert(ui::lastFrameVertexCount() > 0);
+        io.DisplaySize = ImVec2(1280,720);
+        io.DisplayFramebufferScale = ImVec2(density,density);
+        io.DeltaTime = 1.0f/60;
+        io.Fonts->Build();
+        assert(io.FontDefault->IsGlyphInFont(0xf07b) && io.FontDefault->IsGlyphInFont(0xf1c9) && io.FontDefault->IsGlyphInFont(0xf03e));
+        ImGui::NewFrame();
+        ImGui::SetNextWindowPos(ImVec2(10,10));
+        ImGui::SetNextWindowSize(ImVec2(420,160));
+        ImGui::Begin("Typography");
+        ImGui::TextUnformatted("Hierarchy / Inspector: Position 0.125");
+        ImGui::TextUnformatted("\xef\x81\xbb  \xef\x87\x89  \xef\x80\xbe");
+        ImGui::End();
+        ImGui::Render();
+        assert(ImGui::GetDrawData()->TotalVtxCount > 0);
     }
-    auto& style = ui::style();
+    auto& style = ImGui::GetStyle();
     assert(style.AntiAliasedLines && style.AntiAliasedFill);
     assert(style.WindowRounding == 0);
     for (auto& color : style.Colors) {
         assert(std::isfinite(color.x) && color.x >= 0 && color.x <= 1);
         assert(std::isfinite(color.w) && color.w >= 0 && color.w <= 1);
     }
-    const auto originalButton=style.Colors[ui::Col_Button];const float originalBorder=style.FrameBorderSize;
+    const auto originalButton=style.Colors[ImGuiCol_Button];const float originalBorder=style.FrameBorderSize;
     applyEditorPalette(2);
-    assert(activeEditorTheme==2 && style.FrameBorderSize==1 && style.Colors[ui::Col_WindowBg].x>.7f);
-    const auto classicButton = style.Colors[ui::Col_Button];
-    ui::newFrame();ui::setNextWindowPos({10,10});ui::setNextWindowSize({300,200});ui::beginWindow("Classic theme");
-    auto* draw=ui::windowDrawList();const auto start=draw->vertices().size();
-    draw->addRectFilled({30,50},{130,80},ui::colorU32(ui::Col_Button));
-    const auto roundedStart = draw->vertices().size();
-    draw->addRect({150,50},{230,100},ui::colorU32(ui::Col_Button),8,2);
-    assert(draw->vertices().size() >= roundedStart + 100);
-    ui::endWindow();ui::render();finishEditorTheme();
-    const auto& vertices = draw->vertices();
-    assert(vertices.size() >= start + 6);
-    const auto buttonColour = ui::colorU32(ui::Col_Button);
-    assert(vertices[start].colour == buttonColour && vertices[start + 2].colour == buttonColour);
-    assert(style.FrameBorderSize==1 && style.Colors[ui::Col_Button].x==classicButton.x);
+    assert(activeEditorTheme==2 && style.FrameBorderSize==1 && style.Colors[ImGuiCol_WindowBg].x>.7f);
+    ImGui::NewFrame();ImGui::SetNextWindowPos({10,10});ImGui::SetNextWindowSize({300,200});ImGui::Begin("Classic theme");
+    auto* draw=ImGui::GetWindowDrawList();const int start=draw->VtxBuffer.Size;
+    draw->AddRectFilled({30,50},{130,80},ImGui::GetColorU32(ImGuiCol_Button));
+    ImGui::End();ImGui::Render();finishEditorTheme(ImGui::GetDrawData());
+    assert(draw->VtxBuffer[start].col!=draw->VtxBuffer[start+2].col);
     applyEditorPalette(0);
-    assert(style.FrameBorderSize==originalBorder && style.Colors[ui::Col_Button].x==originalButton.x);
-    applyEditorPalette(3);assert(activeEditorTheme==3 && style.Colors[ui::Col_WindowBg].x<.2f && style.Colors[ui::Col_Header].z>style.Colors[ui::Col_Header].x);
-    applyEditorPalette(1);assert(style.Colors[ui::Col_Button].x==style.Colors[ui::Col_Button].y);
+    assert(style.FrameBorderSize==originalBorder && style.Colors[ImGuiCol_Button].x==originalButton.x);
+    applyEditorPalette(3);assert(activeEditorTheme==3 && style.Colors[ImGuiCol_WindowBg].x<.2f && style.Colors[ImGuiCol_Header].z>style.Colors[ImGuiCol_Header].x);
+    applyEditorPalette(1);assert(style.Colors[ImGuiCol_Button].x==style.Colors[ImGuiCol_Button].y);
     applyEditorPalette(0);
-    ui::destroyContext();
+    ImGui::DestroyContext();
 }

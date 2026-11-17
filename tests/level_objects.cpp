@@ -21,18 +21,18 @@ int main()
     require(objects.size()==3,"empty game objects are listed");
     require(objects[0].entity==first && objects[1].entity==second,"stable entity order");
     require(objects[0].hasCollider && !objects[1].hasCollider,"visual helpers identified");
-    ui::createContext();
-    auto& io=ui::io();
-    io.DisplaySize=ui::Vec2(1280,720); io.DeltaTime=1.0f/60;
-
+    ImGui::CreateContext();
+    auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
+    io.DisplaySize=ImVec2(1280,720); io.DeltaTime=1.0f/60;
+    unsigned char* pixels; int w,h; io.Fonts->GetTexDataAsRGBA32(&pixels,&w,&h);
     Entity selected;
     auto frame=[&](bool enabled=true) {
-        ui::newFrame(); drawLevelObjects(world,selected,enabled); ui::render();
+        ImGui::NewFrame(); drawLevelObjects(world,selected,enabled); ImGui::Render();
     };
     auto click=[&](float y,bool enabled=true) {
-        ui::injectMousePos(130,y); frame(enabled);
-        ui::injectMouseButton(0,true); frame(enabled);
-        ui::injectMouseButton(0,false); frame(enabled);
+        io.AddMousePosEvent(70,y); frame(enabled);
+        io.AddMouseButtonEvent(0,true); frame(enabled);
+        io.AddMouseButtonEvent(0,false); frame(enabled);
     };
     frame(); frame();
     float rowY=0;
@@ -47,6 +47,6 @@ int main()
     require(selected==Entity{},"destroyed selection cleared");
     const Entity replacement=add("Sphere");
     require(replacement!=second && levelObjects(world).size()==3,"new generation listed without stale selection");
-    ui::destroyContext();
+    ImGui::DestroyContext();
     std::puts("Level object listing, selection, disabled mode and lifecycle tests passed");
 }

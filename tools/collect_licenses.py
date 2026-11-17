@@ -44,11 +44,8 @@ comments(ROOT / 'third_party/glad/include/KHR/khrplatform.h', 'Khronos.txt')
 copy(ROOT / 'third_party/simdjson/LICENSE', 'Apache-2.0.txt')
 for folder, filename, target in [
     ('sdl3', 'LICENSE.txt', 'SDL3.txt'), ('jolt', 'LICENSE', 'Jolt.txt'),
-    ('assimp', 'LICENSE', 'assimp.txt'), ('zstd', 'LICENSE', 'Zstandard.txt'),
-    ('mygui', 'COPYING.MIT', 'MyGUI.txt'),
-    ('freetype', 'LICENSE.TXT', 'FreeType-License.txt'),
-    ('freetype', 'docs/FTL.TXT', 'FreeType-FTL.txt'),
-    ('pugixml', 'LICENSE.md', 'pugixml.txt'), ('utfcpp', 'LICENSE', 'utfcpp.txt')]:
+    ('imgui', 'LICENSE.txt', 'DearImGui.txt'), ('imguizmo', 'LICENSE', 'ImGuizmo.txt'),
+    ('assimp', 'LICENSE', 'assimp.txt')]:
     copy(args.build / '_deps' / (folder + '-src') / filename, target)
 comments(args.build / '_deps/lua-src/lua.h', 'Lua.txt')
 for dependency, subtree in [('assimp', 'contrib'), ('sdl3', 'src')]:

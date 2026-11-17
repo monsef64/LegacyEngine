@@ -3,7 +3,7 @@
 #include "input/input.hpp"
 #include "project/json_io.hpp"
 #include <fstream>
-#include "ui/mygui_ui.hpp"
+#include <imgui.h>
 #include <iomanip>
 struct InputSettings {
     bool visible = false;
@@ -162,14 +162,14 @@ struct InputSettings {
             waiting.clear();
             return;
         }
-        ui::setNextWindowSize(ui::Vec2(740, 420), ui::Cond_FirstUseEver);
-        if (ui::beginWindow("Input Settings", &visible, ui::WindowFlags_NoDocking)) {
-            ui::textWrapped(
+        ImGui::SetNextWindowSize(ImVec2(740, 420), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Input Settings", &visible, ImGuiWindowFlags_NoDocking)) {
+            ImGui::TextWrapped(
                 "Each action has three alternative bindings. Click a slot and press a keyboard key, mouse button or gamepad button. Escape cancels. Right-click a slot to clear it.");
-            ui::beginDisabled(!editable || !waiting.empty());
-            ui::inputText("New button name", name, sizeof(name));
-            ui::sameLine();
-            if (ui::button("Add mapping") && name[0] && input.buttons.size() < 256) {
+            ImGui::BeginDisabled(!editable || !waiting.empty());
+            ImGui::InputText("New button name", name, sizeof(name));
+            ImGui::SameLine();
+            if (ImGui::Button("Add mapping") && name[0] && input.buttons.size() < 256) {
                 if (!input.buttons.count(name)) {
                     input.buttons[name] = 0;
                     save(assets, input);
@@ -179,55 +179,55 @@ struct InputSettings {
                 }
             }
             std::string remove, renameFrom, renameTo;
-            if (ui::beginTable("Mappings",
+            if (ImGui::BeginTable("Mappings",
                                   5,
-                                  ui::TableFlags_BordersInnerV | ui::TableFlags_RowBg |
-                                      ui::TableFlags_SizingStretchSame)) {
-                ui::tableSetupColumn("Button name");
-                ui::tableSetupColumn("Binding 1");
-                ui::tableSetupColumn("Binding 2");
-                ui::tableSetupColumn("Binding 3");
-                ui::tableSetupColumn("Actions", ui::TableColumnFlags_WidthFixed, 65);
-                ui::tableHeadersRow();
+                                  ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
+                                      ImGuiTableFlags_SizingStretchSame)) {
+                ImGui::TableSetupColumn("Button name");
+                ImGui::TableSetupColumn("Binding 1");
+                ImGui::TableSetupColumn("Binding 2");
+                ImGui::TableSetupColumn("Binding 3");
+                ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 65);
+                ImGui::TableHeadersRow();
                 for (const auto& pair : input.buttons) {
-                    ui::pushId(pair.first.c_str());
-                    ui::tableNextRow();
-                    ui::tableNextColumn();
+                    ImGui::PushID(pair.first.c_str());
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
                     char renamed[129];
                     std::snprintf(renamed, sizeof(renamed), "%s", pair.first.c_str());
-                    ui::setNextItemWidth(-1);
-                    if (ui::inputText("##Name",
+                    ImGui::SetNextItemWidth(-1);
+                    if (ImGui::InputText("##Name",
                                          renamed,
                                          sizeof(renamed),
-                                         ui::InputTextFlags_EnterReturnsTrue) &&
+                                         ImGuiInputTextFlags_EnterReturnsTrue) &&
                         renamed[0]) {
                         renameFrom = pair.first;
                         renameTo = renamed;
                     }
                     for (int slot = 0; slot < 3; ++slot) {
-                        ui::tableNextColumn();
-                        ui::pushId(slot);
-                        if (ui::button(label(input.binding(pair.first, slot)).c_str(),
-                                          ui::Vec2(-1, 0))) {
+                        ImGui::TableNextColumn();
+                        ImGui::PushID(slot);
+                        if (ImGui::Button(label(input.binding(pair.first, slot)).c_str(),
+                                          ImVec2(-1, 0))) {
                             waiting = pair.first;
                             waitingSlot = slot;
                         }
-                        if (ui::beginPopupContextItem("Binding actions")) {
-                            if (ui::menuItem("Clear binding")) {
+                        if (ImGui::BeginPopupContextItem("Binding actions")) {
+                            if (ImGui::MenuItem("Clear binding")) {
                                 input.bind(pair.first, slot, 0);
                                 save(assets, input);
                             }
-                            ui::endPopup();
+                            ImGui::EndPopup();
                         }
-                        ui::popId();
+                        ImGui::PopID();
                     }
-                    ui::tableNextColumn();
-                    if (ui::smallButton("Remove")) {
+                    ImGui::TableNextColumn();
+                    if (ImGui::SmallButton("Remove")) {
                         remove = pair.first;
                     }
-                    ui::popId();
+                    ImGui::PopID();
                 }
-                ui::endTable();
+                ImGui::EndTable();
             }
             if (!remove.empty()) {
                 input.buttons.erase(remove);
@@ -246,20 +246,20 @@ struct InputSettings {
                     save(assets, input);
                 }
             }
-            ui::endDisabled();
+            ImGui::EndDisabled();
             if (!waiting.empty()) {
-                ui::text("Press a key, mouse or gamepad button for '%s', slot %d...",
+                ImGui::Text("Press a key, mouse or gamepad button for '%s', slot %d...",
                             waiting.c_str(),
                             waitingSlot + 1);
-                if (ui::button("Cancel capture")) {
+                if (ImGui::Button("Cancel capture")) {
                     waiting.clear();
                 }
             }
             if (!error.empty()) {
-                ui::textWrapped("%s", error.c_str());
+                ImGui::TextWrapped("%s", error.c_str());
             }
         }
-        ui::endWindow();
+        ImGui::End();
         if (!visible) {
             waiting.clear();
         }

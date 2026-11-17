@@ -5,7 +5,7 @@
 #include "editor/value_context.hpp"
 #include "scene/scene_camera.hpp"
 #include "terrain/terrain_tools.hpp"
-#include "ui/mygui_ui.hpp"
+#include <imgui.h>
 namespace Terrains {
 class Editor {
     Entity selected_{}, stroke_{};
@@ -16,24 +16,24 @@ class Editor {
     std::string source_, heightmap_, error_;
 
     void drawBrushGrid() {
-        ui::text("Brush: %s", brushNames[brushShape_]);
+        ImGui::Text("Brush: %s", brushNames[brushShape_]);
         // Responsive horizontal/vertical thumbnail grid, scrollable on narrow panels.
         constexpr float cell = 54;
-        int columns = std::clamp(int(ui::contentRegionAvail().x / (cell + 6)), 1, 5);
-        if (ui::beginChild("Brush shapes", ui::Vec2(0, 190), true)) {
+        int columns = std::clamp(int(ImGui::GetContentRegionAvail().x / (cell + 6)), 1, 5);
+        if (ImGui::BeginChild("Brush shapes", ImVec2(0, 190), true)) {
             for (int i = 0; i < int(brushNames.size()); ++i) {
-                ui::pushId(i);
+                ImGui::PushID(i);
                 if (i % columns) {
-                    ui::sameLine(0, 6);
+                    ImGui::SameLine(0, 6);
                 }
-                auto origin = ui::cursorScreenPos();
-                if (ui::invisibleButton("Brush", ui::Vec2(cell, cell))) {
+                auto origin = ImGui::GetCursorScreenPos();
+                if (ImGui::InvisibleButton("Brush", ImVec2(cell, cell))) {
                     brushShape_ = i;
                 }
-                bool hovered = ui::isItemHovered();
-                auto* draw = ui::windowDrawList();
-                draw->addRectFilled(
-                    origin, {origin.x + cell, origin.y + cell}, UI_COL32(18, 21, 25, 255), 4);
+                bool hovered = ImGui::IsItemHovered();
+                auto* draw = ImGui::GetWindowDrawList();
+                draw->AddRectFilled(
+                    origin, {origin.x + cell, origin.y + cell}, IM_COL32(18, 21, 25, 255), 4);
                 constexpr int pixels = 24;
                 constexpr float spacing = (cell - 6) / pixels;
                 for (int z = 0; z < pixels; ++z) {
@@ -41,24 +41,25 @@ class Editor {
                         float value =
                             brushMask(i, (x + .5f) / pixels * 2 - 1, (z + .5f) / pixels * 2 - 1);
                         int gray = int(value * 255);
-                        auto a = ui::Vec2(origin.x + 3 + x * spacing, origin.y + 3 + z * spacing);
-                        draw->addRectFilled(
-                            a, {a.x + spacing, a.y + spacing}, UI_COL32(gray, gray, gray, 255));
+                        auto a = ImVec2(origin.x + 3 + x * spacing, origin.y + 3 + z * spacing);
+                        draw->AddRectFilled(
+                            a, {a.x + spacing, a.y + spacing}, IM_COL32(gray, gray, gray, 255));
                     }
                 }
-                draw->addRect(origin,
+                draw->AddRect(origin,
                               {origin.x + cell, origin.y + cell},
-                              i == brushShape_ ? UI_COL32(255, 210, 65, 255)
-                                               : UI_COL32(75, 80, 85, 255),
+                              i == brushShape_ ? IM_COL32(255, 210, 65, 255)
+                                               : IM_COL32(75, 80, 85, 255),
                               4,
+                              0,
                               i == brushShape_ ? 2 : 1);
                 if (hovered) {
-                    ui::setTooltip("%d. %s", i + 1, brushNames[i]);
+                    ImGui::SetTooltip("%d. %s", i + 1, brushNames[i]);
                 }
-                ui::popId();
+                ImGui::PopID();
             }
         }
-        ui::endChild();
+        ImGui::EndChild();
     }
 
   public:
@@ -105,17 +106,17 @@ class Editor {
         if (!visible_) {
             return;
         }
-        ui::setNextWindowSize(ui::Vec2(360, 600), ui::Cond_FirstUseEver);
-        if (ui::beginWindow("Terrain tools", &visible_)) {
-            ui::beginDisabled(!editable);
+        ImGui::SetNextWindowSize(ImVec2(360, 600), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Terrain tools", &visible_)) {
+            ImGui::BeginDisabled(!editable);
             auto& terrain = world.get<Terrain>(selected);
             EditorValues::Checkbox("Enable Scene brush", &enabled_);
             EditorValues::Combo("Tool", &tool_, "Raise\0Lower\0Smooth\0Flatten\0Paint\0");
             drawBrushGrid();
             EditorValues::DragFloat(
-                "Brush radius", &radius_, .1f, .1f, 500, "%.1f m", ui::SliderFlags_AlwaysClamp);
+                "Brush radius", &radius_, .1f, .1f, 500, "%.1f m", ImGuiSliderFlags_AlwaysClamp);
             EditorValues::DragFloat(
-                "Strength", &strength_, .1f, .01f, 100, "%.2f", ui::SliderFlags_AlwaysClamp);
+                "Strength", &strength_, .1f, .01f, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
             EditorValues::SliderFloat("Falloff", &falloff_, 0, 1);
             if (tool_ == 3) {
                 EditorValues::DragFloat("Flatten height", &flatten_, .1f, -10000, 10000);
@@ -123,14 +124,14 @@ class Editor {
             if (tool_ == 4) {
                 EditorValues::SliderInt("Paint layer", &layer_, 0, 3);
             }
-            ui::textWrapped(
+            ImGui::TextWrapped(
                 "Left-drag Scene to sculpt/paint. Alt navigation and right-drag remain camera controls. Release commits one undo step and updates collision.");
-            ui::separator();
-            ui::textWrapped(
+            ImGui::Separator();
+            ImGui::TextWrapped(
                 "For baked direct lighting: mark this object Static, set lights to Static, then bake from Windows > Lighting. Save afterward. Rebake after sculpting or moving terrain.");
             if (terrain.data && !terrain.data->lightmap.empty()) {
-                ui::textWrapped("Baked atlas: %s", terrain.data->lightmap.c_str());
-                if (ui::button("Clear terrain bake")) {
+                ImGui::TextWrapped("Baked atlas: %s", terrain.data->lightmap.c_str());
+                if (ImGui::Button("Clear terrain bake")) {
                     finish(world, selected, history);
                     history.commit(world, selected);
                     writable(terrain);
@@ -139,8 +140,8 @@ class Editor {
                     history.commit(world, selected);
                 }
             }
-            ui::beginDisabled(!allowSave);
-            if (ui::button("Save .terrain asset")) {
+            ImGui::BeginDisabled(!allowSave);
+            if (ImGui::Button("Save .terrain asset")) {
                 try {
                     finish(world, selected, history);
                     history.commit(world, selected);
@@ -151,15 +152,15 @@ class Editor {
                     error_ = e.what();
                 }
             }
-            ui::endDisabled();
-            ui::textWrapped(
+            ImGui::EndDisabled();
+            ImGui::TextWrapped(
                 "%s%s",
                 terrain.asset.empty() ? "Unsaved terrain" : terrain.asset.c_str(),
                 terrain.data && terrain.data->revision != terrain.savedRevision ? " *" : "");
             assetPicker("Terrain asset", source_, &assets, [](const std::string& path) {
                 return asset(path);
             });
-            if (ui::button("Load selected terrain") && !source_.empty()) {
+            if (ImGui::Button("Load selected terrain") && !source_.empty()) {
                 try {
                     finish(world, selected, history);
                     history.commit(world, selected);
@@ -173,23 +174,23 @@ class Editor {
                     error_ = e.what();
                 }
             }
-            ui::textDisabled("Load/Import/Flat replace data; Undo restores the prior sculpt.");
+            ImGui::TextDisabled("Load/Import/Flat replace data; Undo restores the prior sculpt.");
             if (terrain.data) {
                 auto& data = *terrain.data;
-                ui::text("%d x %d height samples | %.1f m square",
+                ImGui::Text("%d x %d height samples | %.1f m square",
                             data.resolution,
                             data.resolution,
                             data.size);
                 for (int i = 0; i < 4; ++i) {
-                    ui::pushId(i);
+                    ImGui::PushID(i);
                     std::string title = "Material layer " + std::to_string(i);
-                    if (ui::treeNode(title.c_str())) {
+                    if (ImGui::TreeNode(title.c_str())) {
                         auto edited = data.layers[i];
                         bool changed = assetPicker(
                             "Material asset", edited.material, &assets, [](const std::string& p) {
                                 return materialAsset(p);
                             });
-                        ui::textWrapped(
+                        ImGui::TextWrapped(
                             "Material asset supplies albedo and normal maps; direct map fields are used when no material is selected. Tint, strength and tiling multiply the material settings.");
                         changed |= assetPicker(
                             "Albedo", edited.texture, &assets, [](const std::string& p) {
@@ -208,18 +209,18 @@ class Editor {
                                                            .01f,
                                                            1000,
                                                            "%.1f",
-                                                           ui::SliderFlags_AlwaysClamp);
+                                                           ImGuiSliderFlags_AlwaysClamp);
                         if (changed) {
                             writable(terrain);
                             terrain.data->layers[i] = edited;
                             terrain.data->revision = nextRevision();
                         }
-                        ui::treePop();
+                        ImGui::TreePop();
                     }
-                    ui::popId();
+                    ImGui::PopID();
                 }
             }
-            if (ui::collapsingHeader("Heightmap import")) {
+            if (ImGui::CollapsingHeader("Heightmap import")) {
                 assetPicker("Heightmap", heightmap_, &assets, [](const std::string& p) {
                     return materialTexturePath(p);
                 });
@@ -229,9 +230,9 @@ class Editor {
                                         0,
                                         10000,
                                         "%.1f m",
-                                        ui::SliderFlags_AlwaysClamp);
+                                        ImGuiSliderFlags_AlwaysClamp);
                 EditorValues::DragFloat("Height offset", &importOffset_, .1f, -10000, 10000);
-                if (ui::button("Import heightmap") && !heightmap_.empty()) {
+                if (ImGui::Button("Import heightmap") && !heightmap_.empty()) {
                     try {
                         finish(world, selected, history);
                         history.commit(world, selected);
@@ -242,14 +243,14 @@ class Editor {
                         error_ = e.what();
                     }
                 }
-                ui::textWrapped(
+                ImGui::TextWrapped(
                     "8/16-bit images, up to 4096 pixels. Bilinearly resampled to this terrain grid. Image top maps to terrain Z=0.");
             }
-            if (ui::collapsingHeader("New flat terrain")) {
+            if (ImGui::CollapsingHeader("New flat terrain")) {
                 EditorValues::Combo("Resolution", &resolution_, "65\0 129\0 257\0");
                 EditorValues::DragFloat(
-                    "Terrain size", &size_, 1, 1, 10000, "%.1f m", ui::SliderFlags_AlwaysClamp);
-                if (ui::button("Replace with flat terrain")) {
+                    "Terrain size", &size_, 1, 1, 10000, "%.1f m", ImGuiSliderFlags_AlwaysClamp);
+                if (ImGui::Button("Replace with flat terrain")) {
                     finish(world, selected, history);
                     history.commit(world, selected);
                     auto d = std::make_shared<Data>();
@@ -263,11 +264,11 @@ class Editor {
                 }
             }
             if (!error_.empty()) {
-                ui::textWrapped("%s", error_.c_str());
+                ImGui::TextWrapped("%s", error_.c_str());
             }
-            ui::endDisabled();
+            ImGui::EndDisabled();
         }
-        ui::endWindow();
+        ImGui::End();
         if (!visible_ || !enabled_) {
             finish(world, selected, history);
         }
@@ -278,7 +279,7 @@ class Editor {
                  const Ray* ray,
                  const Mat4& vp,
                  const EditorRect& rect,
-                 ui::DrawList* draw) {
+                 ImDrawList* draw) {
         if (!draw || !ray || !active(world, selected)) {
             return;
         }
@@ -297,7 +298,7 @@ class Editor {
         if (!intersect(d, origin, direction, hit)) {
             return;
         }
-        auto project = [&](float x, float z, ui::Vec2& out) {
+        auto project = [&](float x, float z, ImVec2& out) {
             if (x < 0 || z < 0 || x > d.size || z > d.size) {
                 return false;
             }
@@ -321,35 +322,35 @@ class Editor {
             out = {rect.x + (p.x + 1) * .5f * rect.width, rect.y + (1 - p.y) * .5f * rect.height};
             return true;
         };
-        draw->pushClipRect({rect.x, rect.y}, {rect.x + rect.width, rect.y + rect.height}, true);
-        auto ring = [&](float radius, uint32_t color, float width) {
-            ui::Vec2 previous;
+        draw->PushClipRect({rect.x, rect.y}, {rect.x + rect.width, rect.y + rect.height}, true);
+        auto ring = [&](float radius, ImU32 color, float width) {
+            ImVec2 previous;
             bool valid = false;
             for (int i = 0; i <= 128; ++i) {
                 float angle = i * (2 * kPi / 128);
-                ui::Vec2 p;
+                ImVec2 p;
                 bool next =
                     project(hit.x + std::cos(angle) * radius, hit.z + std::sin(angle) * radius, p);
                 if (valid && next) {
-                    draw->addLine(previous, p, color, width);
+                    draw->AddLine(previous, p, color, width);
                 }
                 previous = p;
                 valid = next;
             }
         };
-        ring(radius_, UI_COL32(10, 10, 10, 220), 4);
-        ring(radius_, UI_COL32(255, 210, 65, 255), 2);
+        ring(radius_, IM_COL32(10, 10, 10, 220), 4);
+        ring(radius_, IM_COL32(255, 210, 65, 255), 2);
         if (brushShape_ == 0 && falloff_ > 0) {
             ring(radius_ * std::sqrt(1 - std::pow(.5f, 1 / (falloff_ * 4))),
-                 UI_COL32(255, 230, 130, 190),
+                 IM_COL32(255, 230, 130, 190),
                  1);
         }
-        ui::Vec2 center;
+        ImVec2 center;
         if (project(hit.x, hit.z, center)) {
-            draw->addLine({center.x - 5, center.y}, {center.x + 5, center.y}, UI_COL32_WHITE, 1.5f);
-            draw->addLine({center.x, center.y - 5}, {center.x, center.y + 5}, UI_COL32_WHITE, 1.5f);
+            draw->AddLine({center.x - 5, center.y}, {center.x + 5, center.y}, IM_COL32_WHITE, 1.5f);
+            draw->AddLine({center.x, center.y - 5}, {center.x, center.y + 5}, IM_COL32_WHITE, 1.5f);
         }
-        draw->popClipRect();
+        draw->PopClipRect();
     }
     void stroke(World& world,
                 Entity selected,

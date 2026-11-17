@@ -21,20 +21,20 @@ class AnimationWindow {
     bool dirty_ = false, playing_ = false, loop_ = false, resetPose_ = false;
     struct DisabledScope {
         explicit DisabledScope(bool disabled = true) {
-            ui::beginDisabled(disabled);
+            ImGui::BeginDisabled(disabled);
         }
         ~DisabledScope() {
-            ui::endDisabled();
+            ImGui::EndDisabled();
         }
     };
     struct PopupScope {
         ~PopupScope() {
-            ui::endPopup();
+            ImGui::EndPopup();
         }
     };
     struct TableScope {
         ~TableScope() {
-            ui::endTable();
+            ImGui::EndTable();
         }
     };
     float time_ = 0;
@@ -157,16 +157,16 @@ class AnimationWindow {
             lastCamera_ = cameraState;
             previewRevision_ = modelAssetRevision;
         }
-        ui::image(static_cast<ui::TextureID>(surface_.texture),
-                     ui::Vec2(width, width * 270 / 480),
-                     ui::Vec2(0, 1),
-                     ui::Vec2(1, 0));
-        if (ui::isItemHovered()) {
-            if (ui::isMouseDragging(ui::MouseButton_Right)) {
-                camera_.look(ui::io().MouseDelta.x, ui::io().MouseDelta.y);
+        ImGui::Image(static_cast<ImTextureID>(surface_.texture),
+                     ImVec2(width, width * 270 / 480),
+                     ImVec2(0, 1),
+                     ImVec2(1, 0));
+        if (ImGui::IsItemHovered()) {
+            if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+                camera_.look(ImGui::GetIO().MouseDelta.x, ImGui::GetIO().MouseDelta.y);
             }
-            if (ui::io().MouseWheel) {
-                camera_.zoom(ui::io().MouseWheel);
+            if (ImGui::GetIO().MouseWheel) {
+                camera_.zoom(ImGui::GetIO().MouseWheel);
             }
         }
     }
@@ -291,14 +291,14 @@ class AnimationWindow {
         previewDirty_ = true;
     }
     void drawCurves(float height) {
-        auto pos = ui::cursorScreenPos();
-        float width = std::max(1.f, ui::contentRegionAvail().x);
-        ui::invisibleButton("Curves plot", ui::Vec2(width, height));
-        auto* draw = ui::windowDrawList();
-        draw->addRectFilled(pos, ui::Vec2(pos.x + width, pos.y + height), UI_COL32(30, 33, 39, 255));
+        auto pos = ImGui::GetCursorScreenPos();
+        float width = std::max(1.f, ImGui::GetContentRegionAvail().x);
+        ImGui::InvisibleButton("Curves plot", ImVec2(width, height));
+        auto* draw = ImGui::GetWindowDrawList();
+        draw->AddRectFilled(pos, ImVec2(pos.x + width, pos.y + height), IM_COL32(30, 33, 39, 255));
         if (track_ < 0 || track_ >= int(clip_.tracks.size())) {
-            draw->addText(ui::Vec2(pos.x + 12, pos.y + 12),
-                          UI_COL32(180, 185, 195, 255),
+            draw->AddText(ImVec2(pos.x + 12, pos.y + 12),
+                          IM_COL32(180, 185, 195, 255),
                           "Select a property track in Dope Sheet to view its curves.");
             return;
         }
@@ -311,10 +311,10 @@ class AnimationWindow {
                 high = std::max(high, k.value[lane]);
             }
         }
-        uint32_t colors[]{UI_COL32(235, 100, 100, 255),
-                       UI_COL32(115, 215, 145, 255),
-                       UI_COL32(100, 155, 245, 255),
-                       UI_COL32(215, 170, 240, 255)};
+        ImU32 colors[]{IM_COL32(235, 100, 100, 255),
+                       IM_COL32(115, 215, 145, 255),
+                       IM_COL32(100, 155, 245, 255),
+                       IM_COL32(215, 170, 240, 255)};
         for (int lane = 0; lane < property->lanes(); ++lane) {
             if (selectedLane_ >= 0 && lane != selectedLane_) {
                 continue;
@@ -322,24 +322,24 @@ class AnimationWindow {
             for (std::size_t k = 1; k < track.keys.size(); ++k) {
                 const auto& a = track.keys[k - 1];
                 const auto& b = track.keys[k];
-                ui::Vec2 p{pos.x + a.time / clip_.duration * width,
+                ImVec2 p{pos.x + a.time / clip_.duration * width,
                          pos.y + height - 12 -
                              (a.value[lane] - low) / (high - low) * (height - 24)},
                     q{pos.x + b.time / clip_.duration * width,
                       pos.y + height - 12 - (b.value[lane] - low) / (high - low) * (height - 24)};
                 if (property->kind == AnimationValueKind::Boolean) {
-                    draw->addLine(p, ui::Vec2(q.x, p.y), colors[lane]);
-                    draw->addLine(ui::Vec2(q.x, p.y), q, colors[lane]);
+                    draw->AddLine(p, ImVec2(q.x, p.y), colors[lane]);
+                    draw->AddLine(ImVec2(q.x, p.y), q, colors[lane]);
                 } else {
-                    draw->addLine(p, q, colors[lane], 1.5f);
+                    draw->AddLine(p, q, colors[lane], 1.5f);
                 }
             }
         }
         float x = pos.x + time_ / clip_.duration * width;
-        draw->addLine(ui::Vec2(x, pos.y), ui::Vec2(x, pos.y + height), UI_COL32(245, 190, 70, 255));
-        if (ui::isItemActive()) {
+        draw->AddLine(ImVec2(x, pos.y), ImVec2(x, pos.y + height), IM_COL32(245, 190, 70, 255));
+        if (ImGui::IsItemActive()) {
             time_ =
-                std::clamp((ui::io().MousePos.x - pos.x) / width, 0.f, 1.f) * clip_.duration;
+                std::clamp((ImGui::GetIO().MousePos.x - pos.x) / width, 0.f, 1.f) * clip_.duration;
             playing_ = false;
             resetPose_ = false;
         }
@@ -442,87 +442,87 @@ class AnimationWindow {
             track_ = key_ = -1;
             sheetModel_.clear();
         }
-        ui::setNextWindowSize(ui::Vec2(1100, 570), ui::Cond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(1100, 570), ImGuiCond_FirstUseEver);
         bool openWindow = true;
-        if (ui::beginWindow(dirty_ ? "Animation*###AnimationEditor" : "Animation###AnimationEditor",
+        if (ImGui::Begin(dirty_ ? "Animation*###AnimationEditor" : "Animation###AnimationEditor",
                          &openWindow)) {
             try {
                 if (editMode &&
-                    ui::shortcut(ui::Mod_Ctrl | ui::Key_S, ui::InputFlags_RouteFocused)) {
+                    ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteFocused)) {
                     saveClip(assets);
                 }
-                if (!ui::io().WantTextInput &&
-                    !ui::isPopupOpen("", ui::PopupFlags_AnyPopupId)) {
-                    if (ui::shortcut(ui::Mod_Ctrl | ui::Key_C, ui::InputFlags_RouteFocused)) {
+                if (!ImGui::GetIO().WantTextInput &&
+                    !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+                    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C, ImGuiInputFlags_RouteFocused)) {
                         copyKeys();
                     }
                     if (editMode &&
-                        ui::shortcut(ui::Mod_Ctrl | ui::Key_V, ui::InputFlags_RouteFocused)) {
+                        ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_V, ImGuiInputFlags_RouteFocused)) {
                         pasteKeys();
                     }
                 }
                 {
                     DisabledScope disabled(!editMode);
-                    if (ui::button("Save animation")) {
+                    if (ImGui::Button("Save animation")) {
                         saveClip(assets);
                     }
                 }
-                ui::sameLine();
-                ui::textDisabled("Ctrl+S | all tracks and X/Y/Z values");
+                ImGui::SameLine();
+                ImGui::TextDisabled("Ctrl+S | all tracks and X/Y/Z values");
                 // Compact transport bar, with the sheet always in front rather than
                 // buried below a long stack of property controls.
-                if (ui::button("|<")) {
+                if (ImGui::Button("|<")) {
                     time_ = 0;
                     playing_ = false;
                     resetPose_ = false;
                 }
-                ui::sameLine();
-                if (ui::button("<")) {
+                ImGui::SameLine();
+                if (ImGui::Button("<")) {
                     time_ = std::max(0.f, time_ - 1.f / samples_);
                     playing_ = false;
                     resetPose_ = false;
                 }
-                ui::sameLine();
-                if (ui::button(playing_ ? "Pause" : "Play")) {
+                ImGui::SameLine();
+                if (ImGui::Button(playing_ ? "Pause" : "Play")) {
                     playing_ = !playing_;
                     resetPose_ = false;
                 }
-                ui::sameLine();
-                if (ui::button(">")) {
+                ImGui::SameLine();
+                if (ImGui::Button(">")) {
                     time_ = std::min(clip_.duration, time_ + 1.f / samples_);
                     playing_ = false;
                     resetPose_ = false;
                 }
-                ui::sameLine();
-                if (ui::button(">|")) {
+                ImGui::SameLine();
+                if (ImGui::Button(">|")) {
                     time_ = clip_.duration;
                     playing_ = false;
                     resetPose_ = false;
                 }
-                ui::sameLine();
-                if (ui::button("Stop")) {
+                ImGui::SameLine();
+                if (ImGui::Button("Stop")) {
                     playing_ = false;
                     time_ = 0;
                     resetPose_ = false;
                 }
-                ui::sameLine();
-                if (ui::button("Reset")) {
+                ImGui::SameLine();
+                if (ImGui::Button("Reset")) {
                     playing_ = false;
                     time_ = 0;
                     resetPose_ = true;
                 }
-                ui::sameLine();
+                ImGui::SameLine();
                 EditorValues::Checkbox("Loop", &loop_);
-                ui::sameLine();
-                ui::setNextItemWidth(75);
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(75);
                 int frame = int(std::round(time_ * samples_));
                 if (EditorValues::InputInt("Frame", &frame, 0)) {
                     time_ = std::clamp(frame / float(samples_), 0.f, clip_.duration);
                     playing_ = false;
                     resetPose_ = false;
                 }
-                ui::sameLine();
-                ui::textDisabled(" / %.2fs", clip_.duration);
+                ImGui::SameLine();
+                ImGui::TextDisabled(" / %.2fs", clip_.duration);
                 if (playing_) {
                     time_ += std::isfinite(dt) ? std::clamp(dt, 0.f, .25f) : 0;
                     if (time_ >= clip_.duration) {
@@ -534,21 +534,21 @@ class AnimationWindow {
                         }
                     }
                 }
-                ui::separator();
-                if (ui::button("Clip / Settings")) {
-                    ui::openPopup("Clip settings");
+                ImGui::Separator();
+                if (ImGui::Button("Clip / Settings")) {
+                    ImGui::OpenPopup("Clip settings");
                 }
-                ui::sameLine();
-                ui::textUnformatted(path_.empty() ? "Unsaved animation" : path_.c_str());
-                ui::sameLine();
-                ui::setNextItemWidth(65);
+                ImGui::SameLine();
+                ImGui::TextUnformatted(path_.empty() ? "Unsaved animation" : path_.c_str());
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(65);
                 if (EditorValues::InputInt("Samples", &samples_, 0)) {
                     samples_ = std::clamp(samples_, 1, 240);
                 }
-                ui::sameLine();
-                ui::setNextItemWidth(95);
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(95);
                 EditorValues::SliderFloat("Zoom", &zoom_, 1, 12, "%.1fx");
-                if (ui::beginPopup("Clip settings")) {
+                if (ImGui::BeginPopup("Clip settings")) {
                     PopupScope popup;
                     auto next = path_;
                     if (assetPicker("Open clip",
@@ -560,7 +560,7 @@ class AnimationWindow {
                     }
                     {
                         DisabledScope disabled(!editMode);
-                        if (ui::button("New clip")) {
+                        if (ImGui::Button("New clip")) {
                             if (dirty_) {
                                 error_ = "Save or discard edits first.";
                             } else {
@@ -572,12 +572,12 @@ class AnimationWindow {
                                 time_ = 0;
                             }
                         }
-                        ui::inputText("Asset path", newPath_, sizeof(newPath_));
-                        if (ui::button("Save clip")) {
+                        ImGui::InputText("Asset path", newPath_, sizeof(newPath_));
+                        if (ImGui::Button("Save clip")) {
                             saveClip(assets);
                         }
-                        ui::sameLine();
-                        if (ui::button("Discard edits")) {
+                        ImGui::SameLine();
+                        if (ImGui::Button("Discard edits")) {
                             if (path_.empty()) {
                                 clip_ = {};
                                 previewDirty_ = true;
@@ -606,7 +606,7 @@ class AnimationWindow {
                             }
                         }
                         if (world.alive(selected) && !path_.empty() &&
-                            ui::button("Assign to selected object")) {
+                            ImGui::Button("Assign to selected object")) {
                             history.commit(world, selected);
                             if (!world.has<Animation>(selected)) {
                                 world.add(selected, Animation{});
@@ -618,24 +618,24 @@ class AnimationWindow {
                         }
                     }
                 }
-                if (ui::button("+ Add Property")) {
-                    ui::openPopup("Add property");
+                if (ImGui::Button("+ Add Property")) {
+                    ImGui::OpenPopup("Add property");
                 }
-                if (ui::beginPopup("Add property")) {
+                if (ImGui::BeginPopup("Add property")) {
                     PopupScope popup;
                     DisabledScope disabled(!editMode || clip_.tracks.size() >= 64);
-                    ui::inputText("Child path (empty = self)", target_, sizeof(target_));
-                    if (ui::beginCombo("Property", animationProperties[property_].name)) {
+                    ImGui::InputText("Child path (empty = self)", target_, sizeof(target_));
+                    if (ImGui::BeginCombo("Property", animationProperties[property_].name)) {
                         for (int i = 0;
                              i < int(sizeof(animationProperties) / sizeof(animationProperties[0]));
                              ++i) {
-                            if (ui::selectable(animationProperties[i].name, property_ == i)) {
+                            if (ImGui::Selectable(animationProperties[i].name, property_ == i)) {
                                 property_ = i;
                             }
                         }
-                        ui::endCombo();
+                        ImGui::EndCombo();
                     }
-                    if (ui::button("Add track")) {
+                    if (ImGui::Button("Add track")) {
                         std::string target = target_,
                                     property = animationProperties[property_].name;
                         bool duplicate = false;
@@ -651,11 +651,11 @@ class AnimationWindow {
                             dirty_ = true;
                             previewDirty_ = true;
                         }
-                        ui::closeCurrentPopup();
+                        ImGui::CloseCurrentPopup();
                     }
                 }
-                ui::sameLine();
-                ui::textDisabled(
+                ImGui::SameLine();
+                ImGui::TextDisabled(
                     "Click ruler to scrub | drag diamonds to retime | double-click a lane to capture");
                 if (sheetModel_ != clip_.model || sheetAnimation_ != clip_.modelAnimation) {
                     importedRows_.clear();
@@ -743,31 +743,31 @@ class AnimationWindow {
                 for (const auto& row : importedRows_) {
                     rows.push_back(&row);
                 }
-                const float sheetHeight = std::max(170.f, ui::contentRegionAvail().y - 130.f);
+                const float sheetHeight = std::max(170.f, ImGui::GetContentRegionAvail().y - 130.f);
                 if (!curves_) {
                     const float laneWidth =
-                        std::max(240.f, (ui::contentRegionAvail().x - 280.f) * zoom_);
-                    if (ui::beginTable("Dope sheet",
+                        std::max(240.f, (ImGui::GetContentRegionAvail().x - 280.f) * zoom_);
+                    if (ImGui::BeginTable("Dope sheet",
                                           2,
-                                          ui::TableFlags_BordersInnerV |
-                                              ui::TableFlags_Resizable | ui::TableFlags_ScrollX |
-                                              ui::TableFlags_ScrollY | ui::TableFlags_RowBg,
-                                          ui::Vec2(0, sheetHeight))) {
+                                          ImGuiTableFlags_BordersInnerV |
+                                              ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollX |
+                                              ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg,
+                                          ImVec2(0, sheetHeight))) {
                         TableScope table;
-                        ui::tableSetupColumn(
-                            "Hierarchy / Property", ui::TableColumnFlags_WidthFixed, 260);
-                        ui::tableSetupColumn(
-                            "Timeline", ui::TableColumnFlags_WidthFixed, laneWidth);
-                        ui::tableSetupScrollFreeze(1, 1);
-                        ui::tableNextRow();
-                        ui::tableNextColumn();
-                        ui::textUnformatted("Hierarchy / Property");
-                        ui::tableNextColumn();
-                        auto ruler = ui::cursorScreenPos();
-                        ui::invisibleButton("Ruler", ui::Vec2(laneWidth, 30));
-                        auto* draw = ui::windowDrawList();
-                        if (ui::isItemActive()) {
-                            time_ = std::clamp((ui::io().MousePos.x - ruler.x) / laneWidth,
+                        ImGui::TableSetupColumn(
+                            "Hierarchy / Property", ImGuiTableColumnFlags_WidthFixed, 260);
+                        ImGui::TableSetupColumn(
+                            "Timeline", ImGuiTableColumnFlags_WidthFixed, laneWidth);
+                        ImGui::TableSetupScrollFreeze(1, 1);
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::TextUnformatted("Hierarchy / Property");
+                        ImGui::TableNextColumn();
+                        auto ruler = ImGui::GetCursorScreenPos();
+                        ImGui::InvisibleButton("Ruler", ImVec2(laneWidth, 30));
+                        auto* draw = ImGui::GetWindowDrawList();
+                        if (ImGui::IsItemActive()) {
+                            time_ = std::clamp((ImGui::GetIO().MousePos.x - ruler.x) / laneWidth,
                                                0.f,
                                                1.f) *
                                     clip_.duration;
@@ -784,26 +784,27 @@ class AnimationWindow {
                                           "%d:%02d",
                                           int(t),
                                           int(std::round((t - int(t)) * samples_)));
-                            draw->addText(
-                                ui::Vec2(x + 3, ruler.y), UI_COL32(185, 190, 200, 255), label);
-                            draw->addLine(ui::Vec2(x, ruler.y + 18),
-                                          ui::Vec2(x, ruler.y + 30),
-                                          UI_COL32(110, 115, 125, 255));
+                            draw->AddText(
+                                ImVec2(x + 3, ruler.y), IM_COL32(185, 190, 200, 255), label);
+                            draw->AddLine(ImVec2(x, ruler.y + 18),
+                                          ImVec2(x, ruler.y + 30),
+                                          IM_COL32(110, 115, 125, 255));
                         }
                         const float rulerHead = ruler.x + laneWidth * time_ / clip_.duration;
-                        draw->addTriangleFilled(ui::Vec2(rulerHead - 5, ruler.y + 18),
-                                                ui::Vec2(rulerHead + 5, ruler.y + 18),
-                                                ui::Vec2(rulerHead, ruler.y + 25),
-                                                UI_COL32(235, 90, 75, 255));
-                        // Native retained panels keep table rows as ordinary widgets.
-                        // The source collection is bounded by scene tracks, so lay out
-                        // each row and let MyGUI clip the scrollable parent.
-                        for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
+                        draw->AddTriangleFilled(ImVec2(rulerHead - 5, ruler.y + 18),
+                                                ImVec2(rulerHead + 5, ruler.y + 18),
+                                                ImVec2(rulerHead, ruler.y + 25),
+                                                IM_COL32(235, 90, 75, 255));
+                        ImGuiListClipper clipper;
+                        clipper.Begin(int(rows.size()), 25.f);
+                        while (clipper.Step()) {
+                            for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
+                                 ++rowIndex) {
                                 const auto& row = *rows[rowIndex];
-                                ui::pushId(rowIndex);
-                                ui::tableNextRow(25);
-                                ui::tableNextColumn();
-                                ui::indent(std::min(row.indent, 12) * 12.f);
+                                ImGui::PushID(rowIndex);
+                                ImGui::TableNextRow(0, 25);
+                                ImGui::TableNextColumn();
+                                ImGui::Indent(std::min(row.indent, 12) * 12.f);
                                 auto label = row.track == -2
                                                  ? (collapsed_[row.group] ? "> " : "v ") + row.label
                                                  : row.label;
@@ -820,11 +821,11 @@ class AnimationWindow {
                                     }
                                     label += value;
                                 }
-                                if (ui::selectable(label.c_str(),
+                                if (ImGui::Selectable(label.c_str(),
                                                       row.track >= 0 && track_ == row.track &&
                                                           selectedLane_ == row.lane,
                                                       0,
-                                                      ui::Vec2(0, 21))) {
+                                                      ImVec2(0, 21))) {
                                     if (row.track == -2) {
                                         collapsed_[row.group] = !collapsed_[row.group];
                                     } else {
@@ -833,29 +834,29 @@ class AnimationWindow {
                                         key_ = -1;
                                     }
                                 }
-                                ui::unindent(std::min(row.indent, 12) * 12.f);
-                                if (ui::isItemHovered()) {
-                                    ui::setTooltip("%s%s",
+                                ImGui::Unindent(std::min(row.indent, 12) * 12.f);
+                                if (ImGui::IsItemHovered()) {
+                                    ImGui::SetTooltip("%s%s",
                                                       row.label.c_str(),
                                                       row.track < 0 ? " (imported, read-only)"
                                                                     : "");
                                 }
-                                ui::tableNextColumn();
-                                auto pos = ui::cursorScreenPos();
-                                ui::invisibleButton("Lane", ui::Vec2(laneWidth, 21));
-                                draw = ui::windowDrawList();
+                                ImGui::TableNextColumn();
+                                auto pos = ImGui::GetCursorScreenPos();
+                                ImGui::InvisibleButton("Lane", ImVec2(laneWidth, 21));
+                                draw = ImGui::GetWindowDrawList();
                                 for (int i = 0; i <= ticks; ++i) {
                                     float x = pos.x + laneWidth * i / ticks;
-                                    draw->addLine(ui::Vec2(x, pos.y),
-                                                  ui::Vec2(x, pos.y + 25),
-                                                  UI_COL32(70, 74, 82, 100));
+                                    draw->AddLine(ImVec2(x, pos.y),
+                                                  ImVec2(x, pos.y + 25),
+                                                  IM_COL32(70, 74, 82, 100));
                                 }
-                                if (ui::isItemClicked()) {
+                                if (ImGui::IsItemClicked()) {
                                     draggingKey_ = false;
                                     float nearest = 8;
                                     for (int k = 0; k < int(row.times.size()); ++k) {
                                         float distance = std::abs(
-                                            ui::io().MousePos.x -
+                                            ImGui::GetIO().MousePos.x -
                                             (pos.x + laneWidth * row.times[k] / clip_.duration));
                                         if (distance < nearest) {
                                             nearest = distance;
@@ -867,7 +868,7 @@ class AnimationWindow {
                                         }
                                     }
                                     if (nearest == 8) {
-                                        time_ = std::clamp((ui::io().MousePos.x - pos.x) /
+                                        time_ = std::clamp((ImGui::GetIO().MousePos.x - pos.x) /
                                                                laneWidth,
                                                            0.f,
                                                            1.f) *
@@ -879,9 +880,9 @@ class AnimationWindow {
                                     playing_ = false;
                                     resetPose_ = false;
                                 }
-                                if (ui::isItemActive() && ui::isMouseDragging(0)) {
+                                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)) {
                                     float t =
-                                        std::round(std::clamp((ui::io().MousePos.x - pos.x) /
+                                        std::round(std::clamp((ImGui::GetIO().MousePos.x - pos.x) /
                                                                   laneWidth,
                                                               0.f,
                                                               1.f) *
@@ -903,17 +904,17 @@ class AnimationWindow {
                                         time_ = t;
                                     }
                                 }
-                                if (ui::isItemHovered() && ui::isMouseDoubleClicked(0) &&
+                                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0) &&
                                     row.track >= 0 && editMode) {
                                     captureKey(world, selected, row.track);
                                 }
                                 const float firstTime =
                                     std::max(0.f,
-                                             (draw->clipRectMin().x - pos.x - 5) / laneWidth *
+                                             (draw->GetClipRectMin().x - pos.x - 5) / laneWidth *
                                                  clip_.duration);
                                 const float lastTime =
                                     std::min(clip_.duration,
-                                             (draw->clipRectMax().x - pos.x + 5) / laneWidth *
+                                             (draw->GetClipRectMax().x - pos.x + 5) / laneWidth *
                                                  clip_.duration);
                                 auto marker =
                                     std::lower_bound(row.times.begin(), row.times.end(), firstTime);
@@ -921,13 +922,13 @@ class AnimationWindow {
                                     const int k = int(marker - row.times.begin());
                                     const float x = pos.x + laneWidth * (*marker) / clip_.duration,
                                                 y = pos.y + 10;
-                                    const uint32_t color = row.track == track_ && k == key_
-                                                            ? UI_COL32(255, 197, 70, 255)
-                                                            : UI_COL32(175, 190, 210, 255);
-                                    draw->addQuadFilled(ui::Vec2(x, y - 4),
-                                                        ui::Vec2(x + 4, y),
-                                                        ui::Vec2(x, y + 4),
-                                                        ui::Vec2(x - 4, y),
+                                    const ImU32 color = row.track == track_ && k == key_
+                                                            ? IM_COL32(255, 197, 70, 255)
+                                                            : IM_COL32(175, 190, 210, 255);
+                                    draw->AddQuadFilled(ImVec2(x, y - 4),
+                                                        ImVec2(x + 4, y),
+                                                        ImVec2(x, y + 4),
+                                                        ImVec2(x - 4, y),
                                                         color);
                                     // Dense imported clips draw at most one diamond per two
                                     // pixels, rather than generating a million hidden quads.
@@ -935,68 +936,69 @@ class AnimationWindow {
                                     marker = std::lower_bound(marker + 1, row.times.end(), next);
                                 }
                                 float playhead = pos.x + laneWidth * time_ / clip_.duration;
-                                draw->addLine(ui::Vec2(playhead, pos.y),
-                                              ui::Vec2(playhead, pos.y + 25),
-                                              UI_COL32(235, 90, 75, 255),
+                                draw->AddLine(ImVec2(playhead, pos.y),
+                                              ImVec2(playhead, pos.y + 25),
+                                              IM_COL32(235, 90, 75, 255),
                                               1.5f);
-                                ui::popId();
+                                ImGui::PopID();
+                            }
                         }
                         if (rows.empty()) {
-                            ui::tableNextRow();
-                            ui::tableNextColumn();
-                            ui::textDisabled("Add a property to begin.");
+                            ImGui::TableNextRow();
+                            ImGui::TableNextColumn();
+                            ImGui::TextDisabled("Add a property to begin.");
                         }
                     }
                 } else {
                     drawCurves(sheetHeight);
                 }
-                if (ui::button("Dope Sheet")) {
+                if (ImGui::Button("Dope Sheet")) {
                     curves_ = false;
                 }
-                ui::sameLine();
-                if (ui::button("Curves")) {
+                ImGui::SameLine();
+                if (ImGui::Button("Curves")) {
                     curves_ = true;
                 }
-                ui::sameLine();
-                ui::textDisabled(
+                ImGui::SameLine();
+                ImGui::TextDisabled(
                     "%zu tracks | frame %d", rows.size(), int(std::round(time_ * samples_)));
                 {
                     DisabledScope disabled(!canCopyKeys());
-                    if (ui::button("Copy key")) {
+                    if (ImGui::Button("Copy key")) {
                         copyKeys();
                     }
                 }
-                ui::sameLine();
+                ImGui::SameLine();
                 {
                     DisabledScope disabled(!canCopyKeys(true));
-                    if (ui::button("Copy track keys")) {
+                    if (ImGui::Button("Copy track keys")) {
                         copyKeys(true);
                     }
                 }
-                ui::sameLine();
+                ImGui::SameLine();
                 {
                     DisabledScope disabled(!editMode || !canPasteKeys());
-                    if (ui::button("Paste at playhead")) {
+                    if (ImGui::Button("Paste at playhead")) {
                         pasteKeys();
                     }
                 }
-                if (ui::isItemHovered(ui::HoveredFlags_AllowWhenDisabled)) {
-                    ui::setTooltip(
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip(
                         "Ctrl+C / Ctrl+V | paste onto a matching property track.\nAll XYZ lanes are copied. Matching times are replaced; other keys remain.\nTrack copies preserve relative timing and extend the clip if needed.");
                 }
                 if (!copiedKeys_.empty()) {
-                    ui::sameLine();
-                    ui::textDisabled(
+                    ImGui::SameLine();
+                    ImGui::TextDisabled(
                         "%zu copied (%s)", copiedKeys_.size(), copiedProperty_.c_str());
                 }
                 if (track_ >= 0 && track_ < int(clip_.tracks.size())) {
                     DisabledScope disabled(!editMode);
                     auto& track = clip_.tracks[track_];
-                    if (ui::button("Capture key")) {
+                    if (ImGui::Button("Capture key")) {
                         captureKey(world, selected, track_);
                     }
-                    ui::sameLine();
-                    if (ui::button("Delete track")) {
+                    ImGui::SameLine();
+                    if (ImGui::Button("Delete track")) {
                         clip_.tracks.erase(clip_.tracks.begin() + track_);
                         track_ = key_ = -1;
                         dirty_ = true;
@@ -1004,8 +1006,8 @@ class AnimationWindow {
                     } else if (key_ >= 0 && key_ < int(track.keys.size())) {
                         auto& key = track.keys[key_];
                         const auto* property = animationProperty(track.property);
-                        ui::sameLine();
-                        ui::setNextItemWidth(90);
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(90);
                         float t = key.time;
                         if (EditorValues::DragFloat(
                                 "Key time", &t, 1.f / samples_, 0, clip_.duration, "%.3f")) {
@@ -1031,38 +1033,38 @@ class AnimationWindow {
                             const char* axes[]{"X", "Y", "Z"};
                             for (int lane = 0; lane < 3; ++lane) {
                                 if (lane) {
-                                    ui::sameLine();
+                                    ImGui::SameLine();
                                 }
-                                ui::pushId(lane);
-                                ui::setNextItemWidth(std::max(
-                                    65.f, (ui::contentRegionAvail().x - 90.f) / (3 - lane)));
+                                ImGui::PushID(lane);
+                                ImGui::SetNextItemWidth(std::max(
+                                    65.f, (ImGui::GetContentRegionAvail().x - 90.f) / (3 - lane)));
                                 if (EditorValues::DragFloat(axes[lane],
                                                             &key.value[lane],
                                                             .01f,
                                                             property->minimum,
                                                             property->maximum,
                                                             "%.3f",
-                                                            ui::SliderFlags_AlwaysClamp)) {
+                                                            ImGuiSliderFlags_AlwaysClamp)) {
                                     dirty_ = true;
                                     previewDirty_ = true;
                                     selectedLane_ = lane;
                                 }
-                                ui::popId();
+                                ImGui::PopID();
                             }
-                        } else if (ui::dragScalarNFloat("Value",
-
+                        } else if (ImGui::DragScalarN("Value",
+                                                      ImGuiDataType_Float,
                                                       key.value.data(),
                                                       property->lanes(),
                                                       .01f,
                                                       &property->minimum,
                                                       &property->maximum,
                                                       "%.3f",
-                                                      ui::SliderFlags_AlwaysClamp)) {
+                                                      ImGuiSliderFlags_AlwaysClamp)) {
                             dirty_ = true;
                             previewDirty_ = true;
                         }
-                        ui::sameLine();
-                        if (ui::button("Delete key")) {
+                        ImGui::SameLine();
+                        if (ImGui::Button("Delete key")) {
                             track.keys.erase(track.keys.begin() + key_);
                             key_ = -1;
                             dirty_ = true;
@@ -1070,33 +1072,33 @@ class AnimationWindow {
                         }
                     }
                 }
-                if (ui::collapsingHeader("Isolated preview")) {
+                if (ImGui::CollapsingHeader("Isolated preview")) {
                     if (world.alive(selected) && (!base_ || selected != owner_)) {
                         rebuild(world, selected, assets, renderer);
                     }
-                    if (ui::button("Refresh preview") && world.alive(selected)) {
+                    if (ImGui::Button("Refresh preview") && world.alive(selected)) {
                         rebuild(world, selected, assets, renderer);
                     }
-                    ui::sameLine();
+                    ImGui::SameLine();
                     {
                         DisabledScope disabled(!editMode || !world.alive(selected));
-                        if (ui::button("Apply frame to Scene (undoable)")) {
+                        if (ImGui::Button("Apply frame to Scene (undoable)")) {
                             history.commit(world, selected);
                             applyAnimationClip(world, selected, clip_, time_);
                             history.commit(world, selected);
                         }
                     }
-                    render(renderer, assets, std::min(400.f, ui::contentRegionAvail().x));
+                    render(renderer, assets, std::min(400.f, ImGui::GetContentRegionAvail().x));
                 }
                 if (!error_.empty()) {
-                    ui::textWrapped("%s", error_.c_str());
+                    ImGui::TextWrapped("%s", error_.c_str());
                 }
             } catch (const std::exception& e) {
                 error_ = e.what();
-                ui::textWrapped("%s", error_.c_str());
+                ImGui::TextWrapped("%s", error_.c_str());
             }
         }
-        ui::endWindow();
+        ImGui::End();
         if (!openWindow) {
             if (dirty_) {
                 error_ = "Save or discard clip edits before closing.";

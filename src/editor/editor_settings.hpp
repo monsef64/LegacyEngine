@@ -8,7 +8,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include "ui/mygui_ui.hpp"
+#include <imgui.h>
 #include <sstream>
 struct EditorSettings {
     bool external = false, visible = false, alwaysShowColliders = false;
@@ -77,7 +77,7 @@ struct EditorSettings {
                 scrollZoomSpeed = std::clamp(zoom, .1f, 5.f);
             }
         }
-        if (ui::hasContext()) {
+        if (ImGui::GetCurrentContext()) {
             applyEditorPalette(theme);
         }
     }
@@ -170,13 +170,13 @@ struct EditorSettings {
         if (!visible) {
             return;
         }
-        const auto area = ui::mainViewport()->WorkSize;
-        ui::setNextWindowSize(ui::Vec2(std::min(540.0f, area.x), std::min(560.0f, area.y)),
-                                 ui::Cond_FirstUseEver);
-        ui::setNextWindowSizeConstraints(
-            ui::Vec2(std::min(360.0f, area.x), std::min(380.0f, area.y)), area);
-        if (ui::beginWindow("Editor Settings", &visible, ui::WindowFlags_NoDocking)) {
-            ui::setNextItemWidth(-120);
+        const auto area = ImGui::GetMainViewport()->WorkSize;
+        ImGui::SetNextWindowSize(ImVec2(std::min(540.0f, area.x), std::min(560.0f, area.y)),
+                                 ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSizeConstraints(
+            ImVec2(std::min(360.0f, area.x), std::min(380.0f, area.y)), area);
+        if (ImGui::Begin("Editor Settings", &visible, ImGuiWindowFlags_NoDocking)) {
+            ImGui::SetNextItemWidth(-120);
             if (EditorValues::Combo(
                     "Theme", &theme, "Legacy Dark\0Grey\0Unity 5 Classic\0Unity Dark Classic\0")) {
                 applyEditorPalette(theme);
@@ -192,29 +192,29 @@ struct EditorSettings {
             if (EditorValues::SliderInt("FPS limit (VSync off)", &maxFps, 0, 240, "%d")) {
                 save();
             }
-            ui::textDisabled(
+            ImGui::TextDisabled(
                 "VSync takes priority. Limit 0 = uncapped; background target = 30 FPS.");
             if (EditorValues::InputInt("Autosave delay (seconds)", &autosaveSeconds)) {
                 autosaveSeconds = std::clamp(autosaveSeconds, 0, 3600);
                 save();
             }
-            ui::textDisabled(
+            ImGui::TextDisabled(
                 "0 disables autosave. Only previously saved projects are autosaved.");
-            ui::separatorText("Scene Grid");
+            ImGui::SeparatorText("Scene Grid");
             auto next = grid;
             bool changed = EditorValues::Checkbox("Show grid", &next.visible);
             changed |= EditorValues::Combo("Plane", &next.plane, "XZ\0XY\0YZ\0");
-            changed |= ui::dragInt("Cells", &next.cells, 1, 2, 512);
+            changed |= ImGui::DragInt("Cells", &next.cells, 1, 2, 512);
             changed |= EditorValues::DragFloat("Spacing", &next.spacing, .05f, .01f, 1000);
-            changed |= ui::dragFloat3("Grid position (X/Y/Z)", &next.position.x, .05f);
+            changed |= ImGui::DragFloat3("Grid position (X/Y/Z)", &next.position.x, .05f);
             changed |= EditorValues::ColorEdit3("Grid color", &next.color.x);
             if (changed && next.valid()) {
                 grid = next;
                 save();
             }
-            ui::separatorText("Editor");
+            ImGui::SeparatorText("Editor");
             int choice = external ? 1 : 0;
-            ui::setNextItemWidth(-120);
+            ImGui::SetNextItemWidth(-120);
             if (EditorValues::Combo("Code editor", &choice, "Internal\0External (VS Code)\0")) {
                 external = choice == 1;
                 save();
@@ -222,15 +222,15 @@ struct EditorSettings {
                     openExternal(folder);
                 }
             }
-            ui::textWrapped(
+            ImGui::TextWrapped(
                 "External mode opens the selected script in VS Code when double-clicked. VS Code's code command must be in PATH (standard Windows installations are also detected).");
-            if (external && ui::button("Open project in VS Code")) {
+            if (external && ImGui::Button("Open project in VS Code")) {
                 openExternal(folder);
             }
             if (!error.empty()) {
-                ui::textWrapped("%s", error.c_str());
+                ImGui::TextWrapped("%s", error.c_str());
             }
         }
-        ui::endWindow();
+        ImGui::End();
     }
 };

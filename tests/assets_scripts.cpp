@@ -49,18 +49,19 @@ int main() {
     bool missing=false;for(const auto& message:runtime.messages())if(message.find("missing.lua")!=std::string::npos)missing=true;
     assert(missing);runtime.stop();
     // Exercise docking, reset/restore, close visibility, and file icon geometry.
-    ui::createContext();auto& io=ui::io();
-    io.DisplaySize=ui::Vec2(1280,720);io.DeltaTime=1.0f/60;dockedEditor=true;
+    ImGui::CreateContext();auto& io=ImGui::GetIO();io.IniFilename=nullptr;
+    io.ConfigFlags|=ImGuiConfigFlags_DockingEnable;
+    io.DisplaySize=ImVec2(1280,720);io.DeltaTime=1.0f/60;io.Fonts->Build();dockedEditor=true;
     for(int frame=0;frame<3;++frame) {
-        ui::newFrame();bool reset=frame==2;
+        ImGui::NewFrame();bool reset=frame==2;
         if(frame==2)panelOpen[0]=false;
         drawWorkspace(EditorRect{0,20,1280,38},reset);
         if(frame==2)assert(panelOpen[0]);
         if(beginEditorPanel("Assets")) {
             fileIcon("code.lua");fileIcon("image.png");fileIcon("model.glb");fileIcon("sound.wav");fileIcon("notes.txt");
         }
-        ui::endWindow();ui::render();
+        ImGui::End();ImGui::Render();
     }
-    ui::destroyContext();dockedEditor=false;
+    ImGui::DestroyContext();dockedEditor=false;
     std::filesystem::remove_all(temp);
 }
