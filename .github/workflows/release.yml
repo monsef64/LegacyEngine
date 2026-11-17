@@ -173,6 +173,7 @@ jobs:
           fi
           tail -60 shell.log
           echo "exit status: $status"
+          echo "$status" > shell-status.txt
           exit "$status"
       # Job logs are not always retrievable afterwards; the failure report is
       # the only durable record of what the run printed, so keep the raw files.
@@ -190,20 +191,42 @@ jobs:
           retention-days: 7
 
       - name: Summarise the shell test
+        id: shell-summary
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          # The logs can carry binary bytes; the comment API rejects a body that
+          # is not valid text, which silently lost a whole report once. Keep
+          # only printable characters.
+          clean() {
+            tr -cd '\11\12\15\40-\176' < "$1" 2>/dev/null | tail -n "${2:-40}" \
+              || echo "no $1"
+          }
           {
             echo '### Qt editor shell test'
+            echo "exit status: $(cat shell-status.txt 2>/dev/null || echo unknown)"
             echo '```'
-            echo '--- run ---'; tail -40 shell.log 2>/dev/null || echo 'no run output'
-            echo '--- backtrace ---'; tail -40 shell-gdb.log 2>/dev/null || echo 'no backtrace'
-            echo '--- configure ---'; tail -15 shell-config.log 2>/dev/null || echo 'no configure output'
+            echo '--- backtrace ---'; clean shell-gdb.log 45
+            echo '--- run ---'; clean shell.log 45
+            echo '--- configure ---'; clean shell-config.log 12
             echo '```'
           } > shell-report.md
           cat shell-report.md >> "$GITHUB_STEP_SUMMARY"
-          gh pr comment "${{ github.event.pull_request.number }}" --body-file shell-report.md || true
+          gh pr comment "$PR_NUMBER" --body-file shell-report.md \
+            || gh pr comment "$PR_NUMBER" --body "Qt editor shell test failed; see the run page." \
+            || true
+
+      # Only if the report above could not run at all: a failed run with
+      # nothing to read is what sent me guessing once already.
+      - name: Say the shell test failed
+        if: failure() && steps.shell-summary.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body "Qt editor shell test failed and the report step errored; the job log has the detail." || true
 
       # Renders 120 frames and exits on its own. A runner without a GPU still
       # exercises the whole frame path end to end: xvfb supplies the X display
@@ -245,14 +268,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          clean() {
+            tr -cd '\11\12\15\40-\176' < "$1" 2>/dev/null | tail -n "${2:-40}" \
+              || echo "no $1"
+          }
           {
             echo '### Smoke test output'
             echo '```'
-            tail -80 smoke.log 2>/dev/null || echo 'no output captured'
+            clean smoke.log 80
             echo '```'
             echo '### Backtrace'
             echo '```'
-            tail -50 smoke-gdb.log 2>/dev/null || echo 'none: the run did not leave a backtrace'
+            clean smoke-gdb.log 50
             echo '```'
           } > report.md
           cat report.md >> "$GITHUB_STEP_SUMMARY"
