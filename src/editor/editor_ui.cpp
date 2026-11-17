@@ -232,18 +232,6 @@ void EditorUI::handleActions(const ActionSink& sink) {
     if (a.theme >= 0) {
         sink.theme(a.theme);
     }
-    if (a.editorSettings) {
-        shell_->openEditorSettings();
-    }
-    if (a.inputSettings) {
-        shell_->openInputSettings();
-    }
-    if (a.renderingSettings) {
-        shell_->openRenderingSettings();
-    }
-    if (a.layers) {
-        shell_->openLayers();
-    }
     if (a.backup) {
         sink.backup();
     }
@@ -269,15 +257,6 @@ void EditorUI::handleActions(const ActionSink& sink) {
     }
     if (a.about) {
         shell_->showAbout();
-    }
-    if (a.openAnimation) {
-        shell_->openAnimationEditor();
-    }
-    if (a.saveAnimation) {
-        sink.saveAnimation();
-    }
-    if (a.bakeLighting) {
-        sink.bakeLighting();
     }
     if (a.prefabSave) {
         sink.prefabSave();
@@ -307,9 +286,6 @@ void EditorUI::handleActions(const ActionSink& sink) {
     }
     if (!a.openScript.empty()) {
         sink.openScript(a.openScript);
-    }
-    if (a.openLevel == false && !a.levelName.empty() && !a.openLevel) {
-        // levelName is only meaningful with openLevel set; nothing to do.
     }
     actions_.clear();
 }

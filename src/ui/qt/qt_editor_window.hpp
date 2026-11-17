@@ -87,17 +87,10 @@ struct PendingActions {
     int openManual = 0; // 1 = index.html, 2 = scripting-reference.html
     bool openGitHub = false, about = false;
     bool play = false, pause = false, stop = false;
-    bool focusGame = false;
     int theme = -1;
-    bool editorSettings = false;
     bool backup = false, fixProject = false, openInVSCode = false;
-    bool layers = false, inputSettings = false, renderingSettings = false;
     bool openLevel = false, openSettingsFolder = false;
     bool importFiles = false;
-    bool openAnimation = false;
-    bool saveAnimation = false;
-    bool bakeLighting = false;
-    bool focusScene = false, focusGameView = false;
     bool separateGameWindow = false, toggleGameFullscreen = false;
 
     // Asset browser operations that change the scene rather than files.
