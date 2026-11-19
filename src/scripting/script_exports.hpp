@@ -11,7 +11,7 @@ inline bool exportReferenceType(const std::string& type) {
            type == "LuaScript" || type == "Camera" || type == "AudioSource" ||
            type == "AudioListener" || type == "DirectionalLight" || type == "PointLight" ||
            type == "SpotLight" || type == "Skybox" || type == "CharacterController" ||
-           type == "FPSCamera" || type == "Raycast" || type == "Animation" ||
+           type == "TPSCamera" || type == "FPSCamera" || type == "Raycast" || type == "Animation" ||
            type == "ParticleSystem" || type == "Laser" || type == "LightShafts" ||
            type == "Water" || type == "BoneAttachment" || type == "Vehicle" ||
            type == "CloudSystem" || type == "River" || type == "Fog" || type == "CameraEffects";
@@ -129,6 +129,7 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(Skybox);
     EXPORT_COMPONENT(CharacterController);
     EXPORT_COMPONENT(FPSCamera);
+    EXPORT_COMPONENT(TPSCamera);
     EXPORT_COMPONENT(Raycast);
     EXPORT_COMPONENT(Animation);
     EXPORT_COMPONENT(ParticleSystem);

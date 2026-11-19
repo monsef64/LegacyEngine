@@ -28,6 +28,10 @@ inline std::vector<Vertex> chunk(const Data& d, int cx, int cz, int step, bool s
     if (skirts) {
         float drop = std::max(2.f, d.size / (d.resolution - 1) * 8);
         for (int edge = 0; edge < 4; ++edge) {
+            if ((edge == 0 && z0 == 0) || (edge == 1 && x0 + 32 == d.resolution - 1) ||
+                (edge == 2 && z0 + 32 == d.resolution - 1) || (edge == 3 && x0 == 0)) {
+                continue;
+            }
             for (int i = 0; i < 32; i += step) {
                 int x = x0 + (edge == 0   ? i
                               : edge == 1 ? 32

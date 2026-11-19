@@ -70,3 +70,9 @@ Unparent children first to preserve them; editor Undo restores the deleted hiera
 - Folder-aware, type-filtered asset slot popup menus.
 - RigidBody damping/kinematic and force/impulse APIs, RGB color names, Collider triggers.
 - Line/fan/sphere queries with multiple hits and project-owned layer masks.
+
+
+- [TPS Camera and skybox environment lighting](third-person-and-environment.md):
+  third-person orbit/zoom/shoulder/smoothing with sphere-sweep obstruction checks,
+  optional sky-colored ambient illumination, steering rollover assist,
+  terrain/mesh Scene picking and nearby object creation.

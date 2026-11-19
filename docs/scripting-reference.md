@@ -3646,3 +3646,15 @@ component APIs. Water shares River fields and adds `mesh`; both support
 BoneAttachment exposes `enabled`, `source` (GameObject), `node` (index), `offset`
 and `rotation` (complete vector assignments), plus read-only `error`. Bone pose
 evaluation drives its owner's Transform; a dynamic RigidBody is not supported.
+
+
+## TPS Camera and skybox ambient lighting
+
+The [TPS/environment guide](third-person-and-environment.md) documents `TPSCamera`
+settings, target/parent following, orbit input and collision limits. TPSCamera is
+available through component lookup/add/remove/find/export APIs; `target` is a
+GameObject reference, `offset` is assigned as a complete vector and
+`resolvedDistance` is read-only. Camera projection/activation remains on Camera.
+`Skybox.affectEnvironment` enables sampled sky-colored ambient light and
+`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.stabilityAssist`
+sets speed-dependent steering reduction (0..1; default 1).

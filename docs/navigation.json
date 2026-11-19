@@ -20,6 +20,10 @@
     "title": "Editor workflow"
   },
   {
+    "file": "third-person-and-environment.md",
+    "title": "TPS camera and environment lighting"
+  },
+  {
     "file": "lighting.md",
     "title": "Dynamic lighting and shadows"
   },

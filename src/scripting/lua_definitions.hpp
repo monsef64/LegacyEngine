@@ -7,6 +7,10 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"TPSCamera", "TPSCamera - Third person target/parent follow camera. Fields: enabled, target (GameObject or nil for parent), offset (complete world-space vector), mouseLook, collision, distance/minDistance/maxDistance, yaw/pitch/minPitch/maxPitch (degrees), sensitivity, zoomSpeed, smoothing, shoulder, collisionRadius. Read-only resolvedDistance. During Play, hold right mouse or lock cursor to orbit; wheel zooms. Requires Camera+Transform, colliders for obstruction avoidance; incompatible with FPSCamera. Use Camera APIs on getComponent(Camera)."},
+    {"affectEnvironment", "Skybox.affectEnvironment: boolean, opt-in sky-colored ambient illumination on lit meshes, terrain and foliage; not shadowed GI"},
+    {"environmentIntensity", "Skybox.environmentIntensity: 0..5, default 1; used when affectEnvironment is true"},
+    {"stabilityAssist", "Vehicle.stabilityAssist: 0..1, default 1; speed-dependent steering reduction to limit cornering rollover. Does not lock rotation or prevent impact rollovers."},
     {"Water", "Water - shared River water settings on arbitrary static .mesh or built-in MeshRenderer geometry; mesh (optional asset), shaderStyle (0..7), waveHeight, waveLength, waveSpeed. Upward triangles define buoyancy and contact coverage; not a sealed fluid volume. Ignores own solid collider/rigid-body integration."},
     {"BoneAttachment", "BoneAttachment - enabled, source (animated GameObject), node (skeleton index), offset (complete vector), rotation (Euler degrees complete vector). Drives Transform position/rotation from evaluated bone pose; errors are read-only. Avoid dynamic RigidBody and attachment dependency cycles."},
     {"shaderStyle", "Water/River.shaderStyle: 0 Classic, 1 Clear, 2 Ocean, 3 Lake, 4 Rapids, 5 Tropical, 6 Marsh, 7 Industrial canal (screenshot-inspired approximation)"},

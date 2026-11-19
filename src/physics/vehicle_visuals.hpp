@@ -11,7 +11,7 @@ inline Transform wheelPose(const Vehicle& v, int i) {
     t.position = {(i % 2 ? 1.f : -1.f) * v.trackWidth * .5f,
                   v.mountHeight - v.suspensionLength * (1 - std::clamp(v.compression[i], 0.f, 1.f)),
                   (i < 2 ? -1.f : 1.f) * v.wheelBase * .5f};
-    const float steer = i < 2 ? -std::clamp(v.steering, -1.f, 1.f) * radians(v.maxSteerAngle) : 0;
+    const float steer = i < 2 ? -v.wheelSteerAngle : 0;
     t.rotation = composeRotation(axisAngle({0, 1, 0}, steer), axisAngle({1, 0, 0}, -v.wheelRoll));
     // Built-in sphere has radius .5: flatten the axle dimension into a tire.
     t.scale = {v.wheelRadius * .7f, v.wheelRadius * 2, v.wheelRadius * 2};

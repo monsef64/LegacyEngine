@@ -216,7 +216,11 @@ class FoliageRenderer {
         instances_ = program_ = 0;
         attempted_ = false;
     }
-    void draw(World& world, const AssetManager& assets, const Mat4& vp, Vec3 eye) {
+    void draw(World& world,
+              const AssetManager& assets,
+              const Mat4& vp,
+              Vec3 eye,
+              Vec3 skyAmbient = {.12f, .12f, .12f}) {
         if (root_ != assets.root || revision_ != modelAssetRevision) {
             clear();
             root_ = assets.root;
@@ -246,6 +250,10 @@ class FoliageRenderer {
         }
         if (program_) {
             glUseProgram(program_);
+            glUniform3f(glGetUniformLocation(program_, "skyAmbient"),
+                        skyAmbient.x,
+                        skyAmbient.y,
+                        skyAmbient.z);
             glUniformMatrix4fv(vp_, 1, GL_FALSE, vp.m);
             glUniform1f(time_, float(std::fmod(double(SDL_GetTicksNS()) * 1e-9, 1000.)));
             glUniform1i(glGetUniformLocation(program_, "albedo"), 0);

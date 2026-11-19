@@ -199,3 +199,16 @@ No automated tests are added or run for this feature. On the desktop build:
 
 Linux compilation does not validate native desktop behavior or driving feel;
 these interactive checks remain pending.
+
+
+### Steering rollover assist
+
+`stabilityAssist` is a 0..1 Vehicle setting (default 1), also scriptable. It reduces
+steering authority at speed using a conservative track/ride-height cornering
+acceleration estimate; visible front-wheel steering follows the reduced angle.
+Zero restores unrestricted steering. It does not lock roll/pitch or guarantee
+that impacts/curbs/slopes cannot flip the chassis. See the
+[follow-up guide](third-person-and-environment.md#vehicle-steering-stability)
+for manual checks and limits. Keyboard-controller steering reduction combines
+with this physics-side assist; adjust the sample's high-speed steering fraction
+if you want less additional script-side reduction.

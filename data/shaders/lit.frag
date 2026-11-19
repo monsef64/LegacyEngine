@@ -17,6 +17,7 @@ uniform samplerCube uEnvironmentCube;
 uniform sampler2D uEnvironmentPanorama;
 uniform int uEnvironmentType;
 uniform vec3 uEnvironmentColor;
+uniform vec3 uSkyAmbient = vec3(.12);
 uniform bool uBakedSoft;
 uniform bool uLightBaked[16];
 uniform int uDynamicShadowBase[16];
@@ -215,7 +216,7 @@ void main() {
     }
     vec3 viewDirection = normalize(uCameraPosition - vWorldPosition);
     vec3 baked = uLightmapGrid > 0 ? pow(textureLod(uLightmap, vLightmapUV, 0.0).rgb, vec3(2.0)) * 16.0 : vec3(0);
-    vec3 result = albedo * .12;
+    vec3 result = albedo * uSkyAmbient;
     vec3 staticDirect = vec3(0), staticVisible = vec3(0);
     for (int i = 0; i < uLightCount; ++i) {
         int type = int(uLightPosition[i].w);

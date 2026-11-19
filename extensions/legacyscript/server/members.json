@@ -10,12 +10,12 @@
   "GameObject": {
     "name": "string",
     "parent": "GameObject|nil",
-    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
-    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
-    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
-    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
-    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil",
-    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River",
+    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
+    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
+    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
+    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
+    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
+    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera",
     "removeComponent": "fun(componentType:ComponentType)",
     "onAnimationFinish": "fun()|nil",
     "onAnimationStart": "fun()|nil",
@@ -273,7 +273,9 @@
     "setHDR": "fun(self:Skybox,texture:Texture|nil)",
     "setFace": "fun(self:Skybox,face:string,texture:Texture|nil)",
     "fadeTo": "fun(self:Skybox,destination:GameObject|Skybox,speed:number) Smooth crossfade, duration = 1/speed seconds",
-    "setTextures": "fun(self:Skybox,right:Texture,left:Texture,top:Texture,bottom:Texture,front:Texture,back:Texture)"
+    "setTextures": "fun(self:Skybox,right:Texture,left:Texture,top:Texture,bottom:Texture,front:Texture,back:Texture)",
+    "affectEnvironment": "boolean Optional sky-colored ambient light; default false",
+    "environmentIntensity": "number 0..5, default 1"
   },
   "CharacterController": {
     "speed": "number Metres per second; default 4.5",
@@ -518,6 +520,65 @@
     "waveStrength": "number 0..1 Shading only; does not displace geometry",
     "foam": "number 0..1 Procedural edge foam",
     "subdivisions": "integer Samples per curve span 2..32",
-    "points": "table List of 2..64 complete local vector tables; getter returns copies, assign the whole list to change"
+    "points": "table List of 2..64 complete local vector tables; getter returns copies, assign the whole list to change",
+    "shaderStyle": "integer 0 Classic, 1 Clear, 2 Ocean, 3 Lake, 4 Rapids, 5 Tropical, 6 Marsh, 7 Industrial canal",
+    "waveHeight": "number Geometric displacement 0..3 metres",
+    "waveLength": "number 0.1..100 metres",
+    "waveSpeed": "number 0..10 multiplier"
+  },
+  "Vehicle": {
+    "enabled": "boolean",
+    "throttle": "number -1..1, forward/reverse, runtime command",
+    "steering": "number -1..1, positive right, runtime command",
+    "brake": "number 0..1 service brake",
+    "handbrake": "boolean Rear brake/sliding",
+    "speed": "number Read-only signed forward m/s",
+    "groundedWheels": "integer Read-only 0..4",
+    "isGrounded": "boolean Read-only",
+    "wheelCompression": "number[] Read-only copy, FL/FR/RL/RR, 0..1",
+    "wheelBase": "number 0.2..20 local metres",
+    "trackWidth": "number 0.2..10 local metres",
+    "mountHeight": "number -10..10 local metres",
+    "wheelRadius": "number 0.05..3 local metres",
+    "suspensionLength": "number 0.05..3 local metres",
+    "springStrength": "number 100..500000 N/m per wheel",
+    "suspensionDamping": "number 0..50000 per wheel",
+    "engineForce": "number 0..200000 N total",
+    "brakeForce": "number 0..300000 N total",
+    "tireGrip": "number 0.05..5",
+    "maxSteerAngle": "number 0..70 degrees",
+    "maxSpeed": "number 1..150 m/s engine cutoff",
+    "stabilityAssist": "number 0..1 speed-dependent safe steering, default 1"
+  },
+  "Water": {
+    "mesh": "string Optional .mesh asset; empty uses this MeshRenderer or default plane"
+  },
+  "BoneAttachment": {
+    "enabled": "boolean",
+    "source": "GameObject|nil Animated model owner",
+    "node": "integer Skeleton node index (-1 unbound)",
+    "offset": "Vec3 Bone-local position offset (assign complete vector)",
+    "rotation": "Vec3 Euler-degree offset (assign complete vector)",
+    "error": "string Read-only runtime diagnostic"
+  },
+  "TPSCamera": {
+    "enabled": "boolean",
+    "target": "GameObject|nil Target root; nil follows the Transform parent",
+    "offset": "Vec3 World-space look-at offset; assign a complete vector",
+    "mouseLook": "boolean Right mouse or locked cursor orbits during Play",
+    "collision": "boolean Sphere-sweep obstruction avoidance (requires colliders)",
+    "distance": "number Desired distance, within minDistance..maxDistance",
+    "minDistance": "number At least 0.05 metres",
+    "maxDistance": "number At most 1000 metres",
+    "yaw": "number Orbit yaw in degrees",
+    "pitch": "number Orbit pitch in degrees, within minPitch..maxPitch",
+    "minPitch": "number At least -89 degrees",
+    "maxPitch": "number At most 89 degrees",
+    "sensitivity": "number 0..10 degrees per mouse pixel",
+    "zoomSpeed": "number 0..20 metres per wheel unit",
+    "smoothing": "number 0..100 response, zero snaps",
+    "shoulder": "number -10..10 metres, local screen-right",
+    "collisionRadius": "number 0.02..5 metres; near-plane coverage can enlarge this",
+    "resolvedDistance": "number Read-only obstruction-adjusted distance"
   }
 }

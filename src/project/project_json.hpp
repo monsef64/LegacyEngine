@@ -206,7 +206,9 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"front", 's'},
       {"back", 's'},
       {"hdr", 's'},
-      {"cubemap", 's'}}},
+      {"cubemap", 's'},
+      {"affectEnvironment", 'b'},
+      {"environmentIntensity", 'f'}}},
     {"ObjectActivity", {{"enabled", 'b'}}},
     {"PrefabInstance", {{"asset", 's'}}},
     {"CharacterController",
@@ -240,7 +242,8 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"River", {{"settings", 'j'}}},
     {"Vehicle", {{"settings", 'j'}}},
     {"Water", {{"settings", 'j'}}},
-    {"BoneAttachment", {{"settings", 'j'}, {"source", 'i'}}}};
+    {"BoneAttachment", {{"settings", 'j'}, {"source", 'i'}}},
+    {"TPSCamera", {{"settings", 'j'}, {"target", 'i'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     Json result = Json::object();
@@ -252,6 +255,12 @@ inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
 }
 inline void writeSchema(std::ostream& out, const Json& original, const std::vector<Field>& fields) {
     Json object = original;
+    if (!object.contains("affectEnvironment")) {
+        object["affectEnvironment"] = false;
+    }
+    if (!object.contains("environmentIntensity")) {
+        object["environmentIntensity"] = 1;
+    }
     if (!object.contains("cubemap")) {
         object["cubemap"] = "";
     }
@@ -363,12 +372,12 @@ inline Json fromLegacy(const std::string& text) {
     in >> count;
     doc["objects"] = Json::array();
     for (int i = 0; i < count; ++i) {
-        unsigned mask = 0;
+        std::uint64_t mask = 0;
         int parent = -1;
         in >> mask >> parent;
         Json object = {{"parent", parent}, {"components", Json::object()}};
         for (unsigned type = 0; type < components.size(); ++type) {
-            if (mask & (1u << type)) {
+            if (mask & (1ull << type)) {
                 Json value;
                 if (type == 5) {
                     value = Json::array();
@@ -382,7 +391,11 @@ inline Json fromLegacy(const std::string& text) {
                         script["fields"] = readFields(in);
                     }
                 } else {
-                    value = readSchema(in, components[type].second);
+                    auto fields = components[type].second;
+                    if (type == 12 && version < 32) {
+                        fields.resize(fields.size() - 2);
+                    }
+                    value = readSchema(in, fields);
                 }
                 object["components"][components[type].first] = value;
             }
@@ -402,7 +415,7 @@ inline std::string toLegacy(const Json& doc) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 31\n";
+    out << std::setprecision(17) << "LegacyEngineProject 32\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),
@@ -417,16 +430,16 @@ inline std::string toLegacy(const Json& doc) {
         if (!data.is_object()) {
             throw std::runtime_error("Invalid components");
         }
-        unsigned mask = 0;
+        std::uint64_t mask = 0;
         for (unsigned type = 0; type < components.size(); ++type) {
             if (data.contains(components[type].first)) {
-                mask |= 1u << type;
+                mask |= 1ull << type;
             }
         }
         out << mask << ' ';
         write(out, object, {{"parent", 'i'}});
         for (unsigned type = 0; type < components.size(); ++type) {
-            if (mask & (1u << type)) {
+            if (mask & (1ull << type)) {
                 const auto& value = data.at(components[type].first);
                 if (type == 5) {
                     if (!value.is_array() || value.empty() || value.size() > 64) {

@@ -41,20 +41,20 @@ struct Vector {
     Component component;
     char field[32];
 };
-const char* types[]{"Transform",     "RigidBody",
-                    "Collider",      "MeshRenderer",
-                    "ObjectName",    "LuaScript",
-                    "Camera",        "AudioSource",
-                    "AudioListener", "DirectionalLight",
-                    "PointLight",    "SpotLight",
-                    "Skybox",        "CharacterController",
-                    "FPSCamera",     "Raycast",
-                    "Animation",     "ParticleSystem",
-                    "Laser",         "LightShafts",
-                    "CameraEffects", "Fog",
-                    "CloudSystem",   "River",
-                    "Vehicle",       "Water",
-                    "BoneAttachment"};
+const char* types[]{"Transform",      "RigidBody",
+                    "Collider",       "MeshRenderer",
+                    "ObjectName",     "LuaScript",
+                    "Camera",         "AudioSource",
+                    "AudioListener",  "DirectionalLight",
+                    "PointLight",     "SpotLight",
+                    "Skybox",         "CharacterController",
+                    "FPSCamera",      "Raycast",
+                    "Animation",      "ParticleSystem",
+                    "Laser",          "LightShafts",
+                    "CameraEffects",  "Fog",
+                    "CloudSystem",    "River",
+                    "Vehicle",        "Water",
+                    "BoneAttachment", "TPSCamera"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -63,7 +63,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 27; ++i) {
+    for (int i = 0; i < 28; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -119,6 +119,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<Water>(h.entity);
     case 26:
         return h.world->has<BoneAttachment>(h.entity);
+    case 27:
+        return h.world->has<TPSCamera>(h.entity);
     case 21:
         return h.world->has<Fog>(h.entity);
     case 20:
@@ -265,6 +267,8 @@ Field field(lua_State* L, const Component& c, const char* key) {
     }
     case 12: {
         auto& v = h.world->get<Skybox>(h.entity);
+        FIELD(affectEnvironment, Boolean);
+        FIELD(environmentIntensity, Number);
         FIELD(type, Integer);
         FIELD(color, Vec);
         FIELD(enabled, Boolean);
@@ -464,7 +468,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 27; ++i) {
+    for (int i = 0; i < 28; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -684,6 +688,9 @@ int LuaScene::api(lua_State* L) {
         case 25:
             self.world_.each<Water>([&](Entity e, Water&) { collect(e); });
             break;
+        case 27:
+            self.world_.each<TPSCamera>([&](Entity e, TPSCamera&) { collect(e); });
+            break;
         case 26:
             self.world_.each<BoneAttachment>([&](Entity e, BoneAttachment&) { collect(e); });
             break;
@@ -818,7 +825,8 @@ int LuaScene::api(lua_State* L) {
         if (((type == 0 || type == 1 || type == 2) &&
              (self.world_.has<CharacterController>(h.entity) ||
               self.world_.has<Vehicle>(h.entity))) ||
-            ((type == 0 || type == 6) && self.world_.has<FPSCamera>(h.entity))) {
+            ((type == 0 || type == 6) &&
+             (self.world_.has<FPSCamera>(h.entity) || self.world_.has<TPSCamera>(h.entity)))) {
             return luaL_error(
                 L, "Remove the dependent Vehicle, CharacterController or FPSCamera first");
         }
@@ -867,6 +875,9 @@ int LuaScene::api(lua_State* L) {
             break;
         case 25:
             self.world_.remove<Water>(h.entity);
+            break;
+        case 27:
+            self.world_.remove<TPSCamera>(h.entity);
             break;
         case 26:
             self.world_.remove<BoneAttachment>(h.entity);
@@ -966,6 +977,20 @@ int LuaScene::api(lua_State* L) {
             }
             self.world_.add(h.entity, Water{});
             break;
+        case 27:
+            if (self.world_.has<FPSCamera>(h.entity)) {
+                return luaL_error(L, "Remove FPSCamera first");
+            }
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            if (!self.world_.has<Camera>(h.entity)) {
+                self.world_.add(h.entity, Camera{});
+            }
+            self.world_.get<Camera>(h.entity).tracking = false;
+            self.world_.get<Camera>(h.entity).following = false;
+            self.world_.add(h.entity, TPSCamera{});
+            break;
         case 26:
             if (!self.world_.has<Transform>(h.entity)) {
                 self.world_.add(h.entity, Transform{});
@@ -1034,6 +1059,9 @@ int LuaScene::api(lua_State* L) {
             self.world_.add(h.entity, Raycast{});
             break;
         case 14:
+            if (self.world_.has<TPSCamera>(h.entity)) {
+                return luaL_error(L, "Remove TPSCamera first");
+            }
             addFPSCamera(self.world_, h.entity);
             break;
         case 12:
@@ -1278,8 +1306,8 @@ int LuaScene::componentIndex(lua_State* L) {
         return objectIndex(L);
     }
     // Component aliases resolve on the same owner, without storing raw pointers.
-    for (int type = 0; type < 27; ++type) {
-        std::string alias = type == 14 ? "fpsCamera" : types[type];
+    for (int type = 0; type < 28; ++type) {
+        std::string alias = type == 14 ? "fpsCamera" : type == 27 ? "tpsCamera" : types[type];
         alias[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(alias[0])));
         if (!std::strcmp(key, alias.c_str())) {
             if (has(c.object, type)) {
@@ -1348,6 +1376,39 @@ int LuaScene::componentIndex(lua_State* L) {
             lua_pushboolean(L, j.at(key).get<bool>());
         } else {
             lua_pushnumber(L, j.at(key).get<double>());
+        }
+        return 1;
+    }
+    if (c.type == 27) {
+        const auto& t = c.object.world->get<TPSCamera>(c.object.entity);
+        if (!std::strcmp(key, "target")) {
+            if (c.object.world->alive(t.target)) {
+                c.object.scene->pushObject(t.target);
+            } else {
+                lua_pushnil(L);
+            }
+            return 1;
+        }
+        if (!std::strcmp(key, "resolvedDistance")) {
+            lua_pushnumber(L, t.resolvedDistance);
+            return 1;
+        }
+        auto j = TPSCameras::settings(t);
+        if (!j.contains(key)) {
+            return luaL_error(L, "Unknown TPSCamera property");
+        }
+        auto v = j.at(key);
+        if (v.is_boolean()) {
+            lua_pushboolean(L, v.get<bool>());
+        } else if (v.is_number()) {
+            lua_pushnumber(L, v.get<double>());
+        } else {
+            lua_createtable(L, 0, 3);
+            const char* names[] = {"x", "y", "z"};
+            for (int i = 0; i < 3; ++i) {
+                lua_pushnumber(L, v[i].get<float>());
+                lua_setfield(L, -2, names[i]);
+            }
         }
         return 1;
     }
@@ -1884,6 +1945,49 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 27) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 27)) {
+            return luaL_error(L, "TPSCamera no longer exists");
+        }
+        auto& t = c.object.world->get<TPSCamera>(c.object.entity);
+        const char* key = luaL_checkstring(L, 2);
+        if (!std::strcmp(key, "target")) {
+            if (lua_isnil(L, 3)) {
+                t.target = {};
+            } else {
+                auto h = handle(L, 3);
+                if (h.world != c.object.world || h.entity == c.object.entity) {
+                    return luaL_error(L, "Invalid TPS target");
+                }
+                t.target = h.entity;
+            }
+            t.initialized = false;
+            return 0;
+        }
+        auto j = TPSCameras::settings(t);
+        if (!j.contains(key)) {
+            return luaL_error(L, "Unknown or read-only TPSCamera property");
+        }
+        if (j.at(key).is_boolean()) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            j[key] = bool(lua_toboolean(L, 3));
+        } else if (j.at(key).is_number()) {
+            j[key] = luaL_checknumber(L, 3);
+        } else {
+            j[key] = Environment::vec(vectorArgument(L, 3));
+        }
+        try {
+            auto next = TPSCameras::parse(j);
+            next.target = t.target;
+            next.initialized = t.initialized;
+            next.resolvedDistance = t.resolvedDistance;
+            next.previousPosition = t.previousPosition;
+            t = next;
+        } catch (const std::exception& ex) {
+            return luaL_error(L, "%s", ex.what());
+        }
+        return 0;
+    }
     if (c.type == 26) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, 26)) {
             return luaL_error(L, "BoneAttachment no longer exists");
@@ -2421,6 +2525,10 @@ int LuaScene::componentNewIndex(lua_State* L) {
     }
     case Kind::Number: {
         const float value = number(L, 3);
+        if (c.type == 12 && !std::strcmp(gameplayKey, "environmentIntensity") &&
+            (value < 0 || value > 5)) {
+            return luaL_error(L, "Environment intensity must be 0..5");
+        }
         if ((c.type == 13 || c.type == 14 || c.type == 15 ||
              (c.type == 1 &&
               (!std::strcmp(gameplayKey, "drag") || !std::strcmp(gameplayKey, "angularDrag") ||
@@ -3447,7 +3555,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 27; ++type) {
+                for (; type < 28; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }

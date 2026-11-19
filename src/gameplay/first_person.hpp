@@ -47,7 +47,7 @@ inline void updateCharacterControllers(World& world, Physics& physics) {
 inline void updateFPSCameras(World& world, float dt, InputState& input) {
     world.each<FPSCamera, Camera, Transform>(
         [&](Entity e, FPSCamera& fps, Camera& camera, Transform&) {
-            if (!isActive(world, e) || !camera.active) {
+            if (!isActive(world, e) || !camera.active || world.has<TPSCamera>(e)) {
                 return;
             }
             auto local = localTransform(world, e);
