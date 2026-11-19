@@ -3,6 +3,7 @@ name: Windows x64 build
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -21,6 +22,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Resolve engine version
+        id: version
+        shell: pwsh
+        run: python tools/release_version.py
       - name: Install MinGW-w64 toolchain
         uses: msys2/setup-msys2@v2
         with:
@@ -35,6 +41,7 @@ jobs:
         run: >-
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
+          -DLEGACY_ENGINE_VERSION=${{ steps.version.outputs.version }}
           -DCMAKE_C_COMPILER=gcc
           -DCMAKE_CXX_COMPILER=g++
           -DLEGACY_VENDORED_SDL=ON
@@ -59,6 +66,6 @@ jobs:
             done
       - uses: actions/upload-artifact@v4
         with:
-          name: LegacyEngine-Windows-x64
+          name: LegacyEngine-${{ steps.version.outputs.version }}-Windows-x64
           path: package/LegacyEngine/
           if-no-files-found: error

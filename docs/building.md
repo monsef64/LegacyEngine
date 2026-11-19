@@ -77,3 +77,62 @@ A Linux Release/headless-SDL build measured during implementation:
 The combined reduction is about 22.8%. These are executable sizes, **not archive
 or full installation sizes**; Windows builds and other toolchains will differ.
 The full desktop runtime and Windows MinGW package need manual verification.
+
+
+## Engine versions and GitHub releases
+
+`VERSION` contains the local development baseline (`MAJOR.MINOR.PATCH`), initially
+`0.1.0`. A normal CMake build displays `<VERSION>-dev` in **Help > About**.
+CI development builds append the short commit ID. To set a version explicitly:
+
+```sh
+cmake -S . -B build -DLEGACY_ENGINE_VERSION=1.2.3
+```
+
+This is a CMake cache setting: reconfigure with a new value when reusing a build
+directory. The generated `engine_version.hpp` supplies the About window; do not
+edit a second hard-coded UI version. Update `VERSION` in a normal change when
+advancing the development baseline. Release tags override this baseline; a
+release does not automatically modify or commit `VERSION`.
+
+### Publish from Actions
+
+After the workflow changes land on the default branch:
+
+1. Open **Actions > Release > Run workflow**.
+2. Choose the branch/commit to build and enter **version**, such as `1.2.3` or
+   `1.3.0-rc.1` (a leading `v` is optional).
+3. Run the workflow. It validates the version, builds the selected commit, then
+   creates `v1.2.3` and a GitHub Release with generated notes. The engine archive
+   is named `LegacyEngine-1.2.3-linux-x86_64.tar.gz` and its About window shows
+   `1.2.3`. Documentation ZIP and LegacyScript VSIX are attached too.
+
+Leave **version** empty for artifacts only, with no tag/release creation.
+Alternatively, pushing a tag such as `v1.2.3` triggers the same release build.
+Use semantic versions: patch for fixes, minor for compatible features, major for
+breaking changes. Prerelease versions such as `1.3.0-rc.1` are marked as GitHub
+prereleases; build metadata (`+...`) is not supported.
+
+Existing tags may only be reused for the same commit. Rerunning that release
+replaces matching assets, so prefer a new version for changed code. Publication
+requires the repository's Actions policy to allow `contents: write`; no PAT is
+needed. The release is created after the Linux build, with the VSIX attached by
+a dependent job; if that job fails, rerun failed jobs to finish the release.
+
+The existing Windows MinGW-w64 workflow also builds pushed version tags and embeds
+the tag version in About. Its versioned Windows package remains an **Actions
+artifact**, not a GitHub Release attachment. Tags created by the manual workflow's
+`GITHUB_TOKEN` do not trigger other workflows: run Windows manually on that tag
+if a Windows artifact is needed for a manually published release.
+
+### Manual verification
+
+- Configure/build locally and open About; check `<VERSION>-dev`.
+- Reconfigure with `-DLEGACY_ENGINE_VERSION=1.2.3-rc.1`; rebuild and check About.
+- Dispatch without a version; confirm versioned development artifacts and no release.
+- On a suitable release commit, dispatch a new prerelease version and inspect
+  the tag target, release notes, prerelease flag, archive name and packaged About.
+- Rerun the same version at the same commit; check asset replacement. Reusing a
+  version on a different commit must fail before building.
+
+Publishing is a real remote operation; it is not performed during local validation.

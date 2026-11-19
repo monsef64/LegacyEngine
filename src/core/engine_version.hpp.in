@@ -1,0 +1,5 @@
+#pragma once
+
+namespace EngineVersion {
+inline constexpr const char* version = "@LEGACY_ENGINE_VERSION@";
+}

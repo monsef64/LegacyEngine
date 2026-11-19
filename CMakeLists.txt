@@ -1,6 +1,18 @@
 cmake_minimum_required(VERSION 3.20...3.31)
 
-project(LegacyEngine LANGUAGES C CXX)
+# VERSION is the local development baseline. Release CI overrides it with the
+# validated tag version, so the archive and About window always agree.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" LEGACY_BASE_VERSION LIMIT_COUNT 1)
+if(NOT LEGACY_BASE_VERSION MATCHES "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$")
+  message(FATAL_ERROR "VERSION must contain MAJOR.MINOR.PATCH")
+endif()
+project(LegacyEngine VERSION ${LEGACY_BASE_VERSION} LANGUAGES C CXX)
+set(LEGACY_ENGINE_VERSION "${PROJECT_VERSION}-dev" CACHE STRING "Engine version displayed in About")
+if(NOT LEGACY_ENGINE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$")
+  message(FATAL_ERROR "Invalid LEGACY_ENGINE_VERSION")
+endif()
+configure_file(src/core/engine_version.hpp.in generated/engine_version.hpp @ONLY)
 
 # Single-config generators (Makefiles, Ninja) build unoptimised code unless a
 # build type is chosen, so default to Release.

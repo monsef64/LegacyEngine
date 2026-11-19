@@ -1,3 +1,4 @@
+#include "engine_version.hpp"
 #include "editor/recent_projects.hpp"
 #include "effects/laser_update.hpp"
 #include <cctype>
@@ -1331,7 +1332,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         if (ImGui::BeginPopupModal(
                 "About LegacyEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextUnformatted("LegacyEngine");
+            ImGui::Text("LegacyEngine %s", EngineVersion::version);
             ImGui::TextUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
             ImGui::TextUnformatted("SDL3 / OpenGL / Dear ImGui / Jolt");
             if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
