@@ -7,16 +7,16 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
----@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
----@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
----@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
----@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River
+---@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onAnimationFinish fun()|nil
 ---@field onAnimationStart fun()|nil
@@ -94,7 +94,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -889,3 +889,27 @@ CloudSystem = nil
 ---@field subdivisions integer Samples per curve span 2..32
 ---@field points table List of 2..64 complete local vector tables; getter returns copies, assign the whole list to change
 River = nil
+
+---@class Vehicle
+---@field enabled boolean
+---@field throttle number -1..1, forward/reverse, runtime command
+---@field steering number -1..1, positive right, runtime command
+---@field brake number 0..1 service brake
+---@field handbrake boolean Rear brake/sliding
+---@field speed number Read-only signed forward m/s
+---@field groundedWheels integer Read-only 0..4
+---@field isGrounded boolean Read-only
+---@field wheelCompression number[] Read-only copy, FL/FR/RL/RR, 0..1
+---@field wheelBase number 0.2..20 local metres
+---@field trackWidth number 0.2..10 local metres
+---@field mountHeight number -10..10 local metres
+---@field wheelRadius number 0.05..3 local metres
+---@field suspensionLength number 0.05..3 local metres
+---@field springStrength number 100..500000 N/m per wheel
+---@field suspensionDamping number 0..50000 per wheel
+---@field engineForce number 0..200000 N total
+---@field brakeForce number 0..300000 N total
+---@field tireGrip number 0.05..5
+---@field maxSteerAngle number 0..70 degrees
+---@field maxSpeed number 1..150 m/s engine cutoff
+Vehicle = nil

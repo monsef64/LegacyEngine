@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 29\n";
+    out << std::setprecision(9) << "LegacyEngineProject 30\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -111,7 +111,7 @@ inline std::string encodeLegacy(World& world,
             (world.has<Laser>(e) ? 4194304 : 0) | (world.has<LightShafts>(e) ? 8388608 : 0) |
             (world.has<Terrain>(e) ? 16777216 : 0) | (world.has<CameraEffects>(e) ? 33554432 : 0) |
             (world.has<Fog>(e) ? 67108864 : 0) | (world.has<CloudSystem>(e) ? 134217728 : 0) |
-            (world.has<River>(e) ? 268435456 : 0);
+            (world.has<River>(e) ? 268435456 : 0) | (world.has<Vehicle>(e) ? 536870912 : 0);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -320,6 +320,10 @@ inline std::string encodeLegacy(World& world,
             require(Environment::valid(*c));
             out << std::quoted(Environment::settings(*c).dump()) << ' ';
         }
+        if (const auto* v = world.tryGet<Vehicle>(e)) {
+            require(Vehicles::valid(*v));
+            out << std::quoted(Vehicles::settings(*v).dump()) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -337,7 +341,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 29));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 30));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -408,7 +412,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 26 ? 33554431u
                          : version < 27 ? 67108863u
                          : version < 28 ? 134217727u
-                                        : 536870911u) &&
+                         : version < 30 ? 536870911u
+                                        : 1073741823u) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -677,7 +682,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= (version >= 28   ? 25u
+            require(types.size() <= (version >= 30   ? 26u
+                                     : version >= 28 ? 25u
                                      : version >= 27 ? 23u
                                      : version >= 26 ? 22u
                                      : version >= 25 ? 21u
@@ -687,7 +693,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::vector<int> seen;
             for (int id : types) {
                 require(id >= 0 &&
-                        id < (version >= 28   ? 25
+                        id < (version >= 30   ? 26
+                              : version >= 28 ? 25
                               : version >= 27 ? 23
                               : version >= 26 ? 22
                               : version >= 25 ? 21
@@ -771,6 +778,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> std::quoted(text);
             require(text.size() <= 16384);
             result.world.add(e, Environment::parse<River>(parseJson(text)));
+        }
+        if (mask & 536870912) {
+            std::string text;
+            in >> std::quoted(text);
+            require(text.size() <= 16384);
+            result.world.add(e, Vehicles::parse(parseJson(text)));
         }
         require(bool(in));
     }

@@ -99,6 +99,9 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(AudioListener{});
     component(AudioSource{});
     component(RigidBody{});
+    if (const auto* v = sourceWorld.tryGet<Vehicle>(source)) {
+        world.add(copy, Vehicles::parse(Vehicles::settings(*v)));
+    }
     component(ObjectName{});
     component(LuaScript{});
     component(Camera{});

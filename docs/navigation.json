@@ -44,6 +44,10 @@
     "title": "Physics, triggers, raycasts and layers"
   },
   {
+    "file": "vehicles.md",
+    "title": "Vehicle physics and scripting"
+  },
+  {
     "file": "scripting-reference.md",
     "title": "Scripting Reference"
   },

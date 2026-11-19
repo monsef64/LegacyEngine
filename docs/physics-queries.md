@@ -1,5 +1,7 @@
 # Physics scripting, triggers, raycasts and layers
 
+For four-wheel suspension, steering and driving controls, see [Vehicle physics](vehicles.md).
+
 ## RigidBody
 
 Existing properties `mass`, `useGravity`, `linearVelocity` and `angularVelocity`
