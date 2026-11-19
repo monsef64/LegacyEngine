@@ -1,9 +1,7 @@
 name: Release
 
-# Builds the Linux binary.
-#   - Pushing a tag such as v0.1.0 builds it and publishes it as a GitHub release.
-#   - Running the workflow by hand on a branch only builds it; download the
-#     result from the run's page.
+# Push a SemVer tag, or dispatch with a version, to publish a Linux release.
+# Dispatch with an empty version builds development artifacts only.
 on:
   push:
     branches: ["**"]
@@ -13,6 +11,8 @@ on:
       - 'src/**'
       - 'third_party/**'
       - 'CMakeLists.txt'
+      - 'VERSION'
+      - 'tools/release_version.py'
       - 'docs/**'
       - 'README.md'
       - 'scripts/**'
@@ -24,18 +24,55 @@ on:
       - 'src/**'
       - 'third_party/**'
       - 'CMakeLists.txt'
+      - 'VERSION'
+      - 'tools/release_version.py'
       - 'docs/**'
       - 'README.md'
       - 'scripts/**'
       - 'extensions/legacyscript/**'
       - '.github/workflows/release.yml'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.2.3 or 1.2.3-rc.1); empty = build only'
+        required: false
+        type: string
+        default: ''
 
 permissions:
-  contents: write # needed to create the release
+  contents: read
+
+# Serialize publishing/reruns to avoid racing the same tag's assets.
+concurrency:
+  group: release-${{ github.event.inputs.version || github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  version:
+    name: Resolve engine version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate version and tag target
+        id: version
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: python3 tools/release_version.py
+
   linux:
+    permissions:
+      contents: write # Create the tag/release and upload packages.
+    needs: version
+    env:
+      ENGINE_VERSION: ${{ needs.version.outputs.version }}
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
     name: Linux x86_64
     # The binary needs a system at least as new as the one it is built on.
     runs-on: ubuntu-24.04
@@ -102,6 +139,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DLEGACY_ENGINE_VERSION="$ENGINE_VERSION" \
             -DBUILD_TESTING=OFF \
             -DLEGACY_VENDORED_SDL=ON \
             "-DCMAKE_EXE_LINKER_FLAGS=-static-libgcc -static-libstdc++ -s"
@@ -149,8 +187,7 @@ jobs:
 
       - name: Package
         run: |
-          timestamp=$(date -u +%Y%m%d-%H%M%S)
-          package=LegacyEngine-$timestamp-linux-x86_64
+          package=LegacyEngine-$ENGINE_VERSION-linux-x86_64
 
           mkdir -p "$package"
           cp build/LegacyEngine "$package/"
@@ -177,22 +214,35 @@ jobs:
           if-no-files-found: error
 
       - name: Publish the release
-        if: github.ref_type == 'tag'
+        if: needs.version.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+          set -euo pipefail
+          # Recheck the tag after the build, including dispatch-created tags.
+          tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null || true)
+          if [ -n "$tag_sha" ]; then
+            # Resolve annotated tags as well as lightweight tags.
+            remote_commit=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq '.sha')
+            test "$remote_commit" = "$GITHUB_SHA" || { echo 'Tag points to another commit'; exit 1; }
+          fi
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             # The workflow was run again for the same tag: replace the file.
-            gh release upload "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" build/legacyengine-docs.zip --clobber
+            gh release upload "$RELEASE_TAG" "$PACKAGE.tar.gz" build/legacyengine-docs.zip --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$PACKAGE.tar.gz" build/legacyengine-docs.zip \
-              --verify-tag --generate-notes --title "LegacyEngine $GITHUB_REF_NAME"
+            flags=()
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+            gh release create "$RELEASE_TAG" "$PACKAGE.tar.gz" build/legacyengine-docs.zip \
+              --target "$GITHUB_SHA" --generate-notes --title "LegacyEngine $RELEASE_TAG" "${flags[@]}"
           fi
 
   vsix:
+    permissions:
+      contents: write # Attach the VSIX to the release.
     name: Build LegacyScript VSIX
-    needs: linux
+    needs: [version, linux]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
@@ -219,8 +269,9 @@ jobs:
           archive: false
           if-no-files-found: error
       - name: Attach VSIX to engine tag release
-        if: github.ref_type == 'tag'
+        if: needs.version.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release upload "$GITHUB_REF_NAME" legacyscript.vsix --clobber
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+        run: gh release upload "$RELEASE_TAG" legacyscript.vsix --clobber

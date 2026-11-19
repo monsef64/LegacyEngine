@@ -36,7 +36,8 @@ than in this README.
 The [Release workflow](.github/workflows/release.yml) publishes the engine,
 **legacyscript-vsix**, and **legacyengine-docs** artifacts in the same run.
 Extract the docs artifact and open `index.html` offline. Engine packages also
-include the HTML docs; tagged releases attach a docs ZIP and the VSIX.
+include the HTML docs; tagged or manually versioned releases attach a docs ZIP
+and the VSIX. See [versioning and publishing](docs/building.md#engine-versions-and-github-releases).
 See [documentation build instructions](docs/index.md#build-this-documentation)
 and the [VS Code extension guide](docs/vscode.md).
 
