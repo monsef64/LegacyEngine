@@ -3,6 +3,7 @@
 #include "effects/laser_update.hpp"
 #include "engine_version.hpp"
 #include <cctype>
+#include <imgui_internal.h>
 // LegacyEngine - Scene editing and runtime orchestration.
 //
 // World conventions:
@@ -473,11 +474,20 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 SDL_SetWindowMouseGrab(window, false);
                 SDL_SetWindowMouseRect(window, nullptr);
             }
+            if (cameraLooking && event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+                cameraLooking = false;
+                orbitPivot.reset();
+                input.releaseMouse();
+                clicking = false;
+                continue;
+            }
             const bool navigationMouse =
                 (cameraLooking || orbitPivot.has_value()) &&
                 (event.type == SDL_EVENT_MOUSE_MOTION ||
                  event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                  event.type == SDL_EVENT_MOUSE_BUTTON_UP || event.type == SDL_EVENT_MOUSE_WHEEL);
+            // Keep key-up events flowing to ImGui so a key held when RMB starts
+            // cannot remain stuck in the editor. Scene RMB clears the text focus.
             if (!navigationMouse) {
                 ImGui_ImplSDL3_ProcessEvent(&event);
             }
@@ -499,11 +509,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                (ImGui::GetIO().WantCaptureMouse && !sceneHovered &&
                                 !cameraLooking && !orbitPivot) ||
                                (editor.capturesMouse() && !cameraLooking && !orbitPivot &&
+                                !(event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                                  event.button.button == SDL_BUTTON_RIGHT && sceneHovered &&
+                                  !editor.dragging()) &&
                                 !(SDL_GetModState() & SDL_KMOD_ALT)))) {
                 clicking = false;
                 continue;
             }
-            if (event.type == SDL_EVENT_KEY_DOWN && ImGui::GetIO().WantCaptureKeyboard) {
+            if (event.type == SDL_EVENT_KEY_DOWN && ImGui::GetIO().WantCaptureKeyboard &&
+                !cameraLooking && !orbitPivot) {
                 continue;
             }
             switch (event.type) {
@@ -541,8 +555,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                            layout.scene,
                                            event.button.x,
                                            event.button.y) &&
-                    layout.scene.contains(event.button.x, event.button.y) &&
-                    !ImGui::GetIO().WantTextInput && !cameraModifiersHeld(SDL_GetModState())) {
+                    layout.scene.contains(event.button.x, event.button.y) && !editor.dragging() &&
+                    !cameraModifiersHeld(SDL_GetModState())) {
+                    // A deliberate Scene RMB press transfers keyboard focus away
+                    // from an Inspector/script text edit before starting WASD.
+                    ImGui::ClearActiveID();
+                    ImGui::SetWindowFocus("Scene");
                     cameraLooking = input.lockSceneCursor();
                     clicking = false;
                 }
@@ -604,9 +622,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                         camera.up() * (event.motion.yrel * scale);
                     }
                 }
-                if (event.motion.state & SDL_BUTTON_RMASK) {
+                if (cameraLooking) {
                     clicking = false;
-                    if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) {
+                    // Windows relative motion need not carry a button-state mask.
+                    if (!cameraModifiersHeld(SDL_GetModState())) {
                         const auto motion = input.lockedMotion(event.motion);
                         camera.look(motion.first, motion.second);
                     }
@@ -665,8 +684,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
-                if ((sceneHovered || cameraLooking) &&
-                    !cameraModifiersHeld(SDL_GetModState()) && !ImGui::GetIO().WantTextInput) {
+                if ((sceneHovered || cameraLooking) && !cameraModifiersHeld(SDL_GetModState()) &&
+                    !ImGui::GetIO().WantTextInput) {
                     if (cameraLooking) {
                         if (SDL_GetModState() & SDL_KMOD_SHIFT) {
                             cameraBoost = adjustSceneCameraBoost(cameraBoost, event.wheel.y);
@@ -2245,7 +2264,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         if (cameraLooking && !browser.dialog.pending() && !projectDialog.pending() &&
             !cameraModifiersHeld(SDL_GetModState()) && !editor.dragging() &&
-            !ImGui::GetIO().WantTextInput &&
             (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             const bool* keys = SDL_GetKeyboardState(nullptr);
             const float speed =
