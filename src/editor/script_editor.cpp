@@ -1,4 +1,5 @@
 #include "editor/script_editor.hpp"
+#include "editor/asset_browser.hpp"
 #include "editor/script_explorer.hpp"
 #include "scripting/lua_definitions.hpp"
 #include "scripting/lua_highlight.hpp"
@@ -12,7 +13,10 @@ ScriptEditor::ScriptEditor() = default;
 void ScriptEditor::draw(const EditorLayout* layout,
                         bool executionEnabled,
                         AssetManager* assets,
-                        std::string* openedScript) {
+                        std::string* openedScript,
+                        AssetBrowser* browser,
+                        bool fileOperationsEnabled,
+                        EditorHistory* history) {
     const auto* viewport = ImGui::GetMainViewport();
     if (!dockedEditor || panelOpen[3]) {
         if (layout) {
@@ -30,7 +34,9 @@ void ScriptEditor::draw(const EditorLayout* layout,
                     "Script Explorer",
                     ImVec2(std::min(200.0f, ImGui::GetContentRegionAvail().x * .3f), 0),
                     ImGuiChildFlags_Borders);
-                ImGui::TextUnformatted("Scripts");
+                ScriptTreeAction scriptAction;
+                ImGui::TextUnformatted("Assets");
+                scriptFolderDrop("", browser && fileOperationsEnabled ? &scriptAction : nullptr);
                 std::optional<std::string> createScriptIn;
                 if (ImGui::Button("New Script", ImVec2(-1, 0))) {
                     createScriptIn =
@@ -47,7 +53,11 @@ void ScriptEditor::draw(const EditorLayout* layout,
                         treeRoot_ = assets->root;
                         treeRefresh_ = ImGui::GetTime() + .5;
                     }
-                    if (auto chosen = scriptTree_.draw(assetPath_, "", &createScriptIn)) {
+                    if (auto chosen = scriptTree_.draw(
+                            assetPath_,
+                            "",
+                            &createScriptIn,
+                            browser && fileOperationsEnabled ? &scriptAction : nullptr)) {
                         saveFile(*assets);
                         auto text = assets->readScript(*chosen);
                         setSource(text);
@@ -65,7 +75,64 @@ void ScriptEditor::draw(const EditorLayout* layout,
                         }
                         ImGui::EndPopup();
                     }
-                    if (createScriptIn) {
+                    if (fileOperationsEnabled && browser && world_ &&
+                        ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+                        !ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F2) &&
+                        fileOpen()) {
+                        scriptAction = {ScriptTreeAction::Rename, assetPath_, {}};
+                    }
+                    if (fileOperationsEnabled && browser && world_ &&
+                        scriptAction.kind != ScriptTreeAction::None) {
+                        if (!AssetManager::script(scriptAction.path) ||
+                            !std::filesystem::is_regular_file(assets->resolve(scriptAction.path))) {
+                            throw std::runtime_error("Select an existing script");
+                        }
+                        saveFile(*assets);
+                        scriptActionPath_ = scriptAction.path;
+                        scriptActionRoot_ = assets->root;
+                        fileError_.clear();
+                        if (scriptAction.kind == ScriptTreeAction::Rename) {
+                            std::snprintf(scriptRename_,
+                                          sizeof(scriptRename_),
+                                          "%s",
+                                          std::filesystem::path(scriptAction.path)
+                                              .filename()
+                                              .string()
+                                              .c_str());
+                            scriptRenameFocus_ = true;
+                            ImGui::OpenPopup("Rename script");
+                        } else if (scriptAction.kind == ScriptTreeAction::Delete) {
+                            ImGui::OpenPopup("Delete script?");
+                        } else if (scriptAction.kind == ScriptTreeAction::Duplicate) {
+                            browser->selected = scriptAction.path;
+                            browser->copySelected(false);
+                            browser->pasteAssets(*world_,
+                                                 std::filesystem::path(scriptAction.path)
+                                                     .parent_path()
+                                                     .generic_string());
+                            treeRefresh_ = 0;
+                        } else if (scriptAction.kind == ScriptTreeAction::Move) {
+                            const auto destination = assets->resolve(scriptAction.folder);
+                            if (!std::filesystem::is_directory(destination)) {
+                                throw std::runtime_error("Drop onto an existing folder");
+                            }
+                            browser->selected = scriptAction.path;
+                            browser->renameSelected(
+                                *world_,
+                                (std::filesystem::path(scriptAction.folder) /
+                                 std::filesystem::path(scriptAction.path).filename())
+                                    .generic_string(),
+                                true);
+                            if (assetPath_ == scriptAction.path) {
+                                assetPath_ = browser->selected;
+                                if (openedScript) {
+                                    *openedScript = assetPath_;
+                                }
+                            }
+                            treeRefresh_ = 0;
+                        }
+                    }
+                    if (fileOperationsEnabled && createScriptIn) {
                         // Save the current document before switching to the newly created asset.
                         saveFile(*assets);
                         const auto folder = std::filesystem::path(*createScriptIn);
@@ -85,6 +152,100 @@ void ScriptEditor::draw(const EditorLayout* layout,
                     }
                 } catch (const std::exception& e) {
                     fileError_ = e.what();
+                }
+                if (ImGui::BeginPopupModal(
+                        "Rename script", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                    if (scriptRenameFocus_) {
+                        ImGui::SetKeyboardFocusHere();
+                        scriptRenameFocus_ = false;
+                    }
+                    const bool enter = ImGui::InputText("Name",
+                                                        scriptRename_,
+                                                        sizeof(scriptRename_),
+                                                        ImGuiInputTextFlags_EnterReturnsTrue);
+                    if (fileOperationsEnabled && (ImGui::Button("Rename") || enter)) {
+                        try {
+                            if (scriptActionRoot_ != assets->root) {
+                                throw std::runtime_error(
+                                    "Project changed; select the script again");
+                            }
+                            saveFile(*assets);
+                            browser->selected = scriptActionPath_;
+                            browser->renameSelected(*world_, scriptRename_);
+                            if (assetPath_ == scriptActionPath_) {
+                                assetPath_ = browser->selected;
+                                if (openedScript) {
+                                    *openedScript = assetPath_;
+                                }
+                            }
+                            treeRefresh_ = 0;
+                            fileError_.clear();
+                            ImGui::CloseCurrentPopup();
+                        } catch (const std::exception& ex) {
+                            fileError_ = ex.what();
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                        ImGui::CloseCurrentPopup();
+                    }
+                    if (!fileError_.empty()) {
+                        ImGui::TextWrapped("%s", fileError_.c_str());
+                    }
+                    ImGui::EndPopup();
+                }
+                if (ImGui::BeginPopupModal(
+                        "Delete script?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                    ImGui::TextWrapped(
+                        "Move %s to Trash? Scene references will remain missing until restored or reassigned. Undo restores the file.",
+                        scriptActionPath_.c_str());
+                    if (fileOperationsEnabled && ImGui::Button("Delete")) {
+                        try {
+                            saveFile(*assets);
+                            if (scriptActionRoot_ != assets->root) {
+                                throw std::runtime_error(
+                                    "Project changed; select the script again");
+                            }
+                            if (!history || !world_) {
+                                throw std::runtime_error("Script deletion requires editor history");
+                            }
+                            auto receipt =
+                                std::make_shared<TrashFile>(assets->resolve(scriptActionPath_));
+                            if (!history->performAsset(*world_, selected_, [receipt](bool redo) {
+                                    if (redo) {
+                                        receipt->remove();
+                                    } else {
+                                        receipt->restore();
+                                    }
+                                    ++modelAssetRevision;
+                                })) {
+                                throw std::runtime_error(history->error);
+                            }
+                            if (assetPath_ == scriptActionPath_) {
+                                setSource("");
+                                assetPath_.clear();
+                                if (openedScript) {
+                                    openedScript->clear();
+                                }
+                            }
+                            if (browser->selected == scriptActionPath_) {
+                                browser->selected.clear();
+                            }
+                            treeRefresh_ = 0;
+                            fileError_.clear();
+                            ImGui::CloseCurrentPopup();
+                        } catch (const std::exception& ex) {
+                            fileError_ = ex.what();
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                        ImGui::CloseCurrentPopup();
+                    }
+                    if (!fileError_.empty()) {
+                        ImGui::TextWrapped("%s", fileError_.c_str());
+                    }
+                    ImGui::EndPopup();
                 }
                 ImGui::EndChild();
                 ImGui::SameLine();

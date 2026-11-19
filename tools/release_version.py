@@ -27,12 +27,16 @@ ref_name = os.environ.get("GITHUB_REF_NAME", "")
 event = os.environ.get("GITHUB_EVENT_NAME", "")
 sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 tag = ""
-if ref_type == "tag":
+# The checkbox only controls manual runs; pushing a version tag still publishes.
+publish = event != "workflow_dispatch" or os.environ.get("PUBLISH_RELEASE", "true") != "false"
+if event == "workflow_dispatch" and os.environ.get("PUBLISH_RELEASE") == "true" and not requested and ref_type != "tag":
+    raise SystemExit("Enter a version to publish, or uncheck Publish GitHub Release for a build-only run")
+if publish and ref_type == "tag":
     if not ref_name.startswith("v"):
         raise SystemExit("Release tags must begin with v")
     version = validate(ref_name[1:])
     tag = ref_name
-elif event == "workflow_dispatch" and requested:
+elif publish and event == "workflow_dispatch" and requested:
     version = validate(requested.removeprefix("v"))
     tag = "v" + version
 else:

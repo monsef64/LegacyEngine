@@ -1869,40 +1869,58 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<Animation>(selected) && ImGui::MenuItem("Animation")) {
+                    world.add(selected, Animation{});
+                }
+                if (ImGui::BeginMenu("Audio")) {
+                    if (!world.has<AudioListener>(selected) && ImGui::MenuItem("Audio Listener")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
+                        world.add(selected, AudioListener{});
+                    }
+                    if (!world.has<AudioSource>(selected) && ImGui::MenuItem("Audio Source")) {
+                        world.add(selected, AudioSource{});
+                    }
+                    ImGui::EndMenu();
+                }
                 if (!world.has<BoneAttachment>(selected) && ImGui::MenuItem("Bone Attachment")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});
                     }
                     world.add(selected, BoneAttachment{});
                 }
-
-                if (!world.has<Vehicle>(selected) &&
-                    ImGui::MenuItem(
-                        "Vehicle", nullptr, false, !world.has<CharacterController>(selected))) {
-                    if (!world.has<Transform>(selected)) {
-                        world.add(selected, Transform{});
-                    }
-                    if (!world.has<RigidBody>(selected)) {
-                        RigidBody rb;
-                        rb.mass = 1000;
-                        world.add(selected, rb);
-                    }
-                    if (!world.has<Collider>(selected)) {
-                        Collider c;
-                        c.size = {1.8f, .6f, 4.f};
-                        world.add(selected, c);
-                    }
-                    world.add(selected, Vehicle{});
+                if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("Camera Effects")) {
+                    world.add(selected, CameraEffects{});
                 }
-                if (ImGui::BeginMenu("Environment")) {
-                    if (!world.has<Water>(selected) && !world.has<River>(selected) &&
-                        ImGui::MenuItem("Water")) {
+                if (ImGui::BeginMenu("Cameras")) {
+                    if (!world.has<Camera>(selected) && ImGui::MenuItem("Camera")) {
                         if (!world.has<Transform>(selected)) {
                             world.add(selected, Transform{});
                         }
-                        world.add(selected, Water{});
+                        world.add(selected, Camera{});
                     }
-
+                    if (!world.has<FPSCamera>(selected) && ImGui::MenuItem("FPS")) {
+                        addFPSCamera(world, selected);
+                    }
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Collider", !world.has<Collider>(selected))) {
+                    const char* names[]{"Box", "Sphere", "Capsule", "Cone", "Mesh"};
+                    const int order[]{0, 2, 3, 4, 1};
+                    for (int shape : order) {
+                        if (ImGui::MenuItem(names[shape])) {
+                            if (!world.has<Transform>(selected)) {
+                                world.add(selected, Transform{});
+                            }
+                            Collider collider;
+                            collider.shape = static_cast<ColliderShape>(shape);
+                            world.add(selected, collider);
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("Environment")) {
                     if (!world.has<CloudSystem>(selected) && ImGui::MenuItem("Clouds")) {
                         if (!world.has<Transform>(selected)) {
                             world.add(selected, Transform{{0, 20, 0}});
@@ -1919,6 +1937,9 @@ inline void drawInspector(World& world,
                         }
                         world.add(selected, River{});
                     }
+                    if (!world.has<Skybox>(selected) && ImGui::MenuItem("Skybox")) {
+                        world.add(selected, Skybox{});
+                    }
                     if (!world.has<Terrain>(selected) && ImGui::MenuItem("Terrain")) {
                         if (!world.has<Transform>(selected)) {
                             world.add(selected, Transform{});
@@ -1926,19 +1947,14 @@ inline void drawInspector(World& world,
                         world.add(selected, Terrain{});
                         Terrains::openTools = true;
                     }
-                    if (!world.has<Skybox>(selected) && ImGui::MenuItem("Skybox")) {
-                        world.add(selected, Skybox{});
+                    if (!world.has<Water>(selected) && !world.has<River>(selected) &&
+                        ImGui::MenuItem("Water")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
+                        world.add(selected, Water{});
                     }
                     ImGui::EndMenu();
-                }
-                if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("Camera Effects")) {
-                    world.add(selected, CameraEffects{});
-                }
-                if (!world.has<LightShafts>(selected) && ImGui::MenuItem("LightShafts")) {
-                    if (!world.has<Transform>(selected)) {
-                        world.add(selected, Transform{});
-                    }
-                    world.add(selected, LightShafts{});
                 }
                 if (!world.has<Laser>(selected) && ImGui::MenuItem("Laser")) {
                     if (!world.has<Transform>(selected)) {
@@ -1946,48 +1962,14 @@ inline void drawInspector(World& world,
                     }
                     world.add(selected, Laser{});
                 }
-                if (!world.has<ParticleSystem>(selected) && ImGui::MenuItem("Particle System")) {
-                    if (!world.has<Transform>(selected)) {
-                        world.add(selected, Transform{});
-                    }
-                    world.add(selected, ParticleSystem{});
-                }
-                if (!world.has<Animation>(selected) && ImGui::MenuItem("Animation")) {
-                    world.add(selected, Animation{});
-                }
-                if (!world.has<Raycast>(selected) && ImGui::MenuItem("Raycast")) {
-                    if (!world.has<Transform>(selected)) {
-                        world.add(selected, Transform{});
-                    }
-                    world.add(selected, Raycast{});
-                }
-                if (ImGui::BeginMenu("Physics")) {
-                    if (!world.has<RigidBody>(selected) && ImGui::MenuItem("Rigidbody")) {
-                        if (!world.has<Transform>(selected)) {
-                            world.add(selected, Transform{});
+                if (ImGui::MenuItem("LegacyScript")) {
+                    if (auto* scripts = world.tryGet<LuaScript>(selected)) {
+                        if (scripts->additional.size() < 63) {
+                            scripts->additional.push_back({});
                         }
-                        world.add(selected, RigidBody{});
+                    } else {
+                        world.add(selected, LuaScript{});
                     }
-                    if (!world.has<CharacterController>(selected) &&
-                        ImGui::MenuItem("Character Controller",
-                                        nullptr,
-                                        false,
-                                        !world.has<Vehicle>(selected))) {
-                        addCharacterController(world, selected);
-                    }
-                    ImGui::EndMenu();
-                }
-                if (ImGui::BeginMenu("Cameras")) {
-                    if (!world.has<Camera>(selected) && ImGui::MenuItem("Camera")) {
-                        if (!world.has<Transform>(selected)) {
-                            world.add(selected, Transform{});
-                        }
-                        world.add(selected, Camera{});
-                    }
-                    if (!world.has<FPSCamera>(selected) && ImGui::MenuItem("FPS")) {
-                        addFPSCamera(world, selected);
-                    }
-                    ImGui::EndMenu();
                 }
                 if (ImGui::BeginMenu("Lights")) {
                     if (!world.has<DirectionalLight>(selected) &&
@@ -2011,46 +1993,63 @@ inline void drawInspector(World& world,
                     }
                     ImGui::EndMenu();
                 }
-                if (ImGui::BeginMenu("Audio")) {
-                    if (!world.has<AudioSource>(selected) && ImGui::MenuItem("Audio Source")) {
-                        world.add(selected, AudioSource{});
+                if (!world.has<LightShafts>(selected) && ImGui::MenuItem("LightShafts")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
                     }
-                    if (!world.has<AudioListener>(selected) && ImGui::MenuItem("Audio Listener")) {
-                        if (!world.has<Transform>(selected)) {
-                            world.add(selected, Transform{});
-                        }
-                        world.add(selected, AudioListener{});
-                    }
-                    ImGui::EndMenu();
-                }
-                if (!world.has<Transform>(selected) && ImGui::MenuItem("Transform")) {
-                    world.add(selected, Transform{});
+                    world.add(selected, LightShafts{});
                 }
                 if (!world.has<MeshRenderer>(selected) && ImGui::MenuItem("MeshRenderer")) {
                     world.add(selected, MeshRenderer{meshes[0]});
                 }
-                if (ImGui::BeginMenu("Collider", !world.has<Collider>(selected))) {
-                    const char* names[]{"Box", "Sphere", "Capsule", "Cone", "Mesh"};
-                    for (int shape = 0; shape < 5; ++shape) {
-                        if (ImGui::MenuItem(names[shape])) {
-                            if (!world.has<Transform>(selected)) {
-                                world.add(selected, Transform{});
-                            }
-                            Collider collider;
-                            collider.shape = static_cast<ColliderShape>(shape);
-                            world.add(selected, collider);
+                if (!world.has<ParticleSystem>(selected) && ImGui::MenuItem("Particle System")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, ParticleSystem{});
+                }
+                if (ImGui::BeginMenu("Physics")) {
+                    if (!world.has<CharacterController>(selected) &&
+                        ImGui::MenuItem("Character Controller",
+                                        nullptr,
+                                        false,
+                                        !world.has<Vehicle>(selected))) {
+                        addCharacterController(world, selected);
+                    }
+                    if (!world.has<RigidBody>(selected) && ImGui::MenuItem("Rigidbody")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
                         }
+                        world.add(selected, RigidBody{});
                     }
                     ImGui::EndMenu();
                 }
-                if (ImGui::MenuItem("LegacyScript")) {
-                    if (auto* scripts = world.tryGet<LuaScript>(selected)) {
-                        if (scripts->additional.size() < 63) {
-                            scripts->additional.push_back({});
-                        }
-                    } else {
-                        world.add(selected, LuaScript{});
+                if (!world.has<Raycast>(selected) && ImGui::MenuItem("Raycast")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
                     }
+                    world.add(selected, Raycast{});
+                }
+                if (!world.has<Transform>(selected) && ImGui::MenuItem("Transform")) {
+                    world.add(selected, Transform{});
+                }
+                if (!world.has<Vehicle>(selected) &&
+                    ImGui::MenuItem(
+                        "Vehicle", nullptr, false, !world.has<CharacterController>(selected))) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    if (!world.has<RigidBody>(selected)) {
+                        RigidBody rb;
+                        rb.mass = 1000;
+                        world.add(selected, rb);
+                    }
+                    if (!world.has<Collider>(selected)) {
+                        Collider c;
+                        c.size = {1.8f, .6f, 4.f};
+                        world.add(selected, c);
+                    }
+                    world.add(selected, Vehicle{});
                 }
                 ImGui::EndPopup();
             }

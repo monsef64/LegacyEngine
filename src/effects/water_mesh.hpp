@@ -1,6 +1,7 @@
 #pragma once
 #include "core/hierarchy.hpp"
 #include "models/model_asset.hpp"
+#include <tuple>
 
 namespace Waters {
 // Bounded shared cache for rendering and physics. Static geometry only.
@@ -51,6 +52,31 @@ geometry(World& world, Entity e, const AssetManager& assets, bool refine = true)
         }
         if (mesh.vertices.size() > 120000) {
             throw std::runtime_error("Water mesh exceeds 120000 vertices");
+        }
+        // Weld shading normals by position for water only. Imported flat normals
+        // should not turn specular highlights into a triangle checkerboard.
+        if (refine) {
+            std::map<std::tuple<float, float, float>, Vec3> normals;
+            auto key = [](Vec3 p) { return std::make_tuple(p.x, p.y, p.z); };
+            for (size_t i = 0; i + 2 < mesh.vertices.size(); i += 3) {
+                const auto& a = mesh.vertices[i];
+                const auto& b = mesh.vertices[i + 1];
+                const auto& c = mesh.vertices[i + 2];
+                auto face = cross(b.position - a.position, c.position - a.position);
+                if (dot(face, a.normal + b.normal + c.normal) < 0) {
+                    face = face * -1.f;
+                }
+                for (size_t j = 0; j < 3; ++j) {
+                    auto& sum = normals[key(mesh.vertices[i + j].position)];
+                    sum = sum + face;
+                }
+            }
+            for (auto& vertex : mesh.vertices) {
+                const auto sum = normals[key(vertex.position)];
+                if (dot(sum, sum) > 1e-12f) {
+                    vertex.normal = normalize(sum);
+                }
+            }
         }
         // Refine large triangles so coarse planes can show displaced waves.
         for (int pass = 0; refine && pass < 4 && mesh.vertices.size() * 4 <= 120000; ++pass) {

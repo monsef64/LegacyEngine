@@ -33,11 +33,41 @@ keeping the binding. Edit-time settings changes are reflected when Play starts.
 Roll angle is a speed-based visual approximation, not simulated tire angular
 velocity. Wheel transforms/roll changed during Play revert on Stop.
 
+## Ready-to-use driving controller
+
+For smoother keyboard driving, attach
+[`vehicle_controller.ls`](../scripts/examples/vehicle_controller.ls) to the
+**Vehicle root**, instead of `vehicle_basic.ls`. Do not run both controllers on
+the same vehicle: they write the same input commands.
+
+- **W**: accelerate forward; brake first if reversing.
+- **S**: reverse; brake first if moving forward.
+- **A/D**: smoothly steer left/right; releasing returns steering toward center.
+- **Space**: service brake (overrides acceleration).
+- **Left Shift**: rear handbrake.
+- Holding **W + S** brakes rather than accelerating.
+
+Create the vehicle about 1.2 m above collidable ground, provide a Game camera,
+then press Play and focus Game. Local -Z is forward. The script keeps existing
+vehicle tuning and uses the Vehicle physics API, not Transform movement.
+Steering authority tapers to 40% at 100 km/h; adjust `steeringRate`,
+`steeringReturnRate`, `highSpeedSteering` and `directionChangeSpeed` near the top
+of the file to change the feel. It adds no camera, gears or reset/teleport logic.
+
+Manual check: accelerate, release to coast, hold S to stop then reverse, hold W
+while reversing, test both steering directions, Space, W+S and the handbrake.
+Check steering at low/high speeds and verify Stop restores the edit-time scene.
+This sample has not been interactively drive-tested; no automated tests were run.
+
 ## Physics model
 
 Four rays sample the road under the chassis. Suspension compression and relative
 contact velocity produce spring/damper support. Tire impulses combine lateral
 grip, engine force and braking with a shared load-dependent friction budget.
+All suspension impulses are applied before an eight-iteration accumulated tire
+impulse solve. Point effective mass includes chassis/ground rotational inertia,
+instead of treating each contact as an independent quarter of the chassis mass.
+This reduces residual idle slip/yaw and interaction between successive wheels.
 Impulses at contact points produce pitch/roll/yaw through the existing Jolt solver;
 there is no scripted Transform movement. Dynamic ground receives the opposite
 impulse. Wheel rays ignore triggers and the vehicle's own descendant colliders.
@@ -48,14 +78,15 @@ in reverse; it does not automatically apply a transmission or service brake.
 Wheel commands persist until overwritten. Suspension/traction operate only at
 fixed physics steps while simulation advances, not in Edit mode or while paused.
 
-At near-zero throttle and low relative wheel speed (below 0.5 m/s), contact-based
+At near-zero throttle and low relative longitudinal/lateral wheel speed (below 0.5 m/s), contact-based
 idle hold uses the service-brake capacity to counter creeping. It releases on
 throttle. Tire forces anticipate gravity during the upcoming fixed step, rather
 than permanently lagging on slopes; relative ground velocity is still respected.
 Coasting above the hold threshold has light rolling resistance. Hold remains
 limited by tire grip, wheel load and brakeForce: it is not an infinite parking
 constraint, and steep slopes/poor contact can still cause sliding. No airborne
-velocity is forcibly zeroed.
+velocity is forcibly zeroed. Grounded, no-throttle wheel visuals suppress roll
+from speed jitter below 0.03 m/s; this is visual only, not a chassis velocity clamp.
 
 A dynamic, positive-mass RigidBody and non-trigger primitive chassis Collider are
 required. A static/kinematic chassis, mesh collider, disabled entity/component,
@@ -158,10 +189,13 @@ No automated tests are added or run for this feature. On the desktop build:
 - Check suspension movement, front steering and forward/reverse visual roll.
   Save/reopen, duplicate with children, prefab round-trip and undo/redo creation.
   Stop must restore original wheel transforms.
-- Right-click Hierarchy background, level root and object rows: toggle **A-Z Order**.
-  Check case-insensitive sibling sorting, hierarchy preservation, search and
-  shift-selection. Toggle off to return to entity-creation order. Sorting is a
-  session-only display preference, not a scene mutation.
+- Confirm Create and Add Component menus and their submenus are alphabetical.
+  The Hierarchy itself retains entity order and has no A-Z Order toggle.
+- Check idle position/yaw and wheel roll on flat ground for at least a minute,
+  then repeat on moderate slopes and dynamic platforms. Test low grip, reduced
+  brakeForce, throttle release/reapplication, side impacts and partial contact.
+  Holding is grip/load/brake-limited; it must not pin the car in air or on steep
+  slopes. Confirm accelerated/reversed wheel rotation is preserved.
 
 Linux compilation does not validate native desktop behavior or driving feel;
 these interactive checks remain pending.
