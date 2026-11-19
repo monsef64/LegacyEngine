@@ -2411,6 +2411,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (world.alive(selectedEntity)) {
                     const auto* transform = world.tryGet<Transform>(selectedEntity);
                     const auto* collider = world.tryGet<Collider>(selectedEntity);
+                    if (transform) {
+                        if (const auto* vehicle = world.tryGet<Vehicle>(selectedEntity)) {
+                            renderer.drawVehicle(*transform, *vehicle, viewProjection);
+                        }
+                    }
                     if (transform && collider) {
                         renderer.drawCollider(*transform,
                                               effectiveCollider(world, selectedEntity, *collider),

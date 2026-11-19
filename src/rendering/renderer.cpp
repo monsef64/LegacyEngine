@@ -813,6 +813,39 @@ void Renderer::drawCamera(const Transform& transform,
                           const Mat4& viewProjection) {
     drawWire(cameraFrustumWire(camera), transform, viewProjection, {.92f, .94f, .98f});
 }
+void Renderer::drawVehicle(const Transform& transform, const Vehicle& v, const Mat4& vp) {
+    if (!Vehicles::valid(v)) {
+        return;
+    }
+    MeshData wire;
+    wire.topology = MeshData::Topology::Lines;
+    auto line = [&](Vec3 a, Vec3 b) {
+        wire.vertices.push_back({a, {}});
+        wire.vertices.push_back({b, {}});
+    };
+    for (int i = 0; i < 4; ++i) {
+        const bool front = i < 2;
+        const Vec3 mount{(i % 2 ? 1.f : -1.f) * v.trackWidth * .5f,
+                         v.mountHeight,
+                         (front ? -1.f : 1.f) * v.wheelBase * .5f};
+        const auto center =
+            mount - Vec3{0, v.suspensionLength * (1 - std::clamp(v.compression[i], 0.f, 1.f)), 0};
+        line(mount, center);
+        const float angle =
+            front ? std::clamp(v.steering, -1.f, 1.f) * radians(v.maxSteerAngle) : 0;
+        const Vec3 forward{std::sin(angle), 0, -std::cos(angle)};
+        for (int segment = 0; segment < 20; ++segment) {
+            auto point = [&](int n) {
+                float a = 2 * kPi * float(n) / 20;
+                return center + forward * (std::cos(a) * v.wheelRadius) +
+                       Vec3{0, std::sin(a) * v.wheelRadius, 0};
+            };
+            line(point(segment), point(segment + 1));
+        }
+    }
+    drawWire(wire, transform, vp, {1, .65f, .15f}, 1, 2);
+}
+
 void Renderer::drawRaycast(const Transform& transform,
                            const Raycast& query,
                            const Mat4& viewProjection,

@@ -6,8 +6,8 @@
 
 // IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox; 12
 // character; 13 FPS camera; 14 raycast; 15 particles; 16 laser; 17 shafts; 18 terrain;
-// 19 clouds; 20 fog; 21 river.
-inline constexpr int editorObjectTypeCount = 22;
+// 19 clouds; 20 fog; 21 river; 22 vehicle.
+inline constexpr int editorObjectTypeCount = 23;
 inline bool validEditorObjectType(int item) {
     return item >= 0 && item < editorObjectTypeCount;
 }
@@ -15,6 +15,9 @@ inline int drawCreateItems() {
     int item = -1;
     if (ImGui::MenuItem("Empty GameObject")) {
         item = 0;
+    }
+    if (ImGui::MenuItem("Vehicle")) {
+        item = 22;
     }
     if (ImGui::MenuItem("Character Controller")) {
         item = 12;
@@ -149,7 +152,8 @@ inline Entity createEditorObject(World& world,
                                "Terrain",
                                "Clouds",
                                "Fog",
-                               "River"};
+                               "River",
+                               "Vehicle"};
     static_assert(sizeof(names) / sizeof(names[0]) == editorObjectTypeCount);
     if (!validEditorObjectType(item)) {
         return {};
@@ -166,6 +170,21 @@ inline Entity createEditorObject(World& world,
                                     item > 0 && item < 5 ? meshes[item] : MeshHandle{},
                                     item > 0 && item < 5 ? shapes[item] : ColliderShape::Box,
                                     item == 0 || item >= 5);
+    if (item == 22) {
+        RigidBody rb;
+        rb.mass = 1000;
+        Collider c;
+        c.size = {1.8f, .6f, 4.f};
+        world.add(entity, rb);
+        world.add(entity, c);
+        world.add(entity, Vehicle{});
+        // Keep the physics root at unit scale. Only the visible child is scaled.
+        auto visual =
+            createLevelObject(world, "Chassis visual", position, {}, ColliderShape::Box, true);
+        world.add(visual, MeshRenderer{cube, {.25f, .4f, .65f}});
+        world.get<Transform>(visual).scale = c.size;
+        setParent(world, visual, entity);
+    }
     if (item == 19) {
         world.get<Transform>(entity).position.y += 20;
         world.add(entity, CloudSystem{});

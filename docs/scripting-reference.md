@@ -3623,3 +3623,16 @@ function onStart()
     if skybox1 and skybox2 then fadeSkybox(skybox1, skybox2, 0.5) end
 end
 ```
+
+
+## Vehicle component
+
+See [Vehicle physics and scripting](vehicles.md) for setup, tuning ranges and a
+complete driving example. Use `self:getComponent(Vehicle)` or
+`self:addComponent(Vehicle)`. Both the type token and string `"Vehicle"` work.
+
+Writable commands: `throttle` (-1..1), `steering` (-1..1, positive right), `brake`
+(0..1), `handbrake` (boolean). Read-only state: `speed` (signed m/s),
+`groundedWheels`, `isGrounded`, `wheelCompression` (copied FL/FR/RL/RR array).
+All vehicle configuration is writable through the same property names shown in
+the Inspector; runtime commands/state are not serialized.

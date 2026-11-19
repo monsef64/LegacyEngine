@@ -52,7 +52,8 @@ const char* types[]{"Transform",     "RigidBody",
                     "Animation",     "ParticleSystem",
                     "Laser",         "LightShafts",
                     "CameraEffects", "Fog",
-                    "CloudSystem",   "River"};
+                    "CloudSystem",   "River",
+                    "Vehicle"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -61,7 +62,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 24; ++i) {
+    for (int i = 0; i < 25; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -111,6 +112,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<CloudSystem>(h.entity);
     case 23:
         return h.world->has<River>(h.entity);
+    case 24:
+        return h.world->has<Vehicle>(h.entity);
     case 21:
         return h.world->has<Fog>(h.entity);
     case 20:
@@ -456,7 +459,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 24; ++i) {
+    for (int i = 0; i < 25; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -673,6 +676,9 @@ int LuaScene::api(lua_State* L) {
         case 22:
             self.world_.each<CloudSystem>([&](Entity e, CloudSystem&) { collect(e); });
             break;
+        case 24:
+            self.world_.each<Vehicle>([&](Entity e, Vehicle&) { collect(e); });
+            break;
         case 23:
             self.world_.each<River>([&](Entity e, River&) { collect(e); });
             break;
@@ -799,9 +805,11 @@ int LuaScene::api(lua_State* L) {
             return luaL_error(L, "Remove CloudSystem / River before Transform");
         }
         if (((type == 0 || type == 1 || type == 2) &&
-             self.world_.has<CharacterController>(h.entity)) ||
+             (self.world_.has<CharacterController>(h.entity) ||
+              self.world_.has<Vehicle>(h.entity))) ||
             ((type == 0 || type == 6) && self.world_.has<FPSCamera>(h.entity))) {
-            return luaL_error(L, "Remove the dependent CharacterController or FPSCamera first");
+            return luaL_error(
+                L, "Remove the dependent Vehicle, CharacterController or FPSCamera first");
         }
         switch (type) {
         case 0:
@@ -845,6 +853,9 @@ int LuaScene::api(lua_State* L) {
             break;
         case 22:
             self.world_.remove<CloudSystem>(h.entity);
+            break;
+        case 24:
+            self.world_.remove<Vehicle>(h.entity);
             break;
         case 23:
             self.world_.remove<River>(h.entity);
@@ -918,6 +929,9 @@ int LuaScene::api(lua_State* L) {
             self.world_.add(h.entity, PointLight{});
             break;
         case 13:
+            if (self.world_.has<Vehicle>(h.entity)) {
+                return luaL_error(L, "Remove Vehicle before adding CharacterController");
+            }
             addCharacterController(self.world_, h.entity);
             break;
         case 22:
@@ -925,6 +939,25 @@ int LuaScene::api(lua_State* L) {
                 self.world_.add(h.entity, Transform{{0, 20, 0}});
             }
             self.world_.add(h.entity, CloudSystem{});
+            break;
+        case 24:
+            if (self.world_.has<CharacterController>(h.entity)) {
+                return luaL_error(L, "Remove CharacterController before adding Vehicle");
+            }
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            if (!self.world_.has<RigidBody>(h.entity)) {
+                RigidBody rb;
+                rb.mass = 1000;
+                self.world_.add(h.entity, rb);
+            }
+            if (!self.world_.has<Collider>(h.entity)) {
+                Collider c;
+                c.size = {1.8f, .6f, 4};
+                self.world_.add(h.entity, c);
+            }
+            self.world_.add(h.entity, Vehicle{});
             break;
         case 23:
             if (!self.world_.has<Transform>(h.entity)) {
@@ -1210,7 +1243,7 @@ int LuaScene::componentIndex(lua_State* L) {
         return objectIndex(L);
     }
     // Component aliases resolve on the same owner, without storing raw pointers.
-    for (int type = 0; type < 21; ++type) {
+    for (int type = 0; type < 25; ++type) {
         std::string alias = type == 14 ? "fpsCamera" : types[type];
         alias[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(alias[0])));
         if (!std::strcmp(key, alias.c_str())) {
@@ -1231,6 +1264,55 @@ int LuaScene::componentIndex(lua_State* L) {
             component(L, c.object, 0);
         } else {
             lua_pushnil(L);
+        }
+        return 1;
+    }
+    if (c.type == 24) {
+        const auto& v = c.object.world->get<Vehicle>(c.object.entity);
+        if (!std::strcmp(key, "throttle")) {
+            lua_pushnumber(L, v.throttle);
+            return 1;
+        }
+        if (!std::strcmp(key, "steering")) {
+            lua_pushnumber(L, v.steering);
+            return 1;
+        }
+        if (!std::strcmp(key, "brake")) {
+            lua_pushnumber(L, v.brake);
+            return 1;
+        }
+        if (!std::strcmp(key, "handbrake")) {
+            lua_pushboolean(L, v.handbrake);
+            return 1;
+        }
+        if (!std::strcmp(key, "speed")) {
+            lua_pushnumber(L, v.speed);
+            return 1;
+        }
+        if (!std::strcmp(key, "groundedWheels")) {
+            lua_pushinteger(L, v.groundedWheels);
+            return 1;
+        }
+        if (!std::strcmp(key, "isGrounded")) {
+            lua_pushboolean(L, v.groundedWheels > 0);
+            return 1;
+        }
+        if (!std::strcmp(key, "wheelCompression")) {
+            lua_createtable(L, 4, 0);
+            for (int i = 0; i < 4; ++i) {
+                lua_pushnumber(L, v.compression[i]);
+                lua_rawseti(L, -2, i + 1);
+            }
+            return 1;
+        }
+        const auto j = Vehicles::settings(v);
+        if (!j.contains(key)) {
+            return luaL_error(L, "Unknown Vehicle property: %s", key);
+        }
+        if (j.at(key).is_boolean()) {
+            lua_pushboolean(L, j.at(key).get<bool>());
+        } else {
+            lua_pushnumber(L, j.at(key).get<double>());
         }
         return 1;
     }
@@ -1731,6 +1813,55 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 24) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 24)) {
+            return luaL_error(L, "Vehicle no longer exists");
+        }
+        auto& v = c.object.world->get<Vehicle>(c.object.entity);
+        const char* key = luaL_checkstring(L, 2);
+        if (!std::strcmp(key, "handbrake")) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            v.handbrake = lua_toboolean(L, 3);
+            return 0;
+        }
+        if (!std::strcmp(key, "throttle") || !std::strcmp(key, "steering") ||
+            !std::strcmp(key, "brake")) {
+            const float value = number(L, 3);
+            const float minimum = !std::strcmp(key, "brake") ? 0.f : -1.f;
+            if (value < minimum || value > 1) {
+                return luaL_error(L, "Vehicle input outside supported range");
+            }
+            if (!std::strcmp(key, "throttle")) {
+                v.throttle = value;
+            } else if (!std::strcmp(key, "steering")) {
+                v.steering = value;
+            } else {
+                v.brake = value;
+            }
+            return 0;
+        }
+        auto j = Vehicles::settings(v);
+        if (!j.contains(key)) {
+            return luaL_error(L, "Unknown or read-only Vehicle property: %s", key);
+        }
+        if (j.at(key).is_boolean()) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            j[key] = bool(lua_toboolean(L, 3));
+        } else {
+            j[key] = number(L, 3);
+        }
+        try {
+            const auto next = Vehicles::parse(j);
+            v.enabled = next.enabled;
+#define COPY_VEHICLE(name, value, lo, hi) v.name = next.name;
+            VEHICLE_SETTINGS(COPY_VEHICLE)
+#undef COPY_VEHICLE
+        } catch (const std::exception& e) {
+            return luaL_error(L, "%s", e.what());
+        }
+        return 0;
+    }
+
     if (c.type == 22 || c.type == 23) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
             return luaL_error(L, "Environment component no longer exists");
@@ -3208,7 +3339,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 21; ++type) {
+                for (; type < 25; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }

@@ -281,13 +281,14 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
                       !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) &&
                       !world.has<SpotLight>(entity) && !world.has<Laser>(entity) &&
-                      !world.has<CloudSystem>(entity) && !world.has<River>(entity) &&
-                      !world.has<Fog>(entity) && !world.has<CameraEffects>(entity) &&
-                      !world.has<Terrain>(entity) && !world.has<LightShafts>(entity) &&
-                      !world.has<CharacterController>(entity) && !world.has<FPSCamera>(entity);
+                      !world.has<Vehicle>(entity) && !world.has<CloudSystem>(entity) &&
+                      !world.has<River>(entity) && !world.has<Fog>(entity) &&
+                      !world.has<CameraEffects>(entity) && !world.has<Terrain>(entity) &&
+                      !world.has<LightShafts>(entity) && !world.has<CharacterController>(entity) &&
+                      !world.has<FPSCamera>(entity);
         }
         if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
-            allowed = !world.has<CharacterController>(entity);
+            allowed = !world.has<CharacterController>(entity) && !world.has<Vehicle>(entity);
         }
         if constexpr (std::is_same_v<T, Camera>) {
             allowed = !world.has<FPSCamera>(entity);
@@ -295,7 +296,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         remove = ImGui::MenuItem("Remove component", nullptr, false, allowed);
         if (!allowed) {
             ImGui::TextDisabled(
-                "Remove dependent Camera / listener / lights / controller / FPSCamera first");
+                "Remove dependent Vehicle / Camera / listener / lights / controller / FPSCamera first");
         }
         ImGui::EndPopup();
     }
@@ -358,6 +359,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, CloudSystem>) {
             type = 23;
         }
+        if constexpr (std::is_same_v<T, Vehicle>) {
+            type = 25;
+        }
         if constexpr (std::is_same_v<T, River>) {
             type = 24;
         }
@@ -382,15 +386,20 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if (const auto* payload = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
             const auto source = *static_cast<const EditorComponentPayload*>(payload->Data);
             int target = -1;
-            const char* names[]{
-                "Transform",     "RigidBody",           "Collider",   "MeshRenderer",
-                "ObjectName",    "LegacyScripts",       "Camera",     "AudioSource",
-                "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
-                "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
-                "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
-                "Terrain",       "CameraEffects",       "Fog",        "CloudSystem",
-                "River"};
-            for (int i = 0; i < 25; ++i) {
+            const char* names[]{"Transform",     "RigidBody",
+                                "Collider",      "MeshRenderer",
+                                "ObjectName",    "LegacyScripts",
+                                "Camera",        "AudioSource",
+                                "AudioListener", "DirectionalLight",
+                                "PointLight",    "SpotLight",
+                                "Skybox",        "CharacterController",
+                                "FPSCamera",     "Raycast",
+                                "Animation",     "ParticleSystem",
+                                "Laser",         "LightShafts",
+                                "Terrain",       "CameraEffects",
+                                "Fog",           "CloudSystem",
+                                "River",         "Vehicle"};
+            for (int i = 0; i < 26; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -439,14 +448,19 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
 inline void drawScriptExports(World& world,
                               std::vector<ScriptField>& fields,
                               const AssetManager* assets = nullptr) {
-    const char* componentTypes[]{
-        "Transform",     "RigidBody",           "Collider",   "MeshRenderer",
-        "ObjectName",    "LuaScript",           "Camera",     "AudioSource",
-        "AudioListener", "DirectionalLight",    "PointLight", "SpotLight",
-        "Skybox",        "CharacterController", "FPSCamera",  "Raycast",
-        "Animation",     "ParticleSystem",      "Laser",      "LightShafts",
-        "Terrain",       "CameraEffects",       "Fog",        "CloudSystem",
-        "River"};
+    const char* componentTypes[]{"Transform",     "RigidBody",
+                                 "Collider",      "MeshRenderer",
+                                 "ObjectName",    "LuaScript",
+                                 "Camera",        "AudioSource",
+                                 "AudioListener", "DirectionalLight",
+                                 "PointLight",    "SpotLight",
+                                 "Skybox",        "CharacterController",
+                                 "FPSCamera",     "Raycast",
+                                 "Animation",     "ParticleSystem",
+                                 "Laser",         "LightShafts",
+                                 "Terrain",       "CameraEffects",
+                                 "Fog",           "CloudSystem",
+                                 "River",         "Vehicle"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -505,7 +519,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 25 &&
+                        if (target.type >= 0 && target.type < 26 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -721,10 +735,10 @@ inline void drawInspector(World& world,
             ImGui::Separator();
             auto ordered = world.has<InspectorOrder>(selected)
                                ? world.get<InspectorOrder>(selected).types
-                               : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,
-                                                  13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
-            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,
-                           13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}) {
+                               : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5, 13,
+                                                  14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25};
+            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5, 13,
+                           14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -1191,6 +1205,26 @@ inline void drawInspector(World& world,
                         if (Environment::valid(edited)) {
                             *component = edited;
                         }
+                    }
+                }
+                if (componentID == 25) {
+                    if (auto* v = world.tryGet<Vehicle>(selected);
+                        v && componentHeader<Vehicle>(world, selected, "Vehicle")) {
+                        auto edited = *v;
+                        EditorValues::Checkbox("Enabled", &edited.enabled);
+#define VEHICLE_UI(name, value, lo, hi)                                                            \
+    EditorValues::DragFloat(                                                                       \
+        #name, &edited.name, .05f, lo, hi, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                        VEHICLE_SETTINGS(VEHICLE_UI)
+#undef VEHICLE_UI
+                        if (Vehicles::valid(edited)) {
+                            *v = edited;
+                        }
+                        ImGui::Text("Speed: %.1f km/h | Grounded wheels: %d/4",
+                                    v->speed * 3.6f,
+                                    v->groundedWheels);
+                        ImGui::TextWrapped(
+                            "Local -Z is forward. Four-wheel raycast suspension, front steering, all-wheel drive, rear handbrake. Requires a dynamic RigidBody and a primitive chassis Collider. Drive through Lua throttle/steering/brake/handbrake properties.");
                     }
                 }
                 if (componentID == 24) {
@@ -1736,6 +1770,24 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<Vehicle>(selected) &&
+                    ImGui::MenuItem(
+                        "Vehicle", nullptr, false, !world.has<CharacterController>(selected))) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    if (!world.has<RigidBody>(selected)) {
+                        RigidBody rb;
+                        rb.mass = 1000;
+                        world.add(selected, rb);
+                    }
+                    if (!world.has<Collider>(selected)) {
+                        Collider c;
+                        c.size = {1.8f, .6f, 4.f};
+                        world.add(selected, c);
+                    }
+                    world.add(selected, Vehicle{});
+                }
                 if (ImGui::BeginMenu("Environment")) {
                     if (!world.has<CloudSystem>(selected) && ImGui::MenuItem("Clouds")) {
                         if (!world.has<Transform>(selected)) {
@@ -1802,7 +1854,10 @@ inline void drawInspector(World& world,
                         world.add(selected, RigidBody{});
                     }
                     if (!world.has<CharacterController>(selected) &&
-                        ImGui::MenuItem("Character Controller")) {
+                        ImGui::MenuItem("Character Controller",
+                                        nullptr,
+                                        false,
+                                        !world.has<Vehicle>(selected))) {
                         addCharacterController(world, selected);
                     }
                     ImGui::EndMenu();

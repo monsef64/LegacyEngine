@@ -147,6 +147,8 @@ class Renderer {
                       const Mat4& viewProjection,
                       float opacity = 1.0f);
 
+    void
+    drawVehicle(const Transform& transform, const Vehicle& vehicle, const Mat4& viewProjection);
     void drawCamera(const Transform& transform, const Camera& camera, const Mat4& viewProjection);
     void drawRaycast(const Transform& transform,
                      const Raycast& query,

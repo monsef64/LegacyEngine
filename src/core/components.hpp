@@ -16,6 +16,7 @@
 #include "lighting/light.hpp"
 #include "materials/material.hpp"
 #include "particles/particle_system.hpp"
+#include "physics/vehicle.hpp"
 #include "rendering/mesh.hpp"
 #include "rendering/skybox.hpp"
 #include "terrain/terrain.hpp"

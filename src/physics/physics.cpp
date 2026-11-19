@@ -839,6 +839,119 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                 rigid.impulse = {};
             }
         }
+        // Raycast wheels exert point impulses on the actual solver chassis, never
+        // teleporting its Transform. Commands written by scripts apply this step.
+        world.each<Vehicle>([&](Entity entity, Vehicle& v) {
+            v.speed = 0;
+            v.groundedWheels = 0;
+            v.compression.fill(0);
+            auto found = impl.bodies.find(keyOf(entity));
+            if (!v.enabled || !Vehicles::valid(v) || !isActive(world, entity) ||
+                found == impl.bodies.end()) {
+                return;
+            }
+            const auto& body = found->second;
+            if (body.id.IsInvalid() || body.motion != JPH::EMotionType::Dynamic ||
+                !body.hasCollider || body.sensor || body.box.shape == ColliderShape::Mesh ||
+                body.controller) {
+                return;
+            }
+            const auto position = vec(api.GetPosition(body.id));
+            const auto rotation = quat(api.GetRotation(body.id));
+            const auto up = rotateVector(rotation, {0, 1, 0}),
+                       forward = rotateVector(rotation, {0, 0, -1});
+            v.speed = dot(vec(api.GetLinearVelocity(body.id)), forward);
+            if (dot(up, Vec3{0, 1, 0}) < .1f) {
+                return; // No upside-down traction.
+            }
+            auto command = [](float n, float lo, float hi) {
+                return std::isfinite(n) ? std::clamp(n, lo, hi) : 0.f;
+            };
+            const float throttle = command(v.throttle, -1, 1), steer = command(v.steering, -1, 1),
+                        brake = command(v.brake, 0, 1);
+            const float mass = body.rigid.mass;
+            const auto* transform = world.tryGet<Transform>(entity);
+            // Wheel dimensions are chassis-local metres, transformed by scale.
+            if (!transform) {
+                return;
+            }
+            const float verticalScale = std::abs(transform->scale.y);
+            const float rest = v.suspensionLength * verticalScale;
+            const float radius =
+                v.wheelRadius * std::max(std::abs(transform->scale.x), verticalScale);
+            if (rest < .001f || radius < .001f) {
+                return;
+            }
+            for (int wheel = 0; wheel < 4; ++wheel) {
+                const bool front = wheel < 2;
+                const Vec3 local{(wheel % 2 ? 1.f : -1.f) * v.trackWidth * .5f,
+                                 v.mountHeight,
+                                 (front ? -1.f : 1.f) * v.wheelBase * .5f};
+                const auto mount = position + rotateVector(rotation, local * transform->scale);
+                RayHit hit;
+                const bool contact =
+                    raycast({mount, up * -1.f}, rest + radius, hit, [&](Entity other) {
+                        auto ancestor = other;
+                        for (unsigned depth = 0; world.alive(ancestor) && depth < 128; ++depth) {
+                            if (ancestor == entity) {
+                                return false;
+                            }
+                            ancestor = getParent(world, ancestor);
+                        }
+                        const auto* c = world.tryGet<Collider>(other);
+                        return !c || !c->isTrigger;
+                    });
+                if (!contact || dot(hit.normal, up) < .2f) {
+                    continue;
+                }
+                ++v.groundedWheels;
+                const float compression = std::clamp(rest - (hit.distance - radius), 0.f, rest);
+                v.compression[wheel] = compression / rest;
+                auto ground = impl.bodies.find(keyOf(hit.entity));
+                const bool movingGround =
+                    ground != impl.bodies.end() && !ground->second.id.IsInvalid();
+                const auto groundVelocity =
+                    movingGround ? vec(api.GetPointVelocity(ground->second.id, jvec(hit.point)))
+                                 : Vec3{};
+                const auto relative =
+                    vec(api.GetPointVelocity(body.id, jvec(hit.point))) - groundVelocity;
+                const float load = std::clamp(v.springStrength * compression -
+                                                  v.suspensionDamping * dot(relative, up),
+                                              0.f,
+                                              mass * 9.81f * 2.5f);
+                const float angle = front ? steer * radians(v.maxSteerAngle) : 0;
+                auto direction = rotateVector(rotation, {std::sin(angle), 0, -std::cos(angle)});
+                direction = normalize(direction - hit.normal * dot(direction, hit.normal));
+                if (dot(direction, direction) < .1f) {
+                    continue;
+                }
+                const auto lateral = normalize(cross(direction, hit.normal));
+                const float longitudinalSpeed = dot(relative, direction),
+                            lateralSpeed = dot(relative, lateral);
+                const float limit = v.tireGrip * load;
+                const float lateralForce =
+                    std::clamp(-lateralSpeed * mass / (4 * kStepSeconds), -limit, limit) *
+                    (v.handbrake && !front ? .5f : 1.f);
+                float drive = throttle * v.engineForce * .25f;
+                if (std::abs(v.speed) >= v.maxSpeed && drive * v.speed > 0) {
+                    drive = 0;
+                }
+                const float stopping = std::clamp(-longitudinalSpeed * mass / (4 * kStepSeconds),
+                                                  -v.brakeForce * .25f,
+                                                  v.brakeForce * .25f);
+                const float braking = v.handbrake && !front ? 1.f : brake;
+                const float remaining =
+                    std::sqrt(std::max(0.f, limit * limit - lateralForce * lateralForce));
+                const float longitudinal =
+                    std::clamp(drive + stopping * braking, -remaining, remaining);
+                const auto impulse =
+                    (up * load + lateral * lateralForce + direction * longitudinal) * kStepSeconds;
+                api.AddImpulse(body.id, jvec(impulse), jvec(hit.point));
+                if (movingGround && ground->second.motion == JPH::EMotionType::Dynamic) {
+                    api.AddImpulse(ground->second.id, jvec(impulse * -1.f), jvec(hit.point));
+                }
+            }
+        });
         const auto error = impl.system.Update(kStepSeconds, 1, &impl.allocator, &impl.jobs);
         if (error != JPH::EPhysicsUpdateError::None) {
             std::fprintf(stderr, "Jolt update capacity error: %u\n", unsigned(error));

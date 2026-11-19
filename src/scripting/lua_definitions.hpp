@@ -7,6 +7,16 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"Vehicle",
+         "Vehicle - four-wheel raycast chassis, local -Z forward. enabled; throttle (-1..1), steering (-1..1), brake (0..1), handbrake (boolean). Read-only speed (signed m/s), groundedWheels, isGrounded, wheelCompression (copy, FL/FR/RL/RR). Settings: wheelBase, trackWidth, mountHeight, wheelRadius, suspensionLength, springStrength, suspensionDamping, engineForce, brakeForce, tireGrip, maxSteerAngle (degrees), maxSpeed (m/s). Requires dynamic primitive chassis; adding supplies missing dependencies only."},
+        {"throttle",
+         "Vehicle.throttle: -1..1, negative reverse, commands persist until reassigned"},
+        {"steering", "Vehicle.steering: -1..1, positive steers right"},
+        {"brake", "Vehicle.brake: 0..1, four-wheel service brake"},
+        {"handbrake", "Vehicle.handbrake: boolean, rear-wheel braking with reduced lateral grip"},
+        {"groundedWheels", "Vehicle.groundedWheels: read-only count 0..4"},
+        {"wheelCompression",
+         "Vehicle.wheelCompression: read-only copied array, front-left/front-right/rear-left/rear-right, 0..1"},
     {"CloudSystem", "CloudSystem - enabled, volumetric (false=2D, true=volume), color, size, coverage, density, scale, speed, opacity, steps (4..24). Vector getters return copies; assign a complete vector table. Requires Transform."},
     {"River", "River - enabled, color, width, opacity, speed, flowing, flowAmount (0..2), transparent, collisionEffects, collisionStrength (0..2), waveScale, waveStrength, foam, subdivisions (2..32), points (2..64 local vectors). Getters return copies; assign the complete points list to update the curve. Requires Transform; visual water, no fluid physics."},
     {"Fog", "Fog - enabled, color (complete RGB vector), density (0..10), start (>=0), end (>start, <=1000000). Global distance fog; first enabled active entity wins. Use bracket notation for the end field (a Lua keyword)."},
