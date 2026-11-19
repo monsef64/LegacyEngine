@@ -376,3 +376,12 @@ placements and five generated grass test cutouts. New imported models use `.mesh
 with `.lemesh` backward compatibility. See the
 [terrain foliage and mesh guide](../docs/manual/terrain-foliage-and-mesh-assets.md)
 (repository) for usage, limits and manual checks.
+
+
+### Hierarchy alphabetical order
+
+Right-click the Hierarchy background, level root or an object row and toggle
+**A-Z Order** to display siblings in case-insensitive name order. Turn it off to
+restore entity-creation order. This is a session display preference: it does not
+reparent objects or modify saved scene data. For Vehicle objects, the context menu
+also offers **Create wheel meshes**; see [vehicles](vehicles.md).

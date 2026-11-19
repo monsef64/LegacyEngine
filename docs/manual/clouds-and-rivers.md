@@ -82,7 +82,7 @@ Clouds use one quad or a 12-triangle volume. Effects are frustum-culled, sorted
 back-to-front by object origin and capped at 256 drawn/cached component instances
 per Renderer. These are cost controls, not benchmark results. Transparent objects
 from different effect systems and intersecting rivers/volumes are not globally sorted.
-Animation uses renderer time in both Edit and Play; Pause does not freeze the shader.
+Cloud animation uses renderer time. River/Water wave and flow animation now uses the fixed simulation clock and freezes while paused.
 Transparent effects do not contribute opaque depth, baked lighting or fog depth.
 
 ## Manual verification
@@ -164,3 +164,15 @@ Hierarchy/Inspector, click other buttons and verify no selection or editing occu
 Release, Alt-Tab and refocus; confirm the pointer and normal UI interaction return.
 Check Windows/MinGW and the desktop SDL backend: the console build does not
 validate native capture or rendered appearance.
+
+
+## Geometric waves and mesh Water follow-up
+
+River now has geometric Wave height/length/speed controls and eight shader styles,
+including five additional natural-water looks and an Industrial canal style
+inspired by the supplied screenshot. The separate Water component applies shared
+shading to arbitrary static mesh geometry and supports surface-based contact
+foam and opt-in buoyancy. See the [water and attachment guide](../water-and-attachments.md)
+for the current implementation, compatibility rules and manual checks. Earlier
+normal-only shading notes describe the zero-Wave-height setting; no full fluid
+simulation or actual scene reflection/refraction is introduced.

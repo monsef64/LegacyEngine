@@ -25,6 +25,7 @@ struct Vehicle {
     float throttle = 0, steering = 0, brake = 0;
     bool handbrake = false;
     float speed = 0;
+    float wheelRoll = 0; // Runtime visual rotation, never serialized.
     int groundedWheels = 0;
     std::array<float, 4> compression{}; // front-left, front-right, rear-left, rear-right
 };

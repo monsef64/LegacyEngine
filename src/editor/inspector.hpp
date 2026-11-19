@@ -1,5 +1,6 @@
 #pragma once
 #include "animation/animation_clip.hpp"
+#include "animation/bone_attachment_system.hpp"
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
@@ -25,6 +26,15 @@
 #include <cstdio>
 #include <cstring>
 
+inline void drawWaterSettings(River& r) {
+    ImGui::Combo("Water shader",
+                 &r.shaderStyle,
+                 "Classic\0Clear\0Ocean\0Lake\0Rapids\0Tropical\0Marsh\0Industrial canal\0");
+    EditorValues::SliderFloat("Wave height", &r.waveHeight, 0, 3);
+    EditorValues::DragFloat(
+        "Wave length", &r.waveLength, .1f, .1f, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+    EditorValues::SliderFloat("Wave speed", &r.waveSpeed, 0, 10);
+}
 inline bool editVector(const char* label,
                        Vec3& value,
                        float speed = 0.05f,
@@ -244,7 +254,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4);
     ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(.16f, .23f, .31f, 1));
-    const char* display = !std::strcmp(name, "CloudSystem")     ? "Clouds"
+    const char* display = !std::strcmp(name, "BoneAttachment")  ? "Bone Attachment"
+                          : !std::strcmp(name, "CloudSystem")   ? "Clouds"
                           : !std::strcmp(name, "CameraEffects") ? "Camera Effects"
                           : !std::strcmp(name, "FPSCamera")     ? "FPS"
                                                                 : name;
@@ -281,6 +292,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             allowed = !world.has<Camera>(entity) && !world.has<AudioListener>(entity) &&
                       !world.has<DirectionalLight>(entity) && !world.has<PointLight>(entity) &&
                       !world.has<SpotLight>(entity) && !world.has<Laser>(entity) &&
+                      !world.has<Water>(entity) && !world.has<BoneAttachment>(entity) &&
                       !world.has<Vehicle>(entity) && !world.has<CloudSystem>(entity) &&
                       !world.has<River>(entity) && !world.has<Fog>(entity) &&
                       !world.has<CameraEffects>(entity) && !world.has<Terrain>(entity) &&
@@ -359,6 +371,12 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, CloudSystem>) {
             type = 23;
         }
+        if constexpr (std::is_same_v<T, Water>) {
+            type = 26;
+        }
+        if constexpr (std::is_same_v<T, BoneAttachment>) {
+            type = 27;
+        }
         if constexpr (std::is_same_v<T, Vehicle>) {
             type = 25;
         }
@@ -398,8 +416,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "Laser",         "LightShafts",
                                 "Terrain",       "CameraEffects",
                                 "Fog",           "CloudSystem",
-                                "River",         "Vehicle"};
-            for (int i = 0; i < 26; ++i) {
+                                "River",         "Vehicle",
+                                "Water",         "BoneAttachment"};
+            for (int i = 0; i < 28; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -460,7 +479,8 @@ inline void drawScriptExports(World& world,
                                  "Laser",         "LightShafts",
                                  "Terrain",       "CameraEffects",
                                  "Fog",           "CloudSystem",
-                                 "River",         "Vehicle"};
+                                 "River",         "Vehicle",
+                                 "Water",         "BoneAttachment"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -519,7 +539,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 26 &&
+                        if (target.type >= 0 && target.type < 28 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -733,12 +753,13 @@ inline void drawInspector(World& world,
                 ImGui::EndCombo();
             }
             ImGui::Separator();
-            auto ordered = world.has<InspectorOrder>(selected)
-                               ? world.get<InspectorOrder>(selected).types
-                               : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5, 13,
-                                                  14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25};
-            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5, 13,
-                           14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25}) {
+            auto ordered =
+                world.has<InspectorOrder>(selected)
+                    ? world.get<InspectorOrder>(selected).types
+                    : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14,
+                                       15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27};
+            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14,
+                           15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -1227,6 +1248,83 @@ inline void drawInspector(World& world,
                             "Local -Z is forward. Four-wheel raycast suspension, front steering, all-wheel drive, rear handbrake. Requires a dynamic RigidBody and a primitive chassis Collider. Drive through Lua throttle/steering/brake/handbrake properties.");
                     }
                 }
+                if (componentID == 27) {
+                    if (auto* b = world.tryGet<BoneAttachment>(selected);
+                        b && componentHeader<BoneAttachment>(world, selected, "BoneAttachment")) {
+                        EditorValues::Checkbox("Enabled", &b->enabled);
+                        const auto* label = world.tryGet<ObjectName>(b->source);
+                        if (ImGui::BeginCombo("Animated model",
+                                              label ? label->value.c_str() : "Select model")) {
+                            for (auto e : world.entities()) {
+                                if (e != selected && world.has<Transform>(e) &&
+                                    !BoneAttachments::sourceModel(world, e).empty()) {
+                                    const auto* name = world.tryGet<ObjectName>(e);
+                                    ImGui::PushID(int(e.index));
+                                    if (ImGui::Selectable(name ? name->value.c_str() : "Model",
+                                                          b->source == e)) {
+                                        b->source = e;
+                                        b->node = -1;
+                                    }
+                                    ImGui::PopID();
+                                }
+                            }
+                            ImGui::EndCombo();
+                        }
+                        if (assets && world.alive(b->source)) {
+                            try {
+                                const auto& doc = BoneAttachments::skeleton(
+                                    *assets, BoneAttachments::sourceModel(world, b->source));
+                                const auto& nodes = doc.at("nodes");
+                                std::string preview =
+                                    b->node >= 0 && size_t(b->node) < nodes.size()
+                                        ? nodes[b->node].value("name", std::string("Bone"))
+                                        : "Select bone/node";
+                                if (ImGui::BeginCombo("Bone", preview.c_str())) {
+                                    for (size_t i = 0; i < nodes.size(); ++i) {
+                                        ImGui::PushID(int(i));
+                                        auto text = nodes[i].value("name", std::string("Node")) +
+                                                    " [" + std::to_string(i) + "]";
+                                        if (ImGui::Selectable(text.c_str(), b->node == int(i))) {
+                                            b->node = int(i);
+                                        }
+                                        ImGui::PopID();
+                                    }
+                                    ImGui::EndCombo();
+                                }
+                            } catch (const std::exception& ex) {
+                                ImGui::TextWrapped("%s", ex.what());
+                            }
+                        }
+                        editVector("Position offset", b->offset, .01f, -100000, 100000);
+                        editVector("Rotation offset", b->rotation, .5f, -36000, 36000);
+                        if (!b->error.empty()) {
+                            ImGui::TextWrapped("%s", b->error.c_str());
+                        }
+                    }
+                }
+                if (componentID == 26) {
+                    if (auto* w = world.tryGet<Water>(selected);
+                        w && componentHeader<Water>(world, selected, "Water")) {
+                        EditorValues::Checkbox("Enabled", &w->enabled);
+                        if (assets) {
+                            assetPicker("Water mesh (optional)",
+                                        w->mesh,
+                                        assets,
+                                        [](const std::string& path) { return modelAsset(path); });
+                        }
+                        ImGui::TextWrapped(
+                            "Empty mesh uses this object's MeshRenderer. Upward triangles define contacts and buoyancy; holes stay open. Water is not a sealed fluid volume.");
+                        drawWaterSettings(*w);
+                        EditorValues::Checkbox("Flowing", &w->flowing);
+                        EditorValues::DragFloat("Flow speed", &w->speed, .1f, -100, 100);
+                        EditorValues::SliderFloat("Flow amount", &w->flowAmount, 0, 2);
+                        EditorValues::ColorEdit3("Water color", &w->color.x);
+                        EditorValues::SliderFloat("Opacity", &w->opacity, 0, 1);
+                        EditorValues::SliderFloat("Surface detail", &w->waveStrength, 0, 1);
+                        EditorValues::Checkbox("Collider contact effects", &w->collisionEffects);
+                        EditorValues::SliderFloat("Contact strength", &w->collisionStrength, 0, 2);
+                    }
+                }
                 if (componentID == 24) {
                     if (auto* component = world.tryGet<River>(selected);
                         component && componentHeader<River>(world, selected, "River")) {
@@ -1234,6 +1332,7 @@ inline void drawInspector(World& world,
                         auto* r = &edited;
                         EditorValues::Checkbox("Enabled", &r->enabled);
                         EditorValues::Checkbox("Edit curve in Scene", &r->editCurve);
+                        drawWaterSettings(*r);
                         EditorValues::ColorEdit3("Water color", &r->color.x);
                         EditorValues::DragFloat("Width", &r->width, .1f, .05f, 1000);
                         EditorValues::SliderFloat("Opacity", &r->opacity, 0, 1);
@@ -1770,6 +1869,13 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<BoneAttachment>(selected) && ImGui::MenuItem("Bone Attachment")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, BoneAttachment{});
+                }
+
                 if (!world.has<Vehicle>(selected) &&
                     ImGui::MenuItem(
                         "Vehicle", nullptr, false, !world.has<CharacterController>(selected))) {
@@ -1789,6 +1895,14 @@ inline void drawInspector(World& world,
                     world.add(selected, Vehicle{});
                 }
                 if (ImGui::BeginMenu("Environment")) {
+                    if (!world.has<Water>(selected) && !world.has<River>(selected) &&
+                        ImGui::MenuItem("Water")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
+                        world.add(selected, Water{});
+                    }
+
                     if (!world.has<CloudSystem>(selected) && ImGui::MenuItem("Clouds")) {
                         if (!world.has<Transform>(selected)) {
                             world.add(selected, Transform{{0, 20, 0}});
@@ -1798,7 +1912,8 @@ inline void drawInspector(World& world,
                     if (!world.has<Fog>(selected) && ImGui::MenuItem("Fog")) {
                         world.add(selected, Fog{});
                     }
-                    if (!world.has<River>(selected) && ImGui::MenuItem("River")) {
+                    if (!world.has<River>(selected) && !world.has<Water>(selected) &&
+                        ImGui::MenuItem("River")) {
                         if (!world.has<Transform>(selected)) {
                             world.add(selected, Transform{});
                         }

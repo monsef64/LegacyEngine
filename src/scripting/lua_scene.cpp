@@ -53,7 +53,8 @@ const char* types[]{"Transform",     "RigidBody",
                     "Laser",         "LightShafts",
                     "CameraEffects", "Fog",
                     "CloudSystem",   "River",
-                    "Vehicle"};
+                    "Vehicle",       "Water",
+                    "BoneAttachment"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -62,7 +63,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 25; ++i) {
+    for (int i = 0; i < 27; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -114,6 +115,10 @@ bool has(const Handle& h, int type) {
         return h.world->has<River>(h.entity);
     case 24:
         return h.world->has<Vehicle>(h.entity);
+    case 25:
+        return h.world->has<Water>(h.entity);
+    case 26:
+        return h.world->has<BoneAttachment>(h.entity);
     case 21:
         return h.world->has<Fog>(h.entity);
     case 20:
@@ -459,7 +464,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 25; ++i) {
+    for (int i = 0; i < 27; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -676,6 +681,12 @@ int LuaScene::api(lua_State* L) {
         case 22:
             self.world_.each<CloudSystem>([&](Entity e, CloudSystem&) { collect(e); });
             break;
+        case 25:
+            self.world_.each<Water>([&](Entity e, Water&) { collect(e); });
+            break;
+        case 26:
+            self.world_.each<BoneAttachment>([&](Entity e, BoneAttachment&) { collect(e); });
+            break;
         case 24:
             self.world_.each<Vehicle>([&](Entity e, Vehicle&) { collect(e); });
             break;
@@ -854,6 +865,12 @@ int LuaScene::api(lua_State* L) {
         case 22:
             self.world_.remove<CloudSystem>(h.entity);
             break;
+        case 25:
+            self.world_.remove<Water>(h.entity);
+            break;
+        case 26:
+            self.world_.remove<BoneAttachment>(h.entity);
+            break;
         case 24:
             self.world_.remove<Vehicle>(h.entity);
             break;
@@ -940,6 +957,21 @@ int LuaScene::api(lua_State* L) {
             }
             self.world_.add(h.entity, CloudSystem{});
             break;
+        case 25:
+            if (self.world_.has<River>(h.entity)) {
+                return luaL_error(L, "Remove River before adding Water");
+            }
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            self.world_.add(h.entity, Water{});
+            break;
+        case 26:
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            self.world_.add(h.entity, BoneAttachment{});
+            break;
         case 24:
             if (self.world_.has<CharacterController>(h.entity)) {
                 return luaL_error(L, "Remove CharacterController before adding Vehicle");
@@ -960,6 +992,9 @@ int LuaScene::api(lua_State* L) {
             self.world_.add(h.entity, Vehicle{});
             break;
         case 23:
+            if (self.world_.has<Water>(h.entity)) {
+                return luaL_error(L, "Remove Water before adding River");
+            }
             if (!self.world_.has<Transform>(h.entity)) {
                 self.world_.add(h.entity, Transform{});
             }
@@ -1243,7 +1278,7 @@ int LuaScene::componentIndex(lua_State* L) {
         return objectIndex(L);
     }
     // Component aliases resolve on the same owner, without storing raw pointers.
-    for (int type = 0; type < 25; ++type) {
+    for (int type = 0; type < 27; ++type) {
         std::string alias = type == 14 ? "fpsCamera" : types[type];
         alias[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(alias[0])));
         if (!std::strcmp(key, alias.c_str())) {
@@ -1316,10 +1351,44 @@ int LuaScene::componentIndex(lua_State* L) {
         }
         return 1;
     }
-    if (c.type == 22 || c.type == 23) {
-        auto j = c.type == 22
-                     ? Environment::settings(c.object.world->get<CloudSystem>(c.object.entity))
-                     : Environment::settings(c.object.world->get<River>(c.object.entity));
+    if (c.type == 26) {
+        const auto& b = c.object.world->get<BoneAttachment>(c.object.entity);
+        if (!std::strcmp(key, "source")) {
+            if (c.object.world->alive(b.source)) {
+                c.object.scene->pushObject(b.source);
+            } else {
+                lua_pushnil(L);
+            }
+            return 1;
+        }
+        if (!std::strcmp(key, "error")) {
+            lua_pushstring(L, b.error.c_str());
+            return 1;
+        }
+        const auto j = BoneAttachments::settings(b);
+        if (!j.contains(key)) {
+            return luaL_error(L, "Unknown BoneAttachment property");
+        }
+        const auto& v = j.at(key);
+        if (v.is_boolean()) {
+            lua_pushboolean(L, v.get<bool>());
+        } else if (v.is_number()) {
+            lua_pushnumber(L, v.get<double>());
+        } else {
+            lua_createtable(L, 0, 3);
+            const char* axes[] = {"x", "y", "z"};
+            for (int i = 0; i < 3; ++i) {
+                lua_pushnumber(L, v[i].get<float>());
+                lua_setfield(L, -2, axes[i]);
+            }
+        }
+        return 1;
+    }
+    if (c.type == 22 || c.type == 23 || c.type == 25) {
+        auto j =
+            c.type == 22 ? Environment::settings(c.object.world->get<CloudSystem>(c.object.entity))
+            : c.type == 25 ? Waters::settings(c.object.world->get<Water>(c.object.entity))
+                           : Environment::settings(c.object.world->get<River>(c.object.entity));
         if (!j.contains(key)) {
             return luaL_error(L, "Unknown environment property: %s", key);
         }
@@ -1336,6 +1405,8 @@ int LuaScene::componentIndex(lua_State* L) {
             lua_pushboolean(L, value.get<bool>());
         } else if (value.is_number()) {
             lua_pushnumber(L, value.get<double>());
+        } else if (value.is_string()) {
+            lua_pushstring(L, value.get_ref<const std::string&>().c_str());
         } else if (!std::strcmp(key, "points")) {
             lua_createtable(L, int(value.size()), 0);
             int i = 1;
@@ -1813,6 +1884,38 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 26) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 26)) {
+            return luaL_error(L, "BoneAttachment no longer exists");
+        }
+        auto& b = c.object.world->get<BoneAttachment>(c.object.entity);
+        const char* key = luaL_checkstring(L, 2);
+        if (!std::strcmp(key, "source")) {
+            b.source = lua_isnil(L, 3) ? Entity{} : handle(L, 3).entity;
+            return 0;
+        }
+        auto j = BoneAttachments::settings(b);
+        if (!j.contains(key)) {
+            return luaL_error(L, "Unknown or read-only BoneAttachment property");
+        }
+        if (j.at(key).is_boolean()) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            j[key] = bool(lua_toboolean(L, 3));
+        } else if (j.at(key).is_number_integer()) {
+            j[key] = luaL_checkinteger(L, 3);
+        } else {
+            j[key] = Environment::vec(vectorArgument(L, 3));
+        }
+        try {
+            auto next = BoneAttachments::parse(j);
+            next.source = b.source;
+            b = next;
+        } catch (const std::exception& ex) {
+            return luaL_error(L, "%s", ex.what());
+        }
+        return 0;
+    }
+
     if (c.type == 24) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, 24)) {
             return luaL_error(L, "Vehicle no longer exists");
@@ -1862,14 +1965,15 @@ int LuaScene::componentNewIndex(lua_State* L) {
         return 0;
     }
 
-    if (c.type == 22 || c.type == 23) {
+    if (c.type == 22 || c.type == 23 || c.type == 25) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
             return luaL_error(L, "Environment component no longer exists");
         }
         const char* key = luaL_checkstring(L, 2);
-        auto j = c.type == 22
-                     ? Environment::settings(c.object.world->get<CloudSystem>(c.object.entity))
-                     : Environment::settings(c.object.world->get<River>(c.object.entity));
+        auto j =
+            c.type == 22 ? Environment::settings(c.object.world->get<CloudSystem>(c.object.entity))
+            : c.type == 25 ? Waters::settings(c.object.world->get<Water>(c.object.entity))
+                           : Environment::settings(c.object.world->get<River>(c.object.entity));
         if (!j.contains(key)) {
             return luaL_error(L, "Unknown environment property: %s", key);
         }
@@ -1878,10 +1982,12 @@ int LuaScene::componentNewIndex(lua_State* L) {
             j[key] = bool(lua_toboolean(L, 3));
         } else if (j.at(key).is_number_integer()) {
             auto n = luaL_checkinteger(L, 3);
-            if (n < 2 || n > 32) {
+            if ((!std::strcmp(key, "shaderStyle") ? (n < 0 || n > 7) : (n < 2 || n > 32))) {
                 return luaL_error(L, "Environment integer outside supported range");
             }
             j[key] = n;
+        } else if (j.at(key).is_string()) {
+            j[key] = luaL_checkstring(L, 3);
         } else if (j.at(key).is_number()) {
             j[key] = luaL_checknumber(L, 3);
         } else if (!std::strcmp(key, "points")) {
@@ -1905,6 +2011,8 @@ int LuaScene::componentNewIndex(lua_State* L) {
             if (c.type == 22) {
                 c.object.world->get<CloudSystem>(c.object.entity) =
                     Environment::parse<CloudSystem>(j);
+            } else if (c.type == 25) {
+                c.object.world->get<Water>(c.object.entity) = Waters::parse(j);
             } else {
                 bool edit = c.object.world->get<River>(c.object.entity).editCurve;
                 auto next = Environment::parse<River>(j);
@@ -3339,7 +3447,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 25; ++type) {
+                for (; type < 27; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }

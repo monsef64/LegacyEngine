@@ -13,8 +13,8 @@ inline bool exportReferenceType(const std::string& type) {
            type == "SpotLight" || type == "Skybox" || type == "CharacterController" ||
            type == "FPSCamera" || type == "Raycast" || type == "Animation" ||
            type == "ParticleSystem" || type == "Laser" || type == "LightShafts" ||
-           type == "Vehicle" || type == "CloudSystem" || type == "River" || type == "Fog" ||
-           type == "CameraEffects";
+           type == "Water" || type == "BoneAttachment" || type == "Vehicle" ||
+           type == "CloudSystem" || type == "River" || type == "Fog" || type == "CameraEffects";
 }
 inline bool exportAssetType(const std::string& type) {
     return type == "Asset" || type == "AudioClip" || type == "Texture";
@@ -139,6 +139,8 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(CloudSystem);
     EXPORT_COMPONENT(River);
     EXPORT_COMPONENT(Vehicle);
+    EXPORT_COMPONENT(Water);
+    EXPORT_COMPONENT(BoneAttachment);
 #undef EXPORT_COMPONENT
     return false;
 }

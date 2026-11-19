@@ -4,7 +4,7 @@
 
 1. Use **Create > Vehicle**. This creates a unit-scale physics root with a 1000 kg
    RigidBody, a 1.8 × 0.6 × 4 metre box Collider, Vehicle, and a scaled chassis
-   visual child. Alternatively use **Add Component > Vehicle** on an existing
+   visual child plus four tire meshes and hubs. Alternatively use **Add Component > Vehicle** on an existing
    object. Missing Transform/RigidBody/Collider dependencies are supplied;
    existing components are not overwritten.
 2. Place the root about 1.2 metres above a broad plane or Terrain with collision.
@@ -17,8 +17,21 @@
    **Space** service brake, **Left Shift** rear handbrake.
 
 Select the root in Scene to see orange wheel circles and suspension lines. These
-are setup guides, not rendered tires. The preset has a visible chassis but does
-not generate tire meshes, an animated steering wheel or a following camera.
+are setup guides, separate from the rendered tire meshes. The preset includes
+simple flattened-sphere tires and hubs, not detailed automotive assets. It does
+not generate an animated steering wheel or following camera.
+
+For an existing Vehicle, right-click its Hierarchy row and choose **Create wheel
+meshes**. Repeating the action creates only missing wheels and preserves existing
+ones. This is undoable. Generated wheels are collider-less visual children, so
+they do not interfere with suspension rays. Their reserved direct-child names
+are `Vehicle Wheel FL`, `Vehicle Wheel FR`, `Vehicle Wheel RL`, `Vehicle Wheel RR`.
+Keep those names and their direct Vehicle parent for automatic suspension,
+front steering and rolling animation during Play. Renaming or reparenting a wheel
+unbinds that visual; replace its MeshRenderer if you want a custom tire while
+keeping the binding. Edit-time settings changes are reflected when Play starts.
+Roll angle is a speed-based visual approximation, not simulated tire angular
+velocity. Wheel transforms/roll changed during Play revert on Stop.
 
 ## Physics model
 
@@ -34,6 +47,15 @@ The basic model is **all-wheel drive**, **front-wheel steering**, with a
 in reverse; it does not automatically apply a transmission or service brake.
 Wheel commands persist until overwritten. Suspension/traction operate only at
 fixed physics steps while simulation advances, not in Edit mode or while paused.
+
+At near-zero throttle and low relative wheel speed (below 0.5 m/s), contact-based
+idle hold uses the service-brake capacity to counter creeping. It releases on
+throttle. Tire forces anticipate gravity during the upcoming fixed step, rather
+than permanently lagging on slopes; relative ground velocity is still respected.
+Coasting above the hold threshold has light rolling resistance. Hold remains
+limited by tire grip, wheel load and brakeForce: it is not an infinite parking
+constraint, and steep slopes/poor contact can still cause sliding. No airborne
+velocity is forcibly zeroed.
 
 A dynamic, positive-mass RigidBody and non-trigger primitive chassis Collider are
 required. A static/kinematic chassis, mesh collider, disabled entity/component,
@@ -96,7 +118,7 @@ commands. Undo tracks configuration; Play/Stop uses the normal world snapshot
 so runtime edits do not leak into saved edit state.
 
 This is a lightweight four-wheel raycast vehicle, not a full automotive simulator:
-no swept/physical tire colliders, tire rotation meshes, engine RPM/gears/clutch,
+no swept/physical tire colliders, simulated wheel angular dynamics, engine RPM/gears/clutch,
 differential, anti-roll bars, ABS, traction control or automatic recovery. Narrow
 obstacles/curbs can be missed by wheel rays, and wheels may clip side obstacles.
 No airborne steering is applied. Chassis collisions still use normal physics.
@@ -121,3 +143,25 @@ No automated tests are added or run for this feature. On the desktop build:
   searches, read-only fields and rejection of NaN/out-of-range controls/settings.
 - Confirm existing rigid-body, river buoyancy and character workflows still work
   on Windows/MinGW; the Linux console build cannot validate desktop driving.
+
+
+### Idle hold and generated-wheel follow-up checks
+
+- Let the default vehicle settle on flat ground with zero throttle/brake. Observe
+  for a minute, then repeat on moderate slopes, forward and sideways. Verify idle
+  hold does not prevent acceleration/reverse and respects low grip/zero brakeForce.
+- Test coasting across the hold threshold, braking, handbrake, ramps and moving
+  platforms. Check airborne motion and collisions remain unconstrained.
+- Create Vehicle from both main and Hierarchy context menus; confirm four tires
+  and hubs render. Run Create wheel meshes repeatedly on old/new vehicles, delete
+  one wheel and recreate it, and check no duplicate tires or colliders appear.
+- Check suspension movement, front steering and forward/reverse visual roll.
+  Save/reopen, duplicate with children, prefab round-trip and undo/redo creation.
+  Stop must restore original wheel transforms.
+- Right-click Hierarchy background, level root and object rows: toggle **A-Z Order**.
+  Check case-insensitive sibling sorting, hierarchy preservation, search and
+  shift-selection. Toggle off to return to entity-creation order. Sorting is a
+  session-only display preference, not a scene mutation.
+
+Linux compilation does not validate native desktop behavior or driving feel;
+these interactive checks remain pending.

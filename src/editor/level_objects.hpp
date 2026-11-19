@@ -23,6 +23,10 @@ struct LevelObject {
 };
 
 inline unsigned hierarchyExpansionEpoch = 0;
+inline bool hierarchyAZOrder = false;
+inline void hierarchySortMenu() {
+    ImGui::MenuItem("A-Z Order", nullptr, &hierarchyAZOrder);
+}
 inline void resetHierarchyExpansion() {
     ++hierarchyExpansionEpoch;
 }
@@ -34,6 +38,24 @@ inline std::vector<LevelObject> levelObjects(World& world) {
             {e, name ? name->value : "Object " + std::to_string(e.index), world.has<Collider>(e)});
     });
     std::sort(objects.begin(), objects.end(), [](const LevelObject& a, const LevelObject& b) {
+        if (hierarchyAZOrder) {
+            auto less = [](const std::string& x, const std::string& y) {
+                return std::lexicographical_compare(x.begin(),
+                                                    x.end(),
+                                                    y.begin(),
+                                                    y.end(),
+                                                    [](unsigned char lhs, unsigned char rhs) {
+                                                        return std::tolower(lhs) <
+                                                               std::tolower(rhs);
+                                                    });
+            };
+            if (less(a.name, b.name)) {
+                return true;
+            }
+            if (less(b.name, a.name)) {
+                return false;
+            }
+        }
         return a.entity.index < b.entity.index;
     });
     return objects;
@@ -99,6 +121,8 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(AudioListener{});
     component(AudioSource{});
     component(RigidBody{});
+    component(Water{});
+    component(BoneAttachment{});
     if (const auto* v = sourceWorld.tryGet<Vehicle>(source)) {
         world.add(copy, Vehicles::parse(Vehicles::settings(*v)));
     }
@@ -178,6 +202,9 @@ copyLevelHierarchy(World& sourceWorld, Entity source, World& world, bool preserv
         const auto parent = getParent(sourceWorld, originals[i]);
         if (i || preserveParent) {
             setParent(world, copies[i], remap(parent));
+        }
+        if (auto* b = world.tryGet<BoneAttachment>(copies[i])) {
+            b->source = remap(b->source);
         }
         if (auto* camera = world.tryGet<Camera>(copies[i])) {
             camera->targetEntity = remap(camera->targetEntity);
@@ -346,7 +373,8 @@ inline bool drawLevelObjects(World& world,
                              int* createRequest = nullptr,
                              const char* levelName = "Untitled",
                              bool* renameLevel = nullptr,
-                             Entity* createParent = nullptr) {
+                             Entity* createParent = nullptr,
+                             Entity* vehicleWheelsRequest = nullptr) {
     if (focused) {
         *focused = false;
     }
@@ -540,6 +568,12 @@ inline bool drawLevelObjects(World& world,
                 renameRequested = true;
             }
             if (ImGui::BeginPopupContextItem("Object actions")) {
+                hierarchySortMenu();
+                if (vehicleWheelsRequest && world.has<Vehicle>(object.entity) &&
+                    ImGui::MenuItem("Create wheel meshes")) {
+                    *vehicleWheelsRequest = object.entity;
+                    collapsed.erase(hierarchyKey(object.entity));
+                }
                 if (selected != object.entity) {
                     if (std::find(hierarchySelection.begin(),
                                   hierarchySelection.end(),
@@ -635,6 +669,7 @@ inline bool drawLevelObjects(World& world,
             ImGui::EndDragDropTarget();
         }
         if (ImGui::BeginPopupContextItem("Level root")) {
+            hierarchySortMenu();
             if (ImGui::MenuItem("Rename Level...", nullptr, false, renameLevel != nullptr) &&
                 renameLevel) {
                 *renameLevel = true;
@@ -683,6 +718,7 @@ inline bool drawLevelObjects(World& world,
             hierarchySelection.clear();
         }
         if (createRequest && ImGui::BeginPopupContextItem("Hierarchy empty actions")) {
+            hierarchySortMenu();
             if (ImGui::BeginMenu("Create")) {
                 int item = drawCreateItems();
                 if (item >= 0) {

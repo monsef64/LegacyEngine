@@ -238,7 +238,9 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"Fog", {{"settings", 'j'}}},
     {"CloudSystem", {{"settings", 'j'}}},
     {"River", {{"settings", 'j'}}},
-    {"Vehicle", {{"settings", 'j'}}}};
+    {"Vehicle", {{"settings", 'j'}}},
+    {"Water", {{"settings", 'j'}}},
+    {"BoneAttachment", {{"settings", 'j'}, {"source", 'i'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     Json result = Json::object();
@@ -400,7 +402,7 @@ inline std::string toLegacy(const Json& doc) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 30\n";
+    out << std::setprecision(17) << "LegacyEngineProject 31\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),
