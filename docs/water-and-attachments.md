@@ -147,3 +147,21 @@ not verify desktop appearance or attachment alignment. Check manually:
 - Save/reopen, duplicate whole character hierarchies, prefab round-trip,
   undo/redo settings and switch scenes/projects. Play-time edits must revert on
   Stop. Check previous vehicle/grass/cloud/river workflows remain functional.
+
+
+## Smooth water highlight follow-up
+
+Water lighting now uses smoothly interpolated base normals and analytic slopes
+of the three displaced waves, rather than deriving a flat normal from each
+rasterized triangle. Mesh Water averages coincident-position shading normals;
+River normals follow the sampled centerline slope. Procedural ripple detail and
+contact rings remain, and specular/environment highlights are retained. No
+material specular texture was removed: this pass uses procedural highlights.
+The geometry budget is unchanged, so extremely coarse meshes can still expose
+polygonal silhouettes even with smooth lighting.
+
+Manual checks: move the camera/light view across low-subdivision River and Water
+planes in all styles, especially Industrial canal, and inspect grazing highlights
+for triangle seams. Repeat on sloped rivers and curved/imported surfaces with
+flat source normals; verify waves, foam, transparency and below-water rendering.
+GLSL validation/builds do not replace these desktop appearance checks.

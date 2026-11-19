@@ -14,14 +14,11 @@ inline bool validEditorObjectType(int item) {
 }
 inline int drawCreateItems() {
     int item = -1;
-    if (ImGui::MenuItem("Empty GameObject")) {
-        item = 0;
-    }
-    if (ImGui::MenuItem("Vehicle")) {
-        item = 22;
-    }
-    if (ImGui::MenuItem("Character Controller")) {
-        item = 12;
+    if (ImGui::BeginMenu("Audio")) {
+        if (ImGui::MenuItem("Audio Source")) {
+            item = 6;
+        }
+        ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Cameras")) {
         if (ImGui::MenuItem("Camera")) {
@@ -32,10 +29,13 @@ inline int drawCreateItems() {
         }
         ImGui::EndMenu();
     }
+    if (ImGui::MenuItem("Character Controller")) {
+        item = 12;
+    }
+    if (ImGui::MenuItem("Empty GameObject")) {
+        item = 0;
+    }
     if (ImGui::BeginMenu("Environment")) {
-        if (ImGui::MenuItem("Water")) {
-            item = 23;
-        }
         if (ImGui::MenuItem("Clouds")) {
             item = 19;
         }
@@ -45,31 +45,19 @@ inline int drawCreateItems() {
         if (ImGui::MenuItem("River")) {
             item = 21;
         }
-        if (ImGui::MenuItem("Terrain")) {
-            item = 18;
-        }
         if (ImGui::MenuItem("Skybox")) {
             item = 11;
         }
+        if (ImGui::MenuItem("Terrain")) {
+            item = 18;
+        }
+        if (ImGui::MenuItem("Water")) {
+            item = 23;
+        }
         ImGui::EndMenu();
-    }
-    if (ImGui::MenuItem("LightShafts")) {
-        item = 17;
     }
     if (ImGui::MenuItem("Laser")) {
         item = 16;
-    }
-    if (ImGui::MenuItem("Particles")) {
-        item = 15;
-    }
-    if (ImGui::MenuItem("Raycast")) {
-        item = 14;
-    }
-    if (ImGui::BeginMenu("Audio")) {
-        if (ImGui::MenuItem("Audio Source")) {
-            item = 6;
-        }
-        ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Lights")) {
         if (ImGui::MenuItem("DirectionalLight")) {
@@ -83,17 +71,27 @@ inline int drawCreateItems() {
         }
         ImGui::EndMenu();
     }
+    if (ImGui::MenuItem("LightShafts")) {
+        item = 17;
+    }
+    if (ImGui::MenuItem("Particles")) {
+        item = 15;
+    }
+    if (ImGui::MenuItem("Raycast")) {
+        item = 14;
+    }
     if (ImGui::BeginMenu("Shape")) {
-        const char* names[]{"Capsule", "Cone", "Cube", "Sphere"};
-        for (int i = 0; i < 4; ++i) {
+        const char* names[]{"Capsule", "Cone", "Cube", "Plane", "Sphere"};
+        const int ids[]{1, 2, 3, 10, 4};
+        for (int i = 0; i < 5; ++i) {
             if (ImGui::MenuItem(names[i])) {
-                item = i + 1;
+                item = ids[i];
             }
         }
-        if (ImGui::MenuItem("Plane")) {
-            item = 10;
-        }
         ImGui::EndMenu();
+    }
+    if (ImGui::MenuItem("Vehicle")) {
+        item = 22;
     }
     return item;
 }

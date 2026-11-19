@@ -13,6 +13,7 @@ class EnvironmentRenderer {
     struct Vertex {
         Vec3 p;
         float u, v;
+        Vec3 normal{0, 1, 0};
     };
     struct Mesh {
         GLuint vao = 0, vbo = 0;
@@ -43,16 +44,16 @@ class EnvironmentRenderer {
         GLuint v = 0, f = 0;
         try {
             v = compile(GL_VERTEX_SHADER, R"(#version 330 core
-layout(location=0)in vec3 position;layout(location=1)in vec2 texcoord;
+layout(location=0)in vec3 position;layout(location=1)in vec2 texcoord;layout(location=2)in vec3 normal;
 uniform mat4 vp,model;uniform int mode;uniform float time,speed,waveHeight,waveLength,waveSpeed;
-out vec3 localPoint;out vec3 worldPoint;out vec2 uv;
-void main(){localPoint=position;worldPoint=(model*vec4(position,1)).xyz;
+out vec3 localPoint;out vec3 worldPoint;out vec3 surfaceNormal;out vec2 uv;
+void main(){surfaceNormal=transpose(inverse(mat3(model)))*normal;localPoint=position;worldPoint=(model*vec4(position,1)).xyz;
 if(mode==0){float k=6.2831853/waveLength,t=time*speed*waveSpeed;
 worldPoint.y+=waveHeight*(.6*sin(k*dot(worldPoint.xz,vec2(.8,.6))-t*1.4)+.28*sin(k*1.73*dot(worldPoint.xz,vec2(-.6,.8))-t*1.9)+.12*sin(k*2.61*dot(worldPoint.xz,vec2(.3,.95))-t*2.6));}
 uv=texcoord;gl_Position=vp*vec4(worldPoint,1);}
 )");
             f = compile(GL_FRAGMENT_SHADER, R"(#version 330 core
-in vec3 localPoint;in vec3 worldPoint;in vec2 uv;out vec4 fragColor;
+in vec3 localPoint;in vec3 worldPoint;in vec3 surfaceNormal;in vec2 uv;out vec4 fragColor;
 uniform mat4 vp,model,inverseModel;uniform vec3 eye,tint;uniform int mode,steps;
 uniform int transparentWater,contactCount,waterStyle,meshWater;
 uniform float waveHeight,waveLength,waveSpeed;
@@ -67,8 +68,8 @@ float cloud(vec3 p){return .65*noise(p)+.35*noise(p*2.07+11.);}
 void main(){
  gl_FragDepth=gl_FragCoord.z;
  if(mode==0){
-  // No periodic wave bands or vertex displacement. Two drifting noise scales
-  // perturb the actual ribbon normal, with derivative filtering at distance.
+  // Interpolated base normals plus analytic wave slopes avoid triangle-flat
+  // specular highlights on the displaced surface.
   vec2 p=(meshWater!=0?worldPoint.xz:vec2(uv.x*2.,uv.y))*waveScale;
   float styleDetail=waterStyle==4?2.4:waterStyle==3?.4:waterStyle==7?.65:1.;
   p*=styleDetail;
@@ -85,7 +86,13 @@ void main(){
    contactFoam+=envelope*(.55+.45*sin(band*14.-time*5.))*contactStrength;
   }
   vec3 dx=dFdx(worldPoint),dy=dFdy(worldPoint),viewDir=normalize(eye-worldPoint);
-  vec3 n=normalize(cross(dx,dy));if(dot(n,viewDir)<0.)n=-n;
+  vec3 n=normalize(surfaceNormal);
+  float k=6.2831853/waveLength,t=time*speed*waveSpeed;
+  vec2 slope=waveHeight*k*(.6*vec2(.8,.6)*cos(k*dot(worldPoint.xz,vec2(.8,.6))-t*1.4)
+   +.28*1.73*vec2(-.6,.8)*cos(k*1.73*dot(worldPoint.xz,vec2(-.6,.8))-t*1.9)
+   +.12*2.61*vec2(.3,.95)*cos(k*2.61*dot(worldPoint.xz,vec2(.3,.95))-t*2.6));
+  n=normalize(vec3(n.x-slope.x*n.y,n.y,n.z-slope.y*n.y));
+  if(dot(n,viewDir)<0.)n=-n;
   vec3 rx=cross(dy,n),ry=cross(n,dx);float det=dot(dx,rx);
   float detailAttenuation=1./(1.+dot(fwidth(p),fwidth(p))*4.);
   vec3 gradient=(rx*dFdx(detail)+ry*dFdy(detail))*(sign(det)/max(abs(det),.000001));
@@ -203,7 +210,7 @@ void main(){
         std::vector<Vertex> v;
         int n = (int(r.points.size()) - 1) * r.subdivisions;
         v.reserve(n * 6);
-        Vec3 lastL{}, lastR{};
+        Vec3 lastL{}, lastR{}, lastNormal{0, 1, 0};
         float distance = 0;
         for (int i = 0; i <= n; ++i) {
             float t = float(i) / n;
@@ -214,27 +221,38 @@ void main(){
             if (dot(side, side) < .1f) {
                 side = {1, 0, 0};
             }
+            Vec3 normal = normalize(cross(side, tangent));
+            if (dot(normal, normal) < .1f) {
+                normal = {0, 1, 0};
+            }
+            if (normal.y < 0) {
+                normal = normal * -1.f;
+            }
             Vec3 l = p - side * (r.width * .5f), rr = p + side * (r.width * .5f);
             if (i) {
                 float next = distance + std::sqrt(dot(l - lastL, l - lastL));
                 v.insert(v.end(),
-                         {{lastL, 0, distance},
-                          {l, 0, next},
-                          {rr, 1, next},
-                          {lastL, 0, distance},
-                          {rr, 1, next},
-                          {lastR, 1, distance}});
+                         {{lastL, 0, distance, lastNormal},
+                          {l, 0, next, normal},
+                          {rr, 1, next, normal},
+                          {lastL, 0, distance, lastNormal},
+                          {rr, 1, next, normal},
+                          {lastR, 1, distance, lastNormal}});
                 distance = next;
             }
             lastL = l;
             lastR = rr;
+            lastNormal = normal;
         }
         for (int pass = 0; pass < 3 && v.size() * 4 < 120000; ++pass) {
             std::vector<Vertex> refined;
             for (size_t i = 0; i + 2 < v.size(); i += 3) {
                 auto a = v[i], b = v[i + 1], c = v[i + 2];
                 auto mid = [](Vertex x, Vertex y) {
-                    return Vertex{(x.p + y.p) * .5f, (x.u + y.u) * .5f, (x.v + y.v) * .5f};
+                    return Vertex{(x.p + y.p) * .5f,
+                                  (x.u + y.u) * .5f,
+                                  (x.v + y.v) * .5f,
+                                  normalize(x.normal + y.normal)};
                 };
                 auto ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
                 refined.insert(refined.end(), {a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca});
@@ -597,7 +615,7 @@ void main(){
                     vertices.clear();
                     try {
                         for (const auto& v : Waters::geometry(world, item.e, assets).vertices) {
-                            vertices.push_back({v.position, v.u, v.v});
+                            vertices.push_back({v.position, v.u, v.v, v.normal});
                         }
                     } catch (const std::exception& ex) {
                         error = ex.what();
@@ -623,6 +641,13 @@ void main(){
                                       GL_FALSE,
                                       sizeof(Vertex),
                                       reinterpret_cast<void*>(offsetof(Vertex, u)));
+                glEnableVertexAttribArray(2);
+                glVertexAttribPointer(2,
+                                      3,
+                                      GL_FLOAT,
+                                      GL_FALSE,
+                                      sizeof(Vertex),
+                                      reinterpret_cast<void*>(offsetof(Vertex, normal)));
                 mesh.count = GLsizei(vertices.size());
                 mesh.signature = signature;
             }

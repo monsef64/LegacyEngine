@@ -102,12 +102,17 @@ After the workflow changes land on the default branch:
 1. Open **Actions > Release > Run workflow**.
 2. Choose the branch/commit to build and enter **version**, such as `1.2.3` or
    `1.3.0-rc.1` (a leading `v` is optional).
-3. Run the workflow. It validates the version, builds the selected commit, then
+3. Keep **Publish GitHub Release** checked and run the workflow. It validates the version, builds the selected commit, then
    creates `v1.2.3` and a GitHub Release with generated notes. The engine archive
    is named `LegacyEngine-1.2.3-linux-x86_64.tar.gz` and its About window shows
    `1.2.3`. Documentation ZIP and LegacyScript VSIX are attached too.
 
-Leave **version** empty for artifacts only, with no tag/release creation.
+The result appears at [GitHub Releases](https://github.com/monsef64/LegacyEngine/releases),
+not just in Actions artifacts. The run summary contains a direct release link.
+
+For artifacts only, uncheck **Publish GitHub Release**; the version input is ignored
+and no tag/release is created. Publishing on a branch without a version fails early
+with instructions instead of silently producing artifacts.
 Alternatively, pushing a tag such as `v1.2.3` triggers the same release build.
 Use semantic versions: patch for fixes, minor for compatible features, major for
 breaking changes. Prerelease versions such as `1.3.0-rc.1` are marked as GitHub
@@ -129,7 +134,8 @@ if a Windows artifact is needed for a manually published release.
 
 - Configure/build locally and open About; check `<VERSION>-dev`.
 - Reconfigure with `-DLEGACY_ENGINE_VERSION=1.2.3-rc.1`; rebuild and check About.
-- Dispatch without a version; confirm versioned development artifacts and no release.
+- Dispatch with **Publish GitHub Release** unchecked; confirm development artifacts and no release.
+- Leave publishing checked without a version on a branch; confirm an actionable validation error.
 - On a suitable release commit, dispatch a new prerelease version and inspect
   the tag target, release notes, prerelease flag, archive name and packaged About.
 - Rerun the same version at the same commit; check asset replacement. Reusing a

@@ -931,6 +931,20 @@ void Physics::update(World& world, float seconds, const std::function<void(float
             if (rest < .001f || radius < .001f) {
                 return;
             }
+            struct TireContact {
+                Vec3 point, direction, lateral, gravity;
+                JPH::BodyID ground;
+                bool dynamicGround = false;
+                float load = 0, inverseLong = 0, inverseSide = 0;
+                float longitudinal = 0, sideways = 0, drive = 0, brakeLimit = 0;
+                bool hold = false, rear = false;
+            };
+            std::vector<TireContact> tires;
+            auto inverseMassAt = [&](JPH::BodyID id, float inverseMass, Vec3 point, Vec3 axis) {
+                const auto arm = jvec(point) - JPH::Vec3(api.GetCenterOfMassPosition(id));
+                const auto torque = arm.Cross(jvec(axis));
+                return inverseMass + torque.Dot(api.GetInverseInertia(id).Multiply3x3(torque));
+            };
             for (int wheel = 0; wheel < 4; ++wheel) {
                 const bool front = wheel < 2;
                 const Vec3 local{(wheel % 2 ? 1.f : -1.f) * v.trackWidth * .5f,
@@ -986,38 +1000,76 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                     ground->second.rigid.useGravity) {
                     relativeGravity = relativeGravity - vec(impl.system.GetGravity());
                 }
-                const float limit = v.tireGrip * load;
-                const float lateralForce =
-                    std::clamp(-(lateralSpeed / kStepSeconds + dot(relativeGravity, lateral)) *
-                                   mass * .25f,
-                               -limit,
-                               limit) *
-                    (v.handbrake && !front ? .5f : 1.f);
-                float drive = throttle * v.engineForce * .25f;
-                if (std::abs(v.speed) >= v.maxSpeed && drive * v.speed > 0) {
-                    drive = 0;
+                TireContact tire;
+                tire.point = hit.point;
+                tire.direction = direction;
+                tire.lateral = lateral;
+                tire.gravity = relativeGravity;
+                tire.load = load;
+                tire.rear = !front;
+                tire.dynamicGround =
+                    movingGround && ground->second.motion == JPH::EMotionType::Dynamic;
+                if (movingGround) {
+                    tire.ground = ground->second.id;
                 }
-                const float requestedStop =
-                    -(longitudinalSpeed / kStepSeconds + dot(relativeGravity, direction)) * mass *
-                    .25f;
-                const float stopping =
-                    std::clamp(requestedStop, -v.brakeForce * .25f, v.brakeForce * .25f);
-                // Low-speed idle hold is contact-based, grip-limited and released
-                // immediately on throttle. Never zero the chassis velocity or pose.
-                const bool idleHold =
-                    std::abs(throttle) < .01f && std::abs(longitudinalSpeed) < .5f;
-                const float braking = (idleHold || (v.handbrake && !front)) ? 1.f : brake;
-                const float rolling =
-                    idleHold ? 0.f : std::clamp(requestedStop, -load * .015f, load * .015f);
-                const float remaining =
-                    std::sqrt(std::max(0.f, limit * limit - lateralForce * lateralForce));
-                const float longitudinal = std::clamp(
-                    drive + stopping * braking + rolling * (1 - braking), -remaining, remaining);
-                const auto impulse =
-                    (up * load + lateral * lateralForce + direction * longitudinal) * kStepSeconds;
-                api.AddImpulse(body.id, jvec(impulse), jvec(hit.point));
-                if (movingGround && ground->second.motion == JPH::EMotionType::Dynamic) {
-                    api.AddImpulse(ground->second.id, jvec(impulse * -1.f), jvec(hit.point));
+                tire.inverseLong = inverseMassAt(body.id, 1.f / mass, hit.point, direction);
+                tire.inverseSide = inverseMassAt(body.id, 1.f / mass, hit.point, lateral);
+                if (tire.dynamicGround) {
+                    tire.inverseLong += inverseMassAt(
+                        tire.ground, 1.f / ground->second.rigid.mass, hit.point, direction);
+                    tire.inverseSide += inverseMassAt(
+                        tire.ground, 1.f / ground->second.rigid.mass, hit.point, lateral);
+                }
+                tire.hold = std::abs(throttle) < .01f && std::abs(longitudinalSpeed) < .5f &&
+                            std::abs(lateralSpeed) < .5f;
+                const float braking = (tire.hold || (v.handbrake && !front)) ? 1.f : brake;
+                tire.brakeLimit = braking * v.brakeForce * .25f * kStepSeconds;
+                tire.drive = (std::abs(v.speed) >= v.maxSpeed && throttle * v.speed > 0)
+                                 ? 0.f
+                                 : throttle * v.engineForce * .25f * kStepSeconds;
+                // Coasting rolling resistance, without making it an unbounded brake.
+                if (!tire.hold) {
+                    tire.brakeLimit += load * .015f * (1 - braking) * kStepSeconds;
+                }
+                tires.push_back(tire);
+            }
+            auto applyTireImpulse = [&](const TireContact& tire, Vec3 impulse) {
+                api.AddImpulse(body.id, jvec(impulse), jvec(tire.point));
+                if (tire.dynamicGround) {
+                    api.AddImpulse(tire.ground, jvec(impulse * -1.f), jvec(tire.point));
+                }
+            };
+            // Apply all suspension impulses before solving traction, then iterate
+            // accumulated, effective-mass tire constraints. A single mass/4 force
+            // pass leaves residual yaw/slip and lets later wheels undo earlier ones.
+            for (const auto& tire : tires) {
+                applyTireImpulse(tire, up * (tire.load * kStepSeconds));
+            }
+            for (int iteration = 0; iteration < 8; ++iteration) {
+                for (auto& tire : tires) {
+                    const Vec3 groundVelocity =
+                        tire.ground.IsInvalid()
+                            ? Vec3{}
+                            : vec(api.GetPointVelocity(tire.ground, jvec(tire.point)));
+                    const Vec3 velocity = vec(api.GetPointVelocity(body.id, jvec(tire.point))) -
+                                          groundVelocity + tire.gravity * kStepSeconds;
+                    const float limit = v.tireGrip * tire.load * kStepSeconds;
+                    const float sideLimit = limit * (v.handbrake && tire.rear ? .5f : 1.f);
+                    float side = std::clamp(tire.sideways - dot(velocity, tire.lateral) /
+                                                                std::max(1e-8f, tire.inverseSide),
+                                            -sideLimit,
+                                            sideLimit);
+                    const float remaining = std::sqrt(std::max(0.f, limit * limit - side * side));
+                    const float desired = tire.longitudinal - dot(velocity, tire.direction) /
+                                                                  std::max(1e-8f, tire.inverseLong);
+                    float longitudinal = std::clamp(
+                        desired, tire.drive - tire.brakeLimit, tire.drive + tire.brakeLimit);
+                    longitudinal = std::clamp(longitudinal, -remaining, remaining);
+                    applyTireImpulse(tire,
+                                     tire.lateral * (side - tire.sideways) +
+                                         tire.direction * (longitudinal - tire.longitudinal));
+                    tire.sideways = side;
+                    tire.longitudinal = longitudinal;
                 }
             }
         });

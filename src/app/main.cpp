@@ -1590,8 +1590,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             world, selectedEntity, browser.assets, history, editAllowed, !playMode.active());
         scripts.componentOutput = componentScripts.messages();
         scripts.setAssetContext(browser.openedScript, selectedEntity);
-        ImGui::BeginDisabled(playMode.active());
-        scripts.draw(&layout, playMode.playing(), &browser.assets, &browser.openedScript);
+        ImGui::BeginDisabled(!editAllowed || playMode.active());
+        scripts.draw(&layout,
+                     playMode.playing(),
+                     &browser.assets,
+                     &browser.openedScript,
+                     &browser,
+                     editAllowed && !playMode.active(),
+                     &history);
         ImGui::EndDisabled();
         browser.projectFolder = currentProject.empty()
                                     ? browser.assets.root

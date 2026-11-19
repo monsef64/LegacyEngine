@@ -11,6 +11,9 @@
 #include <vector>
 struct ImGuiInputTextCallbackData;
 
+class AssetBrowser;
+class EditorHistory;
+
 class ScriptEditor {
   public:
     ScriptEditor();
@@ -18,7 +21,10 @@ class ScriptEditor {
     void draw(const EditorLayout* layout = nullptr,
               bool executionEnabled = true,
               AssetManager* assets = nullptr,
-              std::string* openedScript = nullptr);
+              std::string* openedScript = nullptr,
+              AssetBrowser* browser = nullptr,
+              bool fileOperationsEnabled = true,
+              EditorHistory* history = nullptr);
     void saveFile(AssetManager& assets) {
         if (fileDirty_ && AssetManager::script(assetPath_)) {
             assets.writeScript(assetPath_, source());
@@ -136,6 +142,10 @@ class ScriptEditor {
     bool ownerError_ = false, fileDirty_ = false;
     std::string fileError_;
     ScriptTree scriptTree_;
+    std::string scriptActionPath_;
+    std::filesystem::path scriptActionRoot_;
+    char scriptRename_[256]{};
+    bool scriptRenameFocus_ = false;
     std::filesystem::path treeRoot_;
     double treeRefresh_ = 0;
     LuaConsole console_;

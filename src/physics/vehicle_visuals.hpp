@@ -62,9 +62,14 @@ inline void updateWheelMeshes(World& world, float dt) {
         }
         const float radius =
             v.wheelRadius * std::max(std::abs(rootPose->scale.x), std::abs(rootPose->scale.y));
-        if (radius > .001f && std::isfinite(v.speed)) {
+        // Solver-scale resting jitter must not accumulate visible tire rotation.
+        const float rollSpeed =
+            v.groundedWheels > 0 && std::abs(v.throttle) < .01f && std::abs(v.speed) < .03f
+                ? 0.f
+                : v.speed;
+        if (radius > .001f && std::isfinite(rollSpeed)) {
             v.wheelRoll =
-                std::fmod(v.wheelRoll + v.speed * std::clamp(dt, 0.f, .25f) / radius, 2 * kPi);
+                std::fmod(v.wheelRoll + rollSpeed * std::clamp(dt, 0.f, .25f) / radius, 2 * kPi);
         }
         for (auto e : world.entities()) {
             const auto* name = world.tryGet<ObjectName>(e);

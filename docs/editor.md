@@ -259,6 +259,28 @@ right-click empty explorer space to create one at the Assets root. Filenames
 start at `NewScript.ls` and use numbered suffixes to avoid overwriting files.
 The current document is saved before switching. The tree refreshes automatically.
 
+Hover a script filename for its full path and available actions. Select/open a
+script and press **F2**, or right-click a file and choose **Rename**. Enter confirms
+and Escape cancels. The extension is preserved and existing files are not
+overwritten. **Duplicate** creates a numbered copy in the same folder. **Delete**
+asks for confirmation, sends the file to Trash and supports editor Undo/Redo;
+references to deleted files remain missing until restored or reassigned.
+
+Drag script files onto an explorer folder (including empty folders) to move them;
+drop onto the **Assets** heading to move back to the root. The same payload still
+works on script assignment targets in Inspector/Hierarchy. Rename/move reuses the
+Asset Browser's project-reference remapping, including scene attachments and
+saved asset references, and keeps the currently edited script open. Dirty document
+contents are saved before file operations. File management is disabled during
+Play. Create folders through Assets; folder renaming/deletion remains there.
+
+Manual checks: rename with F2/right-click, cancel, reject duplicate/invalid names;
+duplicate unsaved text; move into an empty/nested folder and back to Assets;
+verify attached scripts and reopened levels/prefabs retain paths; delete/cancel,
+undo/redo deletion, and verify Play disables file operations. These interactive
+checks are pending; no automated tests were added or run.
+
+
 See [static 3D model import](models.md) for Assimp format choices, baked model
 assets, model placement and the current static-only limitations.
 
@@ -378,10 +400,10 @@ with `.lemesh` backward compatibility. See the
 (repository) for usage, limits and manual checks.
 
 
-### Hierarchy alphabetical order
+### Alphabetical creation/component menus
 
-Right-click the Hierarchy background, level root or an object row and toggle
-**A-Z Order** to display siblings in case-insensitive name order. Turn it off to
-restore entity-creation order. This is a session display preference: it does not
-reparent objects or modify saved scene data. For Vehicle objects, the context menu
-also offers **Create wheel meshes**; see [vehicles](vehicles.md).
+The **Create** menu (including Hierarchy context menus) and Inspector **Add
+Component** menu are alphabetical, including their submenus. Categories and
+component names are retained. Hierarchy objects keep their existing entity order;
+the earlier **A-Z Order** Hierarchy toggle has been removed. For Vehicle objects,
+the context menu still offers **Create wheel meshes**; see [vehicles](vehicles.md).

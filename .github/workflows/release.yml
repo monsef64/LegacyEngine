@@ -1,7 +1,7 @@
 name: Release
 
 # Push a SemVer tag, or dispatch with a version, to publish a Linux release.
-# Dispatch with an empty version builds development artifacts only.
+# Manual runs publish by default; uncheck Publish GitHub Release for build-only artifacts.
 on:
   push:
     branches: ["**"]
@@ -34,10 +34,15 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. 1.2.3 or 1.2.3-rc.1); empty = build only'
+        description: 'Version to publish (e.g. 1.2.3 or 1.2.3-rc.1); required when publishing'
         required: false
         type: string
         default: ''
+      publish:
+        description: 'Publish GitHub Release (listed on the repository Releases page)'
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -64,6 +69,7 @@ jobs:
         id: version
         env:
           RELEASE_VERSION: ${{ inputs.version }}
+          PUBLISH_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && 'true' || 'false' }}
         run: python3 tools/release_version.py
 
   linux:
@@ -237,6 +243,15 @@ jobs:
             gh release create "$RELEASE_TAG" "$PACKAGE.tar.gz" build/legacyengine-docs.zip \
               --target "$GITHUB_SHA" --generate-notes --title "LegacyEngine $RELEASE_TAG" "${flags[@]}"
           fi
+          release_url=$(gh release view "$RELEASE_TAG" --json url --jq '.url')
+          {
+            echo "## GitHub Release published"
+            echo "[$RELEASE_TAG]($release_url)"
+            echo ""
+            echo "Find it on: https://github.com/$GH_REPO/releases"
+            echo ""
+            echo "Linux archive and documentation are uploaded. The dependent VSIX job attaches the extension next."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   vsix:
     permissions:
