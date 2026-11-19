@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 30\n";
+    out << std::setprecision(9) << "LegacyEngineProject 31\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -111,7 +111,9 @@ inline std::string encodeLegacy(World& world,
             (world.has<Laser>(e) ? 4194304 : 0) | (world.has<LightShafts>(e) ? 8388608 : 0) |
             (world.has<Terrain>(e) ? 16777216 : 0) | (world.has<CameraEffects>(e) ? 33554432 : 0) |
             (world.has<Fog>(e) ? 67108864 : 0) | (world.has<CloudSystem>(e) ? 134217728 : 0) |
-            (world.has<River>(e) ? 268435456 : 0) | (world.has<Vehicle>(e) ? 536870912 : 0);
+            (world.has<River>(e) ? 268435456 : 0) | (world.has<Vehicle>(e) ? 536870912u : 0u) |
+            (world.has<Water>(e) ? 1073741824u : 0u) |
+            (world.has<BoneAttachment>(e) ? 2147483648u : 0u);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -324,6 +326,15 @@ inline std::string encodeLegacy(World& world,
             require(Vehicles::valid(*v));
             out << std::quoted(Vehicles::settings(*v).dump()) << ' ';
         }
+        if (const auto* w = world.tryGet<Water>(e)) {
+            require(Environment::valid(*w));
+            out << std::quoted(Waters::settings(*w).dump()) << ' ';
+        }
+        if (const auto* b = world.tryGet<BoneAttachment>(e)) {
+            (void)BoneAttachments::parse(BoneAttachments::settings(*b));
+            out << std::quoted(BoneAttachments::settings(*b).dump()) << ' '
+                << entityIndex(b->source) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -341,7 +352,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 30));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 31));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -413,7 +424,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 27 ? 67108863u
                          : version < 28 ? 134217727u
                          : version < 30 ? 536870911u
-                                        : 1073741823u) &&
+                         : version < 31 ? 1073741823u
+                                        : UINT32_MAX) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -682,7 +694,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= (version >= 30   ? 26u
+            require(types.size() <= (version >= 31   ? 28u
+                                     : version >= 30 ? 26u
                                      : version >= 28 ? 25u
                                      : version >= 27 ? 23u
                                      : version >= 26 ? 22u
@@ -693,7 +706,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::vector<int> seen;
             for (int id : types) {
                 require(id >= 0 &&
-                        id < (version >= 30   ? 26
+                        id < (version >= 31   ? 28
+                              : version >= 30 ? 26
                               : version >= 28 ? 25
                               : version >= 27 ? 23
                               : version >= 26 ? 22
@@ -785,8 +799,28 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             require(text.size() <= 16384);
             result.world.add(e, Vehicles::parse(parseJson(text)));
         }
+        if (mask & 1073741824u) {
+            std::string text;
+            in >> std::quoted(text);
+            require(text.size() <= 16384);
+            result.world.add(e, Waters::parse(parseJson(text)));
+        }
+        if (mask & 2147483648u) {
+            std::string text;
+            int source = -1;
+            in >> std::quoted(text) >> source;
+            require(text.size() <= 16384 && source >= -1 && source < count);
+            auto b = BoneAttachments::parse(parseJson(text));
+            b.source = source < 0 ? Entity{} : Entity{unsigned(source), 0};
+            result.world.add(e, b);
+        }
         require(bool(in));
     }
+    result.world.each<BoneAttachment>([&](Entity, BoneAttachment& b) {
+        if (b.source != Entity{}) {
+            b.source = entities[b.source.index];
+        }
+    });
     result.world.each<LuaScript>([&](Entity, LuaScript& scripts) {
         auto remap = [&](std::vector<ScriptField>& fields) {
             for (auto& field : fields) {

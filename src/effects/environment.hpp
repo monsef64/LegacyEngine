@@ -18,9 +18,15 @@ struct River {
     Vec3 color{.03f, .28f, .36f};
     float width = 3, opacity = .85f, speed = 1, waveScale = 2, waveStrength = .15f, foam = .3f;
     int subdivisions = 12;
+    int shaderStyle = 0; // Classic, Clear, Ocean, Lake, Rapids, Tropical, Marsh, Industrial.
+    float waveHeight = .08f, waveLength = 4, waveSpeed = 1;
     std::vector<Vec3> points{{-10, 0, 0}, {0, 0, 3}, {10, 0, 0}};
 };
+struct Water : River {
+    std::string mesh; // Empty: use this object's MeshRenderer geometry.
+};
 namespace Environment {
+inline double waterTime = 0; // Fixed-step phase shared by rendering and buoyancy.
 inline bool finite(Vec3 v) {
     return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
 }
@@ -50,11 +56,12 @@ inline bool valid(const CloudSystem& c) {
            range(c.opacity, 0, 1) && c.steps >= 4 && c.steps <= 24;
 }
 inline bool valid(const River& r) {
-    if (!color(r.color) || !range(r.width, .05f, 1000) || !range(r.opacity, 0, 1) ||
-        !range(r.flowAmount, 0, 2) || !range(r.collisionStrength, 0, 2) ||
-        !range(r.speed, -100, 100) || !range(r.waveScale, .01f, 100) ||
-        !range(r.waveStrength, 0, 1) || !range(r.foam, 0, 1) || r.subdivisions < 2 ||
-        r.subdivisions > 32 || r.points.size() < 2 || r.points.size() > 64) {
+    if (r.shaderStyle < 0 || r.shaderStyle > 7 || !range(r.waveHeight, 0, 3) ||
+        !range(r.waveLength, .1f, 100) || !range(r.waveSpeed, 0, 10) || !color(r.color) ||
+        !range(r.width, .05f, 1000) || !range(r.opacity, 0, 1) || !range(r.flowAmount, 0, 2) ||
+        !range(r.collisionStrength, 0, 2) || !range(r.speed, -100, 100) ||
+        !range(r.waveScale, .01f, 100) || !range(r.waveStrength, 0, 1) || !range(r.foam, 0, 1) ||
+        r.subdivisions < 2 || r.subdivisions > 32 || r.points.size() < 2 || r.points.size() > 64) {
         return false;
     }
     for (auto p : r.points) {
@@ -89,6 +96,10 @@ inline Json settings(const River& r) {
             {"transparent", r.transparent},
             {"collisionEffects", r.collisionEffects},
             {"collisionStrength", r.collisionStrength},
+            {"shaderStyle", r.shaderStyle},
+            {"waveHeight", r.waveHeight},
+            {"waveLength", r.waveLength},
+            {"waveSpeed", r.waveSpeed},
             {"width", r.width},
             {"opacity", r.opacity},
             {"speed", r.speed},
@@ -122,6 +133,10 @@ template <class T> T parse(const Json& j) {
         ENV_VALUE(transparent);
         ENV_VALUE(collisionEffects);
         ENV_VALUE(collisionStrength);
+        ENV_VALUE(shaderStyle);
+        c.waveHeight = j.value("waveHeight", 0.f); // Legacy files retain flat geometry.
+        ENV_VALUE(waveLength);
+        ENV_VALUE(waveSpeed);
         ENV_VALUE(width);
         ENV_VALUE(waveScale);
         ENV_VALUE(waveStrength);
@@ -144,6 +159,13 @@ template <class T> T parse(const Json& j) {
     }
     return c;
 }
+inline float waterWave(Vec3 p, const River& r, double time) {
+    const float phase = r.flowing ? float(time) * r.speed * r.flowAmount * r.waveSpeed : 0;
+    const float k = 2 * kPi / r.waveLength;
+    return r.waveHeight * (.6f * std::sin(k * (p.x * .8f + p.z * .6f) - phase * 1.4f) +
+                           .28f * std::sin(k * 1.73f * (-p.x * .6f + p.z * .8f) - phase * 1.9f) +
+                           .12f * std::sin(k * 2.61f * (p.x * .3f + p.z * .95f) - phase * 2.6f));
+}
 inline Vec3 curve(const River& r, float t) {
     int n = int(r.points.size());
     float x = std::clamp(t, 0.f, 1.f) * (n - 1);
@@ -156,3 +178,21 @@ inline Vec3 curve(const River& r, float t) {
            .5f;
 }
 } // namespace Environment
+
+namespace Waters {
+inline Json settings(const Water& w) {
+    auto j = Environment::settings(w);
+    j["mesh"] = w.mesh;
+    return j;
+}
+inline Water parse(const Json& j) {
+    Water w;
+    static_cast<River&>(w) = Environment::parse<River>(j);
+    w.mesh = j.value("mesh", std::string{});
+    if (!w.mesh.empty() && (w.mesh.find("..") != std::string::npos || w.mesh.front() == '/' ||
+                            w.mesh.find(':') != std::string::npos)) {
+        throw std::runtime_error("Invalid Water mesh path");
+    }
+    return w;
+}
+} // namespace Waters

@@ -1,8 +1,9 @@
 // Jolt must precede every other Jolt header.
 #include <Jolt/Jolt.h>
 
-#include "models/collider_source.hpp"
 #include "effects/environment.hpp"
+#include "effects/water_mesh.hpp"
+#include "models/collider_source.hpp"
 #include "models/mesh_simplify.hpp"
 #include "models/model_asset.hpp"
 #include "physics/physics.hpp"
@@ -302,6 +303,8 @@ struct Physics::Impl {
     struct WaterPatch {
         Vec3 a, along, side, normal;
         float aa, ss, as, inverseDet, flow, wave;
+        float waveLength = 4, wavePhaseSpeed = 0;
+        bool triangle = false;
     };
     std::vector<WaterPatch> waterPatches(World& world) {
         std::vector<WaterPatch> patches;
@@ -341,10 +344,47 @@ struct Physics::Impl {
                 }
                 patch.inverseDet = 1.f / det;
                 patch.flow = r.flowing ? std::clamp(r.speed * r.flowAmount * .08f, -2.f, 2.f) : 0;
-                patch.wave = r.flowing && r.flowAmount > 0 && r.speed != 0
-                                 ? r.waveStrength * std::min(r.flowAmount, 1.f) * .25f
-                                 : 0;
+                patch.wave = r.waveHeight;
+                patch.waveLength = r.waveLength;
+                patch.wavePhaseSpeed = r.flowing ? r.speed * r.flowAmount * r.waveSpeed : 0;
                 patches.push_back(patch);
+            }
+        });
+        world.eachReadOnly<Transform, Water>([&](Entity e, const Transform& t, const Water& w) {
+            if (!w.enabled || !isActive(world, e) || !Environment::valid(w)) {
+                return;
+            }
+            try {
+                const auto& mesh = Waters::geometry(world, e, assets, false);
+                auto point = [&](Vec3 p) {
+                    return t.position + rotateVector(t.rotation, p * t.scale);
+                };
+                for (size_t i = 0; i + 2 < mesh.vertices.size(); i += 3) {
+                    WaterPatch p;
+                    p.a = point(mesh.vertices[i].position);
+                    p.along = point(mesh.vertices[i + 1].position) - p.a;
+                    p.side = point(mesh.vertices[i + 2].position) - p.a;
+                    p.normal = normalize(cross(p.along, p.side));
+                    if (p.normal.y < .25f) {
+                        continue;
+                    }
+                    p.aa = dot(p.along, p.along);
+                    p.ss = dot(p.side, p.side);
+                    p.as = dot(p.along, p.side);
+                    float det = p.aa * p.ss - p.as * p.as;
+                    if (!std::isfinite(det) || det < 1e-10f) {
+                        continue;
+                    }
+                    p.inverseDet = 1 / det;
+                    p.triangle = true;
+                    p.flow = w.flowing ? std::clamp(w.speed * w.flowAmount * .08f, -2.f, 2.f) : 0;
+                    p.wave = w.waveHeight;
+                    p.waveLength = w.waveLength;
+                    p.wavePhaseSpeed = w.flowing ? w.speed * w.flowAmount * w.waveSpeed : 0;
+                    patches.push_back(p);
+                }
+            } catch (const std::exception& ex) {
+                std::fprintf(stderr, "Water physics: %s\n", ex.what());
             }
         });
         return patches;
@@ -373,7 +413,7 @@ struct Physics::Impl {
             const float da = dot(delta, patch.along), ds = dot(delta, patch.side);
             const float u = (da * patch.ss - ds * patch.as) * patch.inverseDet;
             const float v = (ds * patch.aa - da * patch.as) * patch.inverseDet;
-            if (u < 0 || u > 1 || std::abs(v) > 1) {
+            if (u < 0 || u > 1 || (patch.triangle ? (v < 0 || u + v > 1) : std::abs(v) > 1)) {
                 continue;
             }
             if (p.y > highest) {
@@ -387,8 +427,12 @@ struct Physics::Impl {
         }
         // A tiny coherent wave proxy drives gentle heave; Jolt integrates the
         // actual submerged shape volume, center-of-buoyancy torque and drag.
+        const float k = 2 * kPi / best->waveLength, phase = float(waterTime) * best->wavePhaseSpeed;
         surface.y +=
-            best->wave * std::sin(float(waterTime * 1.8) + surface.x * .45f + surface.z * .3f);
+            best->wave *
+            (.6f * std::sin(k * (surface.x * .8f + surface.z * .6f) - phase * 1.4f) +
+             .28f * std::sin(k * 1.73f * (-surface.x * .6f + surface.z * .8f) - phase * 1.9f) +
+             .12f * std::sin(k * 2.61f * (surface.x * .3f + surface.z * .95f) - phase * 2.6f));
         const auto current = normalize(best->along) * best->flow;
         api.ApplyBuoyancyImpulse(body.id,
                                  jvec(surface),
@@ -509,6 +553,9 @@ struct Physics::Impl {
             const auto resolved = source == &terrainCollider ? terrainCollider
                                   : source ? effectiveCollider(world, entity, *source)
                                            : Collider{};
+            if (world.has<Water>(entity)) {
+                return; // Virtual water surfaces never become solid Jolt obstacles.
+            }
             const auto* rigid = world.tryGet<RigidBody>(entity);
             if ((!source && !rigid) || !isUsable(transform, source ? &resolved : nullptr, rigid)) {
                 return;
@@ -781,6 +828,7 @@ Physics::~Physics() = default;
 void Physics::reset() {
     const auto root = impl_->assets.root;
     impl_ = std::make_unique<Impl>();
+    Environment::waterTime = 0;
     impl_->assets.root = root;
     triggerEvents.clear();
     collisionEvents.clear();
@@ -817,6 +865,7 @@ void Physics::update(World& world, float seconds, const std::function<void(float
             });
         const auto water = hasFloaters ? impl.waterPatches(world) : std::vector<Impl::WaterPatch>{};
         impl.waterTime += kStepSeconds;
+        Environment::waterTime = impl.waterTime;
         for (auto& entry : impl.bodies) {
             auto& body = entry.second;
             if (body.id.IsInvalid()) {
@@ -928,22 +977,42 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                 const auto lateral = normalize(cross(direction, hit.normal));
                 const float longitudinalSpeed = dot(relative, direction),
                             lateralSpeed = dot(relative, lateral);
+                // Account for gravity integrated by Jolt immediately after these
+                // impulses. Without this, a resting tire always lags by one step
+                // on slopes. Work relative to dynamic ground, not world velocity.
+                Vec3 relativeGravity =
+                    body.rigid.useGravity ? vec(impl.system.GetGravity()) : Vec3{};
+                if (movingGround && ground->second.motion == JPH::EMotionType::Dynamic &&
+                    ground->second.rigid.useGravity) {
+                    relativeGravity = relativeGravity - vec(impl.system.GetGravity());
+                }
                 const float limit = v.tireGrip * load;
                 const float lateralForce =
-                    std::clamp(-lateralSpeed * mass / (4 * kStepSeconds), -limit, limit) *
+                    std::clamp(-(lateralSpeed / kStepSeconds + dot(relativeGravity, lateral)) *
+                                   mass * .25f,
+                               -limit,
+                               limit) *
                     (v.handbrake && !front ? .5f : 1.f);
                 float drive = throttle * v.engineForce * .25f;
                 if (std::abs(v.speed) >= v.maxSpeed && drive * v.speed > 0) {
                     drive = 0;
                 }
-                const float stopping = std::clamp(-longitudinalSpeed * mass / (4 * kStepSeconds),
-                                                  -v.brakeForce * .25f,
-                                                  v.brakeForce * .25f);
-                const float braking = v.handbrake && !front ? 1.f : brake;
+                const float requestedStop =
+                    -(longitudinalSpeed / kStepSeconds + dot(relativeGravity, direction)) * mass *
+                    .25f;
+                const float stopping =
+                    std::clamp(requestedStop, -v.brakeForce * .25f, v.brakeForce * .25f);
+                // Low-speed idle hold is contact-based, grip-limited and released
+                // immediately on throttle. Never zero the chassis velocity or pose.
+                const bool idleHold =
+                    std::abs(throttle) < .01f && std::abs(longitudinalSpeed) < .5f;
+                const float braking = (idleHold || (v.handbrake && !front)) ? 1.f : brake;
+                const float rolling =
+                    idleHold ? 0.f : std::clamp(requestedStop, -load * .015f, load * .015f);
                 const float remaining =
                     std::sqrt(std::max(0.f, limit * limit - lateralForce * lateralForce));
-                const float longitudinal =
-                    std::clamp(drive + stopping * braking, -remaining, remaining);
+                const float longitudinal = std::clamp(
+                    drive + stopping * braking + rolling * (1 - braking), -remaining, remaining);
                 const auto impulse =
                     (up * load + lateral * lateralForce + direction * longitudinal) * kStepSeconds;
                 api.AddImpulse(body.id, jvec(impulse), jvec(hit.point));

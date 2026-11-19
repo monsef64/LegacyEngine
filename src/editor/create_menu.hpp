@@ -2,12 +2,13 @@
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include "core/hierarchy.hpp"
+#include "physics/vehicle_visuals.hpp"
 #include <imgui.h>
 
 // IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox; 12
 // character; 13 FPS camera; 14 raycast; 15 particles; 16 laser; 17 shafts; 18 terrain;
 // 19 clouds; 20 fog; 21 river; 22 vehicle.
-inline constexpr int editorObjectTypeCount = 23;
+inline constexpr int editorObjectTypeCount = 24;
 inline bool validEditorObjectType(int item) {
     return item >= 0 && item < editorObjectTypeCount;
 }
@@ -32,6 +33,9 @@ inline int drawCreateItems() {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Environment")) {
+        if (ImGui::MenuItem("Water")) {
+            item = 23;
+        }
         if (ImGui::MenuItem("Clouds")) {
             item = 19;
         }
@@ -153,7 +157,8 @@ inline Entity createEditorObject(World& world,
                                "Clouds",
                                "Fog",
                                "River",
-                               "Vehicle"};
+                               "Vehicle",
+                               "Water"};
     static_assert(sizeof(names) / sizeof(names[0]) == editorObjectTypeCount);
     if (!validEditorObjectType(item)) {
         return {};
@@ -170,6 +175,10 @@ inline Entity createEditorObject(World& world,
                                     item > 0 && item < 5 ? meshes[item] : MeshHandle{},
                                     item > 0 && item < 5 ? shapes[item] : ColliderShape::Box,
                                     item == 0 || item >= 5);
+    if (item == 23) {
+        world.add(entity, Water{});
+        world.add(entity, MeshRenderer{plane, {1, 1, 1}});
+    }
     if (item == 22) {
         RigidBody rb;
         rb.mass = 1000;
@@ -184,6 +193,7 @@ inline Entity createEditorObject(World& world,
         world.add(visual, MeshRenderer{cube, {.25f, .4f, .65f}});
         world.get<Transform>(visual).scale = c.size;
         setParent(world, visual, entity);
+        Vehicles::createWheelMeshes(world, entity, sphere);
     }
     if (item == 19) {
         world.get<Transform>(entity).position.y += 20;

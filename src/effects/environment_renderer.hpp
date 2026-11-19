@@ -1,6 +1,7 @@
 #pragma once
 #include "core/frustum.hpp"
 #include "core/hierarchy.hpp"
+#include "effects/water_mesh.hpp"
 #include "scene/scene_camera.hpp"
 #include <SDL3/SDL.h>
 #include <glad/gl.h>
@@ -22,6 +23,7 @@ class EnvironmentRenderer {
     GLuint program_ = 0;
     std::map<std::string, GLint> locations_;
     bool attempted_ = false;
+    std::string error;
     static GLuint compile(GLenum type, const char* source) {
         GLuint s = glCreateShader(type);
         glShaderSource(s, 1, &source, nullptr);
@@ -42,13 +44,18 @@ class EnvironmentRenderer {
         try {
             v = compile(GL_VERTEX_SHADER, R"(#version 330 core
 layout(location=0)in vec3 position;layout(location=1)in vec2 texcoord;
-uniform mat4 vp,model;out vec3 localPoint;out vec3 worldPoint;out vec2 uv;
-void main(){localPoint=position;worldPoint=(model*vec4(position,1)).xyz;uv=texcoord;gl_Position=vp*vec4(worldPoint,1);}
+uniform mat4 vp,model;uniform int mode;uniform float time,speed,waveHeight,waveLength,waveSpeed;
+out vec3 localPoint;out vec3 worldPoint;out vec2 uv;
+void main(){localPoint=position;worldPoint=(model*vec4(position,1)).xyz;
+if(mode==0){float k=6.2831853/waveLength,t=time*speed*waveSpeed;
+worldPoint.y+=waveHeight*(.6*sin(k*dot(worldPoint.xz,vec2(.8,.6))-t*1.4)+.28*sin(k*1.73*dot(worldPoint.xz,vec2(-.6,.8))-t*1.9)+.12*sin(k*2.61*dot(worldPoint.xz,vec2(.3,.95))-t*2.6));}
+uv=texcoord;gl_Position=vp*vec4(worldPoint,1);}
 )");
             f = compile(GL_FRAGMENT_SHADER, R"(#version 330 core
 in vec3 localPoint;in vec3 worldPoint;in vec2 uv;out vec4 fragColor;
 uniform mat4 vp,model,inverseModel;uniform vec3 eye,tint;uniform int mode,steps;
-uniform int transparentWater,contactCount;
+uniform int transparentWater,contactCount,waterStyle,meshWater;
+uniform float waveHeight,waveLength,waveSpeed;
 uniform vec4 contacts[16];
 uniform float contactStrength;
 uniform float handedness,time,opacity,speed,noiseScale,coverage,density,waveScale,waveStrength,foam;
@@ -62,7 +69,9 @@ void main(){
  if(mode==0){
   // No periodic wave bands or vertex displacement. Two drifting noise scales
   // perturb the actual ribbon normal, with derivative filtering at distance.
-  vec2 p=vec2(uv.x*2.,uv.y)*waveScale;
+  vec2 p=(meshWater!=0?worldPoint.xz:vec2(uv.x*2.,uv.y))*waveScale;
+  float styleDetail=waterStyle==4?2.4:waterStyle==3?.4:waterStyle==7?.65:1.;
+  p*=styleDetail;
   vec2 drift=vec2(time*speed*.027,-time*speed*.11);
   float detail=waterNoise(p+drift)*.65+waterNoise(p*2.13-drift*.7+17.)*.35;
   float contactFoam=0.;
@@ -85,23 +94,36 @@ void main(){
   vec3 reflected=reflect(-viewDir,n);
   vec3 sky=mix(vec3(.48,.63,.72),vec3(.12,.27,.42),clamp(reflected.y,0.,1.));
   float bank=smoothstep(.55,1.,abs(uv.x*2.-1.));
-  vec3 body=tint*mix(.55,.9,bank);
+  vec3 waterTint=tint;
+  if(waterStyle==2)waterTint=mix(tint,vec3(.015,.10,.19),.8);
+  if(waterStyle==3)waterTint=mix(tint,vec3(.07,.18,.13),.65);
+  if(waterStyle==4)waterTint=mix(tint,vec3(.13,.31,.34),.5);
+  if(waterStyle==5)waterTint=mix(tint,vec3(.02,.55,.48),.8);
+  if(waterStyle==6)waterTint=mix(tint,vec3(.12,.15,.045),.85);
+  if(waterStyle==7)waterTint=mix(tint,vec3(.15,.14,.085),.9);
+  if(waterStyle==7)sky=mix(vec3(.37,.35,.23),vec3(.65,.64,.48),clamp(reflected.y,0.,1.));
+  vec3 body=waterTint*mix(.55,.9,bank);
   vec3 light=normalize(vec3(.4,.85,.25)),halfway=normalize(viewDir+light);
   float nh=max(dot(n,halfway),0.),nl=max(dot(n,light),0.);
-  float roughness=clamp(.18+length(fwidth(n))*.4,.18,.45),a2=roughness*roughness;
+  float baseRoughness=waterStyle==7?.1:waterStyle==3?.12:waterStyle==4?.32:.18;
+  float roughness=clamp(baseRoughness+length(fwidth(n))*.4,baseRoughness,.5),a2=roughness*roughness;
   float denom=nh*nh*(a2-1.)+1.;float specular=min(a2/(3.14159*denom*denom)*.018*nl,1.);
-  float edgeFoam=foam*smoothstep(.82,.99,abs(uv.x*2.-1.))*smoothstep(.48,.78,detail);
+  float edgeMask=meshWater!=0?0.:smoothstep(.82,.99,abs(uv.x*2.-1.));
+  float edgeFoam=foam*edgeMask*smoothstep(.48,.78,detail);
+  if(waterStyle==4)edgeFoam+=foam*smoothstep(.58,.85,detail);
+  if(waterStyle==6)edgeFoam+=.12*smoothstep(.65,.8,detail);
+  float shoreFade=meshWater!=0?1.:(1.-smoothstep(.94,1.,abs(uv.x*2.-1.)));
   vec3 c=mix(body,sky,fresnel)+vec3(1.,.96,.85)*specular+vec3(.65,.72,.7)*edgeFoam;
-  float alpha=clamp(opacity+fresnel*(1.-opacity),0.,1.)*(1.-smoothstep(.94,1.,abs(uv.x*2.-1.)));
-  if(transparentWater!=0){
+  float alpha=clamp(opacity+fresnel*(1.-opacity),0.,1.)*shoreFade;
+  if(transparentWater!=0||waterStyle==1||waterStyle==5){
    // Physically motivated grazing reflection, low face-on opacity and tint.
    // Standard alpha transmission shows underlying scene geometry; no screen copy.
-   c=mix(tint*.7,sky,fresnel)+vec3(1.,.96,.85)*specular;
+   c=mix(waterTint*.7,sky,fresnel)+vec3(1.,.96,.85)*specular;
    alpha=clamp(opacity*.42+fresnel*(1.-opacity*.42),0.,1.)*
-     (1.-smoothstep(.94,1.,abs(uv.x*2.-1.)));
+     shoreFade;
   }
   c=mix(c,vec3(.78,.88,.9),clamp(contactFoam,0.,.8));
-  alpha=max(alpha,clamp(contactFoam,0.,.75)*(1.-smoothstep(.94,1.,abs(uv.x*2.-1.))));
+  alpha=max(alpha,clamp(contactFoam,0.,.75)*shoreFade);
   fragColor=vec4(c,alpha);return;
  }
  vec3 wind=vec3(time*speed,0,time*speed*.3);
@@ -207,12 +229,76 @@ void main(){
             lastL = l;
             lastR = rr;
         }
+        for (int pass = 0; pass < 3 && v.size() * 4 < 120000; ++pass) {
+            std::vector<Vertex> refined;
+            for (size_t i = 0; i + 2 < v.size(); i += 3) {
+                auto a = v[i], b = v[i + 1], c = v[i + 2];
+                auto mid = [](Vertex x, Vertex y) {
+                    return Vertex{(x.p + y.p) * .5f, (x.u + y.u) * .5f, (x.v + y.v) * .5f};
+                };
+                auto ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
+                refined.insert(refined.end(), {a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca});
+            }
+            v = std::move(refined);
+        }
         return v;
     }
 
     struct Contact {
         float x, y, z, radius;
     };
+    static std::vector<Contact>
+    meshContacts(World& world, Entity e, const Transform& t, const AssetManager& assets) {
+        std::vector<Contact> contacts;
+        try {
+            const auto& mesh = Waters::geometry(world, e, assets, false);
+            unsigned considered = 0;
+            float bound = 0;
+            for (const auto& vertex : mesh.vertices) {
+                auto p = vertex.position * t.scale;
+                bound = std::max(bound, std::sqrt(dot(p, p)));
+            }
+            auto point = [&](Vec3 p) { return t.position + rotateVector(t.rotation, p * t.scale); };
+            world.eachReadOnly<Transform, Collider>(
+                [&](Entity other, const Transform& p, const Collider& c) {
+                    if (contacts.size() >= 16 || considered >= 128 || e == other || c.isTrigger ||
+                        !isActive(world, other) || c.shape == ColliderShape::Mesh) {
+                        return;
+                    }
+                    ++considered;
+                    auto center = p.position + rotateVector(p.rotation, c.center * p.scale);
+                    auto size = c.size * p.scale;
+                    float radius = c.shape == ColliderShape::Box
+                                       ? .5f * std::sqrt(dot(size, size))
+                                       : c.radius * std::max({std::abs(p.scale.x),
+                                                              std::abs(p.scale.y),
+                                                              std::abs(p.scale.z)});
+                    auto delta = center - t.position;
+                    if (dot(delta, delta) > (bound + radius) * (bound + radius)) {
+                        return;
+                    }
+                    for (size_t i = 0; i + 2 < mesh.vertices.size(); i += 3) {
+                        Vec3 hit, normal;
+                        if (Waters::surface(point(mesh.vertices[i].position),
+                                            point(mesh.vertices[i + 1].position),
+                                            point(mesh.vertices[i + 2].position),
+                                            center,
+                                            hit,
+                                            normal)) {
+                            hit.y += Environment::waterWave(
+                                hit, world.get<Water>(e), Environment::waterTime);
+                            if (std::abs(dot(center - hit, normal)) > radius) {
+                                continue;
+                            }
+                            contacts.push_back({hit.x, hit.y, hit.z, std::max(.05f, radius * .6f)});
+                            break;
+                        }
+                    }
+                });
+        } catch (const std::exception&) {
+        }
+        return contacts;
+    }
     // Visual surface intersections, not rigid-body forces. Bounds are deliberately
     // conservative for round colliders; triggers and mesh colliders are excluded.
     static std::vector<Contact>
@@ -326,7 +412,7 @@ void main(){
         program_ = 0;
         attempted_ = false;
     }
-    void draw(World& world, const Mat4& vp, Vec3 eye) {
+    void draw(World& world, const AssetManager& assets, const Mat4& vp, Vec3 eye) {
         struct Item {
             Entity e;
             int kind;
@@ -358,13 +444,29 @@ void main(){
                 }
                 float scale =
                     std::max({std::abs(t.scale.x), std::abs(t.scale.y), std::abs(t.scale.z)});
-                collect(e, t, 0, (radius * 1.5f + r.width) * scale);
+                collect(e, t, 0, (radius * 1.5f + r.width) * scale + r.waveHeight);
+            }
+        });
+        world.eachReadOnly<Transform, Water>([&](Entity e, const Transform& t, const Water& w) {
+            if (!w.enabled || !Environment::valid(w) || w.opacity <= 0) {
+                return;
+            }
+            try {
+                float radius = 0;
+                for (const auto& v : Waters::geometry(world, e, assets).vertices) {
+                    radius = std::max(radius,
+                                      std::sqrt(dot(v.position * t.scale, v.position * t.scale)));
+                }
+                collect(e, t, 2, radius + w.waveHeight);
+            } catch (const std::exception& ex) {
+                error = ex.what();
             }
         });
         for (auto it = meshes_.begin(); it != meshes_.end();) {
             Entity e{std::get<0>(it->first), std::get<1>(it->first)};
-            if (!world.alive(e) ||
-                (std::get<2>(it->first) == 0 ? !world.has<River>(e) : !world.has<CloudSystem>(e))) {
+            if (!world.alive(e) || (std::get<2>(it->first) == 0   ? !world.has<River>(e)
+                                    : std::get<2>(it->first) == 2 ? !world.has<Water>(e)
+                                                                  : !world.has<CloudSystem>(e))) {
                 release(it->second);
                 it = meshes_.erase(it);
             } else {
@@ -421,7 +523,8 @@ void main(){
             int mode = 0;
             const CloudSystem* cloud = nullptr;
             const River* river = nullptr;
-            if (item.kind) {
+            if (item.kind == 1) {
+                scalar("time", float(std::fmod(double(SDL_GetTicksNS()) * 1e-9, 10000.)));
                 cloud = &world.get<CloudSystem>(item.e);
                 scale = scale * cloud->size;
                 tint = cloud->color;
@@ -434,7 +537,9 @@ void main(){
                 scalar("opacity", cloud->opacity);
                 glUniform1i(loc("steps"), cloud->steps);
             } else {
-                river = &world.get<River>(item.e);
+                scalar("time", float(Environment::waterTime));
+                river = item.kind == 2 ? static_cast<const River*>(&world.get<Water>(item.e))
+                                       : &world.get<River>(item.e);
                 tint = river->color;
                 auto keyValue = [&](auto value) {
                     signature.append(reinterpret_cast<const char*>(&value), sizeof(value));
@@ -446,12 +551,29 @@ void main(){
                     keyValue(p.y);
                     keyValue(p.z);
                 }
+                if (item.kind == 2) {
+                    const auto& w = world.get<Water>(item.e);
+                    signature += w.mesh;
+                    const auto* r = world.tryGet<MeshRenderer>(item.e);
+                    if (r) {
+                        signature += r->model;
+                        keyValue(r->mesh.id);
+                    }
+                    keyValue(modelAssetRevision);
+                }
+                scalar("waveHeight", river->waveHeight);
+                scalar("waveLength", river->waveLength);
+                scalar("waveSpeed", river->waveSpeed);
+                glUniform1i(loc("waterStyle"), river->shaderStyle);
+                glUniform1i(loc("meshWater"), item.kind == 2 ? 1 : 0);
                 scalar("speed", river->flowing ? river->speed * river->flowAmount : 0);
                 glUniform1i(loc("transparentWater"), river->transparent ? 1 : 0);
                 scalar("contactStrength", river->collisionStrength);
-                const auto contacts = river->collisionEffects && river->collisionStrength > 0
-                                          ? riverContacts(world, item.e, t, *river)
-                                          : std::vector<Contact>{};
+                const auto contacts =
+                    river->collisionEffects && river->collisionStrength > 0
+                        ? (item.kind == 2 ? meshContacts(world, item.e, t, assets)
+                                          : riverContacts(world, item.e, t, *river))
+                        : std::vector<Contact>{};
                 glUniform1i(loc("contactCount"), int(contacts.size()));
                 if (!contacts.empty()) {
                     glUniform4fv(loc("contacts[0]"), GLsizei(contacts.size()), &contacts[0].x);
@@ -471,6 +593,17 @@ void main(){
             auto& mesh = meshes_[key];
             if (mesh.signature != signature) {
                 auto vertices = cloud ? geometry(*cloud) : geometry(*river);
+                if (item.kind == 2) {
+                    vertices.clear();
+                    try {
+                        for (const auto& v : Waters::geometry(world, item.e, assets).vertices) {
+                            vertices.push_back({v.position, v.u, v.v});
+                        }
+                    } catch (const std::exception& ex) {
+                        error = ex.what();
+                        continue;
+                    }
+                }
                 if (!mesh.vao) {
                     glGenVertexArrays(1, &mesh.vao);
                     glGenBuffers(1, &mesh.vbo);

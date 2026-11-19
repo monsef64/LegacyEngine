@@ -727,7 +727,8 @@ void Renderer::draw(World& world,
     glDepthMask(GL_TRUE);
     world.eachReadOnly<Transform, MeshRenderer>(
         [&](Entity e, const Transform& t, const MeshRenderer& r) {
-            if (!isActive(world, e) || world.has<Camera>(e) || !visibleMesh(t, r)) {
+            if (!isActive(world, e) || world.has<Water>(e) || world.has<Camera>(e) ||
+                !visibleMesh(t, r)) {
                 return;
             }
             auto material = resolveMaterial(r);
@@ -756,7 +757,7 @@ void Renderer::draw(World& world,
         glDisable(GL_BLEND);
     }
     transparent.clear(); // Do not retain ECS references beyond this view.
-    environment_.draw(world, viewProjection, cameraPosition);
+    environment_.draw(world, materialAssets_, viewProjection, cameraPosition);
     shafts_.draw(world, materialAssets_, viewProjection, cameraPosition);
     lasers_.draw(world, viewProjection, cameraPosition);
     particles_.draw(world, materialAssets_, viewProjection, cameraPosition, editorView);
@@ -1020,7 +1021,8 @@ void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 ca
     if (needsShadows) {
         world.eachReadOnly<Transform, MeshRenderer>(
             [&](Entity e, const Transform& t, const MeshRenderer& r) {
-                if (!isActive(world, e) || world.has<Camera>(e) || r.mesh.id >= meshes_.size()) {
+                if (!isActive(world, e) || world.has<Water>(e) || world.has<Camera>(e) ||
+                    r.mesh.id >= meshes_.size()) {
                     return;
                 }
                 const auto& mesh = meshes_[r.mesh.id];

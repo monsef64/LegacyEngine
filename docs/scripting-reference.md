@@ -3636,3 +3636,13 @@ Writable commands: `throttle` (-1..1), `steering` (-1..1, positive right), `brak
 `groundedWheels`, `isGrounded`, `wheelCompression` (copied FL/FR/RL/RR array).
 All vehicle configuration is writable through the same property names shown in
 the Inspector; runtime commands/state are not serialized.
+
+
+## Water and BoneAttachment components
+
+[Water meshes and bone attachments](water-and-attachments.md) documents both new
+component APIs. Water shares River fields and adds `mesh`; both support
+`shaderStyle` (0..7), `waveHeight`, `waveLength` and `waveSpeed`.
+BoneAttachment exposes `enabled`, `source` (GameObject), `node` (index), `offset`
+and `rotation` (complete vector assignments), plus read-only `error`. Bone pose
+evaluation drives its owner's Transform; a dynamic RigidBody is not supported.

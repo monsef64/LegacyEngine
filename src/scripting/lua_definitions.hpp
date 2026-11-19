@@ -7,6 +7,12 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
+    {"Water", "Water - shared River water settings on arbitrary static .mesh or built-in MeshRenderer geometry; mesh (optional asset), shaderStyle (0..7), waveHeight, waveLength, waveSpeed. Upward triangles define buoyancy and contact coverage; not a sealed fluid volume. Ignores own solid collider/rigid-body integration."},
+    {"BoneAttachment", "BoneAttachment - enabled, source (animated GameObject), node (skeleton index), offset (complete vector), rotation (Euler degrees complete vector). Drives Transform position/rotation from evaluated bone pose; errors are read-only. Avoid dynamic RigidBody and attachment dependency cycles."},
+    {"shaderStyle", "Water/River.shaderStyle: 0 Classic, 1 Clear, 2 Ocean, 3 Lake, 4 Rapids, 5 Tropical, 6 Marsh, 7 Industrial canal (screenshot-inspired approximation)"},
+    {"waveHeight", "Water/River.waveHeight: 0..3 metres, geometric waves; zero disables displacement"},
+    {"waveLength", "Water/River.waveLength: 0.1..100 metres"},
+    {"waveSpeed", "Water/River.waveSpeed: 0..10 multiplier; Flowing and flow speed also apply"},
     {"Vehicle",
          "Vehicle - four-wheel raycast chassis, local -Z forward. enabled; throttle (-1..1), steering (-1..1), brake (0..1), handbrake (boolean). Read-only speed (signed m/s), groundedWheels, isGrounded, wheelCompression (copy, FL/FR/RL/RR). Settings: wheelBase, trackWidth, mountHeight, wheelRadius, suspensionLength, springStrength, suspensionDamping, engineForce, brakeForce, tireGrip, maxSteerAngle (degrees), maxSpeed (m/s). Requires dynamic primitive chassis; adding supplies missing dependencies only."},
         {"throttle",

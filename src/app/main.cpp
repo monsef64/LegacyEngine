@@ -9,6 +9,7 @@
 //   * right-handed coordinates (the OpenGL convention)
 
 #include "animation/animation_system.hpp"
+#include "animation/bone_attachment_system.hpp"
 #include "audio/audio_system.hpp"
 #include "core/components.hpp"
 #include "core/ecs.hpp"
@@ -1536,7 +1537,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui::End();
         bool hierarchyFocused = false;
         int hierarchyCreate = -1;
-        Entity hierarchyCreateParent;
+        Entity hierarchyCreateParent, vehicleWheelsRequest;
         const std::string hierarchyLevelName =
             prefabLevel                 ? "Prefab: " + editingPrefab
             : !levels.current().empty() ? levels.current()
@@ -1551,9 +1552,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                              hierarchyLevelName.c_str(),
                              editAllowed && !playMode.active() && !prefabLevel ? &renameLevelPopup
                                                                                : nullptr,
-                             &hierarchyCreateParent)) {
+                             &hierarchyCreateParent,
+                             editAllowed ? &vehicleWheelsRequest : nullptr)) {
             editor.finish(world);
             clicking = false;
+        }
+        if (world.alive(vehicleWheelsRequest)) {
+            history.commit(world, selectedEntity);
+            Vehicles::createWheelMeshes(world, vehicleWheelsRequest, sphereMesh);
+            history.commit(world, selectedEntity);
         }
         if (hierarchyCreate >= 0) {
             createObject(hierarchyCreate);
@@ -2018,6 +2025,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                             !projectDialog.pending() && !browser.dialog.pending() &&
                                 !orientationInteracting && !playbackHovered && !cameraLooking &&
                                 !terrainEditor.active(world, selectedEntity) && !curveEditing &&
+                                (!world.has<BoneAttachment>(selectedEntity) ||
+                                 !world.get<BoneAttachment>(selectedEntity).enabled) &&
                                 (!(SDL_GetModState() & SDL_KMOD_ALT) || orbitPivot.has_value()),
                             camera,
                             static_cast<float>(sceneSurface.width) / sceneSurface.height,
@@ -2256,6 +2265,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             componentScripts.fixedUpdate(dt);
             updateCharacterControllers(world, physics);
             updateHierarchy(world);
+            BoneAttachments::update(world, browser.assets);
+            updateHierarchy(world);
         });
         if (playMode.playing()) {
             const auto triggerEvents = physics.triggerEvents;
@@ -2275,10 +2286,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         profiler.checkpoint(ProfilePart::Physics);
         updateHierarchy(world);
+        if (playMode.playing()) {
+            Vehicles::updateWheelMeshes(world, seconds);
+            updateHierarchy(world);
+        }
         profiler.checkpoint(ProfilePart::Hierarchy);
         if (playMode.playing()) {
             updateFPSCameras(world, std::min(seconds, .25f), input);
         }
+        BoneAttachments::update(world, browser.assets);
+        updateHierarchy(world);
         updateCameras(world, playMode.playing() ? std::min(seconds, .25f) : 0);
         updateHierarchy(world);
         if (!(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) && !externalFocus) {

@@ -126,6 +126,12 @@ inline std::string sceneSignature(World& world) {
         component(e, CloudSystem{}, [&](const CloudSystem& c) {
             result += Environment::settings(c).dump();
         });
+        component(e, Water{}, [&](const Water& w) { result += Waters::settings(w).dump(); });
+        component(e, BoneAttachment{}, [&](const BoneAttachment& b) {
+            result += BoneAttachments::settings(b).dump();
+            scalar(b.source.index);
+            scalar(b.source.generation);
+        });
         component(e, Vehicle{}, [&](const Vehicle& v) { result += Vehicles::settings(v).dump(); });
         component(e, River{}, [&](const River& c) { result += Environment::settings(c).dump(); });
         component(e, Fog{}, [&](const Fog& f) { result += Fogs::settings(f).dump(); });

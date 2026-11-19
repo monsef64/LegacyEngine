@@ -48,6 +48,10 @@
     "title": "Vehicle physics and scripting"
   },
   {
+    "file": "water-and-attachments.md",
+    "title": "Water meshes and bone attachments"
+  },
+  {
     "file": "scripting-reference.md",
     "title": "Scripting Reference"
   },
