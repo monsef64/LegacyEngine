@@ -4,7 +4,7 @@
 #include "project/json_io.hpp"
 #include <SDL3/SDL.h>
 struct RenderingSettings {
-    bool visible = false, vsync = true;
+    bool visible = false, vsync = false;
     ShadowSettings shadows;
     std::string error;
     std::filesystem::path root;
@@ -26,7 +26,7 @@ struct RenderingSettings {
             return;
         }
         root = assets.root;
-        vsync = true;
+        vsync = false;
         shadows = {};
         error.clear();
         try {

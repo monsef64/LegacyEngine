@@ -200,6 +200,7 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
         if (stamp != signature_) {
             signature_ = stamp;
             loaded_ = false;
+            ambient_ = {1, 1, 1};
             if (texture_) {
                 glDeleteTextures(1, &texture_);
             }
@@ -207,6 +208,8 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
             try {
                 const unsigned target = sky.type == 1 ? GL_TEXTURE_2D : GL_TEXTURE_CUBE_MAP;
                 glActiveTexture(GL_TEXTURE4);
+                Vec3 ambientSum{};
+                float ambientWeight = 0;
                 glGenTextures(1, &texture_);
                 glBindTexture(target, texture_);
                 int faceSize = 0;
@@ -237,6 +240,16 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
                                 pixels.get()[i] = std::min(pixels.get()[i], 65504.0f);
                             }
                         }
+                        for (int y = 0; y < h; y += std::max(1, h / 32)) {
+                            for (int x = 0; x < w; x += std::max(1, w / 64)) {
+                                const float latitude = (.5f - (y + .5f) / h) * kPi;
+                                const float weight =
+                                    std::max(0.f, std::sin(latitude) + .25f) * std::cos(latitude);
+                                const auto* rgb = pixels.get() + (std::size_t(y) * w + x) * 3;
+                                ambientSum = ambientSum + Vec3{rgb[0], rgb[1], rgb[2]} * weight;
+                                ambientWeight += weight;
+                            }
+                        }
                         glTexImage2D(target, 0, GL_RGB16F, w, h, 0, GL_RGB, GL_FLOAT, pixels.get());
                     } else {
                         if (w != h || w > 2048 || (faceSize && w != faceSize)) {
@@ -251,6 +264,17 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
                         if (!pixels) {
                             throw std::runtime_error("Cannot decode skybox face");
                         }
+                        const float weight = face == 2 ? 1.f : face == 3 ? 0.f : .5f;
+                        for (int y = 0; y < h; y += std::max(1, h / 32)) {
+                            for (int x = 0; x < w; x += std::max(1, w / 32)) {
+                                const auto* rgb = pixels.get() + (std::size_t(y) * w + x) * 4;
+                                ambientSum = ambientSum + Vec3{std::pow(rgb[0] / 255.f, 2.2f),
+                                                               std::pow(rgb[1] / 255.f, 2.2f),
+                                                               std::pow(rgb[2] / 255.f, 2.2f)} *
+                                                              weight;
+                                ambientWeight += weight;
+                            }
+                        }
                         glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + unsigned(face),
                                      0,
                                      GL_RGBA8,
@@ -260,6 +284,14 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
                                      GL_RGBA,
                                      GL_UNSIGNED_BYTE,
                                      pixels.get());
+                    }
+                }
+                if (ambientWeight > 0) {
+                    ambient_ = ambientSum * (1 / ambientWeight);
+                    if (sky.type == 1) {
+                        ambient_ = {ambient_.x / (1 + ambient_.x),
+                                    ambient_.y / (1 + ambient_.y),
+                                    ambient_.z / (1 + ambient_.z)};
                     }
                 }
                 glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);

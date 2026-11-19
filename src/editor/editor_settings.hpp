@@ -15,7 +15,7 @@ struct EditorSettings {
     int theme = 0;
     float scrollZoomSpeed = 1.f;
     float raycastThickness = 2.f; // viewport pixels; editor gizmo only
-    int maxFps = 120;             // zero disables foreground cap; background still sleeps
+    int maxFps = 0;               // zero disables foreground cap; background still sleeps
     int autosaveSeconds = 120;    // zero disables autosave
     GridSettings grid;
     std::string error;

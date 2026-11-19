@@ -32,6 +32,7 @@
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/ShapeCast.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/RegisterTypes.h>
 
@@ -893,6 +894,7 @@ void Physics::update(World& world, float seconds, const std::function<void(float
         world.each<Vehicle>([&](Entity entity, Vehicle& v) {
             v.speed = 0;
             v.groundedWheels = 0;
+            v.wheelSteerAngle = std::clamp(v.steering, -1.f, 1.f) * radians(v.maxSteerAngle);
             v.compression.fill(0);
             auto found = impl.bodies.find(keyOf(entity));
             if (!v.enabled || !Vehicles::valid(v) || !isActive(world, entity) ||
@@ -940,6 +942,7 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                 bool hold = false, rear = false;
             };
             std::vector<TireContact> tires;
+            tires.reserve(4);
             auto inverseMassAt = [&](JPH::BodyID id, float inverseMass, Vec3 point, Vec3 axis) {
                 const auto arm = jvec(point) - JPH::Vec3(api.GetCenterOfMassPosition(id));
                 const auto torque = arm.Cross(jvec(axis));
@@ -982,7 +985,22 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                                                   v.suspensionDamping * dot(relative, up),
                                               0.f,
                                               mass * 9.81f * 2.5f);
-                const float angle = front ? steer * radians(v.maxSteerAngle) : 0;
+                // Limit commanded cornering acceleration before high-speed
+                // steering can lever a high-grip chassis over its outside tires.
+                const float comHeight =
+                    std::max(.25f, rest + radius - v.mountHeight * verticalScale);
+                const float safeAcceleration = std::min(
+                    8.f,
+                    9.81f * v.trackWidth * std::abs(transform->scale.x) / (2 * comHeight) * .65f);
+                const float speedSquared = v.speed * v.speed;
+                const float stableAngle =
+                    std::atan(safeAcceleration * v.wheelBase * std::abs(transform->scale.z) /
+                              std::max(1.f, speedSquared));
+                const float maxAngle = radians(v.maxSteerAngle);
+                const float assistedAngle =
+                    maxAngle + (std::min(maxAngle, stableAngle) - maxAngle) * v.stabilityAssist;
+                v.wheelSteerAngle = steer * assistedAngle;
+                const float angle = front ? v.wheelSteerAngle : 0;
                 auto direction = rotateVector(rotation, {std::sin(angle), 0, -std::cos(angle)});
                 direction = normalize(direction - hit.normal * dot(direction, hit.normal));
                 if (dot(direction, direction) < .1f) {
@@ -1226,4 +1244,51 @@ bool Physics::checkBox(Vec3 center, Vec3 size) const {
                                                      JPH::RVec3::sZero(),
                                                      collector);
     return collector.HadHit();
+}
+
+bool Physics::sphereCast(const Ray& ray,
+                         float distance,
+                         float radius,
+                         RayHit& hit,
+                         const std::function<bool(Entity)>& filter) const {
+    if (!isUsable(ray.origin) || !isUsable(ray.direction) || !std::isfinite(radius) ||
+        radius <= 0 || !std::isfinite(distance) || distance <= 0) {
+        return false;
+    }
+    const auto direction = normalize(ray.direction);
+    if (direction == Vec3{}) {
+        return false;
+    }
+    JPH::SphereShape shape(radius);
+    JPH::RShapeCast cast(&shape,
+                         JPH::Vec3::sReplicate(1),
+                         JPH::RMat44::sTranslation(jvec(ray.origin)),
+                         jvec(direction * distance));
+    JPH::ShapeCastSettings settings;
+    settings.mReturnDeepestPoint = true;
+    settings.SetBackFaceMode(JPH::EBackFaceMode::CollideWithBackFaces);
+    JPH::AllHitCollisionCollector<JPH::CastShapeCollector> collector;
+    impl_->system.GetNarrowPhaseQuery().CastShape(cast, settings, JPH::RVec3::sZero(), collector);
+    bool found = false;
+    float closest = distance;
+    for (const auto& result : collector.mHits) {
+        JPH::BodyLockRead lock(impl_->system.GetBodyLockInterface(), result.mBodyID2);
+        if (!lock.Succeeded()) {
+            continue;
+        }
+        const auto entity = Impl::Contacts::entity(lock.GetBody().GetUserData());
+        if (filter && !filter(entity)) {
+            continue;
+        }
+        float d = std::max(0.f, result.mFraction) * distance;
+        if (d <= closest) {
+            closest = d;
+            hit.entity = entity;
+            hit.distance = d;
+            hit.point = ray.origin + direction * d;
+            hit.normal = normalize(vec(-result.mPenetrationAxis));
+            found = true;
+        }
+    }
+    return found;
 }

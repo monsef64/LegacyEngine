@@ -3,11 +3,32 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <imgui.h>
 #include <limits>
 #include <type_traits>
 namespace EditorValues {
+inline const unsigned char* defaultObject = nullptr;
+inline const unsigned char* editedObject = nullptr;
+inline std::size_t defaultObjectSize = 0;
+inline void setDefaultObject(const void* edited, const void* defaults, std::size_t size) {
+    editedObject = static_cast<const unsigned char*>(edited);
+    defaultObject = static_cast<const unsigned char*>(defaults);
+    defaultObjectSize = size;
+}
+template <class T> inline void bindDefaults(T& edited) {
+    static const T defaults{};
+    setDefaultObject(&edited, &defaults, sizeof(T));
+}
+template <class T> inline T defaultValue(const T* value, T fallback = {}) {
+    const auto address = reinterpret_cast<std::uintptr_t>(value),
+               base = reinterpret_cast<std::uintptr_t>(editedObject);
+    if (defaultObject && address >= base && address - base + sizeof(T) <= defaultObjectSize) {
+        std::memcpy(&fallback, defaultObject + address - base, sizeof(T));
+    }
+    return fallback;
+}
 template <class T>
 inline bool
 context(T* values, int count, T low = T{}, T high = T{}, const char* popupID = nullptr) {
@@ -25,6 +46,18 @@ context(T* values, int count, T low = T{}, T high = T{}, const char* popupID = n
             }
             auto text = j.dump();
             ImGui::SetClipboardText(text.c_str());
+        }
+        if (ImGui::MenuItem("Reset value")) {
+            for (int i = 0; i < count; ++i) {
+                T reset = defaultValue(&values[i]);
+                if constexpr (!std::is_same_v<T, bool>) {
+                    if (low < high) {
+                        reset = std::clamp(reset, low, high);
+                    }
+                }
+                changed |= values[i] != reset;
+                values[i] = reset;
+            }
         }
         std::array<T, 4> candidate{};
         bool valid = false;
@@ -80,6 +113,10 @@ inline bool textContext(char* value, std::size_t capacity) {
         if (ImGui::MenuItem("Copy")) {
             auto text = Json(std::string(value)).dump();
             ImGui::SetClipboardText(text.c_str());
+        }
+        if (ImGui::MenuItem("Reset value")) {
+            changed = value[0] != '\0';
+            value[0] = '\0';
         }
         std::string candidate;
         bool valid = false;

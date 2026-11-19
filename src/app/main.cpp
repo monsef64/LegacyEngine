@@ -1,6 +1,7 @@
-#include "engine_version.hpp"
 #include "editor/recent_projects.hpp"
+#include "editor/scene_picking.hpp"
 #include "effects/laser_update.hpp"
+#include "engine_version.hpp"
 #include <cctype>
 // LegacyEngine - Scene editing and runtime orchestration.
 //
@@ -39,6 +40,7 @@
 #include "editor/transform_editor.hpp"
 #include "gameplay/first_person.hpp"
 #include "gameplay/raycast.hpp"
+#include "gameplay/third_person.hpp"
 #include "levels/level_system.hpp"
 #include "models/collider_source.hpp"
 #include "particles/particle_update.hpp"
@@ -96,7 +98,7 @@ constexpr float kClickReach = 100.0f;
 // and above it: this many metres further away at each try, for this many
 // tries.
 constexpr float kRoomStep = 0.02f;
-constexpr int kRoomSteps = 250;
+constexpr int kRoomSteps = 50; // Stay within one metre of the nearby creation point.
 
 // ---------------------------------------------------------------------------
 // The cubes that clicks create
@@ -589,6 +591,19 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         camera.orbit(*orbitPivot, motion.first, motion.second);
                     }
                 }
+                if ((event.motion.state & SDL_BUTTON_MMASK) && sceneHovered &&
+                    !ImGui::GetIO().WantTextInput) {
+                    clicking = false;
+                    if (SDL_GetModState() & SDL_KMOD_SHIFT) {
+                        camera.pan(-event.motion.xrel * .08f);
+                        camera.zoom(-event.motion.yrel * .025f);
+                    } else {
+                        const float scale = std::max(camera.distance, .1f) * .002f;
+                        camera.target = camera.target +
+                                        camera.right() * (-event.motion.xrel * scale) +
+                                        camera.up() * (event.motion.yrel * scale);
+                    }
+                }
                 if (event.motion.state & SDL_BUTTON_RMASK) {
                     clicking = false;
                     if (cameraLooking && !cameraModifiersHeld(SDL_GetModState())) {
@@ -620,6 +635,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                             const bool found = physics.raycast(ray, kClickReach, hit);
                             selectedEntity = found ? hit.entity : Entity{};
                             float closest = found ? hit.distance : kClickReach;
+                            selectedEntity = ScenePicking::pick(
+                                world, browser.assets, ray, closest, selectedEntity);
+                            if (world.has<MeshRenderer>(selectedEntity) &&
+                                !(SDL_GetModState() & SDL_KMOD_CTRL)) {
+                                selectedEntity = ScenePicking::modelRoot(world, selectedEntity);
+                            }
                             world.each<Camera, Transform>([&](Entity e, Camera&, Transform& t) {
                                 const auto offset = ray.origin - t.position;
                                 const float radius = 1.1f * std::max({std::abs(t.scale.x),
@@ -956,8 +977,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                          ColliderShape::Cone,
                                          ColliderShape::Box,
                                          ColliderShape::Sphere};
-            Vec3 position = camera.target;
-            position.y = std::max(position.y, created == 1 ? 1.0f : created == 0 ? 0.0f : 0.5f);
+            Vec3 position = camera.position() + normalize(camera.target - camera.position()) * 3.f;
             if (created > 0 && created < 5) {
                 position = findRoom(physics, position, shapes[created]);
             }
@@ -1748,7 +1768,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 editor.finish(world);
                 const auto root = world.create();
                 world.add(root, ObjectName{std::filesystem::path(path).stem().string()});
-                world.add(root, Transform{camera.target});
+                world.add(root,
+                          Transform{camera.position() +
+                                    normalize(camera.target - camera.position()) * 3.f});
                 if (document.contains("animations") && !document.at("animations").empty()) {
                     const auto firstPart = document.at("parts").at(0).at("mesh").get<std::string>();
                     Animation animation;
@@ -1763,7 +1785,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 for (const auto& part : parts) {
                     const auto child = world.create();
                     world.add(child, ObjectName{part.name});
-                    world.add(child, Transform{camera.target});
+                    world.add(child,
+                              Transform{camera.position() +
+                                        normalize(camera.target - camera.position()) * 3.f});
                     setParent(world, child, root);
                     MeshRenderer mesh{cubeMesh};
                     mesh.model = part.mesh;
@@ -1781,7 +1805,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             try {
                 history.commit(world, selectedEntity);
                 const auto parent = prefabLevel ? Prefabs::root(world) : Entity{};
-                selectedEntity = Prefabs::spawn(browser.assets, path, world, projectMeshes, {}, {});
+                selectedEntity = Prefabs::spawn(
+                    browser.assets,
+                    path,
+                    world,
+                    projectMeshes,
+                    camera.position() + normalize(camera.target - camera.position()) * 3.f,
+                    {});
                 if (parent != Entity{}) {
                     setParent(world, selectedEntity, parent);
                 }
@@ -2300,6 +2330,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         profiler.checkpoint(ProfilePart::Hierarchy);
         if (playMode.playing()) {
             updateFPSCameras(world, std::min(seconds, .25f), input);
+            updateTPSCameras(world, physics, std::min(seconds, .25f), input);
         }
         BoneAttachments::update(world, browser.assets);
         updateHierarchy(world);

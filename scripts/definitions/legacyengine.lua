@@ -7,16 +7,16 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|nil
----@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|nil
----@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|nil
----@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|nil
----@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment
+---@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onAnimationFinish fun()|nil
 ---@field onAnimationStart fun()|nil
@@ -94,7 +94,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -932,3 +932,32 @@ BoneAttachment = nil
 ---@field waveHeight number Geometric displacement 0..3 metres
 ---@field waveLength number 0.1..100 metres
 ---@field waveSpeed number 0..10 multiplier
+
+
+---@class TPSCamera
+---@field enabled boolean
+---@field target GameObject|nil Target root; nil follows the Transform parent
+---@field offset Vec3 World-space look-at offset; assign a complete vector
+---@field mouseLook boolean Right mouse or locked cursor orbits during Play
+---@field collision boolean Sphere-sweep obstruction avoidance (requires colliders)
+---@field distance number Desired distance, within minDistance..maxDistance
+---@field minDistance number At least 0.05 metres
+---@field maxDistance number At most 1000 metres
+---@field yaw number Orbit yaw in degrees
+---@field pitch number Orbit pitch in degrees, within minPitch..maxPitch
+---@field minPitch number At least -89 degrees
+---@field maxPitch number At most 89 degrees
+---@field sensitivity number 0..10 degrees per mouse pixel
+---@field zoomSpeed number 0..20 metres per wheel unit
+---@field smoothing number 0..100 response, zero snaps
+---@field shoulder number -10..10 metres, local screen-right
+---@field collisionRadius number 0.02..5 metres; near-plane coverage can enlarge this
+---@field resolvedDistance number Read-only obstruction-adjusted distance
+TPSCamera = nil
+
+---@class Skybox
+---@field affectEnvironment boolean Optional sky-colored ambient light; default false
+---@field environmentIntensity number 0..5, default 1
+
+---@class Vehicle
+---@field stabilityAssist number 0..1 speed-dependent safe steering, default 1

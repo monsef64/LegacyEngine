@@ -184,6 +184,11 @@ inline std::string sceneSignature(World& world) {
             scalar(c.canJump);
             scalar(c.canSprint);
         });
+        component(e, TPSCamera{}, [&](const TPSCamera& c) {
+            result += TPSCameras::settings(c).dump();
+            scalar(c.target.index);
+            scalar(c.target.generation);
+        });
         component(e, FPSCamera{}, [&](const FPSCamera& f) {
             scalar(f.isFreecam);
             scalar(f.mouseLook);
@@ -196,6 +201,8 @@ inline std::string sceneSignature(World& world) {
             scalar(sky.type);
             vec(sky.color);
             scalar(sky.enabled);
+            scalar(sky.affectEnvironment);
+            scalar(sky.environmentIntensity);
             for (const auto* p :
                  {&sky.right, &sky.left, &sky.top, &sky.bottom, &sky.front, &sky.back, &sky.hdr}) {
                 scalar(p->size());

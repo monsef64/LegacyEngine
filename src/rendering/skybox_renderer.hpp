@@ -6,9 +6,13 @@ class SkyboxRenderer {
     std::string signature_;
     std::chrono::steady_clock::time_point checked_{};
     bool loaded_ = false;
+    Vec3 ambient_{1, 1, 1};
 
   public:
     std::string error;
+    Vec3 ambient() const {
+        return ambient_;
+    }
     unsigned texture() const {
         return loaded_ ? texture_ : 0;
     }

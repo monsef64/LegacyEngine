@@ -8,7 +8,7 @@
 // IDs: -1 none; 0 empty; 1..4 solids; 5 camera; 6 audio; 7..9 lights; 10 plane; 11 skybox; 12
 // character; 13 FPS camera; 14 raycast; 15 particles; 16 laser; 17 shafts; 18 terrain;
 // 19 clouds; 20 fog; 21 river; 22 vehicle.
-inline constexpr int editorObjectTypeCount = 24;
+inline constexpr int editorObjectTypeCount = 25;
 inline bool validEditorObjectType(int item) {
     return item >= 0 && item < editorObjectTypeCount;
 }
@@ -26,6 +26,9 @@ inline int drawCreateItems() {
         }
         if (ImGui::MenuItem("FPS")) {
             item = 13;
+        }
+        if (ImGui::MenuItem("TPS")) {
+            item = 24;
         }
         ImGui::EndMenu();
     }
@@ -156,7 +159,8 @@ inline Entity createEditorObject(World& world,
                                "Fog",
                                "River",
                                "Vehicle",
-                               "Water"};
+                               "Water",
+                               "TPS Camera"};
     static_assert(sizeof(names) / sizeof(names[0]) == editorObjectTypeCount);
     if (!validEditorObjectType(item)) {
         return {};
@@ -173,6 +177,9 @@ inline Entity createEditorObject(World& world,
                                     item > 0 && item < 5 ? meshes[item] : MeshHandle{},
                                     item > 0 && item < 5 ? shapes[item] : ColliderShape::Box,
                                     item == 0 || item >= 5);
+    if (item == 24) {
+        world.add(entity, TPSCamera{});
+    }
     if (item == 23) {
         world.add(entity, Water{});
         world.add(entity, MeshRenderer{plane, {1, 1, 1}});
@@ -225,7 +232,7 @@ inline Entity createEditorObject(World& world,
     if (item == 13) {
         addFPSCamera(world, entity);
     }
-    if (item == 5 || item == 13) {
+    if (item == 5 || item == 13 || item == 24) {
         Camera camera;
         bool found = false;
         world.each<Camera>([&](Entity, const Camera& c) { found |= c.active; });

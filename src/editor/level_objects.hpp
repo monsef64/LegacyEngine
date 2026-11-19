@@ -109,6 +109,7 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(Camera{});
     component(CharacterController{});
     component(FPSCamera{});
+    component(TPSCamera{});
     component(Raycast{});
     component(Animation{});
     component(ParticleSystem{});
@@ -180,6 +181,11 @@ copyLevelHierarchy(World& sourceWorld, Entity source, World& world, bool preserv
         const auto parent = getParent(sourceWorld, originals[i]);
         if (i || preserveParent) {
             setParent(world, copies[i], remap(parent));
+        }
+        if (auto* c = world.tryGet<TPSCamera>(copies[i])) {
+            c->target = remap(c->target);
+            c->initialized = false;
+            c->resolvedDistance = 0;
         }
         if (auto* b = world.tryGet<BoneAttachment>(copies[i])) {
             b->source = remap(b->source);

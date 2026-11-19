@@ -407,3 +407,12 @@ Component** menu are alphabetical, including their submenus. Categories and
 component names are retained. Hierarchy objects keep their existing entity order;
 the earlier **A-Z Order** Hierarchy toggle has been removed. For Vehicle objects,
 the context menu still offers **Create wheel meshes**; see [vehicles](vehicles.md).
+
+
+### TPS, environment lighting and Scene interaction follow-up
+
+See [TPS camera and environment lighting](third-person-and-environment.md) for
+third-person camera setup/Lua, optional sky-colored ambient light, steering
+stability, terrain surface edges, expanded Scene picking, middle-drag navigation,
+near-camera creation, field Reset value controls and uncapped defaults.
+Existing saved FPS caps/VSync preferences remain respected.

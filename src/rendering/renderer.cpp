@@ -580,6 +580,19 @@ void Renderer::draw(World& world,
             }
         }
     }
+    auto ambientFor = [&](const Skybox* sky, const SkyboxRenderer& renderer) {
+        return sky && sky->affectEnvironment
+                   ? renderer.ambient() * sky->color * (.35f * sky->environmentIntensity)
+                   : Vec3{.12f, .12f, .12f};
+    };
+    Vec3 skyAmbient = ambientFor(activeSky, skyboxRenderer_);
+    if (skyFade) {
+        skyAmbient = ambientFor(&skyFade->from, skyboxRenderer_) * (1 - skyFade->weight()) +
+                     ambientFor(&skyFade->to, skyboxFadeRenderer_) * skyFade->weight();
+    }
+    glUseProgram(litProgram_);
+    glUniform3f(
+        glGetUniformLocation(litProgram_, "uSkyAmbient"), skyAmbient.x, skyAmbient.y, skyAmbient.z);
     terrainRenderer_.draw(
         world, materialAssets_, viewProjection, cameraPosition, litProgram_, lights_);
     ProfileScope surfaces(ProfilePart::Surfaces);
@@ -591,6 +604,7 @@ void Renderer::draw(World& world,
     glUniform1i(environmentType_, environmentTexture ? environment->type : -1);
     const Vec3 environmentColor = environment ? environment->color : Vec3{1, 1, 1};
     glUniform3f(environmentColor_, environmentColor.x, environmentColor.y, environmentColor.z);
+
     glActiveTexture(GL_TEXTURE7);
     glBindTexture(GL_TEXTURE_CUBE_MAP,
                   environment && environment->type == 0 ? environmentTexture : 0);
@@ -742,7 +756,7 @@ void Renderer::draw(World& world,
         });
     // Explicit insertion order preserves equal-depth behavior without stable_sort's temporary
     // buffer.
-    foliage_.draw(world, materialAssets_, viewProjection, cameraPosition);
+    foliage_.draw(world, materialAssets_, viewProjection, cameraPosition, skyAmbient);
     std::sort(transparent.begin(), transparent.end(), [](const auto& a, const auto& b) {
         return a.distance == b.distance ? a.order < b.order : a.distance > b.distance;
     });

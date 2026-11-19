@@ -27,9 +27,9 @@
 #include <cstring>
 
 inline void drawWaterSettings(River& r) {
-    ImGui::Combo("Water shader",
-                 &r.shaderStyle,
-                 "Classic\0Clear\0Ocean\0Lake\0Rapids\0Tropical\0Marsh\0Industrial canal\0");
+    EditorValues::Combo("Water shader",
+                        &r.shaderStyle,
+                        "Classic\0Clear\0Ocean\0Lake\0Rapids\0Tropical\0Marsh\0Industrial canal\0");
     EditorValues::SliderFloat("Wave height", &r.waveHeight, 0, 3);
     EditorValues::DragFloat(
         "Wave length", &r.waveLength, .1f, .1f, 100, "%.2f", ImGuiSliderFlags_AlwaysClamp);
@@ -39,9 +39,16 @@ inline bool editVector(const char* label,
                        Vec3& value,
                        float speed = 0.05f,
                        float minimum = -1000000,
-                       float maximum = 1000000) {
+                       float maximum = 1000000,
+                       Vec3 fallbackReset = {}) {
+    const auto reset = EditorValues::defaultValue(&value, fallbackReset);
+    const auto* oldEdited = EditorValues::editedObject;
+    const auto* oldDefault = EditorValues::defaultObject;
+    const auto oldSize = EditorValues::defaultObjectSize;
     ImGui::PushID(label);
     float v[]{value.x, value.y, value.z};
+    const float resetValues[]{reset.x, reset.y, reset.z};
+    EditorValues::setDefaultObject(v, resetValues, sizeof(v));
     bool changed = false;
     const char* axes[]{"X", "Y", "Z"};
     const bool narrow = ImGui::GetContentRegionAvail().x < 340;
@@ -91,6 +98,7 @@ inline bool editVector(const char* label,
         ImGui::EndTable();
     }
     ImGui::PopID();
+    EditorValues::setDefaultObject(oldEdited, oldDefault, oldSize);
     if (!changed) {
         return false;
     }
@@ -112,6 +120,7 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
         ImGui::EndCombo();
     }
     Json edited = Particles::settings(p);
+    const Json particleDefaults = Particles::settings(ParticleSystem{});
     bool changed = false;
     auto fields = [&](const char* group, std::initializer_list<const char*> names) {
         if (!ImGui::TreeNodeEx(group, ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -133,12 +142,18 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
             auto& value = edited[name];
             if (value.is_boolean()) {
                 bool b = value.get<bool>();
+                const bool reset = particleDefaults.at(name).get<bool>();
+                EditorValues::setDefaultObject(&b, &reset, sizeof(b));
                 if (EditorValues::Checkbox(caption, &b)) {
                     value = b;
                     changed = true;
                 }
             } else if (value.is_array()) {
                 Vec3 v{value[0].get<float>(), value[1].get<float>(), value[2].get<float>()};
+                const auto& defaults = particleDefaults.at(name);
+                Vec3 reset{
+                    defaults[0].get<float>(), defaults[1].get<float>(), defaults[2].get<float>()};
+                EditorValues::setDefaultObject(&v, &reset, sizeof(v));
                 const bool color = std::strstr(name, "Color") || !std::strcmp(name, "color");
                 if (color ? EditorValues::ColorEdit3(caption, &v.x) : editVector(caption, v)) {
                     value = Json::array({v.x, v.y, v.z});
@@ -146,6 +161,8 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
                 }
             } else if (value.is_number_integer()) {
                 int v = value.get<int>();
+                const int reset = particleDefaults.at(name).get<int>();
+                EditorValues::setDefaultObject(&v, &reset, sizeof(v));
                 bool edit = false;
                 if (!std::strcmp(name, "shape")) {
                     edit = EditorValues::Combo(caption, &v, "Point\0Box\0Sphere\0Cone\0");
@@ -162,6 +179,8 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
                 }
             } else if (value.is_number()) {
                 float f = value.get<float>();
+                const float reset = particleDefaults.at(name).get<float>();
+                EditorValues::setDefaultObject(&f, &reset, sizeof(f));
                 if (EditorValues::DragFloat(caption, &f, .02f)) {
                     value = f;
                     changed = true;
@@ -250,6 +269,10 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
 template <class T>
 inline bool
 componentHeader(World& world, Entity entity, const char* name, const T& defaults = T{}) {
+    static T resetDefaults{};
+    resetDefaults = defaults;
+    EditorValues::setDefaultObject(&world.get<T>(entity), &resetDefaults, sizeof(T));
+
     ImGui::Spacing();
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 6));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4);
@@ -257,6 +280,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
     const char* display = !std::strcmp(name, "BoneAttachment")  ? "Bone Attachment"
                           : !std::strcmp(name, "CloudSystem")   ? "Clouds"
                           : !std::strcmp(name, "CameraEffects") ? "Camera Effects"
+                          : !std::strcmp(name, "TPSCamera")     ? "TPS"
                           : !std::strcmp(name, "FPSCamera")     ? "FPS"
                                                                 : name;
     const std::string title = std::string(display) + "###" + name;
@@ -297,13 +321,13 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                       !world.has<River>(entity) && !world.has<Fog>(entity) &&
                       !world.has<CameraEffects>(entity) && !world.has<Terrain>(entity) &&
                       !world.has<LightShafts>(entity) && !world.has<CharacterController>(entity) &&
-                      !world.has<FPSCamera>(entity);
+                      !world.has<FPSCamera>(entity) && !world.has<TPSCamera>(entity);
         }
         if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
             allowed = !world.has<CharacterController>(entity) && !world.has<Vehicle>(entity);
         }
         if constexpr (std::is_same_v<T, Camera>) {
-            allowed = !world.has<FPSCamera>(entity);
+            allowed = !world.has<FPSCamera>(entity) && !world.has<TPSCamera>(entity);
         }
         remove = ImGui::MenuItem("Remove component", nullptr, false, allowed);
         if (!allowed) {
@@ -374,6 +398,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Water>) {
             type = 26;
         }
+        if constexpr (std::is_same_v<T, TPSCamera>) {
+            type = 28;
+        }
         if constexpr (std::is_same_v<T, BoneAttachment>) {
             type = 27;
         }
@@ -417,8 +444,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "Terrain",       "CameraEffects",
                                 "Fog",           "CloudSystem",
                                 "River",         "Vehicle",
-                                "Water",         "BoneAttachment"};
-            for (int i = 0; i < 28; ++i) {
+                                "Water",         "BoneAttachment",
+                                "TPSCamera"};
+            for (int i = 0; i < 29; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -480,7 +508,8 @@ inline void drawScriptExports(World& world,
                                  "Terrain",       "CameraEffects",
                                  "Fog",           "CloudSystem",
                                  "River",         "Vehicle",
-                                 "Water",         "BoneAttachment"};
+                                 "Water",         "BoneAttachment",
+                                 "TPSCamera"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -539,7 +568,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 28 &&
+                        if (target.type >= 0 && target.type < 29 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -757,9 +786,9 @@ inline void drawInspector(World& world,
                 world.has<InspectorOrder>(selected)
                     ? world.get<InspectorOrder>(selected).types
                     : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14,
-                                       15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27};
+                                       15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28};
             for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14,
-                           15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27}) {
+                           15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -788,6 +817,8 @@ inline void drawInspector(World& world,
                     const auto* c = world.tryGet<Collider>(selected);
                     if (c && c->shape != ColliderShape::Box) {
                         float size = edited.scale.x;
+                        const float defaultScale = 1;
+                        EditorValues::setDefaultObject(&size, &defaultScale, sizeof(size));
                         if (EditorValues::DragFloat("Uniform scale",
                                                     &size,
                                                     0.02f,
@@ -800,7 +831,8 @@ inline void drawInspector(World& world,
                             transformChanged = true;
                         }
                     } else {
-                        transformChanged |= editVector("Scale", edited.scale, 0.02f, 0.05f, 100);
+                        transformChanged |=
+                            editVector("Scale", edited.scale, 0.02f, 0.05f, 100, {1, 1, 1});
                     }
                     if (transformChanged) {
                         setLocalTransform(world, selected, edited);
@@ -1169,6 +1201,7 @@ inline void drawInspector(World& world,
                     componentID == 6 && camera &&
                     componentHeader<Camera>(world, selected, "Camera")) {
                     Camera edited = *camera;
+                    EditorValues::bindDefaults(edited);
                     bool active = camera->active;
                     if (EditorValues::Checkbox("Active camera", &active)) {
                         if (active) {
@@ -1191,6 +1224,8 @@ inline void drawInspector(World& world,
                                      edited.viewportY,
                                      edited.viewportWidth,
                                      edited.viewportHeight};
+                    const float defaultViewport[]{0, 0, 1, 1};
+                    EditorValues::setDefaultObject(viewport, defaultViewport, sizeof(viewport));
                     if (EditorValues::DragFloat4("Viewport", viewport, .005f, 0, 1)) {
                         edited.viewportX = viewport[0];
                         edited.viewportY = viewport[1];
@@ -1210,6 +1245,7 @@ inline void drawInspector(World& world,
                     if (auto* component = world.tryGet<CloudSystem>(selected);
                         component && componentHeader<CloudSystem>(world, selected, "CloudSystem")) {
                         auto edited = *component;
+                        EditorValues::bindDefaults(edited);
                         auto* c = &edited;
                         EditorValues::Checkbox("Enabled", &c->enabled);
                         EditorValues::Checkbox("Volumetric", &c->volumetric);
@@ -1232,6 +1268,7 @@ inline void drawInspector(World& world,
                     if (auto* v = world.tryGet<Vehicle>(selected);
                         v && componentHeader<Vehicle>(world, selected, "Vehicle")) {
                         auto edited = *v;
+                        EditorValues::bindDefaults(edited);
                         EditorValues::Checkbox("Enabled", &edited.enabled);
 #define VEHICLE_UI(name, value, lo, hi)                                                            \
     EditorValues::DragFloat(                                                                       \
@@ -1329,6 +1366,7 @@ inline void drawInspector(World& world,
                     if (auto* component = world.tryGet<River>(selected);
                         component && componentHeader<River>(world, selected, "River")) {
                         auto edited = *component;
+                        EditorValues::bindDefaults(edited);
                         auto* r = &edited;
                         EditorValues::Checkbox("Enabled", &r->enabled);
                         EditorValues::Checkbox("Edit curve in Scene", &r->editCurve);
@@ -1374,6 +1412,7 @@ inline void drawInspector(World& world,
                     if (auto* f = world.tryGet<Fog>(selected);
                         f && componentHeader<Fog>(world, selected, "Fog")) {
                         auto edited = *f;
+                        EditorValues::bindDefaults(edited);
                         EditorValues::Checkbox("Enabled", &edited.enabled);
                         EditorValues::ColorEdit3("Color", &edited.color.x);
                         EditorValues::DragFloat("Density", &edited.density, .001f, 0, 10);
@@ -1443,6 +1482,7 @@ inline void drawInspector(World& world,
                     if (auto* shaft = world.tryGet<LightShafts>(selected);
                         shaft && componentHeader<LightShafts>(world, selected, "LightShafts")) {
                         auto edited = *shaft;
+                        EditorValues::bindDefaults(edited);
                         EditorValues::Checkbox("Enabled", &edited.enabled);
                         editVector("Local direction", edited.direction);
                         EditorValues::ColorEdit3("Shaft color", &edited.color.x);
@@ -1489,6 +1529,7 @@ inline void drawInspector(World& world,
                     if (auto* laser = world.tryGet<Laser>(selected);
                         laser && componentHeader<Laser>(world, selected, "Laser")) {
                         LaserSettings edited = *laser;
+                        EditorValues::bindDefaults(edited);
                         EditorValues::Checkbox("Enabled", &edited.enabled);
                         EditorValues::ColorEdit3("Beam color", &edited.color.x);
                         EditorValues::DragFloat("Beam intensity", &edited.intensity, .05f, 0, 100);
@@ -1516,6 +1557,7 @@ inline void drawInspector(World& world,
                         return;
                     }
                     T edited = *light;
+                    EditorValues::bindDefaults(edited);
                     ImGui::PushID(title);
                     if (EditorValues::Combo("Mode", &edited.mode, "Dynamic\0Static\0")) {
                         detachLightBake(world, *light);
@@ -1580,12 +1622,65 @@ inline void drawInspector(World& world,
                     }
                     ImGui::PopID();
                 };
+                if (auto* c = world.tryGet<TPSCamera>(selected);
+                    componentID == 28 && c &&
+                    componentHeader<TPSCamera>(world, selected, "TPSCamera")) {
+                    EditorValues::Checkbox("Enabled", &c->enabled);
+                    const auto* name = world.tryGet<ObjectName>(c->target);
+                    if (ImGui::BeginCombo("Follow target",
+                                          name ? name->value.c_str()
+                                               : "Parent (or select target)")) {
+                        if (ImGui::Selectable("Parent", c->target == Entity{})) {
+                            c->target = {};
+                            c->initialized = false;
+                        }
+                        for (auto e : world.entities()) {
+                            if (e != selected && world.has<Transform>(e)) {
+                                const auto* n = world.tryGet<ObjectName>(e);
+                                ImGui::PushID(int(e.index));
+                                if (ImGui::Selectable(n ? n->value.c_str() : "Object",
+                                                      c->target == e)) {
+                                    c->target = e;
+                                    c->initialized = false;
+                                }
+                                ImGui::PopID();
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                    editVector("Target offset", c->offset);
+                    EditorValues::Checkbox("Mouse orbit", &c->mouseLook);
+                    EditorValues::Checkbox("Collision avoidance", &c->collision);
+                    EditorValues::DragFloat(
+                        "Min distance", &c->minDistance, .05f, .05f, c->maxDistance);
+                    EditorValues::DragFloat(
+                        "Max distance", &c->maxDistance, .1f, c->minDistance, 1000);
+                    c->distance = std::clamp(c->distance, c->minDistance, c->maxDistance);
+                    EditorValues::SliderFloat(
+                        "Distance", &c->distance, c->minDistance, c->maxDistance);
+                    EditorValues::DragFloat("Yaw", &c->yaw, .5f, -100000, 100000);
+                    EditorValues::SliderFloat("Min pitch", &c->minPitch, -89, c->maxPitch);
+                    EditorValues::SliderFloat("Max pitch", &c->maxPitch, c->minPitch, 89);
+                    c->pitch = std::clamp(c->pitch, c->minPitch, c->maxPitch);
+                    EditorValues::SliderFloat("Pitch", &c->pitch, c->minPitch, c->maxPitch);
+                    EditorValues::SliderFloat("Sensitivity", &c->sensitivity, 0, 10);
+                    EditorValues::SliderFloat("Zoom speed", &c->zoomSpeed, 0, 20);
+                    EditorValues::SliderFloat("Smoothing", &c->smoothing, 0, 100);
+                    EditorValues::SliderFloat("Shoulder", &c->shoulder, -10, 10);
+                    EditorValues::SliderFloat("Collision radius", &c->collisionRadius, .02f, 5);
+                    ImGui::TextWrapped(
+                        "Play: hold right mouse (or lock cursor) to orbit, wheel to zoom. Requires a target or Transform parent. Use a separate camera object; sphere casts need colliders.");
+                }
                 if (auto* sky = world.tryGet<Skybox>(selected);
                     componentID == 12 && sky &&
                     componentHeader<Skybox>(world, selected, "Skybox")) {
                     EditorValues::Checkbox("Skybox enabled", &sky->enabled);
                     EditorValues::Combo("Skybox type", &sky->type, "Cubemap asset\0HDR panorama\0");
                     EditorValues::ColorEdit3("Skybox color", &sky->color.x);
+                    EditorValues::Checkbox("Affect environment", &sky->affectEnvironment);
+                    EditorValues::SliderFloat(
+                        "Environment intensity", &sky->environmentIntensity, 0, 5);
+                    ImGui::TextDisabled("Sky-colored ambient light; not shadowed GI.");
                     auto slot = [&](const char* label, std::string& path, bool hdr) {
                         ImGui::PushID(label);
                         assetPicker(label, path, assets, [&](const std::string& file) {
@@ -1900,8 +1995,21 @@ inline void drawInspector(World& world,
                         }
                         world.add(selected, Camera{});
                     }
-                    if (!world.has<FPSCamera>(selected) && ImGui::MenuItem("FPS")) {
+                    if (!world.has<FPSCamera>(selected) && !world.has<TPSCamera>(selected) &&
+                        ImGui::MenuItem("FPS")) {
                         addFPSCamera(world, selected);
+                    }
+                    if (!world.has<TPSCamera>(selected) && !world.has<FPSCamera>(selected) &&
+                        ImGui::MenuItem("TPS")) {
+                        if (!world.has<Transform>(selected)) {
+                            world.add(selected, Transform{});
+                        }
+                        if (!world.has<Camera>(selected)) {
+                            world.add(selected, Camera{});
+                        }
+                        world.add(selected, TPSCamera{});
+                        world.get<Camera>(selected).tracking = false;
+                        world.get<Camera>(selected).following = false;
                     }
                     ImGui::EndMenu();
                 }
@@ -2057,5 +2165,6 @@ inline void drawInspector(World& world,
             ImGui::PopID();
         }
     }
+    EditorValues::setDefaultObject(nullptr, nullptr, 0);
     ImGui::End();
 }

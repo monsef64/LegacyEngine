@@ -1,11 +1,79 @@
 [
   {
+    "name": "TPSCamera",
+    "signature": "TPSCamera - Third person target/parent follow camera. Fields: enabled, target (GameObject or nil for parent), offset (complete world-space vector), mouseLook, collision, distance/minDistance/maxDistance, yaw/pitch/minPitch/maxPitch (degrees), sensitivity, zoomSpeed, smoothing, shoulder, collisionRadius. Read-only resolvedDistance. During Play, hold right mouse or lock cursor to orbit; wheel zooms. Requires Camera+Transform, colliders for obstruction avoidance; incompatible with FPSCamera. Use Camera APIs on getComponent(Camera)."
+  },
+  {
+    "name": "affectEnvironment",
+    "signature": "Skybox.affectEnvironment: boolean, opt-in sky-colored ambient illumination on lit meshes, terrain and foliage; not shadowed GI"
+  },
+  {
+    "name": "environmentIntensity",
+    "signature": "Skybox.environmentIntensity: 0..5, default 1; used when affectEnvironment is true"
+  },
+  {
+    "name": "stabilityAssist",
+    "signature": "Vehicle.stabilityAssist: 0..1, default 1; speed-dependent steering reduction to limit cornering rollover. Does not lock rotation or prevent impact rollovers."
+  },
+  {
+    "name": "Water",
+    "signature": "Water - shared River water settings on arbitrary static .mesh or built-in MeshRenderer geometry; mesh (optional asset), shaderStyle (0..7), waveHeight, waveLength, waveSpeed. Upward triangles define buoyancy and contact coverage; not a sealed fluid volume. Ignores own solid collider/rigid-body integration."
+  },
+  {
+    "name": "BoneAttachment",
+    "signature": "BoneAttachment - enabled, source (animated GameObject), node (skeleton index), offset (complete vector), rotation (Euler degrees complete vector). Drives Transform position/rotation from evaluated bone pose; errors are read-only. Avoid dynamic RigidBody and attachment dependency cycles."
+  },
+  {
+    "name": "shaderStyle",
+    "signature": "Water/River.shaderStyle: 0 Classic, 1 Clear, 2 Ocean, 3 Lake, 4 Rapids, 5 Tropical, 6 Marsh, 7 Industrial canal (screenshot-inspired approximation)"
+  },
+  {
+    "name": "waveHeight",
+    "signature": "Water/River.waveHeight: 0..3 metres, geometric waves; zero disables displacement"
+  },
+  {
+    "name": "waveLength",
+    "signature": "Water/River.waveLength: 0.1..100 metres"
+  },
+  {
+    "name": "waveSpeed",
+    "signature": "Water/River.waveSpeed: 0..10 multiplier; Flowing and flow speed also apply"
+  },
+  {
+    "name": "Vehicle",
+    "signature": "Vehicle - four-wheel raycast chassis, local -Z forward. enabled; throttle (-1..1), steering (-1..1), brake (0..1), handbrake (boolean). Read-only speed (signed m/s), groundedWheels, isGrounded, wheelCompression (copy, FL/FR/RL/RR). Settings: wheelBase, trackWidth, mountHeight, wheelRadius, suspensionLength, springStrength, suspensionDamping, engineForce, brakeForce, tireGrip, maxSteerAngle (degrees), maxSpeed (m/s). Requires dynamic primitive chassis; adding supplies missing dependencies only."
+  },
+  {
+    "name": "throttle",
+    "signature": "Vehicle.throttle: -1..1, negative reverse, commands persist until reassigned"
+  },
+  {
+    "name": "steering",
+    "signature": "Vehicle.steering: -1..1, positive steers right"
+  },
+  {
+    "name": "brake",
+    "signature": "Vehicle.brake: 0..1, four-wheel service brake"
+  },
+  {
+    "name": "handbrake",
+    "signature": "Vehicle.handbrake: boolean, rear-wheel braking with reduced lateral grip"
+  },
+  {
+    "name": "groundedWheels",
+    "signature": "Vehicle.groundedWheels: read-only count 0..4"
+  },
+  {
+    "name": "wheelCompression",
+    "signature": "Vehicle.wheelCompression: read-only copied array, front-left/front-right/rear-left/rear-right, 0..1"
+  },
+  {
     "name": "CloudSystem",
     "signature": "CloudSystem - enabled, volumetric (false=2D, true=volume), color, size, coverage, density, scale, speed, opacity, steps (4..24). Vector getters return copies; assign a complete vector table. Requires Transform."
   },
   {
     "name": "River",
-    "signature": "River - enabled, color, width, opacity, speed, waveScale, waveStrength, foam, subdivisions (2..32), points (2..64 local vectors). Getters return copies; assign the complete points list to update the curve. Requires Transform; visual water, no fluid physics."
+    "signature": "River - enabled, color, width, opacity, speed, flowing, flowAmount (0..2), transparent, collisionEffects, collisionStrength (0..2), waveScale, waveStrength, foam, subdivisions (2..32), points (2..64 local vectors). Getters return copies; assign the complete points list to update the curve. Requires Transform; visual water, no fluid physics."
   },
   {
     "name": "Fog",
@@ -854,6 +922,10 @@
   {
     "name": "useGravity",
     "signature": "RigidBody.useGravity: boolean"
+  },
+  {
+    "name": "floatOnRivers",
+    "signature": "RigidBody.floatOnRivers: boolean, default false. Dynamic bodies with gravity and primitive non-trigger colliders receive river buoyancy, water drag and gentle bobbing."
   },
   {
     "name": "linearVelocity",

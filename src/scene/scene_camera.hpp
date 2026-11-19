@@ -137,7 +137,8 @@ inline void updateCameras(World& world, float dt) {
         if (!isActive(world, e)) {
             return;
         }
-        if (c.tracking) {
+        const auto* tps = world.tryGet<TPSCamera>(e);
+        if (c.tracking && !(tps && tps->enabled)) {
             Vec3 target = c.target;
             if (c.targetEntity != Entity{}) {
                 auto* targetTransform = world.tryGet<Transform>(c.targetEntity);

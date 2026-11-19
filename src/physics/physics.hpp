@@ -66,6 +66,11 @@ class Physics {
     // of the box and `size` the length of its edges, which lie along the X, Y
     // and Z axes.
     bool checkBox(Vec3 center, Vec3 size) const;
+    bool sphereCast(const Ray& ray,
+                    float distance,
+                    float radius,
+                    RayHit& hit,
+                    const std::function<bool(Entity)>& filter = {}) const;
 
   private:
     struct Impl; // keeps Jolt out of the rest of the engine

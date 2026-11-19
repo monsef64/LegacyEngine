@@ -16,7 +16,8 @@
     X(brakeForce, 12000.f, 0.f, 300000.f)                                                          \
     X(tireGrip, 1.5f, .05f, 5.f)                                                                   \
     X(maxSteerAngle, 30.f, 0.f, 70.f)                                                              \
-    X(maxSpeed, 45.f, 1.f, 150.f)
+    X(maxSpeed, 45.f, 1.f, 150.f)                                                                  \
+    X(stabilityAssist, 1.f, 0.f, 1.f)
 struct Vehicle {
     bool enabled = true;
 #define FIELD(name, value, lo, hi) float name = value;
@@ -25,6 +26,7 @@ struct Vehicle {
     float throttle = 0, steering = 0, brake = 0;
     bool handbrake = false;
     float speed = 0;
+    float wheelSteerAngle = 0; // Runtime assisted front-wheel angle in radians.
     float wheelRoll = 0; // Runtime visual rotation, never serialized.
     int groundedWheels = 0;
     std::array<float, 4> compression{}; // front-left, front-right, rear-left, rear-right
