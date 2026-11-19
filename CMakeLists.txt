@@ -36,6 +36,30 @@ if(LEGACY_SMALL_RELEASE AND NOT MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clan
   add_link_options("$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-Wl,--gc-sections>")
 endif()
 
+# A separate, opt-in distribution for legacy Windows hardware. It must be built
+# with MinGW-w64/MSVCRT; the usual UCRT64 package is not the Win7 distribution.
+option(LEGACY_WINDOWS7 "Target Windows 7 SP1 x64 (experimental; audit packaged imports)" OFF)
+option(LEGACY_LOW_END_DEFAULTS "Use lower-cost shadow defaults for new projects" ${LEGACY_WINDOWS7})
+if(LEGACY_WINDOWS7)
+  if(NOT WIN32 OR NOT MINGW OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "LEGACY_WINDOWS7 requires a 64-bit MinGW-w64 Windows toolchain")
+  endif()
+  add_compile_definitions(WINVER=0x0601 _WIN32_WINNT=0x0601 NTDDI_VERSION=0x06010100)
+  add_link_options(-Wl,--major-os-version,6,--minor-os-version,1,--major-subsystem-version,6,--minor-subsystem-version,1)
+  # This engine uses OpenGL directly, never SDL_Renderer or SDL_GPU. Avoid
+  # linking unused D3D12/Vulkan renderer backends into the legacy package.
+  set(SDL_RENDER OFF CACHE BOOL "" FORCE)
+  set(SDL_GPU OFF CACHE BOOL "" FORCE)
+  set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
+  set(LEGACY_VENDORED_SDL ON CACHE BOOL "" FORCE)
+  if(DEFINED ENV{MSYSTEM} AND NOT "$ENV{MSYSTEM}" STREQUAL "MINGW64")
+    message(FATAL_ERROR "Build LEGACY_WINDOWS7 in the MSYS2 MINGW64/MSVCRT shell, not UCRT64")
+  endif()
+endif()
+if(LEGACY_LOW_END_DEFAULTS)
+  add_compile_definitions(LEGACY_LOW_END_DEFAULTS=1)
+endif()
+
 include(FetchContent)
 
 # --- SDL3 (window, input, OpenGL context) -----------------------------------

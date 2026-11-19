@@ -110,16 +110,29 @@ struct InputState {
         return true;
     }
     bool lockSceneCursor() {
-        if (!lockCursor(true)) {
+        if (!window || !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             return false;
         }
-        // Editor navigation must use true relative input, not a hidden absolute
-        // pointer that can still hover/click docked panels between warp frames.
-        warpLock = false;
-        if (!SDL_SetWindowRelativeMouseMode(lockedWindow, true)) {
+        if (lockedWindow && lockedWindow != window) {
             releaseMouse();
-            return false;
         }
+        lockedWindow = window;
+        SDL_GetMouseState(&lockX, &lockY);
+        lastLockX = lockX;
+        lastLockY = lockY;
+        // Request raw relative input directly. Switching through absolute mode
+        // first can synthesize focus/button changes on Windows drivers.
+        warpLock = false;
+        if (!SDL_SetWindowRelativeMouseMode(window, true)) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
+                        "Scene relative mouse unavailable (%s); using confined warp fallback",
+                        SDL_GetError());
+            // Some remote desktop/older drivers cannot provide raw relative input.
+            SDL_SetWindowRelativeMouseMode(window, false);
+            warpLock = true;
+        }
+        SDL_SetWindowMouseGrab(window, true);
+        SDL_HideCursor();
         mouseLocked = false;
         sceneLocked = true;
         return true;

@@ -12,7 +12,23 @@ permissions:
 
 jobs:
   windows:
-    name: Windows x64 Release (MinGW-w64)
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64 Release (UCRT64)
+            msystem: UCRT64
+            prefix: mingw-w64-ucrt-x86_64
+            runtime: ucrt64
+            win7: 'OFF'
+            suffix: Windows-x64
+          - label: Windows 7 SP1 x64 compatibility (MSVCRT)
+            msystem: MINGW64
+            prefix: mingw-w64-x86_64
+            runtime: mingw64
+            win7: 'ON'
+            suffix: Windows7-x64-experimental
     runs-on: windows-latest
     timeout-minutes: 40
     defaults:
@@ -30,13 +46,14 @@ jobs:
       - name: Install MinGW-w64 toolchain
         uses: msys2/setup-msys2@v2
         with:
-          msystem: UCRT64
+          msystem: ${{ matrix.msystem }}
           update: true
           install: >-
             git
-            mingw-w64-ucrt-x86_64-gcc
-            mingw-w64-ucrt-x86_64-cmake
-            mingw-w64-ucrt-x86_64-ninja
+            python
+            ${{ matrix.prefix }}-gcc
+            ${{ matrix.prefix }}-cmake
+            ${{ matrix.prefix }}-ninja
       - name: Configure x64 Release
         run: >-
           cmake -S . -B build -G Ninja
@@ -46,6 +63,7 @@ jobs:
           -DCMAKE_CXX_COMPILER=g++
           -DLEGACY_VENDORED_SDL=ON
           -DBUILD_TESTING=OFF
+          -DLEGACY_WINDOWS7=${{ matrix.win7 }}
       - name: Build
         run: cmake --build build --target LegacyEngine --parallel 4
       - name: Package executable, runtime DLLs and data
@@ -60,12 +78,15 @@ jobs:
           # ldd lists transitive dependencies too. Bundle MinGW runtime DLLs,
           # but leave Windows system DLLs to the operating system.
           ldd build/LegacyEngine.exe > build/runtime-dependencies.txt
-          awk '/=> \/ucrt64\/bin\// {print $3}' build/runtime-dependencies.txt |
+          awk -v root="/${{ matrix.runtime }}/bin/" '$2 == "=>" && index($3, root) == 1 {print $3}' build/runtime-dependencies.txt |
             while IFS= read -r dll; do
               cp "$dll" package/LegacyEngine/
             done
+      - name: Audit Windows 7 package imports
+        if: matrix.win7 == 'ON'
+        run: python tools/audit_windows7_imports.py package/LegacyEngine
       - uses: actions/upload-artifact@v4
         with:
-          name: LegacyEngine-${{ steps.version.outputs.version }}-Windows-x64
+          name: LegacyEngine-${{ steps.version.outputs.version }}-${{ matrix.suffix }}
           path: package/LegacyEngine/
           if-no-files-found: error

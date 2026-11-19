@@ -142,3 +142,58 @@ if a Windows artifact is needed for a manually published release.
   version on a different commit must fail before building.
 
 Publishing is a real remote operation; it is not performed during local validation.
+
+## Experimental Windows 7 SP1 x64 package
+
+The Windows workflow builds **two separate artifacts**: the normal UCRT64 package
+and `Windows7-x64-experimental`, built in MSYS2 **MINGW64 (MSVCRT)**. Do not use the
+UCRT64 artifact as a Windows 7 package. Build on a modern Windows host; installing
+current MSYS2 on Windows 7 is not required or supported by these instructions.
+
+In a modern MSYS2 MINGW64 shell with Git, GCC, CMake, Ninja and Python installed:
+
+```sh
+cmake -S . -B build-win7 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+  -DLEGACY_WINDOWS7=ON -DBUILD_TESTING=OFF
+cmake --build build-win7 --target LegacyEngine --parallel 2
+```
+
+Package `LegacyEngine.exe`, `data/`, the license and its transitive MinGW runtime
+DLLs together (see the Windows workflow). Run
+`python tools/audit_windows7_imports.py package/LegacyEngine` from the toolchain
+shell after packaging. This gate checks PE subsystem versions, missing/unreviewed
+DLLs, UCRT dependencies and a conservative list of known newer static imports.
+It is **not** a complete API-availability check: dynamically loaded APIs, driver
+requirements and future toolchain changes still need review and runtime testing.
+Do not copy system DLLs from newer Windows installations to bypass errors.
+
+The compatibility build targets Windows 7 SP1 **64-bit**, retains OpenGL, and
+omits unused SDL Renderer/GPU/Vulkan backends. A vendor-provided **OpenGL 3.3**
+driver is mandatory; the stock Windows software driver is insufficient. This
+package remains experimental until verified on real Windows 7 SP1 hardware.
+Windows 7 itself is out of security support.
+
+### Lower-cost defaults
+
+`LEGACY_WINDOWS7=ON` defaults `LEGACY_LOW_END_DEFAULTS` to ON. New/missing shadow
+settings use one 512px map instead of 1024px cascaded maps, reducing shadow passes
+and map storage at a quality tradeoff. Existing project settings are preserved;
+change their Rendering shadow mode/resolution explicitly if needed. Normal builds
+retain their existing defaults. The low-end option can also be enabled separately
+on other platforms, or explicitly disabled for the compatibility build. No frame
+rate improvement has been benchmarked on Windows 7 hardware.
+
+### Manual Windows navigation and compatibility checklist
+
+- Start both packages on their intended OS with a vendor OpenGL driver; check
+  startup, project open/save, assets, sound and Play/Stop. On Windows 7, verify
+  there is no missing-DLL/entry-point error before calling the package usable.
+- Hover Scene, hold RMB, move the mouse, and use WASD/QE and Shift. Repeat after
+  editing an Inspector text field and while hovering (not dragging) a gizmo.
+- Release RMB, press Escape, or Alt-Tab: cursor/grab must be restored. Return and
+  repeat. Check MMB pan, Alt+MMB orbit, wheel zoom and Game input separately.
+- Try remote desktop/relative-input failure if available: navigation should use
+  the confined-warp fallback and log a warning rather than silently refuse RMB.
+- Compare a fresh project against an existing project: low-end defaults should
+  affect only missing settings, and saved rendering settings must survive reload.
