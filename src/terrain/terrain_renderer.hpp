@@ -277,7 +277,7 @@ void main(){
                         auto& c = it->second;
                         if (c.identity != d.identity || c.revision != d.heightChunks[index]) {
                             releaseDepth(c);
-                            const auto vertices = chunk(d, x, z, 1, false);
+                            const auto vertices = chunk(d, x, z, 1);
                             std::vector<Vec3> positions;
                             positions.reserve(vertices.size());
                             for (const auto& vertex : vertices) {
@@ -450,13 +450,6 @@ void main(){
                 for (int x = 0; x < count; ++x) {
                     const int index = z * count + x;
                     const auto& bounds = chunkBounds(d, x, z);
-                    const auto& p = bounds.center;
-                    const Vec3 center{
-                        model.m[0] * p.x + model.m[4] * p.y + model.m[8] * p.z + model.m[12],
-                        model.m[1] * p.x + model.m[5] * p.y + model.m[9] * p.z + model.m[13],
-                        model.m[2] * p.x + model.m[6] * p.y + model.m[10] * p.z + model.m[14]};
-                    const float scale =
-                        std::max({std::abs(t.scale.x), std::abs(t.scale.y), std::abs(t.scale.z)});
                     if (!frustum.visibleBox(bounds.center, bounds.extent, model)) {
                         continue;
                     }
@@ -489,13 +482,9 @@ void main(){
                         c.revision = d.chunks[index];
                     }
                     c.used = frame_;
-                    const Vec3 delta = eye - center;
-                    const float distance = dot(delta, delta);
-                    const float span = d.size / (d.resolution - 1) * 32 * scale;
-                    const int lod = distance < span * span * 4    ? 0
-                                    : distance < span * span * 16 ? 1
-                                    : distance < span * span * 64 ? 2
-                                                                  : 3;
+                    // Uniform surface detail avoids cracks without introducing
+                    // downward skirt walls between different chunk LODs.
+                    const int lod = 0;
                     auto& b = c.lod[lod];
                     if (!b.vao) {
                         auto vertices = chunk(d, x, z, 1 << lod);

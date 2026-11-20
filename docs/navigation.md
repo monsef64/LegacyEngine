@@ -6,10 +6,12 @@ Terrain remains a sculptable heightfield surface, not a solid volume or a set of
 separate GameObjects. Its render subdivision is now **16 × 16 heightfield cells**
 per piece instead of 32 × 32. Both color and shadow passes cull individual pieces
 against their own view's planes **before** generating/uploading GPU geometry.
-Transformed box bounds cover heights and internal LOD skirts, including rotated,
-non-uniformly scaled and mirrored terrains. The four existing distance LOD levels
-remain, and only edited pieces (including shared-edge neighbours) are invalidated.
-Outer terrain boundaries do not get thickness/walls; sculpted hills remain.
+Transformed box bounds cover the heightfield surface, including rotated,
+non-uniformly scaled and mirrored terrains. Chunks use matching full surface detail
+so their boundaries meet without downward LOD skirts. No inner or outer chunk
+boundary gets thickness/walls; sculpted hills remain. Only edited pieces
+(including shared-edge neighbours) are invalidated. Full-detail rendering can submit
+more triangles than the previous automatic distance LODs, while chunk frustum culling remains.
 
 Color and depth caches are bounded to 1,024 pieces each. Smaller pieces reduce
 geometry submitted outside a camera/light view but can increase draw calls and
@@ -149,30 +151,21 @@ obstacle.enabled = true
 
 Add **NavMeshObstacle** before baking so its mesh is excluded from static geometry. Its local box is transformed into a conservative world-axis-aligned box; this can overestimate rotated shapes. Agents route around box corners on existing walkable polygons and stop if no safe route exists. This is not navmesh carving, crowd simulation or physics collision avoidance. Obstacle changes trigger repaths at most five times per second; immediate movement checks prevent crossing a newly blocked segment. Bounded detour searches support up to 32 obstacles; more complex blocked paths fail safely. Spawn agents outside obstacle boxes. Agents must not carry their own obstacle component.
 
-## AnimatorSheet state machines
+## Manual regression checks for editor fixes
 
-1. In Assets, right-click a folder's contents and choose **Create > AnimatorSheet (.animatorsheet)**.
-2. Select the sheet. Its Inspector edits parameters, named states and ordered transitions. Assign `.leanim` clips to states and set the entry state. Click **Save sheet** (validation reports missing references).
-3. Add **Animator** to an object and assign the sheet. The existing **Animation** component provides playback/cross-fades; it is added automatically. Use compatible clips targeting the same model/hierarchy. Do not also issue independent Animation commands.
-4. Define float/bool/trigger parameters. Transition conditions are ANDed. Comparisons support `==`, `!=`, `>`, `<`, or `trigger`. `*` as From matches any state. The first matching transition wins, at most once per frame; self-transitions are ignored. Exit time is a normalized elapsed-state threshold (0..1), or -1 to disable. Looping states use elapsed time since entry, not a repeated per-loop exit window.
-5. Set blend seconds for a smooth existing-player cross-fade. No additive blending, blend trees, graph canvas or nested sub-state machines are provided.
-
-```lua
-local animator = self:getComponent(Animator)
-animator:setFloat("Speed", 3)
-animator:setBool("Running", true)
-animator:setTrigger("Jump")
--- Or request a state explicitly:
-animator:crossFade("Run", 0.25)
--- animator:play("Idle") -- immediate transition
-```
-
-Use colon calls for Animator methods. Parameters must exist with the declared type; successful trigger transitions consume their triggers. `currentState` and `error` are read-only. Component values and runtime parameters revert on Stop; the sheet is never changed by playback. Sheet edits are separate asset saves, disabled during Play. Sheet changes are picked up during playback with parameters reset, not written back into the file.
-
-### Additional manual checks
-
-- Send an agent along a path with corners: verify it automatically faces its movement direction, turns smoothly at corners, and stops turning when stationary. Tune angular speed.
-- Place a box obstacle on a wide baked plane: agents should detour; close a narrow corridor: agents should stop. Move/disable the obstacle and confirm repathing.
-- Save/reopen and duplicate objects carrying both new components; verify their settings and component order survive and undo works.
-- Create Idle/Run states and a Speed parameter; transition in both directions and check the configured cross-fade. Test triggers, bools, Any State and exit gates.
-- Check invalid sheet/state/parameter errors, then correct the asset and reload. Stop must restore the pre-Play object state.
+- In focused Play, lock the mouse through scripting or TPS `lockMouse`; move
+  horizontally/vertically and verify FPS/TPS mouselook continues beyond screen
+  edges. Unlock, switch focus, and Stop: capture must release. Also check an
+  external Game window. Scene right-drag navigation must continue to work.
+- Open Navigation and Occlusion Culling on a small display and after restoring
+  saved window layouts; resize them and verify all controls are reachable by scrolling.
+- Inspect flat and sculpted terrain from low angles and below, including internal
+  chunk boundaries. There should be no downward walls, cracks or flattened hills.
+- Bake static occluders, select a camera, and enable the selected-camera overlay;
+  check red/green bounds against the Camera preview, then move the camera and
+  invalidate the bake. Game visibility must not be changed by toggling the overlay.
+- Switch between Internal, VS Code and Sublime in Editor Settings, restart, and
+  verify the selection persists. Open a project/script containing spaces and
+  non-ASCII characters. In Sublime verify `.ls` highlighting, completions and hovers.
+- Open a previously saved scene containing the removed Animator component: other
+  components and the existing Animation player must still load normally.

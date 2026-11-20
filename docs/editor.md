@@ -424,3 +424,17 @@ See [Mesh LOD and baked occlusion](lod-and-occlusion.md) for the MeshRenderer
 
 [Terrain chunks and Navigation](navigation.md) documents smaller camera-culled
 terrain pieces, the Recast/Detour bake window and scriptable Navmesh Agents.
+
+### Sublime Text 4
+
+**Editor Settings > Code editor** now offers **Internal**, **VS Code**, and
+**Sublime Text 4**. The selection persists across launches. In external mode,
+double-click a LegacyScript asset to open it in the selected editor. Install the
+`code` or `subl` launcher in PATH; standard Windows application locations are
+also detected (and the standard macOS Sublime application is recognized).
+Install native Sublime syntax highlighting, API/member completions and hover help
+by copying `extensions/sublime-legacyscript` into Sublime's Packages directory as
+`LegacyScript`. See that folder's README for installation details and limitations.
+The existing Animation player and cross-fades remain; the recently introduced
+Animator/AnimatorSheet state-machine system and its asset creation/editor UI have
+been removed. Old serialized Animator components are ignored when loading a scene.

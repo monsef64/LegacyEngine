@@ -33,8 +33,7 @@ class NavigationWindow {
             return false;
         }
         for (unsigned depth = 0; world.alive(e); ++depth, e = getParent(world, e)) {
-            if (depth >= 128 || world.has<Animation>(e) || world.has<Animator>(e) ||
-                world.has<NavMeshObstacle>(e) ||
+            if (depth >= 128 || world.has<Animation>(e) || world.has<NavMeshObstacle>(e) ||
                 (world.has<RigidBody>(e) && world.get<RigidBody>(e).mass > 0) ||
                 world.has<CharacterController>(e) || world.has<NavMeshAgent>(e) ||
                 world.has<BoneAttachment>(e)) {
@@ -148,6 +147,11 @@ class NavigationWindow {
         if (!visible) {
             return;
         }
+        const auto available = ImGui::GetMainViewport()->WorkSize;
+        ImGui::SetNextWindowSize({std::min(500.f, available.x), std::min(640.f, available.y)},
+                                 ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSizeConstraints(
+            {std::min(320.f, available.x), std::min(260.f, available.y)}, available);
         if (!ImGui::Begin("Navigation", &visible)) {
             ImGui::End();
             return;

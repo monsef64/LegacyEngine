@@ -87,17 +87,22 @@ struct InputState {
         if (!window || !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
             return false;
         }
+        if (mouseLocked && lockedWindow == window) {
+            return true; // repeated script lock calls must not reset capture
+        }
         if (lockedWindow && lockedWindow != window) {
             releaseMouse();
         }
         lockedWindow = window;
-        const char* driver = SDL_GetCurrentVideoDriver();
-        warpLock = !(driver && std::string(driver) == "wayland");
-        SDL_SetHint("SDL_MOUSE_EMULATE_WARP_WITH_RELATIVE", "0");
-        SDL_SetHint("SDL_MOUSE_RELATIVE_WARP_MOTION", "0");
-        if (!SDL_SetWindowRelativeMouseMode(window, !warpLock)) {
-            lockedWindow = nullptr;
-            return false;
+        // Prefer raw relative deltas on every platform. Re-warping once per
+        // frame can discard queued motion when the frame rate is low.
+        warpLock = false;
+        if (!SDL_SetWindowRelativeMouseMode(window, true)) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
+                        "Relative mouse unavailable: %s; using warp fallback",
+                        SDL_GetError());
+            SDL_SetWindowRelativeMouseMode(window, false);
+            warpLock = true;
         }
         SDL_SetWindowMouseGrab(window, true);
         SDL_HideCursor();

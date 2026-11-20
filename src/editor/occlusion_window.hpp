@@ -31,7 +31,9 @@ class OcclusionWindow {
     }
 
   public:
-    bool visible = false;
+    bool visible = false, visualizeSelectedCamera = false;
+    std::size_t previewCulled = 0, previewTested = 0;
+    bool previewValid = false;
     void draw(World& world,
               Renderer& renderer,
               const AssetManager& assets,
@@ -76,6 +78,11 @@ class OcclusionWindow {
         if (!visible) {
             return;
         }
+        const auto available = ImGui::GetMainViewport()->WorkSize;
+        ImGui::SetNextWindowSize({std::min(500.f, available.x), std::min(640.f, available.y)},
+                                 ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSizeConstraints(
+            {std::min(320.f, available.x), std::min(260.f, available.y)}, available);
         if (!ImGui::Begin("Occlusion Culling", &visible)) {
             ImGui::End();
             return;
@@ -83,6 +90,16 @@ class OcclusionWindow {
         ImGui::TextWrapped(
             "Bake static opaque mesh triangles. Only objects marked Static are tested. Dynamic objects, water, animated hierarchies, transparent materials and material overrides are excluded conservatively.");
         ImGui::Checkbox("Enable baked occlusion", &bake.enabled);
+        ImGui::Checkbox("Visualize selected camera", &visualizeSelectedCamera);
+        if (visualizeSelectedCamera) {
+            ImGui::TextWrapped(
+                "Select a Camera in the hierarchy. Scene overlay: red bounds = occluded, green = retained in the camera frustum; cyan triangles = usable baked occluders. The Camera preview uses normal baked culling.");
+            ImGui::Text("Selected camera: %zu culled / %zu tested", previewCulled, previewTested);
+            if (!previewValid) {
+                ImGui::TextWrapped(
+                    "Select a perspective camera and enable a valid bake to visualize culling.");
+            }
+        }
         ImGui::Text("Baked triangles: %zu / 2048", bake.triangles.size());
         ImGui::Text("Last view: %zu culled / %zu tested", bake.culled, bake.tested);
         if (bake.enabled && !bake.valid) {

@@ -887,6 +887,78 @@ void Renderer::drawCollider(const Transform& transform,
              {0, 1, 0},
              opacity);
 }
+bool Renderer::drawOcclusionCamera(
+    World& world, Entity entity, const Mat4& sceneVP, std::size_t& culled, std::size_t& tested) {
+    culled = tested = 0;
+    const auto* camera = world.tryGet<Camera>(entity);
+    const auto* pose = world.tryGet<Transform>(entity);
+    if (!camera || !pose || !validCamera(*camera)) {
+        return false;
+    }
+    drawCamera(*pose, *camera, sceneVP);
+    const auto vp = cameraMatrix(*pose, *camera);
+    // A separate bake view avoids corrupting game/scene culling counters and pointers.
+    Occlusion::Bake preview;
+    preview.enabled = occlusion.enabled;
+    preview.signature = occlusion.signature;
+    preview.triangles = occlusion.triangles;
+    preview.begin(world, modelAssetRevision, vp, [&](const MeshRenderer& r) {
+        return opaqueOcclusionMaterial(r);
+    });
+    if (!preview.valid) {
+        return false;
+    }
+    MeshData occluders;
+    occluders.topology = MeshData::Topology::Lines;
+    for (const auto* triangle : preview.viewTriangles) {
+        for (auto pair : {std::pair<Vec3, Vec3>{triangle->a, triangle->b},
+                          {triangle->b, triangle->c},
+                          {triangle->c, triangle->a}}) {
+            occluders.vertices.push_back({pair.first, {}});
+            occluders.vertices.push_back({pair.second, {}});
+        }
+    }
+    drawWire(occluders, Transform{}, sceneVP, {.1f, .8f, 1.f}, .35f);
+    const ViewFrustum frustum(vp);
+    world.eachReadOnly<Transform, MeshRenderer>([&](Entity e,
+                                                    const Transform& t,
+                                                    const MeshRenderer& r) {
+        if (!Occlusion::eligible(world, e, t, r) || !opaqueOcclusionMaterial(r)) {
+            return;
+        }
+        Vec3 low, high;
+        if (!meshBounds(r.mesh, low, high)) {
+            return;
+        }
+        if (!frustum.visibleBox((low + high) * .5f,
+                                (high - low) * .5f,
+                                transformMatrix(t.position, t.rotation, t.scale))) {
+            return;
+        }
+        const bool hidden = preview.hidden(e, t, low, high, cameraEye(*pose, *camera));
+        MeshData box;
+        box.topology = MeshData::Topology::Lines;
+        for (int i = 0; i < 8; ++i) {
+            for (int axis : {1, 2, 4}) {
+                if (!(i & axis)) {
+                    auto corner = [&](int k) {
+                        return Occlusion::point(t,
+                                                {k & 1 ? high.x : low.x,
+                                                 k & 2 ? high.y : low.y,
+                                                 k & 4 ? high.z : low.z});
+                    };
+                    box.vertices.push_back({corner(i), {}});
+                    box.vertices.push_back({corner(i | axis), {}});
+                }
+            }
+        }
+        drawWire(
+            box, Transform{}, sceneVP, hidden ? Vec3{1, .2f, .15f} : Vec3{.2f, 1, .35f}, .85f, 2);
+    });
+    culled = preview.culled;
+    tested = preview.tested;
+    return true;
+}
 void Renderer::drawCamera(const Transform& transform,
                           const Camera& camera,
                           const Mat4& viewProjection) {

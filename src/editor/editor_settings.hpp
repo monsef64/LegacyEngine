@@ -13,6 +13,7 @@
 struct EditorSettings {
     bool external = false, visible = false, alwaysShowColliders = false;
     int theme = 0;
+    int externalEditor = 0; // 0: VS Code, 1: Sublime Text 4
     float scrollZoomSpeed = 1.f;
     float raycastThickness = 2.f; // viewport pixels; editor gizmo only
     int maxFps = 0;               // zero disables foreground cap; background still sleeps
@@ -76,6 +77,10 @@ struct EditorSettings {
             if (in >> zoom && std::isfinite(zoom)) {
                 scrollZoomSpeed = std::clamp(zoom, .1f, 5.f);
             }
+            int editor;
+            if (in >> editor) {
+                externalEditor = std::clamp(editor, 0, 1);
+            }
         }
         if (ImGui::GetCurrentContext()) {
             applyEditorPalette(theme);
@@ -85,10 +90,10 @@ struct EditorSettings {
         std::ostringstream out;
         out.precision(9);
         out << scrollZoomSpeed << ':' << raycastThickness << ':' << maxFps << ':' << autosaveSeconds
-            << ':' << external << theme << alwaysShowColliders << grid.visible << ':' << grid.cells
-            << ':' << grid.plane << ':' << grid.spacing << ':' << grid.position.x << ':'
-            << grid.position.y << ':' << grid.position.z << ':' << grid.color.x << ':'
-            << grid.color.y << ':' << grid.color.z;
+            << ':' << externalEditor << ':' << external << theme << alwaysShowColliders
+            << grid.visible << ':' << grid.cells << ':' << grid.plane << ':' << grid.spacing << ':'
+            << grid.position.x << ':' << grid.position.y << ':' << grid.position.z << ':'
+            << grid.color.x << ':' << grid.color.y << ':' << grid.color.z;
         return out.str();
     }
     void save() {
@@ -100,8 +105,53 @@ struct EditorSettings {
                 << ' ' << grid.position.x << ' ' << grid.position.y << ' ' << grid.position.z << ' '
                 << grid.color.x << ' ' << grid.color.y << ' ' << grid.color.z << '\n'
                 << autosaveSeconds << '\n'
-                << raycastThickness << ' ' << maxFps << ' ' << scrollZoomSpeed;
+                << raycastThickness << ' ' << maxFps << ' ' << scrollZoomSpeed << ' '
+                << externalEditor;
         }
+    }
+    bool openSublime(const std::filesystem::path& folder,
+                     const std::filesystem::path& script = {}) {
+        std::string executable = "subl";
+#ifdef _WIN32
+        for (const char* variable : {"ProgramFiles", "LOCALAPPDATA"}) {
+            if (const char* base = SDL_getenv(variable)) {
+                for (const char* suffix : {"Sublime Text/sublime_text.exe",
+                                           "Programs/Sublime Text/sublime_text.exe",
+                                           "Sublime Text 4/sublime_text.exe"}) {
+                    const auto candidate = std::filesystem::path(base) / suffix;
+                    if (std::filesystem::is_regular_file(candidate)) {
+                        executable = candidate.string();
+                        break;
+                    }
+                }
+                if (executable != "subl") {
+                    break;
+                }
+            }
+        }
+#elif defined(__APPLE__)
+        const std::filesystem::path bundled =
+            "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl";
+        if (std::filesystem::is_regular_file(bundled)) {
+            executable = bundled.string();
+        }
+#endif
+        const auto project = std::filesystem::absolute(folder).string();
+        const auto file =
+            script.empty() ? std::string{} : std::filesystem::absolute(script).string();
+        const char* args[]{executable.c_str(),
+                           "--add",
+                           project.c_str(),
+                           file.empty() ? nullptr : file.c_str(),
+                           nullptr};
+        if (auto* process = SDL_CreateProcess(args, false)) {
+            SDL_DestroyProcess(process);
+            error.clear();
+            return true;
+        }
+        error = "Cannot launch Sublime Text 4. Install the 'subl' command in PATH. " +
+                std::string(SDL_GetError());
+        return false;
     }
     bool openExternal(const std::filesystem::path& folder, bool isFile = false) {
         std::error_code ec;
@@ -109,6 +159,10 @@ struct EditorSettings {
         if (ec) {
             error = ec.message();
             return false;
+        }
+        if (externalEditor == 1) {
+            return openSublime(isFile ? folder.parent_path() : folder,
+                               isFile ? folder : std::filesystem::path{});
         }
         // URI launch avoids shell interpolation and works with the VS Code URL handler.
         auto raw = std::filesystem::absolute(folder).generic_string();
@@ -130,6 +184,9 @@ struct EditorSettings {
         return true;
     }
     bool openScript(const std::filesystem::path& project, const std::filesystem::path& script) {
+        if (externalEditor == 1) {
+            return openSublime(project, script);
+        }
         const auto folder = std::filesystem::absolute(project).string();
         const auto file = std::filesystem::absolute(script).string();
         // Pass arguments directly: no shell quoting/interpolation, one VS Code
@@ -213,18 +270,22 @@ struct EditorSettings {
                 save();
             }
             ImGui::SeparatorText("Editor");
-            int choice = external ? 1 : 0;
+            int choice = external ? externalEditor + 1 : 0;
             ImGui::SetNextItemWidth(-120);
-            if (EditorValues::Combo("Code editor", &choice, "Internal\0External (VS Code)\0")) {
-                external = choice == 1;
+            if (EditorValues::Combo(
+                    "Code editor", &choice, "Internal\0VS Code\0Sublime Text 4\0")) {
+                external = choice != 0;
+                if (external) {
+                    externalEditor = choice - 1;
+                }
                 save();
                 if (external) {
                     openExternal(folder);
                 }
             }
             ImGui::TextWrapped(
-                "External mode opens the selected script in VS Code when double-clicked. VS Code's code command must be in PATH (standard Windows installations are also detected).");
-            if (external && ImGui::Button("Open project in VS Code")) {
+                "External mode opens scripts in the selected editor. Install 'code' or 'subl' in PATH; standard Windows installations are also detected. Sublime language support is in extensions/sublime-legacyscript.");
+            if (external && ImGui::Button("Open project in external editor")) {
                 openExternal(folder);
             }
             if (!error.empty()) {

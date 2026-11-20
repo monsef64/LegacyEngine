@@ -1,0 +1,4625 @@
+{
+  "scope": "source.legacyscript - comment - string",
+  "completions": [
+    {
+      "trigger": "Vector3",
+      "contents": "Vector3",
+      "annotation": "LegacyEngine",
+      "details": "Vector3(x,y,z) - Construct a vector table accepted by position, rotation, destination and obstacle vector setters."
+    },
+    {
+      "trigger": "NavMeshObstacle",
+      "contents": "NavMeshObstacle",
+      "annotation": "LegacyEngine",
+      "details": "NavMeshObstacle - Dynamic conservative box avoidance for NavMeshAgent. Fields enabled, size and center (local-space Vector3, assign whole vectors). Excluded from navigation bake. No runtime carving; detours are bounded to 32 obstacles."
+    },
+    {
+      "trigger": "NavMeshAgent",
+      "contents": "NavMeshAgent",
+      "annotation": "LegacyEngine",
+      "details": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(). Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Agent origin is at feet. No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
+    },
+    {
+      "trigger": "TPSCamera",
+      "contents": "TPSCamera",
+      "annotation": "LegacyEngine",
+      "details": "TPSCamera - Third person target/parent follow camera. Fields: enabled, target (GameObject or nil for parent), offset (complete world-space vector), mouseLook, lockMouse (bool, default false; locks cursor only in focused Play), collision, distance/minDistance/maxDistance, yaw/pitch/minPitch/maxPitch (degrees), sensitivity, zoomSpeed, smoothing, shoulder, collisionRadius. Read-only resolvedDistance. During Play, hold right mouse or lock cursor to orbit; wheel zooms. Requires Camera+Transform, colliders for obstruction avoidance; incompatible with FPSCamera. Use Camera APIs on getComponent(Camera)."
+    },
+    {
+      "trigger": "affectEnvironment",
+      "contents": "affectEnvironment",
+      "annotation": "LegacyEngine",
+      "details": "Skybox.affectEnvironment: boolean, opt-in sky-colored ambient illumination on lit meshes, terrain and foliage; not shadowed GI"
+    },
+    {
+      "trigger": "environmentIntensity",
+      "contents": "environmentIntensity",
+      "annotation": "LegacyEngine",
+      "details": "Skybox.environmentIntensity: 0..5, default 1; used when affectEnvironment is true"
+    },
+    {
+      "trigger": "stabilityAssist",
+      "contents": "stabilityAssist",
+      "annotation": "LegacyEngine",
+      "details": "Vehicle.stabilityAssist: 0..1, default 1; speed-dependent steering reduction to limit cornering rollover. Does not lock rotation or prevent impact rollovers."
+    },
+    {
+      "trigger": "Water",
+      "contents": "Water",
+      "annotation": "LegacyEngine",
+      "details": "Water - shared River water settings on arbitrary static .mesh or built-in MeshRenderer geometry; mesh (optional asset), shaderStyle (0..7), waveHeight, waveLength, waveSpeed. Upward triangles define buoyancy and contact coverage; not a sealed fluid volume. Ignores own solid collider/rigid-body integration."
+    },
+    {
+      "trigger": "BoneAttachment",
+      "contents": "BoneAttachment",
+      "annotation": "LegacyEngine",
+      "details": "BoneAttachment - enabled, source (animated GameObject), node (skeleton index), offset (complete vector), rotation (Euler degrees complete vector). Drives Transform position/rotation from evaluated bone pose; errors are read-only. Avoid dynamic RigidBody and attachment dependency cycles."
+    },
+    {
+      "trigger": "shaderStyle",
+      "contents": "shaderStyle",
+      "annotation": "LegacyEngine",
+      "details": "Water/River.shaderStyle: 0 Classic, 1 Clear, 2 Ocean, 3 Lake, 4 Rapids, 5 Tropical, 6 Marsh, 7 Industrial canal (screenshot-inspired approximation)"
+    },
+    {
+      "trigger": "waveHeight",
+      "contents": "waveHeight",
+      "annotation": "LegacyEngine",
+      "details": "Water/River.waveHeight: 0..3 metres, geometric waves; zero disables displacement"
+    },
+    {
+      "trigger": "waveLength",
+      "contents": "waveLength",
+      "annotation": "LegacyEngine",
+      "details": "Water/River.waveLength: 0.1..100 metres"
+    },
+    {
+      "trigger": "waveSpeed",
+      "contents": "waveSpeed",
+      "annotation": "LegacyEngine",
+      "details": "Water/River.waveSpeed: 0..10 multiplier; Flowing and flow speed also apply"
+    },
+    {
+      "trigger": "Vehicle",
+      "contents": "Vehicle",
+      "annotation": "LegacyEngine",
+      "details": "Vehicle - four-wheel raycast chassis, local -Z forward. enabled; throttle (-1..1), steering (-1..1), brake (0..1), handbrake (boolean). Read-only speed (signed m/s), groundedWheels, isGrounded, wheelCompression (copy, FL/FR/RL/RR). Settings: wheelBase, trackWidth, mountHeight, wheelRadius, suspensionLength, springStrength, suspensionDamping, engineForce, brakeForce, tireGrip, maxSteerAngle (degrees), maxSpeed (m/s). Requires dynamic primitive chassis; adding supplies missing dependencies only."
+    },
+    {
+      "trigger": "throttle",
+      "contents": "throttle",
+      "annotation": "LegacyEngine",
+      "details": "Vehicle.throttle: -1..1, negative reverse, commands persist until reassigned"
+    },
+    {
+      "trigger": "steering",
+      "contents": "steering",
+      "annotation": "LegacyEngine",
+      "details": "Vehicle.steering: -1..1, positive steers right"
+    },
+    {
+      "trigger": "brake",
+      "contents": "brake",
+      "annotation": "LegacyEngine",
+      "details": "Vehicle.brake: 0..1, four-wheel service brake"
+    },
+    {
+      "trigger": "handbrake",
+      "contents": "handbrake",
+      "annotation": "LegacyEngine",
+      "details": "Vehicle.handbrake: boolean, rear-wheel braking with reduced lateral grip"
+    },
+    {
+      "trigger": "groundedWheels",
+      "contents": "groundedWheels",
+      "annotation": "LegacyEngine",
+      "details": "Vehicle.groundedWheels: read-only count 0..4"
+    },
+    {
+      "trigger": "wheelCompression",
+      "contents": "wheelCompression",
+      "annotation": "LegacyEngine",
+      "details": "Vehicle.wheelCompression: read-only copied array, front-left/front-right/rear-left/rear-right, 0..1"
+    },
+    {
+      "trigger": "CloudSystem",
+      "contents": "CloudSystem",
+      "annotation": "LegacyEngine",
+      "details": "CloudSystem - enabled, volumetric (false=2D, true=volume), color, size, coverage, density, scale, speed, opacity, steps (4..24). Vector getters return copies; assign a complete vector table. Requires Transform."
+    },
+    {
+      "trigger": "River",
+      "contents": "River",
+      "annotation": "LegacyEngine",
+      "details": "River - enabled, color, width, opacity, speed, flowing, flowAmount (0..2), transparent, collisionEffects, collisionStrength (0..2), waveScale, waveStrength, foam, subdivisions (2..32), points (2..64 local vectors). Getters return copies; assign the complete points list to update the curve. Requires Transform; visual water, no fluid physics."
+    },
+    {
+      "trigger": "Fog",
+      "contents": "Fog",
+      "annotation": "LegacyEngine",
+      "details": "Fog - enabled, color (complete RGB vector), density (0..10), start (>=0), end (>start, <=1000000). Global distance fog; first enabled active entity wins. Use bracket notation for the end field (a Lua keyword)."
+    },
+    {
+      "trigger": "fadeToColor",
+      "contents": "fadeToColor",
+      "annotation": "LegacyEngine",
+      "details": "fadeToColor(rgb) -> ColorFade for the current active camera; RGB 0..1, e.g. color.black. Call start(seconds=1) to fade to opaque, stop(seconds=1) to fade to transparent; 0..3600 playing seconds, 0 immediate. Controllers share camera state."
+    },
+    {
+      "trigger": "CameraEffects",
+      "contents": "CameraEffects",
+      "annotation": "LegacyEngine",
+      "details": "CameraEffects - optional OpenGL camera post effects; enabled, bloom, colorGrading, vignette, depthOfField, motionBlur, filmGrain, chromaticAberration, antiAliasing, ambientOcclusion, nightVision, nausea; bloomIntensity, bloomThreshold, exposure, contrast, saturation, temperature, vignetteIntensity, focusDistance, focusRange, dofStrength, motionStrength, grainIntensity, aberrationStrength, aoIntensity, aoRadius, nightVisionMode (0 green, 1 infrared-style), nightVisionIntensity (0..1), nauseaIntensity (0..1), nauseaSpeed (0..5). All effects default off; motion blur is camera-only; antiAliasing uses FXAA-style filtering."
+    },
+    {
+      "trigger": "LightShafts",
+      "contents": "LightShafts",
+      "annotation": "LegacyEngine",
+      "details": "LightShafts - fast visual shaft; enabled, direction, height, width, endWidth, color, intensity, density, falloff, streaks, fade, nearFade, useBakedTexture and texture"
+    },
+    {
+      "trigger": "Laser",
+      "contents": "Laser",
+      "annotation": "LegacyEngine",
+      "details": "Laser - local -Z collider-clipped beam; enabled, color, intensity, range, width, glowWidth, impactSize; hit, endPosition and hitNormal are read-only"
+    },
+    {
+      "trigger": "ParticleSystem",
+      "contents": "ParticleSystem",
+      "annotation": "LegacyEngine",
+      "details": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles/Blood/Explosion); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"
+    },
+    {
+      "trigger": "Animation",
+      "contents": "Animation",
+      "annotation": "LegacyEngine",
+      "details": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"
+    },
+    {
+      "trigger": "onAnimationFinish",
+      "contents": "onAnimationFinish",
+      "annotation": "LegacyEngine",
+      "details": "onAnimationFinish() - targeted animation lifecycle callback"
+    },
+    {
+      "trigger": "onAnimationStart",
+      "contents": "onAnimationStart",
+      "annotation": "LegacyEngine",
+      "details": "onAnimationStart() - targeted animation lifecycle callback"
+    },
+    {
+      "trigger": "onAnimationStopped",
+      "contents": "onAnimationStopped",
+      "annotation": "LegacyEngine",
+      "details": "onAnimationStopped() - targeted animation lifecycle callback"
+    },
+    {
+      "trigger": "onAnimationPause",
+      "contents": "onAnimationPause",
+      "annotation": "LegacyEngine",
+      "details": "onAnimationPause() - targeted animation lifecycle callback"
+    },
+    {
+      "trigger": "onAnimationResume",
+      "contents": "onAnimationResume",
+      "annotation": "LegacyEngine",
+      "details": "onAnimationResume() - targeted animation lifecycle callback"
+    },
+    {
+      "trigger": "getComponentInParent",
+      "contents": "getComponentInParent",
+      "annotation": "LegacyEngine",
+      "details": "getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent"
+    },
+    {
+      "trigger": "getComponentInChildren",
+      "contents": "getComponentInChildren",
+      "annotation": "LegacyEngine",
+      "details": "getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants"
+    },
+    {
+      "trigger": "findComponentInParent",
+      "contents": "findComponentInParent",
+      "annotation": "LegacyEngine",
+      "details": "findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent"
+    },
+    {
+      "trigger": "findComponentInChildren",
+      "contents": "findComponentInChildren",
+      "annotation": "LegacyEngine",
+      "details": "findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren"
+    },
+    {
+      "trigger": "meshDetail",
+      "contents": "meshDetail",
+      "annotation": "LegacyEngine",
+      "details": "Collider.meshDetail: integer 2..15 (default 8), 15 preserves source triangles; lower simplifies the static mesh"
+    },
+    {
+      "trigger": "onCollisionEnter",
+      "contents": "onCollisionEnter",
+      "annotation": "LegacyEngine",
+      "details": "onCollisionEnter(collider) - solid Rigidbody contact begins; collider exposes gameObject and transform"
+    },
+    {
+      "trigger": "onCollisionStay",
+      "contents": "onCollisionStay",
+      "annotation": "LegacyEngine",
+      "details": "onCollisionStay(collider) - solid contact persists during a physics step"
+    },
+    {
+      "trigger": "onCollisionExit",
+      "contents": "onCollisionExit",
+      "annotation": "LegacyEngine",
+      "details": "onCollisionExit(collider) - solid contact ends; other collider may be nil if removed"
+    },
+    {
+      "trigger": "Raycast",
+      "contents": "Raycast",
+      "annotation": "LegacyEngine",
+      "details": "Raycast - Line, adjustable LineOfSight fan, or Sphere overlap query component"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "LegacyEngine",
+      "details": "color.red, green, blue, white, black, yellow, cyan, magenta, gray, orange, purple, pink - RGB vectors"
+    },
+    {
+      "trigger": "cast",
+      "contents": "cast",
+      "annotation": "LegacyEngine",
+      "details": "query:cast() -> nearest hit or nil"
+    },
+    {
+      "trigger": "castAll",
+      "contents": "castAll",
+      "annotation": "LegacyEngine",
+      "details": "query:castAll() -> distance-sorted distinct hit objects"
+    },
+    {
+      "trigger": "setLayers",
+      "contents": "setLayers",
+      "annotation": "LegacyEngine",
+      "details": "query:setLayers({'Default','Enemies'}) - ignore other layers before finding hits"
+    },
+    {
+      "trigger": "addForce",
+      "contents": "addForce",
+      "annotation": "LegacyEngine",
+      "details": "body:addForce(x,y,z) - world force for next fixed step; also accepts a vector table"
+    },
+    {
+      "trigger": "addImpulse",
+      "contents": "addImpulse",
+      "annotation": "LegacyEngine",
+      "details": "body:addImpulse(x,y,z) - world impulse for next fixed step"
+    },
+    {
+      "trigger": "setVelocity",
+      "contents": "setVelocity",
+      "annotation": "LegacyEngine",
+      "details": "body:setVelocity(x,y,z) - metres per second"
+    },
+    {
+      "trigger": "getVelocity",
+      "contents": "getVelocity",
+      "annotation": "LegacyEngine",
+      "details": "body:getVelocity() -> world velocity vector"
+    },
+    {
+      "trigger": "addVelocity",
+      "contents": "addVelocity",
+      "annotation": "LegacyEngine",
+      "details": "body:addVelocity(x,y,z)"
+    },
+    {
+      "trigger": "movePosition",
+      "contents": "movePosition",
+      "annotation": "LegacyEngine",
+      "details": "body:movePosition(x,y,z) - world position, teleport rather than sweep"
+    },
+    {
+      "trigger": "moveRotation",
+      "contents": "moveRotation",
+      "annotation": "LegacyEngine",
+      "details": "body:moveRotation(x,y,z) - Euler degrees, or quaternion table"
+    },
+    {
+      "trigger": "onTriggerEnter",
+      "contents": "onTriggerEnter",
+      "annotation": "LegacyEngine",
+      "details": "onTriggerEnter(collider) - non-solid overlap begins"
+    },
+    {
+      "trigger": "onTriggerStay",
+      "contents": "onTriggerStay",
+      "annotation": "LegacyEngine",
+      "details": "onTriggerStay(collider) - non-solid overlap persists"
+    },
+    {
+      "trigger": "onTriggerExit",
+      "contents": "onTriggerExit",
+      "annotation": "LegacyEngine",
+      "details": "onTriggerExit(collider) - overlap ends; collider may be nil if destroyed"
+    },
+    {
+      "trigger": "CharacterController",
+      "contents": "CharacterController",
+      "annotation": "LegacyEngine",
+      "details": "CharacterController - upright capsule movement, grounded jumping and sprinting"
+    },
+    {
+      "trigger": "FPSCamera",
+      "contents": "FPSCamera",
+      "annotation": "LegacyEngine",
+      "details": "FPSCamera - Camera extension with native mouse look and optional freecam movement"
+    },
+    {
+      "trigger": "move",
+      "contents": "move",
+      "annotation": "LegacyEngine",
+      "details": "controller:move(x,z) - persistent local direction; forward is negative Z, no deltaTime multiplication"
+    },
+    {
+      "trigger": "jump",
+      "contents": "jump",
+      "annotation": "LegacyEngine",
+      "details": "controller:jump() - request a grounded jump if canJump"
+    },
+    {
+      "trigger": "sprint",
+      "contents": "sprint",
+      "annotation": "LegacyEngine",
+      "details": "controller:sprint(enabled=true) - request sprint if canSprint and moving"
+    },
+    {
+      "trigger": "linkToCharacter",
+      "contents": "linkToCharacter",
+      "annotation": "LegacyEngine",
+      "details": "fps:linkToCharacter(controller, x,y,z) - parent using local position offset"
+    },
+    {
+      "trigger": "setIsFreecam",
+      "contents": "setIsFreecam",
+      "annotation": "LegacyEngine",
+      "details": "fps:setIsFreecam(enabled) - allow unparented free movement"
+    },
+    {
+      "trigger": "getIsFreecam",
+      "contents": "getIsFreecam",
+      "annotation": "LegacyEngine",
+      "details": "fps:getIsFreecam() -> boolean"
+    },
+    {
+      "trigger": "getForward",
+      "contents": "getForward",
+      "annotation": "LegacyEngine",
+      "details": "object:getForward() -> world-space normalized local -Z direction"
+    },
+    {
+      "trigger": "getBackward",
+      "contents": "getBackward",
+      "annotation": "LegacyEngine",
+      "details": "object:getBackward() -> world-space normalized local +Z direction"
+    },
+    {
+      "trigger": "getRight",
+      "contents": "getRight",
+      "annotation": "LegacyEngine",
+      "details": "object:getRight() -> world-space normalized local +X direction"
+    },
+    {
+      "trigger": "getLeft",
+      "contents": "getLeft",
+      "annotation": "LegacyEngine",
+      "details": "object:getLeft() -> world-space normalized local -X direction"
+    },
+    {
+      "trigger": "getUp",
+      "contents": "getUp",
+      "annotation": "LegacyEngine",
+      "details": "object:getUp() -> world-space normalized local +Y direction"
+    },
+    {
+      "trigger": "getDown",
+      "contents": "getDown",
+      "annotation": "LegacyEngine",
+      "details": "object:getDown() -> world-space normalized local -Y direction"
+    },
+    {
+      "trigger": "spawn",
+      "contents": "spawn",
+      "annotation": "LegacyEngine",
+      "details": "spawn(prefabPathOrGameObject, position, rotation) -> new GameObject root"
+    },
+    {
+      "trigger": "destroy",
+      "contents": "destroy",
+      "annotation": "LegacyEngine",
+      "details": "destroy(gameObject, delay=0) - destroy subtree now or after playing seconds"
+    },
+    {
+      "trigger": "setCubemap",
+      "contents": "setCubemap",
+      "annotation": "LegacyEngine",
+      "details": "sky:setCubemap(projectRelativeCubemapPath) - select a .cubemap asset"
+    },
+    {
+      "trigger": "task",
+      "contents": "task",
+      "annotation": "LegacyEngine",
+      "details": "task(function() ... end) - run an independent cooperative block; waits pause only that task; call inside lifecycle/object callbacks or tasks"
+    },
+    {
+      "trigger": "waitForSeconds",
+      "contents": "waitForSeconds",
+      "annotation": "LegacyEngine",
+      "details": "waitForSeconds(seconds) - suspend this callback, not the engine"
+    },
+    {
+      "trigger": "wait",
+      "contents": "wait",
+      "annotation": "LegacyEngine",
+      "details": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event"
+    },
+    {
+      "trigger": "isActive",
+      "contents": "isActive",
+      "annotation": "LegacyEngine",
+      "details": "object:isActive() -> effective activity including parents"
+    },
+    {
+      "trigger": "on",
+      "contents": "on",
+      "annotation": "LegacyEngine",
+      "details": "on(eventName, callback) -> listener token; receives queued custom events"
+    },
+    {
+      "trigger": "off",
+      "contents": "off",
+      "annotation": "LegacyEngine",
+      "details": "off(token) -> boolean; remove this script's listener"
+    },
+    {
+      "trigger": "emit",
+      "contents": "emit",
+      "annotation": "LegacyEngine",
+      "details": "emit(eventName, ...) -> boolean; queue up to eight primitive arguments"
+    },
+    {
+      "trigger": "onLevelLoaded",
+      "contents": "onLevelLoaded",
+      "annotation": "LegacyEngine",
+      "details": "onLevelLoaded(name) - destination callback after its scripts start"
+    },
+    {
+      "trigger": "onLevelFailedToLoad",
+      "contents": "onLevelFailedToLoad",
+      "annotation": "LegacyEngine",
+      "details": "onLevelFailedToLoad(name, error) - current level stays active"
+    },
+    {
+      "trigger": "fadeSkybox",
+      "contents": "fadeSkybox",
+      "annotation": "LegacyEngine",
+      "details": "fadeSkybox(destination, speed) or fadeSkybox(source, destination, speed) - activate destination after smooth crossfade"
+    },
+    {
+      "trigger": "fadeTo",
+      "contents": "fadeTo",
+      "annotation": "LegacyEngine",
+      "details": "sky:fadeTo(destination, speed) - smooth skybox transition"
+    },
+    {
+      "trigger": "loadLevel",
+      "contents": "loadLevel",
+      "annotation": "LegacyEngine",
+      "details": "loadLevel(name=nil) -> accepted, error; switch at next frame boundary"
+    },
+    {
+      "trigger": "loadLevelAsync",
+      "contents": "loadLevelAsync",
+      "annotation": "LegacyEngine",
+      "details": "loadLevelAsync(name=nil) -> accepted, error; background file read"
+    },
+    {
+      "trigger": "unloadLevel",
+      "contents": "unloadLevel",
+      "annotation": "LegacyEngine",
+      "details": "unloadLevel(name=nil) -> accepted, error; unload current level"
+    },
+    {
+      "trigger": "restartLevel",
+      "contents": "restartLevel",
+      "annotation": "LegacyEngine",
+      "details": "restartLevel() -> accepted, error; reload current level from disk"
+    },
+    {
+      "trigger": "getCurrentLevel",
+      "contents": "getCurrentLevel",
+      "annotation": "LegacyEngine",
+      "details": "getCurrentLevel() -> string or nil"
+    },
+    {
+      "trigger": "setCurrentLevel",
+      "contents": "setCurrentLevel",
+      "annotation": "LegacyEngine",
+      "details": "setCurrentLevel(name) -> accepted, error; alias for loadLevel"
+    },
+    {
+      "trigger": "nextLevel",
+      "contents": "nextLevel",
+      "annotation": "LegacyEngine",
+      "details": "nextLevel() -> accepted, error; next registered level, no wrapping"
+    },
+    {
+      "trigger": "previousLevel",
+      "contents": "previousLevel",
+      "annotation": "LegacyEngine",
+      "details": "previousLevel() -> accepted, error; previous registered level, no wrapping"
+    },
+    {
+      "trigger": "createAudioSource",
+      "contents": "createAudioSource",
+      "annotation": "LegacyEngine",
+      "details": "createAudioSource(owner=self, clipPath=nil) -> AudioSource"
+    },
+    {
+      "trigger": "AudioClip",
+      "contents": "AudioClip",
+      "annotation": "LegacyEngine",
+      "details": "AudioClip(projectRelativeAudioPath) -> AudioClip path"
+    },
+    {
+      "trigger": "DirectionalLight",
+      "contents": "DirectionalLight",
+      "annotation": "LegacyEngine",
+      "details": "DirectionalLight - dynamic directional illumination and shadows"
+    },
+    {
+      "trigger": "PointLight",
+      "contents": "PointLight",
+      "annotation": "LegacyEngine",
+      "details": "PointLight - dynamic omnidirectional light with range and six shadow faces"
+    },
+    {
+      "trigger": "SpotLight",
+      "contents": "SpotLight",
+      "annotation": "LegacyEngine",
+      "details": "SpotLight - cone light with innerAngle/outerAngle in degrees; cookie is a project-relative projected RGB/alpha image, empty disables"
+    },
+    {
+      "trigger": "Texture",
+      "contents": "Texture",
+      "annotation": "LegacyEngine",
+      "details": "Texture - export-only image or HDR asset path; @export image Texture"
+    },
+    {
+      "trigger": "AudioListener",
+      "contents": "AudioListener",
+      "annotation": "LegacyEngine",
+      "details": "AudioListener - receives sound at its GameObject world position; pause() disables reception, start() enables it"
+    },
+    {
+      "trigger": "spatialBlend",
+      "contents": "spatialBlend",
+      "annotation": "LegacyEngine",
+      "details": "audio:spatialBlend(value) -> 0 (2D) to 1 (3D)"
+    },
+    {
+      "trigger": "setSpatialBlend",
+      "contents": "setSpatialBlend",
+      "annotation": "LegacyEngine",
+      "details": "audio:setSpatialBlend(value) -> alias for spatialBlend"
+    },
+    {
+      "trigger": "AudioSource",
+      "contents": "AudioSource",
+      "annotation": "LegacyEngine",
+      "details": "AudioSource - audio component type token"
+    },
+    {
+      "trigger": "play",
+      "contents": "play",
+      "annotation": "LegacyEngine",
+      "details": "audio:play() - restart assigned clip"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "LegacyEngine",
+      "details": "audio:stop() - stop and rewind"
+    },
+    {
+      "trigger": "pause",
+      "contents": "pause",
+      "annotation": "LegacyEngine",
+      "details": "audio:pause()"
+    },
+    {
+      "trigger": "resume",
+      "contents": "resume",
+      "annotation": "LegacyEngine",
+      "details": "audio:resume()"
+    },
+    {
+      "trigger": "setPitch",
+      "contents": "setPitch",
+      "annotation": "LegacyEngine",
+      "details": "audio:setPitch(pitch) -> clamped 0.1 to 4"
+    },
+    {
+      "trigger": "fadeIn",
+      "contents": "fadeIn",
+      "annotation": "LegacyEngine",
+      "details": "audio:fadeIn(seconds) - restart and fade from silence"
+    },
+    {
+      "trigger": "fadeOut",
+      "contents": "fadeOut",
+      "annotation": "LegacyEngine",
+      "details": "audio:fadeOut(seconds) - fade then stop"
+    },
+    {
+      "trigger": "setVolume",
+      "contents": "setVolume",
+      "annotation": "LegacyEngine",
+      "details": "audio:setVolume(volume) -> clamped 0 to 1"
+    },
+    {
+      "trigger": "mute",
+      "contents": "mute",
+      "annotation": "LegacyEngine",
+      "details": "audio:mute()"
+    },
+    {
+      "trigger": "unmute",
+      "contents": "unmute",
+      "annotation": "LegacyEngine",
+      "details": "audio:unmute()"
+    },
+    {
+      "trigger": "setLooping",
+      "contents": "setLooping",
+      "annotation": "LegacyEngine",
+      "details": "audio:setLooping(enabled) -> boolean"
+    },
+    {
+      "trigger": "setPan",
+      "contents": "setPan",
+      "annotation": "LegacyEngine",
+      "details": "audio:setPan(pan) -> clamped -1 left to 1 right"
+    },
+    {
+      "trigger": "setDistance",
+      "contents": "setDistance",
+      "annotation": "LegacyEngine",
+      "details": "audio:setDistance(distance) -> maximum audible distance (3D)"
+    },
+    {
+      "trigger": "isPlaying",
+      "contents": "isPlaying",
+      "annotation": "LegacyEngine",
+      "details": "audio:isPlaying() -> boolean"
+    },
+    {
+      "trigger": "playOneShot",
+      "contents": "playOneShot",
+      "annotation": "LegacyEngine",
+      "details": "audio:playOneShot(AudioClip) - overlapping nonlooping clip"
+    },
+    {
+      "trigger": "lockCursor",
+      "contents": "lockCursor",
+      "annotation": "LegacyEngine",
+      "details": "lockCursor() -> boolean; viewport-confined motion, cursor hidden"
+    },
+    {
+      "trigger": "unlockCursor",
+      "contents": "unlockCursor",
+      "annotation": "LegacyEngine",
+      "details": "unlockCursor() -> boolean"
+    },
+    {
+      "trigger": "hideCursor",
+      "contents": "hideCursor",
+      "annotation": "LegacyEngine",
+      "details": "hideCursor() -> boolean"
+    },
+    {
+      "trigger": "showCursor",
+      "contents": "showCursor",
+      "annotation": "LegacyEngine",
+      "details": "showCursor() -> boolean"
+    },
+    {
+      "trigger": "isCursorVisible",
+      "contents": "isCursorVisible",
+      "annotation": "LegacyEngine",
+      "details": "isCursorVisible() -> boolean"
+    },
+    {
+      "trigger": "isCursorLocked",
+      "contents": "isCursorLocked",
+      "annotation": "LegacyEngine",
+      "details": "isCursorLocked() -> boolean"
+    },
+    {
+      "trigger": "isKeyPressed",
+      "contents": "isKeyPressed",
+      "annotation": "LegacyEngine",
+      "details": "isKeyPressed(keyNameOrScancode) -> boolean"
+    },
+    {
+      "trigger": "isKeyDown",
+      "contents": "isKeyDown",
+      "annotation": "LegacyEngine",
+      "details": "isKeyDown(keyNameOrScancode) -> boolean"
+    },
+    {
+      "trigger": "isKeyReleased",
+      "contents": "isKeyReleased",
+      "annotation": "LegacyEngine",
+      "details": "isKeyReleased(keyNameOrScancode) -> boolean"
+    },
+    {
+      "trigger": "isMouseButtonPressed",
+      "contents": "isMouseButtonPressed",
+      "annotation": "LegacyEngine",
+      "details": "isMouseButtonPressed(buttonNameOrNumber) -> boolean"
+    },
+    {
+      "trigger": "isMouseButtonDown",
+      "contents": "isMouseButtonDown",
+      "annotation": "LegacyEngine",
+      "details": "isMouseButtonDown(buttonNameOrNumber) -> boolean"
+    },
+    {
+      "trigger": "isMouseButtonReleased",
+      "contents": "isMouseButtonReleased",
+      "annotation": "LegacyEngine",
+      "details": "isMouseButtonReleased(buttonNameOrNumber) -> boolean"
+    },
+    {
+      "trigger": "getMousePosition",
+      "contents": "getMousePosition",
+      "annotation": "LegacyEngine",
+      "details": "getMousePosition() -> {x,y} window pixels"
+    },
+    {
+      "trigger": "getMouseDelta",
+      "contents": "getMouseDelta",
+      "annotation": "LegacyEngine",
+      "details": "getMouseDelta() -> {x,y} relative pixels this frame"
+    },
+    {
+      "trigger": "getMouseWheelDelta",
+      "contents": "getMouseWheelDelta",
+      "annotation": "LegacyEngine",
+      "details": "getMouseWheelDelta() -> {x,y} wheel units this frame"
+    },
+    {
+      "trigger": "getInputAxis",
+      "contents": "getInputAxis",
+      "annotation": "LegacyEngine",
+      "details": "getInputAxis(negativeButton,positiveButton) -> -1 to 1"
+    },
+    {
+      "trigger": "getInputVector",
+      "contents": "getInputVector",
+      "annotation": "LegacyEngine",
+      "details": "getInputVector(leftButton,rightButton,downButton,upButton) -> normalized {x,y}"
+    },
+    {
+      "trigger": "isGamepadButtonPressed",
+      "contents": "isGamepadButtonPressed",
+      "annotation": "LegacyEngine",
+      "details": "isGamepadButtonPressed(buttonNameOrNumber) -> boolean"
+    },
+    {
+      "trigger": "isGamepadButtonDown",
+      "contents": "isGamepadButtonDown",
+      "annotation": "LegacyEngine",
+      "details": "isGamepadButtonDown(buttonNameOrNumber) -> boolean"
+    },
+    {
+      "trigger": "getGamepadAxis",
+      "contents": "getGamepadAxis",
+      "annotation": "LegacyEngine",
+      "details": "getGamepadAxis(axisNameOrNumber) -> -1 to 1"
+    },
+    {
+      "trigger": "getGamepadStick",
+      "contents": "getGamepadStick",
+      "annotation": "LegacyEngine",
+      "details": "getGamepadStick(leftOrRight) -> {x,y}"
+    },
+    {
+      "trigger": "isButtonPressed",
+      "contents": "isButtonPressed",
+      "annotation": "LegacyEngine",
+      "details": "isButtonPressed(projectButtonName) -> boolean"
+    },
+    {
+      "trigger": "isButtonReleased",
+      "contents": "isButtonReleased",
+      "annotation": "LegacyEngine",
+      "details": "isButtonReleased(projectButtonName) -> boolean"
+    },
+    {
+      "trigger": "isButtonDown",
+      "contents": "isButtonDown",
+      "annotation": "LegacyEngine",
+      "details": "isButtonDown(projectButtonName) -> boolean"
+    },
+    {
+      "trigger": "debug",
+      "contents": "debug",
+      "annotation": "LegacyEngine",
+      "details": "debug - safe logging only; no Lua debug introspection"
+    },
+    {
+      "trigger": "log",
+      "contents": "log",
+      "annotation": "LegacyEngine",
+      "details": "debug.log(...) - write a normal message"
+    },
+    {
+      "trigger": "error",
+      "contents": "error",
+      "annotation": "LegacyEngine",
+      "details": "debug.error(...) - write an error without throwing"
+    },
+    {
+      "trigger": "warning",
+      "contents": "warning",
+      "annotation": "LegacyEngine",
+      "details": "debug.warning(...) - write a warning"
+    },
+    {
+      "trigger": "new",
+      "contents": "new",
+      "annotation": "LegacyEngine",
+      "details": "GameObject.new(name) / Camera.new(name)"
+    },
+    {
+      "trigger": "find",
+      "contents": "find",
+      "annotation": "LegacyEngine",
+      "details": "GameObject.find(name) -> GameObject or nil"
+    },
+    {
+      "trigger": "getActive",
+      "contents": "getActive",
+      "annotation": "LegacyEngine",
+      "details": "Camera.getActive() -> Camera GameObject or nil"
+    },
+    {
+      "trigger": "setPosition",
+      "contents": "setPosition",
+      "annotation": "LegacyEngine",
+      "details": "object:setPosition(x,y,z) or object:setPosition({x,y,z})"
+    },
+    {
+      "trigger": "getPosition",
+      "contents": "getPosition",
+      "annotation": "LegacyEngine",
+      "details": "object:getPosition() -> position copy"
+    },
+    {
+      "trigger": "setRotation",
+      "contents": "setRotation",
+      "annotation": "LegacyEngine",
+      "details": "object:setRotation(x,y,z) degrees or quaternion/table"
+    },
+    {
+      "trigger": "getRotation",
+      "contents": "getRotation",
+      "annotation": "LegacyEngine",
+      "details": "object:getRotation() -> quaternion copy"
+    },
+    {
+      "trigger": "setScale",
+      "contents": "setScale",
+      "annotation": "LegacyEngine",
+      "details": "object:setScale(x,y,z) or vector"
+    },
+    {
+      "trigger": "getScale",
+      "contents": "getScale",
+      "annotation": "LegacyEngine",
+      "details": "object:getScale() -> scale copy"
+    },
+    {
+      "trigger": "translate",
+      "contents": "translate",
+      "annotation": "LegacyEngine",
+      "details": "object:translate(x,y,z) or vector"
+    },
+    {
+      "trigger": "setName",
+      "contents": "setName",
+      "annotation": "LegacyEngine",
+      "details": "object:setName(name)"
+    },
+    {
+      "trigger": "getName",
+      "contents": "getName",
+      "annotation": "LegacyEngine",
+      "details": "object:getName() -> string"
+    },
+    {
+      "trigger": "destroy",
+      "contents": "destroy",
+      "annotation": "LegacyEngine",
+      "details": "destroy(object, delay=0) / object:destroy()"
+    },
+    {
+      "trigger": "setActive",
+      "contents": "setActive",
+      "annotation": "LegacyEngine",
+      "details": "object:setActive(enabled=true) - activity inherited by children; Camera also selects active camera"
+    },
+    {
+      "trigger": "setTarget",
+      "contents": "setTarget",
+      "annotation": "LegacyEngine",
+      "details": "camera:setTarget(objectOrPositionOrNil)"
+    },
+    {
+      "trigger": "setShake",
+      "contents": "setShake",
+      "annotation": "LegacyEngine",
+      "details": "camera:setShake(intensity,seconds)"
+    },
+    {
+      "trigger": "createCamera",
+      "contents": "createCamera",
+      "annotation": "LegacyEngine",
+      "details": "createCamera(name) -> Camera GameObject"
+    },
+    {
+      "trigger": "setActiveCamera",
+      "contents": "setActiveCamera",
+      "annotation": "LegacyEngine",
+      "details": "setActiveCamera(cameraOrNil)"
+    },
+    {
+      "trigger": "getActiveCamera",
+      "contents": "getActiveCamera",
+      "annotation": "LegacyEngine",
+      "details": "getActiveCamera() -> Camera GameObject or nil"
+    },
+    {
+      "trigger": "setCameraPosition",
+      "contents": "setCameraPosition",
+      "annotation": "LegacyEngine",
+      "details": "setCameraPosition(camera, {x,y,z})"
+    },
+    {
+      "trigger": "setCameraRotation",
+      "contents": "setCameraRotation",
+      "annotation": "LegacyEngine",
+      "details": "setCameraRotation(camera, Euler degrees {x,y,z} or quaternion {x,y,z,w})"
+    },
+    {
+      "trigger": "lookAt",
+      "contents": "lookAt",
+      "annotation": "LegacyEngine",
+      "details": "lookAt(camera, worldPositionOrGameObject) - one-shot aim"
+    },
+    {
+      "trigger": "setFieldOfView",
+      "contents": "setFieldOfView",
+      "annotation": "LegacyEngine",
+      "details": "setFieldOfView(camera, degrees)"
+    },
+    {
+      "trigger": "setProjectionMode",
+      "contents": "setProjectionMode",
+      "annotation": "LegacyEngine",
+      "details": "setProjectionMode(camera, Perspective | Orthographic)"
+    },
+    {
+      "trigger": "setNearClipPlane",
+      "contents": "setNearClipPlane",
+      "annotation": "LegacyEngine",
+      "details": "setNearClipPlane(camera, distance)"
+    },
+    {
+      "trigger": "setFarClipPlane",
+      "contents": "setFarClipPlane",
+      "annotation": "LegacyEngine",
+      "details": "setFarClipPlane(camera, distance)"
+    },
+    {
+      "trigger": "setViewport",
+      "contents": "setViewport",
+      "annotation": "LegacyEngine",
+      "details": "setViewport(camera, x,y,width,height) - normalized top-left viewport"
+    },
+    {
+      "trigger": "setCameraTarget",
+      "contents": "setCameraTarget",
+      "annotation": "LegacyEngine",
+      "details": "setCameraTarget(camera, pointOrObjectOrNil) - continuous aim"
+    },
+    {
+      "trigger": "setFollowTarget",
+      "contents": "setFollowTarget",
+      "annotation": "LegacyEngine",
+      "details": "setFollowTarget(camera, pointOrObjectOrNil, worldOffset)"
+    },
+    {
+      "trigger": "setCameraShake",
+      "contents": "setCameraShake",
+      "annotation": "LegacyEngine",
+      "details": "setCameraShake(camera, intensity, durationSeconds)"
+    },
+    {
+      "trigger": "worldToScreen",
+      "contents": "worldToScreen",
+      "annotation": "LegacyEngine",
+      "details": "worldToScreen(camera, worldPosition) -> normalized {x,y,zDepth}"
+    },
+    {
+      "trigger": "screenToWorld",
+      "contents": "screenToWorld",
+      "annotation": "LegacyEngine",
+      "details": "screenToWorld(camera, normalized {x,y,zDepth}) -> world position"
+    },
+    {
+      "trigger": "Camera",
+      "contents": "Camera",
+      "annotation": "LegacyEngine",
+      "details": "Camera - camera component type token"
+    },
+    {
+      "trigger": "onMouseDown",
+      "contents": "onMouseDown",
+      "annotation": "LegacyEngine",
+      "details": "onMouseDown() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onMouseUp",
+      "contents": "onMouseUp",
+      "annotation": "LegacyEngine",
+      "details": "onMouseUp() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onMouseEnter",
+      "contents": "onMouseEnter",
+      "annotation": "LegacyEngine",
+      "details": "onMouseEnter() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onMouseExit",
+      "contents": "onMouseExit",
+      "annotation": "LegacyEngine",
+      "details": "onMouseExit() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onMouseOver",
+      "contents": "onMouseOver",
+      "annotation": "LegacyEngine",
+      "details": "onMouseOver() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onAudioStarted",
+      "contents": "onAudioStarted",
+      "annotation": "LegacyEngine",
+      "details": "onAudioStarted() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onAudioFinished",
+      "contents": "onAudioFinished",
+      "annotation": "LegacyEngine",
+      "details": "onAudioFinished() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onAudioPaused",
+      "contents": "onAudioPaused",
+      "annotation": "LegacyEngine",
+      "details": "onAudioPaused() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onAudioResumed",
+      "contents": "onAudioResumed",
+      "annotation": "LegacyEngine",
+      "details": "onAudioResumed() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onAudioStopped",
+      "contents": "onAudioStopped",
+      "annotation": "LegacyEngine",
+      "details": "onAudioStopped() - targeted GameObject callback"
+    },
+    {
+      "trigger": "onStart",
+      "contents": "onStart",
+      "annotation": "LegacyEngine",
+      "details": "onStart() - called when Execute succeeds"
+    },
+    {
+      "trigger": "onUpdate",
+      "contents": "onUpdate",
+      "annotation": "LegacyEngine",
+      "details": "onUpdate(deltaTime) - once per frame, seconds"
+    },
+    {
+      "trigger": "onFixedUpdate",
+      "contents": "onFixedUpdate",
+      "annotation": "LegacyEngine",
+      "details": "onFixedUpdate(deltaTime) - before each 1/60 s physics step"
+    },
+    {
+      "trigger": "onDestroy",
+      "contents": "onDestroy",
+      "annotation": "LegacyEngine",
+      "details": "onDestroy() - object destruction or runtime shutdown/reset"
+    },
+    {
+      "trigger": "createGameObject",
+      "contents": "createGameObject",
+      "annotation": "LegacyEngine",
+      "details": "createGameObject(name) -> GameObject"
+    },
+    {
+      "trigger": "destroyGameObject",
+      "contents": "destroyGameObject",
+      "annotation": "LegacyEngine",
+      "details": "destroyGameObject(gameObject) - immediately destroy object and all descendants"
+    },
+    {
+      "trigger": "getComponent",
+      "contents": "getComponent",
+      "annotation": "LegacyEngine",
+      "details": "getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil"
+    },
+    {
+      "trigger": "addComponent",
+      "contents": "addComponent",
+      "annotation": "LegacyEngine",
+      "details": "addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner"
+    },
+    {
+      "trigger": "removeComponent",
+      "contents": "removeComponent",
+      "annotation": "LegacyEngine",
+      "details": "removeComponent(gameObject, componentType)"
+    },
+    {
+      "trigger": "findGameObjectByName",
+      "contents": "findGameObjectByName",
+      "annotation": "LegacyEngine",
+      "details": "findGameObjectByName(name) -> GameObject or nil"
+    },
+    {
+      "trigger": "findGameObjectsByComponent",
+      "contents": "findGameObjectsByComponent",
+      "annotation": "LegacyEngine",
+      "details": "findGameObjectsByComponent(componentType) -> GameObject[]"
+    },
+    {
+      "trigger": "setParent",
+      "contents": "setParent",
+      "annotation": "LegacyEngine",
+      "details": "setParent(child, parentOrNil) - keep world pose; reject cycles"
+    },
+    {
+      "trigger": "getParent",
+      "contents": "getParent",
+      "annotation": "LegacyEngine",
+      "details": "getParent(child) -> GameObject or nil"
+    },
+    {
+      "trigger": "Transform",
+      "contents": "Transform",
+      "annotation": "LegacyEngine",
+      "details": "Transform - component type token"
+    },
+    {
+      "trigger": "RigidBody",
+      "contents": "RigidBody",
+      "annotation": "LegacyEngine",
+      "details": "RigidBody - component type token"
+    },
+    {
+      "trigger": "Collider",
+      "contents": "Collider",
+      "annotation": "LegacyEngine",
+      "details": "Collider - component type token"
+    },
+    {
+      "trigger": "BoxCollider",
+      "contents": "BoxCollider",
+      "annotation": "LegacyEngine",
+      "details": "BoxCollider - alias of Collider"
+    },
+    {
+      "trigger": "Skybox",
+      "contents": "Skybox",
+      "annotation": "LegacyEngine",
+      "details": "Skybox - component type token; first enabled Skybox supplies scene background"
+    },
+    {
+      "trigger": "setType",
+      "contents": "setType",
+      "annotation": "LegacyEngine",
+      "details": "sky:setType('Textures'|'HDR') - Cubemap or HDR skybox (Textures is a legacy alias)"
+    },
+    {
+      "trigger": "setHDR",
+      "contents": "setHDR",
+      "annotation": "LegacyEngine",
+      "details": "sky:setHDR(Texture) - project .hdr panorama; nil clears"
+    },
+    {
+      "trigger": "setFace",
+      "contents": "setFace",
+      "annotation": "LegacyEngine",
+      "details": "sky:setFace(face,Texture) - right/left/top/bottom/front/back; nil clears"
+    },
+    {
+      "trigger": "setTextures",
+      "contents": "setTextures",
+      "annotation": "LegacyEngine",
+      "details": "sky:setTextures(right,left,top,bottom,front,back)"
+    },
+    {
+      "trigger": "hdr",
+      "contents": "hdr",
+      "annotation": "LegacyEngine",
+      "details": "Skybox.hdr: project-relative Radiance .hdr panorama"
+    },
+    {
+      "trigger": "MeshRenderer",
+      "contents": "MeshRenderer",
+      "annotation": "LegacyEngine",
+      "details": "MeshRenderer - component type token"
+    },
+    {
+      "trigger": "material",
+      "contents": "material",
+      "annotation": "LegacyEngine",
+      "details": "MeshRenderer.material: project-relative .mat asset path"
+    },
+    {
+      "trigger": "setMaterial",
+      "contents": "setMaterial",
+      "annotation": "LegacyEngine",
+      "details": "mesh:setMaterial(path) - assign .mat asset, reset overrides"
+    },
+    {
+      "trigger": "setMaterialColor",
+      "contents": "setMaterialColor",
+      "annotation": "LegacyEngine",
+      "details": "mesh:setMaterialColor(r,g,b) - instance color override"
+    },
+    {
+      "trigger": "setMaterialTexture",
+      "contents": "setMaterialTexture",
+      "annotation": "LegacyEngine",
+      "details": "mesh:setMaterialTexture(Texture) - instance albedo override; nil clears"
+    },
+    {
+      "trigger": "setMaterialNormalMap",
+      "contents": "setMaterialNormalMap",
+      "annotation": "LegacyEngine",
+      "details": "mesh:setMaterialNormalMap(Texture) - instance normal map override; nil clears"
+    },
+    {
+      "trigger": "setMaterialShader",
+      "contents": "setMaterialShader",
+      "annotation": "LegacyEngine",
+      "details": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"
+    },
+    {
+      "trigger": "setMaterialNormalStrength",
+      "contents": "setMaterialNormalStrength",
+      "annotation": "LegacyEngine",
+      "details": "mesh:setMaterialNormalStrength(value) - 0..4"
+    },
+    {
+      "trigger": "setMaterialTiling",
+      "contents": "setMaterialTiling",
+      "annotation": "LegacyEngine",
+      "details": "mesh:setMaterialTiling(x,y) - nonzero UV repeat scale"
+    },
+    {
+      "trigger": "setMaterialSpecular",
+      "contents": "setMaterialSpecular",
+      "annotation": "LegacyEngine",
+      "details": "mesh:setMaterialSpecular(value) - 0..1"
+    },
+    {
+      "trigger": "resetMaterialOverrides",
+      "contents": "resetMaterialOverrides",
+      "annotation": "LegacyEngine",
+      "details": "mesh:resetMaterialOverrides() - restore shared asset properties"
+    },
+    {
+      "trigger": "ObjectName",
+      "contents": "ObjectName",
+      "annotation": "LegacyEngine",
+      "details": "ObjectName - component type token"
+    },
+    {
+      "trigger": "LuaScript",
+      "contents": "LuaScript",
+      "annotation": "LegacyEngine",
+      "details": "LuaScript - attached script component (path, enabled)"
+    },
+    {
+      "trigger": "self",
+      "contents": "self",
+      "annotation": "LegacyEngine",
+      "details": "self - GameObject owning the attached Lua Script"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "LegacyEngine",
+      "details": "LuaScript.enabled: boolean"
+    },
+    {
+      "trigger": "path",
+      "contents": "path",
+      "annotation": "LegacyEngine",
+      "details": "LuaScript.path: relative asset path"
+    },
+    {
+      "trigger": "parent",
+      "contents": "parent",
+      "annotation": "LegacyEngine",
+      "details": "GameObject.parent: GameObject or nil"
+    },
+    {
+      "trigger": "position",
+      "contents": "position",
+      "annotation": "LegacyEngine",
+      "details": "Transform.position: {x,y,z}"
+    },
+    {
+      "trigger": "rotation",
+      "contents": "rotation",
+      "annotation": "LegacyEngine",
+      "details": "Transform.rotation: quaternion {x,y,z,w}"
+    },
+    {
+      "trigger": "scale",
+      "contents": "scale",
+      "annotation": "LegacyEngine",
+      "details": "Transform.scale: {x,y,z}"
+    },
+    {
+      "trigger": "mass",
+      "contents": "mass",
+      "annotation": "LegacyEngine",
+      "details": "RigidBody.mass: number"
+    },
+    {
+      "trigger": "useGravity",
+      "contents": "useGravity",
+      "annotation": "LegacyEngine",
+      "details": "RigidBody.useGravity: boolean"
+    },
+    {
+      "trigger": "floatOnRivers",
+      "contents": "floatOnRivers",
+      "annotation": "LegacyEngine",
+      "details": "RigidBody.floatOnRivers: boolean, default false. Dynamic bodies with gravity and primitive non-trigger colliders receive river buoyancy, water drag and gentle bobbing."
+    },
+    {
+      "trigger": "linearVelocity",
+      "contents": "linearVelocity",
+      "annotation": "LegacyEngine",
+      "details": "RigidBody.linearVelocity: {x,y,z}"
+    },
+    {
+      "trigger": "angularVelocity",
+      "contents": "angularVelocity",
+      "annotation": "LegacyEngine",
+      "details": "RigidBody.angularVelocity: {x,y,z}"
+    },
+    {
+      "trigger": "shape",
+      "contents": "shape",
+      "annotation": "LegacyEngine",
+      "details": "Collider.shape: Box | Sphere | Capsule | Cone | Mesh; Collider.model selects a static .mesh triangle source"
+    },
+    {
+      "trigger": "radius",
+      "contents": "radius",
+      "annotation": "LegacyEngine",
+      "details": "Collider.radius: number"
+    },
+    {
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "LegacyEngine",
+      "details": "Collider.height: number"
+    },
+    {
+      "trigger": "size",
+      "contents": "size",
+      "annotation": "LegacyEngine",
+      "details": "Collider.size: {x,y,z}"
+    },
+    {
+      "trigger": "center",
+      "contents": "center",
+      "annotation": "LegacyEngine",
+      "details": "Collider.center: {x,y,z}"
+    },
+    {
+      "trigger": "friction",
+      "contents": "friction",
+      "annotation": "LegacyEngine",
+      "details": "Collider.friction: number"
+    },
+    {
+      "trigger": "bounciness",
+      "contents": "bounciness",
+      "annotation": "LegacyEngine",
+      "details": "Collider.bounciness: number"
+    },
+    {
+      "trigger": "mesh",
+      "contents": "mesh",
+      "annotation": "LegacyEngine",
+      "details": "MeshRenderer.mesh: Cube | Sphere | Capsule | Cone | Plane"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "LegacyEngine",
+      "details": "MeshRenderer.color: {x,y,z}"
+    },
+    {
+      "trigger": "checkerboard",
+      "contents": "checkerboard",
+      "annotation": "LegacyEngine",
+      "details": "MeshRenderer.checkerboard: boolean"
+    },
+    {
+      "trigger": "specular",
+      "contents": "specular",
+      "annotation": "LegacyEngine",
+      "details": "MeshRenderer.specular: number"
+    },
+    {
+      "trigger": "name",
+      "contents": "name",
+      "annotation": "LegacyEngine",
+      "details": "GameObject.name: string"
+    },
+    {
+      "trigger": "value",
+      "contents": "value",
+      "annotation": "LegacyEngine",
+      "details": "ObjectName.value: string"
+    },
+    {
+      "trigger": "x",
+      "contents": "x",
+      "annotation": "Vec3",
+      "details": "number"
+    },
+    {
+      "trigger": "y",
+      "contents": "y",
+      "annotation": "Vec3",
+      "details": "number"
+    },
+    {
+      "trigger": "z",
+      "contents": "z",
+      "annotation": "Vec3",
+      "details": "number"
+    },
+    {
+      "trigger": "w",
+      "contents": "w",
+      "annotation": "Quaternion",
+      "details": "number"
+    },
+    {
+      "trigger": "name",
+      "contents": "name",
+      "annotation": "GameObject",
+      "details": "string"
+    },
+    {
+      "trigger": "parent",
+      "contents": "parent",
+      "annotation": "GameObject",
+      "details": "GameObject|nil"
+    },
+    {
+      "trigger": "getComponent",
+      "contents": "getComponent",
+      "annotation": "GameObject",
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+    },
+    {
+      "trigger": "getComponentInParent",
+      "contents": "getComponentInParent",
+      "annotation": "GameObject",
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+    },
+    {
+      "trigger": "getComponentInChildren",
+      "contents": "getComponentInChildren",
+      "annotation": "GameObject",
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+    },
+    {
+      "trigger": "findComponentInParent",
+      "contents": "findComponentInParent",
+      "annotation": "GameObject",
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+    },
+    {
+      "trigger": "findComponentInChildren",
+      "contents": "findComponentInChildren",
+      "annotation": "GameObject",
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+    },
+    {
+      "trigger": "addComponent",
+      "contents": "addComponent",
+      "annotation": "GameObject",
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent"
+    },
+    {
+      "trigger": "removeComponent",
+      "contents": "removeComponent",
+      "annotation": "GameObject",
+      "details": "fun(componentType:ComponentType)"
+    },
+    {
+      "trigger": "onAnimationFinish",
+      "contents": "onAnimationFinish",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAnimationStart",
+      "contents": "onAnimationStart",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAnimationStopped",
+      "contents": "onAnimationStopped",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAnimationPause",
+      "contents": "onAnimationPause",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAnimationResume",
+      "contents": "onAnimationResume",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onStart",
+      "contents": "onStart",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onUpdate",
+      "contents": "onUpdate",
+      "annotation": "GameObject",
+      "details": "fun(deltaTime:number)|nil"
+    },
+    {
+      "trigger": "onFixedUpdate",
+      "contents": "onFixedUpdate",
+      "annotation": "GameObject",
+      "details": "fun(deltaTime:number)|nil"
+    },
+    {
+      "trigger": "onDestroy",
+      "contents": "onDestroy",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onMouseDown",
+      "contents": "onMouseDown",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onMouseUp",
+      "contents": "onMouseUp",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onMouseEnter",
+      "contents": "onMouseEnter",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onMouseExit",
+      "contents": "onMouseExit",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onMouseOver",
+      "contents": "onMouseOver",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAudioStarted",
+      "contents": "onAudioStarted",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAudioFinished",
+      "contents": "onAudioFinished",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAudioPaused",
+      "contents": "onAudioPaused",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAudioResumed",
+      "contents": "onAudioResumed",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAudioStopped",
+      "contents": "onAudioStopped",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "setActive",
+      "contents": "setActive",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject,enabled?:boolean) Set local activity (default true); inherited by children"
+    },
+    {
+      "trigger": "isActive",
+      "contents": "isActive",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):boolean Effective activity including parents"
+    },
+    {
+      "trigger": "setPosition",
+      "contents": "setPosition",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject,x:number|Vec3,y?:number,z?:number)"
+    },
+    {
+      "trigger": "getPosition",
+      "contents": "getPosition",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):Vec3"
+    },
+    {
+      "trigger": "setRotation",
+      "contents": "setRotation",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject,x:number|Vec3|Quaternion,y?:number,z?:number,w?:number)"
+    },
+    {
+      "trigger": "getRotation",
+      "contents": "getRotation",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):Quaternion"
+    },
+    {
+      "trigger": "setScale",
+      "contents": "setScale",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject,x:number|Vec3,y?:number,z?:number)"
+    },
+    {
+      "trigger": "getScale",
+      "contents": "getScale",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):Vec3"
+    },
+    {
+      "trigger": "translate",
+      "contents": "translate",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject,x:number|Vec3,y?:number,z?:number)"
+    },
+    {
+      "trigger": "lookAt",
+      "contents": "lookAt",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject,x:number|Vec3|GameObject,y?:number,z?:number)"
+    },
+    {
+      "trigger": "setParent",
+      "contents": "setParent",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject,parent:GameObject|nil)"
+    },
+    {
+      "trigger": "getParent",
+      "contents": "getParent",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):GameObject|nil"
+    },
+    {
+      "trigger": "setName",
+      "contents": "setName",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject,name:string)"
+    },
+    {
+      "trigger": "getName",
+      "contents": "getName",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):string"
+    },
+    {
+      "trigger": "destroy",
+      "contents": "destroy",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject)"
+    },
+    {
+      "trigger": "getForward",
+      "contents": "getForward",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):Vec3 World-space local -Z axis"
+    },
+    {
+      "trigger": "getBackward",
+      "contents": "getBackward",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):Vec3 World-space local +Z axis"
+    },
+    {
+      "trigger": "getRight",
+      "contents": "getRight",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):Vec3 World-space local +X axis"
+    },
+    {
+      "trigger": "getLeft",
+      "contents": "getLeft",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):Vec3 World-space local -X axis"
+    },
+    {
+      "trigger": "getUp",
+      "contents": "getUp",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):Vec3 World-space local +Y axis"
+    },
+    {
+      "trigger": "getDown",
+      "contents": "getDown",
+      "annotation": "GameObject",
+      "details": "fun(self:GameObject):Vec3 World-space local -Y axis"
+    },
+    {
+      "trigger": "layer",
+      "contents": "layer",
+      "annotation": "GameObject",
+      "details": "string Layer name, defaults to Default; assign an existing name or slot number"
+    },
+    {
+      "trigger": "onTriggerEnter",
+      "contents": "onTriggerEnter",
+      "annotation": "GameObject",
+      "details": "fun(collider:Collider|nil)|nil"
+    },
+    {
+      "trigger": "onTriggerStay",
+      "contents": "onTriggerStay",
+      "annotation": "GameObject",
+      "details": "fun(collider:Collider|nil)|nil"
+    },
+    {
+      "trigger": "onTriggerExit",
+      "contents": "onTriggerExit",
+      "annotation": "GameObject",
+      "details": "fun(collider:Collider|nil)|nil"
+    },
+    {
+      "trigger": "onCollisionEnter",
+      "contents": "onCollisionEnter",
+      "annotation": "GameObject",
+      "details": "fun(collider:Collider|nil)|nil"
+    },
+    {
+      "trigger": "onCollisionStay",
+      "contents": "onCollisionStay",
+      "annotation": "GameObject",
+      "details": "fun(collider:Collider|nil)|nil"
+    },
+    {
+      "trigger": "onCollisionExit",
+      "contents": "onCollisionExit",
+      "annotation": "GameObject",
+      "details": "fun(collider:Collider|nil)|nil"
+    },
+    {
+      "trigger": "position",
+      "contents": "position",
+      "annotation": "Transform",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "rotation",
+      "contents": "rotation",
+      "annotation": "Transform",
+      "details": "Quaternion"
+    },
+    {
+      "trigger": "scale",
+      "contents": "scale",
+      "annotation": "Transform",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "mass",
+      "contents": "mass",
+      "annotation": "RigidBody",
+      "details": "number"
+    },
+    {
+      "trigger": "useGravity",
+      "contents": "useGravity",
+      "annotation": "RigidBody",
+      "details": "boolean"
+    },
+    {
+      "trigger": "linearVelocity",
+      "contents": "linearVelocity",
+      "annotation": "RigidBody",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "angularVelocity",
+      "contents": "angularVelocity",
+      "annotation": "RigidBody",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "velocity",
+      "contents": "velocity",
+      "annotation": "RigidBody",
+      "details": "Vec3 Alias of linearVelocity"
+    },
+    {
+      "trigger": "drag",
+      "contents": "drag",
+      "annotation": "RigidBody",
+      "details": "number Nonnegative linear damping"
+    },
+    {
+      "trigger": "angularDrag",
+      "contents": "angularDrag",
+      "annotation": "RigidBody",
+      "details": "number Nonnegative angular damping"
+    },
+    {
+      "trigger": "isKinematic",
+      "contents": "isKinematic",
+      "annotation": "RigidBody",
+      "details": "boolean Move under script control rather than gravity/forces"
+    },
+    {
+      "trigger": "addForce",
+      "contents": "addForce",
+      "annotation": "RigidBody",
+      "details": "fun(self:RigidBody,x:number,y:number,z:number) World force consumed on next physics step"
+    },
+    {
+      "trigger": "addImpulse",
+      "contents": "addImpulse",
+      "annotation": "RigidBody",
+      "details": "fun(self:RigidBody,x:number,y:number,z:number) Instant world impulse at next physics step"
+    },
+    {
+      "trigger": "setVelocity",
+      "contents": "setVelocity",
+      "annotation": "RigidBody",
+      "details": "fun(self:RigidBody,x:number,y:number,z:number)"
+    },
+    {
+      "trigger": "getVelocity",
+      "contents": "getVelocity",
+      "annotation": "RigidBody",
+      "details": "fun(self:RigidBody):Vec3"
+    },
+    {
+      "trigger": "addVelocity",
+      "contents": "addVelocity",
+      "annotation": "RigidBody",
+      "details": "fun(self:RigidBody,x:number,y:number,z:number)"
+    },
+    {
+      "trigger": "movePosition",
+      "contents": "movePosition",
+      "annotation": "RigidBody",
+      "details": "fun(self:RigidBody,x:number,y:number,z:number) Set world position"
+    },
+    {
+      "trigger": "moveRotation",
+      "contents": "moveRotation",
+      "annotation": "RigidBody",
+      "details": "fun(self:RigidBody,x:number,y:number,z:number) Euler degrees, or quaternion table"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "RigidBody",
+      "details": "fun(self:RigidBody) Clear velocities and queued forces/impulses"
+    },
+    {
+      "trigger": "shape",
+      "contents": "shape",
+      "annotation": "Collider",
+      "details": "'Box'|'Sphere'|'Capsule'|'Cone'|'Mesh'"
+    },
+    {
+      "trigger": "model",
+      "contents": "model",
+      "annotation": "Collider",
+      "details": "string Static triangle-mesh .mesh source; empty follows the rendered model"
+    },
+    {
+      "trigger": "meshDetail",
+      "contents": "meshDetail",
+      "annotation": "Collider",
+      "details": "integer Mesh detail 2..15 (default 8); 15 preserves source triangles"
+    },
+    {
+      "trigger": "size",
+      "contents": "size",
+      "annotation": "Collider",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "center",
+      "contents": "center",
+      "annotation": "Collider",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "radius",
+      "contents": "radius",
+      "annotation": "Collider",
+      "details": "number"
+    },
+    {
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "Collider",
+      "details": "number"
+    },
+    {
+      "trigger": "friction",
+      "contents": "friction",
+      "annotation": "Collider",
+      "details": "number"
+    },
+    {
+      "trigger": "bounciness",
+      "contents": "bounciness",
+      "annotation": "Collider",
+      "details": "number"
+    },
+    {
+      "trigger": "isTrigger",
+      "contents": "isTrigger",
+      "annotation": "Collider",
+      "details": "boolean Non-solid overlap sensor"
+    },
+    {
+      "trigger": "gameObject",
+      "contents": "gameObject",
+      "annotation": "Collider",
+      "details": "GameObject Collider owner; inspect name, layer and components"
+    },
+    {
+      "trigger": "transform",
+      "contents": "transform",
+      "annotation": "Collider",
+      "details": "Transform Collider owner transform"
+    },
+    {
+      "trigger": "material",
+      "contents": "material",
+      "annotation": "MeshRenderer",
+      "details": "string Project-relative .mat asset path; empty uses inline Diffuse"
+    },
+    {
+      "trigger": "setMaterial",
+      "contents": "setMaterial",
+      "annotation": "MeshRenderer",
+      "details": "fun(self:MeshRenderer,path:string) Assign an asset, reset instance overrides"
+    },
+    {
+      "trigger": "setMaterialColor",
+      "contents": "setMaterialColor",
+      "annotation": "MeshRenderer",
+      "details": "fun(self:MeshRenderer,r:number,g:number,b:number)"
+    },
+    {
+      "trigger": "setMaterialTexture",
+      "contents": "setMaterialTexture",
+      "annotation": "MeshRenderer",
+      "details": "fun(self:MeshRenderer,texture:Texture|nil)"
+    },
+    {
+      "trigger": "setMaterialNormalMap",
+      "contents": "setMaterialNormalMap",
+      "annotation": "MeshRenderer",
+      "details": "fun(self:MeshRenderer,texture:Texture|nil)"
+    },
+    {
+      "trigger": "setMaterialShader",
+      "contents": "setMaterialShader",
+      "annotation": "MeshRenderer",
+      "details": "fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection"
+    },
+    {
+      "trigger": "setMaterialNormalStrength",
+      "contents": "setMaterialNormalStrength",
+      "annotation": "MeshRenderer",
+      "details": "fun(self:MeshRenderer,value:number)"
+    },
+    {
+      "trigger": "setMaterialTiling",
+      "contents": "setMaterialTiling",
+      "annotation": "MeshRenderer",
+      "details": "fun(self:MeshRenderer,x:number,y:number)"
+    },
+    {
+      "trigger": "setMaterialSpecular",
+      "contents": "setMaterialSpecular",
+      "annotation": "MeshRenderer",
+      "details": "fun(self:MeshRenderer,value:number)"
+    },
+    {
+      "trigger": "resetMaterialOverrides",
+      "contents": "resetMaterialOverrides",
+      "annotation": "MeshRenderer",
+      "details": "fun(self:MeshRenderer)"
+    },
+    {
+      "trigger": "mesh",
+      "contents": "mesh",
+      "annotation": "MeshRenderer",
+      "details": "'Cube'|'Sphere'|'Capsule'|'Cone'|'Plane'"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "MeshRenderer",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "checkerboard",
+      "contents": "checkerboard",
+      "annotation": "MeshRenderer",
+      "details": "boolean"
+    },
+    {
+      "trigger": "specular",
+      "contents": "specular",
+      "annotation": "MeshRenderer",
+      "details": "number"
+    },
+    {
+      "trigger": "model",
+      "contents": "model",
+      "annotation": "MeshRenderer",
+      "details": "string Static .mesh asset path; setting mesh to a primitive clears this"
+    },
+    {
+      "trigger": "value",
+      "contents": "value",
+      "annotation": "ObjectName",
+      "details": "string"
+    },
+    {
+      "trigger": "path",
+      "contents": "path",
+      "annotation": "LuaScript",
+      "details": "string Relative asset path under Assets"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "LuaScript",
+      "details": "boolean"
+    },
+    {
+      "trigger": "active",
+      "contents": "active",
+      "annotation": "Camera",
+      "details": "boolean"
+    },
+    {
+      "trigger": "orthographic",
+      "contents": "orthographic",
+      "annotation": "Camera",
+      "details": "boolean"
+    },
+    {
+      "trigger": "fieldOfView",
+      "contents": "fieldOfView",
+      "annotation": "Camera",
+      "details": "number Degrees"
+    },
+    {
+      "trigger": "nearClip",
+      "contents": "nearClip",
+      "annotation": "Camera",
+      "details": "number"
+    },
+    {
+      "trigger": "farClip",
+      "contents": "farClip",
+      "annotation": "Camera",
+      "details": "number"
+    },
+    {
+      "trigger": "orthographicSize",
+      "contents": "orthographicSize",
+      "annotation": "Camera",
+      "details": "number Vertical size in world units"
+    },
+    {
+      "trigger": "new",
+      "contents": "new",
+      "annotation": "GameObjectConstructor",
+      "details": "fun(name:string):GameObject"
+    },
+    {
+      "trigger": "find",
+      "contents": "find",
+      "annotation": "GameObjectConstructor",
+      "details": "fun(name:string):GameObject|nil"
+    },
+    {
+      "trigger": "setActive",
+      "contents": "setActive",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,enabled?:boolean)"
+    },
+    {
+      "trigger": "setFieldOfView",
+      "contents": "setFieldOfView",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,degrees:number)"
+    },
+    {
+      "trigger": "setProjectionMode",
+      "contents": "setProjectionMode",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,mode:string)"
+    },
+    {
+      "trigger": "setNearClipPlane",
+      "contents": "setNearClipPlane",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,distance:number)"
+    },
+    {
+      "trigger": "setFarClipPlane",
+      "contents": "setFarClipPlane",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,distance:number)"
+    },
+    {
+      "trigger": "setViewport",
+      "contents": "setViewport",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,x:number,y:number,width:number,height:number)"
+    },
+    {
+      "trigger": "setTarget",
+      "contents": "setTarget",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,target:GameObject|Vec3|number|nil,y?:number,z?:number)"
+    },
+    {
+      "trigger": "setFollowTarget",
+      "contents": "setFollowTarget",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,target:GameObject|Vec3|nil,offset:Vec3|number,y?:number,z?:number)"
+    },
+    {
+      "trigger": "setShake",
+      "contents": "setShake",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,intensity:number,duration:number)"
+    },
+    {
+      "trigger": "setCameraShake",
+      "contents": "setCameraShake",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,intensity:number,duration:number) Alias of setShake"
+    },
+    {
+      "trigger": "setCameraTarget",
+      "contents": "setCameraTarget",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,target:GameObject|Vec3|nil) Alias of setTarget"
+    },
+    {
+      "trigger": "worldToScreen",
+      "contents": "worldToScreen",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,x:Vec3|number,y?:number,z?:number):Vec3"
+    },
+    {
+      "trigger": "screenToWorld",
+      "contents": "screenToWorld",
+      "annotation": "CameraObject",
+      "details": "fun(self:CameraObject,x:Vec3|number,y?:number,z?:number):Vec3"
+    },
+    {
+      "trigger": "new",
+      "contents": "new",
+      "annotation": "CameraConstructor",
+      "details": "fun(name:string):CameraObject"
+    },
+    {
+      "trigger": "getActive",
+      "contents": "getActive",
+      "annotation": "CameraConstructor",
+      "details": "fun():CameraObject|nil"
+    },
+    {
+      "trigger": "clip",
+      "contents": "clip",
+      "annotation": "AudioSource",
+      "details": "AudioClip"
+    },
+    {
+      "trigger": "play",
+      "contents": "play",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource)"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource)"
+    },
+    {
+      "trigger": "pause",
+      "contents": "pause",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource)"
+    },
+    {
+      "trigger": "resume",
+      "contents": "resume",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource)"
+    },
+    {
+      "trigger": "setPitch",
+      "contents": "setPitch",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,pitch:number):number"
+    },
+    {
+      "trigger": "fadeIn",
+      "contents": "fadeIn",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,seconds:number)"
+    },
+    {
+      "trigger": "fadeOut",
+      "contents": "fadeOut",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,seconds:number)"
+    },
+    {
+      "trigger": "setVolume",
+      "contents": "setVolume",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,volume:number):number"
+    },
+    {
+      "trigger": "mute",
+      "contents": "mute",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource)"
+    },
+    {
+      "trigger": "unmute",
+      "contents": "unmute",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource)"
+    },
+    {
+      "trigger": "setLooping",
+      "contents": "setLooping",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,enabled:boolean):boolean"
+    },
+    {
+      "trigger": "setPan",
+      "contents": "setPan",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,pan:number):number"
+    },
+    {
+      "trigger": "setDistance",
+      "contents": "setDistance",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,distance:number):number Maximum audible 3D range"
+    },
+    {
+      "trigger": "spatialBlend",
+      "contents": "spatialBlend",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,value:number):number 0 = 2D, 1 = 3D"
+    },
+    {
+      "trigger": "setSpatialBlend",
+      "contents": "setSpatialBlend",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,value:number):number"
+    },
+    {
+      "trigger": "isPlaying",
+      "contents": "isPlaying",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource):boolean"
+    },
+    {
+      "trigger": "playOneShot",
+      "contents": "playOneShot",
+      "annotation": "AudioSource",
+      "details": "fun(self:AudioSource,clip:AudioClip)"
+    },
+    {
+      "trigger": "onAudioStarted",
+      "contents": "onAudioStarted",
+      "annotation": "AudioSource",
+      "details": "AudioEvent"
+    },
+    {
+      "trigger": "onAudioFinished",
+      "contents": "onAudioFinished",
+      "annotation": "AudioSource",
+      "details": "AudioEvent"
+    },
+    {
+      "trigger": "onAudioPaused",
+      "contents": "onAudioPaused",
+      "annotation": "AudioSource",
+      "details": "AudioEvent"
+    },
+    {
+      "trigger": "onAudioResumed",
+      "contents": "onAudioResumed",
+      "annotation": "AudioSource",
+      "details": "AudioEvent"
+    },
+    {
+      "trigger": "onAudioStopped",
+      "contents": "onAudioStopped",
+      "annotation": "AudioSource",
+      "details": "AudioEvent"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "AudioListener",
+      "details": "boolean"
+    },
+    {
+      "trigger": "pause",
+      "contents": "pause",
+      "annotation": "AudioListener",
+      "details": "fun(self:AudioListener) Disable reception without stopping AudioSources"
+    },
+    {
+      "trigger": "start",
+      "contents": "start",
+      "annotation": "AudioListener",
+      "details": "fun(self:AudioListener) Enable reception again"
+    },
+    {
+      "trigger": "x",
+      "contents": "x",
+      "annotation": "Vec2",
+      "details": "number"
+    },
+    {
+      "trigger": "y",
+      "contents": "y",
+      "annotation": "Vec2",
+      "details": "number"
+    },
+    {
+      "trigger": "log",
+      "contents": "log",
+      "annotation": "LegacyDebug",
+      "details": "fun(...:any)"
+    },
+    {
+      "trigger": "error",
+      "contents": "error",
+      "annotation": "LegacyDebug",
+      "details": "fun(...:any)"
+    },
+    {
+      "trigger": "warning",
+      "contents": "warning",
+      "annotation": "LegacyDebug",
+      "details": "fun(...:any)"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "DirectionalLight",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "intensity",
+      "contents": "intensity",
+      "annotation": "DirectionalLight",
+      "details": "number"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "DirectionalLight",
+      "details": "boolean"
+    },
+    {
+      "trigger": "shadows",
+      "contents": "shadows",
+      "annotation": "DirectionalLight",
+      "details": "boolean"
+    },
+    {
+      "trigger": "range",
+      "contents": "range",
+      "annotation": "DirectionalLight",
+      "details": "number"
+    },
+    {
+      "trigger": "innerAngle",
+      "contents": "innerAngle",
+      "annotation": "DirectionalLight",
+      "details": "number"
+    },
+    {
+      "trigger": "outerAngle",
+      "contents": "outerAngle",
+      "annotation": "DirectionalLight",
+      "details": "number"
+    },
+    {
+      "trigger": "shadowDistance",
+      "contents": "shadowDistance",
+      "annotation": "DirectionalLight",
+      "details": "number"
+    },
+    {
+      "trigger": "shadowBias",
+      "contents": "shadowBias",
+      "annotation": "DirectionalLight",
+      "details": "number"
+    },
+    {
+      "trigger": "shadowQuality",
+      "contents": "shadowQuality",
+      "annotation": "DirectionalLight",
+      "details": "integer 0=Off, 1=Low (256), 2=Medium (512), 3=High (1024)"
+    },
+    {
+      "trigger": "setColor",
+      "contents": "setColor",
+      "annotation": "DirectionalLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,r:number,g:number,b:number)"
+    },
+    {
+      "trigger": "setIntensity",
+      "contents": "setIntensity",
+      "annotation": "DirectionalLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)"
+    },
+    {
+      "trigger": "setRange",
+      "contents": "setRange",
+      "annotation": "DirectionalLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)"
+    },
+    {
+      "trigger": "setEnabled",
+      "contents": "setEnabled",
+      "annotation": "DirectionalLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)"
+    },
+    {
+      "trigger": "setShadows",
+      "contents": "setShadows",
+      "annotation": "DirectionalLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)"
+    },
+    {
+      "trigger": "setShadowQuality",
+      "contents": "setShadowQuality",
+      "annotation": "DirectionalLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)"
+    },
+    {
+      "trigger": "setSpotAngles",
+      "contents": "setSpotAngles",
+      "annotation": "DirectionalLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "PointLight",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "intensity",
+      "contents": "intensity",
+      "annotation": "PointLight",
+      "details": "number"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "PointLight",
+      "details": "boolean"
+    },
+    {
+      "trigger": "shadows",
+      "contents": "shadows",
+      "annotation": "PointLight",
+      "details": "boolean"
+    },
+    {
+      "trigger": "range",
+      "contents": "range",
+      "annotation": "PointLight",
+      "details": "number"
+    },
+    {
+      "trigger": "innerAngle",
+      "contents": "innerAngle",
+      "annotation": "PointLight",
+      "details": "number"
+    },
+    {
+      "trigger": "outerAngle",
+      "contents": "outerAngle",
+      "annotation": "PointLight",
+      "details": "number"
+    },
+    {
+      "trigger": "shadowDistance",
+      "contents": "shadowDistance",
+      "annotation": "PointLight",
+      "details": "number"
+    },
+    {
+      "trigger": "shadowBias",
+      "contents": "shadowBias",
+      "annotation": "PointLight",
+      "details": "number"
+    },
+    {
+      "trigger": "shadowQuality",
+      "contents": "shadowQuality",
+      "annotation": "PointLight",
+      "details": "integer 0=Off, 1=Low (256), 2=Medium (512), 3=High (1024)"
+    },
+    {
+      "trigger": "setColor",
+      "contents": "setColor",
+      "annotation": "PointLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,r:number,g:number,b:number)"
+    },
+    {
+      "trigger": "setIntensity",
+      "contents": "setIntensity",
+      "annotation": "PointLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)"
+    },
+    {
+      "trigger": "setRange",
+      "contents": "setRange",
+      "annotation": "PointLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)"
+    },
+    {
+      "trigger": "setEnabled",
+      "contents": "setEnabled",
+      "annotation": "PointLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)"
+    },
+    {
+      "trigger": "setShadows",
+      "contents": "setShadows",
+      "annotation": "PointLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)"
+    },
+    {
+      "trigger": "setShadowQuality",
+      "contents": "setShadowQuality",
+      "annotation": "PointLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)"
+    },
+    {
+      "trigger": "setSpotAngles",
+      "contents": "setSpotAngles",
+      "annotation": "PointLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
+    },
+    {
+      "trigger": "cookie",
+      "contents": "cookie",
+      "annotation": "SpotLight",
+      "details": "string Project-relative PNG/JPG/JPEG/TGA/BMP; empty disables projection"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "SpotLight",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "intensity",
+      "contents": "intensity",
+      "annotation": "SpotLight",
+      "details": "number"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "SpotLight",
+      "details": "boolean"
+    },
+    {
+      "trigger": "shadows",
+      "contents": "shadows",
+      "annotation": "SpotLight",
+      "details": "boolean"
+    },
+    {
+      "trigger": "range",
+      "contents": "range",
+      "annotation": "SpotLight",
+      "details": "number"
+    },
+    {
+      "trigger": "innerAngle",
+      "contents": "innerAngle",
+      "annotation": "SpotLight",
+      "details": "number"
+    },
+    {
+      "trigger": "outerAngle",
+      "contents": "outerAngle",
+      "annotation": "SpotLight",
+      "details": "number"
+    },
+    {
+      "trigger": "shadowDistance",
+      "contents": "shadowDistance",
+      "annotation": "SpotLight",
+      "details": "number"
+    },
+    {
+      "trigger": "shadowBias",
+      "contents": "shadowBias",
+      "annotation": "SpotLight",
+      "details": "number"
+    },
+    {
+      "trigger": "shadowQuality",
+      "contents": "shadowQuality",
+      "annotation": "SpotLight",
+      "details": "integer 0=Off, 1=Low (256), 2=Medium (512), 3=High (1024)"
+    },
+    {
+      "trigger": "setColor",
+      "contents": "setColor",
+      "annotation": "SpotLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,r:number,g:number,b:number)"
+    },
+    {
+      "trigger": "setIntensity",
+      "contents": "setIntensity",
+      "annotation": "SpotLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)"
+    },
+    {
+      "trigger": "setRange",
+      "contents": "setRange",
+      "annotation": "SpotLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,value:number)"
+    },
+    {
+      "trigger": "setEnabled",
+      "contents": "setEnabled",
+      "annotation": "SpotLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)"
+    },
+    {
+      "trigger": "setShadows",
+      "contents": "setShadows",
+      "annotation": "SpotLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,enabled:boolean)"
+    },
+    {
+      "trigger": "setShadowQuality",
+      "contents": "setShadowQuality",
+      "annotation": "SpotLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,quality:integer)"
+    },
+    {
+      "trigger": "setSpotAngles",
+      "contents": "setSpotAngles",
+      "annotation": "SpotLight",
+      "details": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
+    },
+    {
+      "trigger": "type",
+      "contents": "type",
+      "annotation": "Skybox",
+      "details": "integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Skybox",
+      "details": "boolean"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "Skybox",
+      "details": "Vector3 Color tint"
+    },
+    {
+      "trigger": "right",
+      "contents": "right",
+      "annotation": "Skybox",
+      "details": "Texture +X"
+    },
+    {
+      "trigger": "left",
+      "contents": "left",
+      "annotation": "Skybox",
+      "details": "Texture -X"
+    },
+    {
+      "trigger": "top",
+      "contents": "top",
+      "annotation": "Skybox",
+      "details": "Texture +Y"
+    },
+    {
+      "trigger": "bottom",
+      "contents": "bottom",
+      "annotation": "Skybox",
+      "details": "Texture -Y"
+    },
+    {
+      "trigger": "front",
+      "contents": "front",
+      "annotation": "Skybox",
+      "details": "Texture -Z"
+    },
+    {
+      "trigger": "back",
+      "contents": "back",
+      "annotation": "Skybox",
+      "details": "Texture +Z"
+    },
+    {
+      "trigger": "cubemap",
+      "contents": "cubemap",
+      "annotation": "Skybox",
+      "details": "string Project-relative .cubemap asset"
+    },
+    {
+      "trigger": "hdr",
+      "contents": "hdr",
+      "annotation": "Skybox",
+      "details": "Texture Radiance .hdr equirectangular panorama"
+    },
+    {
+      "trigger": "setType",
+      "contents": "setType",
+      "annotation": "Skybox",
+      "details": "fun(self:Skybox,type:string|integer) Cubemap or HDR, or 0/1 (Textures is a legacy alias)"
+    },
+    {
+      "trigger": "setColor",
+      "contents": "setColor",
+      "annotation": "Skybox",
+      "details": "fun(self:Skybox,r:number,g:number,b:number)"
+    },
+    {
+      "trigger": "setEnabled",
+      "contents": "setEnabled",
+      "annotation": "Skybox",
+      "details": "fun(self:Skybox,enabled:boolean)"
+    },
+    {
+      "trigger": "setCubemap",
+      "contents": "setCubemap",
+      "annotation": "Skybox",
+      "details": "fun(self:Skybox,path:string|nil) Set Cubemap mode and project-relative asset"
+    },
+    {
+      "trigger": "setHDR",
+      "contents": "setHDR",
+      "annotation": "Skybox",
+      "details": "fun(self:Skybox,texture:Texture|nil)"
+    },
+    {
+      "trigger": "setFace",
+      "contents": "setFace",
+      "annotation": "Skybox",
+      "details": "fun(self:Skybox,face:string,texture:Texture|nil)"
+    },
+    {
+      "trigger": "fadeTo",
+      "contents": "fadeTo",
+      "annotation": "Skybox",
+      "details": "fun(self:Skybox,destination:GameObject|Skybox,speed:number) Smooth crossfade, duration = 1/speed seconds"
+    },
+    {
+      "trigger": "setTextures",
+      "contents": "setTextures",
+      "annotation": "Skybox",
+      "details": "fun(self:Skybox,right:Texture,left:Texture,top:Texture,bottom:Texture,front:Texture,back:Texture)"
+    },
+    {
+      "trigger": "affectEnvironment",
+      "contents": "affectEnvironment",
+      "annotation": "Skybox",
+      "details": "boolean Optional sky-colored ambient light; default false"
+    },
+    {
+      "trigger": "environmentIntensity",
+      "contents": "environmentIntensity",
+      "annotation": "Skybox",
+      "details": "number 0..5, default 1"
+    },
+    {
+      "trigger": "speed",
+      "contents": "speed",
+      "annotation": "CharacterController",
+      "details": "number Metres per second; default 4.5"
+    },
+    {
+      "trigger": "sprintMultiplier",
+      "contents": "sprintMultiplier",
+      "annotation": "CharacterController",
+      "details": "number At least 1; default 1.7"
+    },
+    {
+      "trigger": "jumpSpeed",
+      "contents": "jumpSpeed",
+      "annotation": "CharacterController",
+      "details": "number Upward launch velocity; default 6"
+    },
+    {
+      "trigger": "groundProbe",
+      "contents": "groundProbe",
+      "annotation": "CharacterController",
+      "details": "number Distance below capsule feet; default 0.12"
+    },
+    {
+      "trigger": "canMove",
+      "contents": "canMove",
+      "annotation": "CharacterController",
+      "details": "boolean Writable movement gate"
+    },
+    {
+      "trigger": "canJump",
+      "contents": "canJump",
+      "annotation": "CharacterController",
+      "details": "boolean Writable jump gate"
+    },
+    {
+      "trigger": "canSprint",
+      "contents": "canSprint",
+      "annotation": "CharacterController",
+      "details": "boolean Writable sprint gate"
+    },
+    {
+      "trigger": "isGrounded",
+      "contents": "isGrounded",
+      "annotation": "CharacterController",
+      "details": "boolean Read-only, updated at fixed physics steps"
+    },
+    {
+      "trigger": "isJumping",
+      "contents": "isJumping",
+      "annotation": "CharacterController",
+      "details": "boolean Read-only, airborne and ascending"
+    },
+    {
+      "trigger": "isMoving",
+      "contents": "isMoving",
+      "annotation": "CharacterController",
+      "details": "boolean Read-only, permitted nonzero movement command"
+    },
+    {
+      "trigger": "isSprinting",
+      "contents": "isSprinting",
+      "annotation": "CharacterController",
+      "details": "boolean Read-only, moving with permitted sprint command"
+    },
+    {
+      "trigger": "move",
+      "contents": "move",
+      "annotation": "CharacterController",
+      "details": "fun(self:CharacterController,x:number,z:number) Local horizontal direction; normalized above unit length; persists until replaced"
+    },
+    {
+      "trigger": "jump",
+      "contents": "jump",
+      "annotation": "CharacterController",
+      "details": "fun(self:CharacterController) Queue one jump; applied only when grounded and canJump"
+    },
+    {
+      "trigger": "sprint",
+      "contents": "sprint",
+      "annotation": "CharacterController",
+      "details": "fun(self:CharacterController,enabled:boolean) Set sprint intent; omitted means true"
+    },
+    {
+      "trigger": "fieldOfView",
+      "contents": "fieldOfView",
+      "annotation": "FPSCamera",
+      "details": "number Inherited Camera field"
+    },
+    {
+      "trigger": "nearClip",
+      "contents": "nearClip",
+      "annotation": "FPSCamera",
+      "details": "number Inherited Camera field"
+    },
+    {
+      "trigger": "farClip",
+      "contents": "farClip",
+      "annotation": "FPSCamera",
+      "details": "number Inherited Camera field"
+    },
+    {
+      "trigger": "orthographic",
+      "contents": "orthographic",
+      "annotation": "FPSCamera",
+      "details": "boolean Inherited Camera field"
+    },
+    {
+      "trigger": "active",
+      "contents": "active",
+      "annotation": "FPSCamera",
+      "details": "boolean Inherited Camera field"
+    },
+    {
+      "trigger": "isFreecam",
+      "contents": "isFreecam",
+      "annotation": "FPSCamera",
+      "details": "boolean Writable; only unparented cameras can translate freely"
+    },
+    {
+      "trigger": "mouseLook",
+      "contents": "mouseLook",
+      "annotation": "FPSCamera",
+      "details": "boolean Writable; native mouse look while cursor is locked"
+    },
+    {
+      "trigger": "speed",
+      "contents": "speed",
+      "annotation": "FPSCamera",
+      "details": "number Freecam metres per second"
+    },
+    {
+      "trigger": "sensitivity",
+      "contents": "sensitivity",
+      "annotation": "FPSCamera",
+      "details": "number Degrees per mouse pixel"
+    },
+    {
+      "trigger": "linkToCharacter",
+      "contents": "linkToCharacter",
+      "annotation": "FPSCamera",
+      "details": "fun(self:FPSCamera,controller:CharacterController|GameObject,x:number,y:number,z:number) Parent using local position offset"
+    },
+    {
+      "trigger": "setIsFreecam",
+      "contents": "setIsFreecam",
+      "annotation": "FPSCamera",
+      "details": "fun(self:FPSCamera,enabled:boolean)"
+    },
+    {
+      "trigger": "getIsFreecam",
+      "contents": "getIsFreecam",
+      "annotation": "FPSCamera",
+      "details": "fun(self:FPSCamera):boolean"
+    },
+    {
+      "trigger": "red",
+      "contents": "red",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "green",
+      "contents": "green",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "blue",
+      "contents": "blue",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "white",
+      "contents": "white",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "black",
+      "contents": "black",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "yellow",
+      "contents": "yellow",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "cyan",
+      "contents": "cyan",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "magenta",
+      "contents": "magenta",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "gray",
+      "contents": "gray",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "orange",
+      "contents": "orange",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "purple",
+      "contents": "purple",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "pink",
+      "contents": "pink",
+      "annotation": "ColorPalette",
+      "details": "Vec3"
+    },
+    {
+      "trigger": "collider",
+      "contents": "collider",
+      "annotation": "RaycastHit",
+      "details": "Collider"
+    },
+    {
+      "trigger": "transform",
+      "contents": "transform",
+      "annotation": "RaycastHit",
+      "details": "Transform"
+    },
+    {
+      "trigger": "gameObject",
+      "contents": "gameObject",
+      "annotation": "RaycastHit",
+      "details": "GameObject"
+    },
+    {
+      "trigger": "point",
+      "contents": "point",
+      "annotation": "RaycastHit",
+      "details": "Vec3 World hit point; sphere query uses center-directed surface point"
+    },
+    {
+      "trigger": "normal",
+      "contents": "normal",
+      "annotation": "RaycastHit",
+      "details": "Vec3 World surface normal; zero when sphere origin is inside a collider"
+    },
+    {
+      "trigger": "distance",
+      "contents": "distance",
+      "annotation": "RaycastHit",
+      "details": "number World distance from query origin"
+    },
+    {
+      "trigger": "type",
+      "contents": "type",
+      "annotation": "Raycast",
+      "details": "integer Raycast.Line, Raycast.LineOfSight or Raycast.Sphere"
+    },
+    {
+      "trigger": "distance",
+      "contents": "distance",
+      "annotation": "Raycast",
+      "details": "number Positive ray range"
+    },
+    {
+      "trigger": "radius",
+      "contents": "radius",
+      "annotation": "Raycast",
+      "details": "number Positive sphere overlap radius"
+    },
+    {
+      "trigger": "angle",
+      "contents": "angle",
+      "annotation": "Raycast",
+      "details": "number Fan aperture in degrees, 0 to 360"
+    },
+    {
+      "trigger": "samples",
+      "contents": "samples",
+      "annotation": "Raycast",
+      "details": "integer Fan rays, 2 to 181"
+    },
+    {
+      "trigger": "offset",
+      "contents": "offset",
+      "annotation": "Raycast",
+      "details": "Vec3 Local origin offset"
+    },
+    {
+      "trigger": "includeTriggers",
+      "contents": "includeTriggers",
+      "annotation": "Raycast",
+      "details": "boolean Whether sensors can be hit"
+    },
+    {
+      "trigger": "cast",
+      "contents": "cast",
+      "annotation": "Raycast",
+      "details": "fun(self:Raycast):RaycastHit|nil Nearest matching hit"
+    },
+    {
+      "trigger": "castAll",
+      "contents": "castAll",
+      "annotation": "Raycast",
+      "details": "fun(self:Raycast):RaycastHit[] Matching distinct objects, nearest first"
+    },
+    {
+      "trigger": "setLayers",
+      "contents": "setLayers",
+      "annotation": "Raycast",
+      "details": "fun(self:Raycast,names:table) Replace layer mask with an array of names; empty array selects none"
+    },
+    {
+      "trigger": "Line",
+      "contents": "Line",
+      "annotation": "RaycastType",
+      "details": "integer"
+    },
+    {
+      "trigger": "LineOfSight",
+      "contents": "LineOfSight",
+      "annotation": "RaycastType",
+      "details": "integer"
+    },
+    {
+      "trigger": "Sphere",
+      "contents": "Sphere",
+      "annotation": "RaycastType",
+      "details": "integer"
+    },
+    {
+      "trigger": "gameObject",
+      "contents": "gameObject",
+      "annotation": "Animation",
+      "details": "GameObject"
+    },
+    {
+      "trigger": "clip",
+      "contents": "clip",
+      "annotation": "Animation",
+      "details": "string"
+    },
+    {
+      "trigger": "loop",
+      "contents": "loop",
+      "annotation": "Animation",
+      "details": "boolean"
+    },
+    {
+      "trigger": "playOnStart",
+      "contents": "playOnStart",
+      "annotation": "Animation",
+      "details": "boolean"
+    },
+    {
+      "trigger": "isPlaying",
+      "contents": "isPlaying",
+      "annotation": "Animation",
+      "details": "boolean Read-only"
+    },
+    {
+      "trigger": "paused",
+      "contents": "paused",
+      "annotation": "Animation",
+      "details": "boolean Read-only"
+    },
+    {
+      "trigger": "time",
+      "contents": "time",
+      "annotation": "Animation",
+      "details": "number Read-only seconds"
+    },
+    {
+      "trigger": "error",
+      "contents": "error",
+      "annotation": "Animation",
+      "details": "string Read-only loading error"
+    },
+    {
+      "trigger": "play",
+      "contents": "play",
+      "annotation": "Animation",
+      "details": "fun(self:Animation)"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "Animation",
+      "details": "fun(self:Animation) Stops and rewinds to frame zero"
+    },
+    {
+      "trigger": "pause",
+      "contents": "pause",
+      "annotation": "Animation",
+      "details": "fun(self:Animation)"
+    },
+    {
+      "trigger": "resume",
+      "contents": "resume",
+      "annotation": "Animation",
+      "details": "fun(self:Animation)"
+    },
+    {
+      "trigger": "crossFade",
+      "contents": "crossFade",
+      "annotation": "Animation",
+      "details": "fun(self:Animation,clip:string,seconds?:number) Timed transition; default 0.25 seconds"
+    },
+    {
+      "trigger": "reset",
+      "contents": "reset",
+      "annotation": "Animation",
+      "details": "fun(self:Animation) Stops and restores the pre-play values"
+    },
+    {
+      "trigger": "Point",
+      "contents": "Point",
+      "annotation": "ParticleSystem",
+      "details": "integer Shape constant"
+    },
+    {
+      "trigger": "Box",
+      "contents": "Box",
+      "annotation": "ParticleSystem",
+      "details": "integer Shape constant"
+    },
+    {
+      "trigger": "Sphere",
+      "contents": "Sphere",
+      "annotation": "ParticleSystem",
+      "details": "integer Shape constant"
+    },
+    {
+      "trigger": "Cone",
+      "contents": "Cone",
+      "annotation": "ParticleSystem",
+      "details": "integer Shape constant"
+    },
+    {
+      "trigger": "Alpha",
+      "contents": "Alpha",
+      "annotation": "ParticleSystem",
+      "details": "integer Blend constant"
+    },
+    {
+      "trigger": "Additive",
+      "contents": "Additive",
+      "annotation": "ParticleSystem",
+      "details": "integer Blend constant"
+    },
+    {
+      "trigger": "Fire",
+      "contents": "Fire",
+      "annotation": "ParticleSystem",
+      "details": "integer Sprite constant"
+    },
+    {
+      "trigger": "Smoke",
+      "contents": "Smoke",
+      "annotation": "ParticleSystem",
+      "details": "integer Sprite constant"
+    },
+    {
+      "trigger": "Sparkles",
+      "contents": "Sparkles",
+      "annotation": "ParticleSystem",
+      "details": "integer Sprite constant"
+    },
+    {
+      "trigger": "play",
+      "contents": "play",
+      "annotation": "ParticleSystem",
+      "details": "fun(self:ParticleSystem)"
+    },
+    {
+      "trigger": "pause",
+      "contents": "pause",
+      "annotation": "ParticleSystem",
+      "details": "fun(self:ParticleSystem)"
+    },
+    {
+      "trigger": "resume",
+      "contents": "resume",
+      "annotation": "ParticleSystem",
+      "details": "fun(self:ParticleSystem)"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "ParticleSystem",
+      "details": "fun(self:ParticleSystem,clearParticles?:boolean)"
+    },
+    {
+      "trigger": "restart",
+      "contents": "restart",
+      "annotation": "ParticleSystem",
+      "details": "fun(self:ParticleSystem)"
+    },
+    {
+      "trigger": "clear",
+      "contents": "clear",
+      "annotation": "ParticleSystem",
+      "details": "fun(self:ParticleSystem)"
+    },
+    {
+      "trigger": "emit",
+      "contents": "emit",
+      "annotation": "ParticleSystem",
+      "details": "fun(self:ParticleSystem,count:integer)"
+    },
+    {
+      "trigger": "setPreset",
+      "contents": "setPreset",
+      "annotation": "ParticleSystem",
+      "details": "fun(self:ParticleSystem,name:string) Fire, Smoke, Sparkles, Blood or Explosion"
+    },
+    {
+      "trigger": "isPlaying",
+      "contents": "isPlaying",
+      "annotation": "ParticleSystem",
+      "details": "boolean Read-only"
+    },
+    {
+      "trigger": "paused",
+      "contents": "paused",
+      "annotation": "ParticleSystem",
+      "details": "boolean Read-only"
+    },
+    {
+      "trigger": "particleCount",
+      "contents": "particleCount",
+      "annotation": "ParticleSystem",
+      "details": "integer Read-only"
+    },
+    {
+      "trigger": "time",
+      "contents": "time",
+      "annotation": "ParticleSystem",
+      "details": "number Read-only emitter cycle time"
+    },
+    {
+      "trigger": "loop",
+      "contents": "loop",
+      "annotation": "ParticleSystem",
+      "details": "boolean"
+    },
+    {
+      "trigger": "playOnAwake",
+      "contents": "playOnAwake",
+      "annotation": "ParticleSystem",
+      "details": "boolean"
+    },
+    {
+      "trigger": "localSpace",
+      "contents": "localSpace",
+      "annotation": "ParticleSystem",
+      "details": "boolean"
+    },
+    {
+      "trigger": "collision",
+      "contents": "collision",
+      "annotation": "ParticleSystem",
+      "details": "boolean Optional swept-point collider physics"
+    },
+    {
+      "trigger": "restitution",
+      "contents": "restitution",
+      "annotation": "ParticleSystem",
+      "details": "number Bounce 0..1"
+    },
+    {
+      "trigger": "collisionFriction",
+      "contents": "collisionFriction",
+      "annotation": "ParticleSystem",
+      "details": "number Tangential velocity loss 0..1"
+    },
+    {
+      "trigger": "maxParticles",
+      "contents": "maxParticles",
+      "annotation": "ParticleSystem",
+      "details": "integer"
+    },
+    {
+      "trigger": "burstCount",
+      "contents": "burstCount",
+      "annotation": "ParticleSystem",
+      "details": "integer"
+    },
+    {
+      "trigger": "shape",
+      "contents": "shape",
+      "annotation": "ParticleSystem",
+      "details": "integer"
+    },
+    {
+      "trigger": "blend",
+      "contents": "blend",
+      "annotation": "ParticleSystem",
+      "details": "integer"
+    },
+    {
+      "trigger": "sprite",
+      "contents": "sprite",
+      "annotation": "ParticleSystem",
+      "details": "integer"
+    },
+    {
+      "trigger": "seed",
+      "contents": "seed",
+      "annotation": "ParticleSystem",
+      "details": "integer"
+    },
+    {
+      "trigger": "useSpriteSheet",
+      "contents": "useSpriteSheet",
+      "annotation": "ParticleSystem",
+      "details": "boolean Opt-in atlas animation; false by default"
+    },
+    {
+      "trigger": "sheetColumns",
+      "contents": "sheetColumns",
+      "annotation": "ParticleSystem",
+      "details": "integer"
+    },
+    {
+      "trigger": "sheetRows",
+      "contents": "sheetRows",
+      "annotation": "ParticleSystem",
+      "details": "integer"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "ParticleSystem",
+      "details": "table Assign a complete x/y/z vector table; returned tables are copies"
+    },
+    {
+      "trigger": "endColor",
+      "contents": "endColor",
+      "annotation": "ParticleSystem",
+      "details": "table Assign a complete x/y/z vector table; returned tables are copies"
+    },
+    {
+      "trigger": "direction",
+      "contents": "direction",
+      "annotation": "ParticleSystem",
+      "details": "table Assign a complete x/y/z vector table; returned tables are copies"
+    },
+    {
+      "trigger": "velocity",
+      "contents": "velocity",
+      "annotation": "ParticleSystem",
+      "details": "table Assign a complete x/y/z vector table; returned tables are copies"
+    },
+    {
+      "trigger": "gravity",
+      "contents": "gravity",
+      "annotation": "ParticleSystem",
+      "details": "table Assign a complete x/y/z vector table; returned tables are copies"
+    },
+    {
+      "trigger": "boxSize",
+      "contents": "boxSize",
+      "annotation": "ParticleSystem",
+      "details": "table Assign a complete x/y/z vector table; returned tables are copies"
+    },
+    {
+      "trigger": "duration",
+      "contents": "duration",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "startDelay",
+      "contents": "startDelay",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "rate",
+      "contents": "rate",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "lifetimeMin",
+      "contents": "lifetimeMin",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "lifetimeMax",
+      "contents": "lifetimeMax",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "speedMin",
+      "contents": "speedMin",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "speedMax",
+      "contents": "speedMax",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "sizeMin",
+      "contents": "sizeMin",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "sizeMax",
+      "contents": "sizeMax",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "endSize",
+      "contents": "endSize",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "alpha",
+      "contents": "alpha",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "endAlpha",
+      "contents": "endAlpha",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "radius",
+      "contents": "radius",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "coneAngle",
+      "contents": "coneAngle",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "drag",
+      "contents": "drag",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "rotationMin",
+      "contents": "rotationMin",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "rotationMax",
+      "contents": "rotationMax",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "angularVelocity",
+      "contents": "angularVelocity",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "frameRate",
+      "contents": "frameRate",
+      "annotation": "ParticleSystem",
+      "details": "number"
+    },
+    {
+      "trigger": "texture",
+      "contents": "texture",
+      "annotation": "ParticleSystem",
+      "details": "string Empty selects bundled sprite; otherwise project-relative image"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Laser",
+      "details": "boolean"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "Laser",
+      "details": "Vec3 Assign a complete RGB vector table (copy on read)"
+    },
+    {
+      "trigger": "intensity",
+      "contents": "intensity",
+      "annotation": "Laser",
+      "details": "number 0..100"
+    },
+    {
+      "trigger": "range",
+      "contents": "range",
+      "annotation": "Laser",
+      "details": "number 0.01..10000 metres"
+    },
+    {
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "Laser",
+      "details": "number Core diameter 0.001..10 metres"
+    },
+    {
+      "trigger": "glowWidth",
+      "contents": "glowWidth",
+      "annotation": "Laser",
+      "details": "number Outer diameter; at least width, at most 100 metres"
+    },
+    {
+      "trigger": "impactSize",
+      "contents": "impactSize",
+      "annotation": "Laser",
+      "details": "number Impact disc diameter 0.001..100 metres"
+    },
+    {
+      "trigger": "hit",
+      "contents": "hit",
+      "annotation": "Laser",
+      "details": "boolean Read-only; latest simulation query hit a collider"
+    },
+    {
+      "trigger": "endPosition",
+      "contents": "endPosition",
+      "annotation": "Laser",
+      "details": "Vec3 Read-only; latest beam endpoint in world space"
+    },
+    {
+      "trigger": "hitNormal",
+      "contents": "hitNormal",
+      "annotation": "Laser",
+      "details": "Vec3 Read-only; valid only when hit is true"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "LightShafts",
+      "details": "boolean"
+    },
+    {
+      "trigger": "direction",
+      "contents": "direction",
+      "annotation": "LightShafts",
+      "details": "Vec3 Local emission direction; assign a complete nonzero vector"
+    },
+    {
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "LightShafts",
+      "details": "number 0.01..1000 metres"
+    },
+    {
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "LightShafts",
+      "details": "number Start width, 0.001..100 metres"
+    },
+    {
+      "trigger": "endWidth",
+      "contents": "endWidth",
+      "annotation": "LightShafts",
+      "details": "number End width, 0.001..500 metres"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "LightShafts",
+      "details": "Vec3 RGB color; assign a complete vector"
+    },
+    {
+      "trigger": "intensity",
+      "contents": "intensity",
+      "annotation": "LightShafts",
+      "details": "number 0..100"
+    },
+    {
+      "trigger": "density",
+      "contents": "density",
+      "annotation": "LightShafts",
+      "details": "number 0..1"
+    },
+    {
+      "trigger": "falloff",
+      "contents": "falloff",
+      "annotation": "LightShafts",
+      "details": "number Profile edge exponent, 0.1..8"
+    },
+    {
+      "trigger": "streaks",
+      "contents": "streaks",
+      "annotation": "LightShafts",
+      "details": "number Profile streak frequency, 0..64"
+    },
+    {
+      "trigger": "fade",
+      "contents": "fade",
+      "annotation": "LightShafts",
+      "details": "number Profile start fade, 0.01..1"
+    },
+    {
+      "trigger": "nearFade",
+      "contents": "nearFade",
+      "annotation": "LightShafts",
+      "details": "number Camera near fade distance, 0.01..100 metres"
+    },
+    {
+      "trigger": "useBakedTexture",
+      "contents": "useBakedTexture",
+      "annotation": "LightShafts",
+      "details": "boolean Use the cached profile if available, else procedural fallback"
+    },
+    {
+      "trigger": "texture",
+      "contents": "texture",
+      "annotation": "LightShafts",
+      "details": "string Project-relative profile image"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "CameraEffects",
+      "details": "boolean"
+    },
+    {
+      "trigger": "bloom",
+      "contents": "bloom",
+      "annotation": "CameraEffects",
+      "details": "boolean"
+    },
+    {
+      "trigger": "colorGrading",
+      "contents": "colorGrading",
+      "annotation": "CameraEffects",
+      "details": "boolean"
+    },
+    {
+      "trigger": "vignette",
+      "contents": "vignette",
+      "annotation": "CameraEffects",
+      "details": "boolean"
+    },
+    {
+      "trigger": "depthOfField",
+      "contents": "depthOfField",
+      "annotation": "CameraEffects",
+      "details": "boolean"
+    },
+    {
+      "trigger": "motionBlur",
+      "contents": "motionBlur",
+      "annotation": "CameraEffects",
+      "details": "boolean Camera-only reprojection, no object velocities"
+    },
+    {
+      "trigger": "filmGrain",
+      "contents": "filmGrain",
+      "annotation": "CameraEffects",
+      "details": "boolean"
+    },
+    {
+      "trigger": "chromaticAberration",
+      "contents": "chromaticAberration",
+      "annotation": "CameraEffects",
+      "details": "boolean"
+    },
+    {
+      "trigger": "antiAliasing",
+      "contents": "antiAliasing",
+      "annotation": "CameraEffects",
+      "details": "boolean FXAA"
+    },
+    {
+      "trigger": "ambientOcclusion",
+      "contents": "ambientOcclusion",
+      "annotation": "CameraEffects",
+      "details": "boolean Six-tap SSAO"
+    },
+    {
+      "trigger": "nightVision",
+      "contents": "nightVision",
+      "annotation": "CameraEffects",
+      "details": "boolean Green or infrared-style luminance visualization"
+    },
+    {
+      "trigger": "nausea",
+      "contents": "nausea",
+      "annotation": "CameraEffects",
+      "details": "boolean Animated screen distortion"
+    },
+    {
+      "trigger": "nightVisionMode",
+      "contents": "nightVisionMode",
+      "annotation": "CameraEffects",
+      "details": "number 0 = green, 1 = infrared-style (not physical heat)"
+    },
+    {
+      "trigger": "nightVisionIntensity",
+      "contents": "nightVisionIntensity",
+      "annotation": "CameraEffects",
+      "details": "number 0..1"
+    },
+    {
+      "trigger": "nauseaIntensity",
+      "contents": "nauseaIntensity",
+      "annotation": "CameraEffects",
+      "details": "number 0..1"
+    },
+    {
+      "trigger": "nauseaSpeed",
+      "contents": "nauseaSpeed",
+      "annotation": "CameraEffects",
+      "details": "number 0..5"
+    },
+    {
+      "trigger": "bloomIntensity",
+      "contents": "bloomIntensity",
+      "annotation": "CameraEffects",
+      "details": "number 0..4"
+    },
+    {
+      "trigger": "bloomThreshold",
+      "contents": "bloomThreshold",
+      "annotation": "CameraEffects",
+      "details": "number 0..8"
+    },
+    {
+      "trigger": "exposure",
+      "contents": "exposure",
+      "annotation": "CameraEffects",
+      "details": "number -5..5 stops"
+    },
+    {
+      "trigger": "contrast",
+      "contents": "contrast",
+      "annotation": "CameraEffects",
+      "details": "number 0..2"
+    },
+    {
+      "trigger": "saturation",
+      "contents": "saturation",
+      "annotation": "CameraEffects",
+      "details": "number 0..2"
+    },
+    {
+      "trigger": "temperature",
+      "contents": "temperature",
+      "annotation": "CameraEffects",
+      "details": "number -1..1"
+    },
+    {
+      "trigger": "vignetteIntensity",
+      "contents": "vignetteIntensity",
+      "annotation": "CameraEffects",
+      "details": "number 0..1"
+    },
+    {
+      "trigger": "focusDistance",
+      "contents": "focusDistance",
+      "annotation": "CameraEffects",
+      "details": "number 0.01..10000 metres"
+    },
+    {
+      "trigger": "focusRange",
+      "contents": "focusRange",
+      "annotation": "CameraEffects",
+      "details": "number 0.01..10000 metres"
+    },
+    {
+      "trigger": "dofStrength",
+      "contents": "dofStrength",
+      "annotation": "CameraEffects",
+      "details": "number 0..1"
+    },
+    {
+      "trigger": "motionStrength",
+      "contents": "motionStrength",
+      "annotation": "CameraEffects",
+      "details": "number 0..1"
+    },
+    {
+      "trigger": "grainIntensity",
+      "contents": "grainIntensity",
+      "annotation": "CameraEffects",
+      "details": "number 0..0.2"
+    },
+    {
+      "trigger": "aberrationStrength",
+      "contents": "aberrationStrength",
+      "annotation": "CameraEffects",
+      "details": "number 0..0.02"
+    },
+    {
+      "trigger": "aoIntensity",
+      "contents": "aoIntensity",
+      "annotation": "CameraEffects",
+      "details": "number 0..2"
+    },
+    {
+      "trigger": "aoRadius",
+      "contents": "aoRadius",
+      "annotation": "CameraEffects",
+      "details": "number 0.01..5 metres"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Fog",
+      "details": "boolean Global distance fog; first enabled active Fog in entity order wins"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "Fog",
+      "details": "table RGB 0..1; assign a complete x/y/z or three-element table (read returns a copy)"
+    },
+    {
+      "trigger": "density",
+      "contents": "density",
+      "annotation": "Fog",
+      "details": "number 0..10 inverse metres; zero is clear"
+    },
+    {
+      "trigger": "start",
+      "contents": "start",
+      "annotation": "Fog",
+      "details": "number Distance before fog begins, 0 or greater and less than end"
+    },
+    {
+      "trigger": "end",
+      "contents": "end",
+      "annotation": "Fog",
+      "details": "number Distance cap, greater than start and at most 1000000 metres; use fog[\"end\"] in Lua"
+    },
+    {
+      "trigger": "start",
+      "contents": "start",
+      "annotation": "ColorFade",
+      "details": "fun(self:ColorFade,seconds?:number) Fade to fully visible color, default one second; zero is immediate"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "ColorFade",
+      "details": "fun(self:ColorFade,seconds?:number) Fade back to transparent, default one second; zero is immediate"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "CloudSystem",
+      "details": "boolean"
+    },
+    {
+      "trigger": "volumetric",
+      "contents": "volumetric",
+      "annotation": "CloudSystem",
+      "details": "boolean False = 2D procedural layer; true = bounded volumetric box"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "CloudSystem",
+      "details": "table RGB 0..1; assign a complete x/y/z or three-element table, read returns a copy"
+    },
+    {
+      "trigger": "size",
+      "contents": "size",
+      "annotation": "CloudSystem",
+      "details": "table XYZ extent 0.1..10000 metres, multiplied by Transform scale; read returns a copy"
+    },
+    {
+      "trigger": "coverage",
+      "contents": "coverage",
+      "annotation": "CloudSystem",
+      "details": "number 0..1"
+    },
+    {
+      "trigger": "density",
+      "contents": "density",
+      "annotation": "CloudSystem",
+      "details": "number 0..10"
+    },
+    {
+      "trigger": "scale",
+      "contents": "scale",
+      "annotation": "CloudSystem",
+      "details": "number Noise frequency 0.001..10"
+    },
+    {
+      "trigger": "speed",
+      "contents": "speed",
+      "annotation": "CloudSystem",
+      "details": "number Wind speed -100..100"
+    },
+    {
+      "trigger": "opacity",
+      "contents": "opacity",
+      "annotation": "CloudSystem",
+      "details": "number 0..1"
+    },
+    {
+      "trigger": "steps",
+      "contents": "steps",
+      "annotation": "CloudSystem",
+      "details": "integer Volumetric raymarch budget 4..24, default 12"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "River",
+      "details": "boolean"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "River",
+      "details": "table RGB 0..1; assign a complete vector, read returns a copy"
+    },
+    {
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "River",
+      "details": "number 0.05..1000 local units"
+    },
+    {
+      "trigger": "opacity",
+      "contents": "opacity",
+      "annotation": "River",
+      "details": "number 0..1"
+    },
+    {
+      "trigger": "speed",
+      "contents": "speed",
+      "annotation": "River",
+      "details": "number Flow speed -100..100"
+    },
+    {
+      "trigger": "waveScale",
+      "contents": "waveScale",
+      "annotation": "River",
+      "details": "number 0.01..100"
+    },
+    {
+      "trigger": "waveStrength",
+      "contents": "waveStrength",
+      "annotation": "River",
+      "details": "number 0..1 Shading only; does not displace geometry"
+    },
+    {
+      "trigger": "foam",
+      "contents": "foam",
+      "annotation": "River",
+      "details": "number 0..1 Procedural edge foam"
+    },
+    {
+      "trigger": "subdivisions",
+      "contents": "subdivisions",
+      "annotation": "River",
+      "details": "integer Samples per curve span 2..32"
+    },
+    {
+      "trigger": "points",
+      "contents": "points",
+      "annotation": "River",
+      "details": "table List of 2..64 complete local vector tables; getter returns copies, assign the whole list to change"
+    },
+    {
+      "trigger": "shaderStyle",
+      "contents": "shaderStyle",
+      "annotation": "River",
+      "details": "integer 0 Classic, 1 Clear, 2 Ocean, 3 Lake, 4 Rapids, 5 Tropical, 6 Marsh, 7 Industrial canal"
+    },
+    {
+      "trigger": "waveHeight",
+      "contents": "waveHeight",
+      "annotation": "River",
+      "details": "number Geometric displacement 0..3 metres"
+    },
+    {
+      "trigger": "waveLength",
+      "contents": "waveLength",
+      "annotation": "River",
+      "details": "number 0.1..100 metres"
+    },
+    {
+      "trigger": "waveSpeed",
+      "contents": "waveSpeed",
+      "annotation": "River",
+      "details": "number 0..10 multiplier"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Vehicle",
+      "details": "boolean"
+    },
+    {
+      "trigger": "throttle",
+      "contents": "throttle",
+      "annotation": "Vehicle",
+      "details": "number -1..1, forward/reverse, runtime command"
+    },
+    {
+      "trigger": "steering",
+      "contents": "steering",
+      "annotation": "Vehicle",
+      "details": "number -1..1, positive right, runtime command"
+    },
+    {
+      "trigger": "brake",
+      "contents": "brake",
+      "annotation": "Vehicle",
+      "details": "number 0..1 service brake"
+    },
+    {
+      "trigger": "handbrake",
+      "contents": "handbrake",
+      "annotation": "Vehicle",
+      "details": "boolean Rear brake/sliding"
+    },
+    {
+      "trigger": "speed",
+      "contents": "speed",
+      "annotation": "Vehicle",
+      "details": "number Read-only signed forward m/s"
+    },
+    {
+      "trigger": "groundedWheels",
+      "contents": "groundedWheels",
+      "annotation": "Vehicle",
+      "details": "integer Read-only 0..4"
+    },
+    {
+      "trigger": "isGrounded",
+      "contents": "isGrounded",
+      "annotation": "Vehicle",
+      "details": "boolean Read-only"
+    },
+    {
+      "trigger": "wheelCompression",
+      "contents": "wheelCompression",
+      "annotation": "Vehicle",
+      "details": "number[] Read-only copy, FL/FR/RL/RR, 0..1"
+    },
+    {
+      "trigger": "wheelBase",
+      "contents": "wheelBase",
+      "annotation": "Vehicle",
+      "details": "number 0.2..20 local metres"
+    },
+    {
+      "trigger": "trackWidth",
+      "contents": "trackWidth",
+      "annotation": "Vehicle",
+      "details": "number 0.2..10 local metres"
+    },
+    {
+      "trigger": "mountHeight",
+      "contents": "mountHeight",
+      "annotation": "Vehicle",
+      "details": "number -10..10 local metres"
+    },
+    {
+      "trigger": "wheelRadius",
+      "contents": "wheelRadius",
+      "annotation": "Vehicle",
+      "details": "number 0.05..3 local metres"
+    },
+    {
+      "trigger": "suspensionLength",
+      "contents": "suspensionLength",
+      "annotation": "Vehicle",
+      "details": "number 0.05..3 local metres"
+    },
+    {
+      "trigger": "springStrength",
+      "contents": "springStrength",
+      "annotation": "Vehicle",
+      "details": "number 100..500000 N/m per wheel"
+    },
+    {
+      "trigger": "suspensionDamping",
+      "contents": "suspensionDamping",
+      "annotation": "Vehicle",
+      "details": "number 0..50000 per wheel"
+    },
+    {
+      "trigger": "engineForce",
+      "contents": "engineForce",
+      "annotation": "Vehicle",
+      "details": "number 0..200000 N total"
+    },
+    {
+      "trigger": "brakeForce",
+      "contents": "brakeForce",
+      "annotation": "Vehicle",
+      "details": "number 0..300000 N total"
+    },
+    {
+      "trigger": "tireGrip",
+      "contents": "tireGrip",
+      "annotation": "Vehicle",
+      "details": "number 0.05..5"
+    },
+    {
+      "trigger": "maxSteerAngle",
+      "contents": "maxSteerAngle",
+      "annotation": "Vehicle",
+      "details": "number 0..70 degrees"
+    },
+    {
+      "trigger": "maxSpeed",
+      "contents": "maxSpeed",
+      "annotation": "Vehicle",
+      "details": "number 1..150 m/s engine cutoff"
+    },
+    {
+      "trigger": "stabilityAssist",
+      "contents": "stabilityAssist",
+      "annotation": "Vehicle",
+      "details": "number 0..1 speed-dependent safe steering, default 1"
+    },
+    {
+      "trigger": "mesh",
+      "contents": "mesh",
+      "annotation": "Water",
+      "details": "string Optional .mesh asset; empty uses this MeshRenderer or default plane"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "BoneAttachment",
+      "details": "boolean"
+    },
+    {
+      "trigger": "source",
+      "contents": "source",
+      "annotation": "BoneAttachment",
+      "details": "GameObject|nil Animated model owner"
+    },
+    {
+      "trigger": "node",
+      "contents": "node",
+      "annotation": "BoneAttachment",
+      "details": "integer Skeleton node index (-1 unbound)"
+    },
+    {
+      "trigger": "offset",
+      "contents": "offset",
+      "annotation": "BoneAttachment",
+      "details": "Vec3 Bone-local position offset (assign complete vector)"
+    },
+    {
+      "trigger": "rotation",
+      "contents": "rotation",
+      "annotation": "BoneAttachment",
+      "details": "Vec3 Euler-degree offset (assign complete vector)"
+    },
+    {
+      "trigger": "error",
+      "contents": "error",
+      "annotation": "BoneAttachment",
+      "details": "string Read-only runtime diagnostic"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "TPSCamera",
+      "details": "boolean"
+    },
+    {
+      "trigger": "target",
+      "contents": "target",
+      "annotation": "TPSCamera",
+      "details": "GameObject|nil Target root; nil follows the Transform parent"
+    },
+    {
+      "trigger": "offset",
+      "contents": "offset",
+      "annotation": "TPSCamera",
+      "details": "Vec3 World-space look-at offset; assign a complete vector"
+    },
+    {
+      "trigger": "mouseLook",
+      "contents": "mouseLook",
+      "annotation": "TPSCamera",
+      "details": "boolean Right mouse or locked cursor orbits during Play"
+    },
+    {
+      "trigger": "lockMouse",
+      "contents": "lockMouse",
+      "annotation": "TPSCamera",
+      "details": "boolean Default false; request cursor lock in focused Play; false releases TPS-owned lock"
+    },
+    {
+      "trigger": "collision",
+      "contents": "collision",
+      "annotation": "TPSCamera",
+      "details": "boolean Sphere-sweep obstruction avoidance (requires colliders)"
+    },
+    {
+      "trigger": "distance",
+      "contents": "distance",
+      "annotation": "TPSCamera",
+      "details": "number Desired distance, within minDistance..maxDistance"
+    },
+    {
+      "trigger": "minDistance",
+      "contents": "minDistance",
+      "annotation": "TPSCamera",
+      "details": "number At least 0.05 metres"
+    },
+    {
+      "trigger": "maxDistance",
+      "contents": "maxDistance",
+      "annotation": "TPSCamera",
+      "details": "number At most 1000 metres"
+    },
+    {
+      "trigger": "yaw",
+      "contents": "yaw",
+      "annotation": "TPSCamera",
+      "details": "number Orbit yaw in degrees"
+    },
+    {
+      "trigger": "pitch",
+      "contents": "pitch",
+      "annotation": "TPSCamera",
+      "details": "number Orbit pitch in degrees, within minPitch..maxPitch"
+    },
+    {
+      "trigger": "minPitch",
+      "contents": "minPitch",
+      "annotation": "TPSCamera",
+      "details": "number At least -89 degrees"
+    },
+    {
+      "trigger": "maxPitch",
+      "contents": "maxPitch",
+      "annotation": "TPSCamera",
+      "details": "number At most 89 degrees"
+    },
+    {
+      "trigger": "sensitivity",
+      "contents": "sensitivity",
+      "annotation": "TPSCamera",
+      "details": "number 0..10 degrees per mouse pixel"
+    },
+    {
+      "trigger": "zoomSpeed",
+      "contents": "zoomSpeed",
+      "annotation": "TPSCamera",
+      "details": "number 0..20 metres per wheel unit"
+    },
+    {
+      "trigger": "smoothing",
+      "contents": "smoothing",
+      "annotation": "TPSCamera",
+      "details": "number 0..100 response, zero snaps"
+    },
+    {
+      "trigger": "shoulder",
+      "contents": "shoulder",
+      "annotation": "TPSCamera",
+      "details": "number -10..10 metres, local screen-right"
+    },
+    {
+      "trigger": "collisionRadius",
+      "contents": "collisionRadius",
+      "annotation": "TPSCamera",
+      "details": "number 0.02..5 metres; near-plane coverage can enlarge this"
+    },
+    {
+      "trigger": "resolvedDistance",
+      "contents": "resolvedDistance",
+      "annotation": "TPSCamera",
+      "details": "number Read-only obstruction-adjusted distance"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "NavMeshAgent",
+      "details": "boolean"
+    },
+    {
+      "trigger": "speed",
+      "contents": "speed",
+      "annotation": "NavMeshAgent",
+      "details": "number Movement speed, 0..100 metres/second"
+    },
+    {
+      "trigger": "stoppingDistance",
+      "contents": "stoppingDistance",
+      "annotation": "NavMeshAgent",
+      "details": "number 0.01..10 metres"
+    },
+    {
+      "trigger": "stopped",
+      "contents": "stopped",
+      "annotation": "NavMeshAgent",
+      "details": "boolean Pause movement without clearing the route"
+    },
+    {
+      "trigger": "destination",
+      "contents": "destination",
+      "annotation": "NavMeshAgent",
+      "details": "Vec3 Assign a complete world-space destination, or call setDestination"
+    },
+    {
+      "trigger": "velocity",
+      "contents": "velocity",
+      "annotation": "NavMeshAgent",
+      "details": "Vec3 Read-only actual last-frame velocity"
+    },
+    {
+      "trigger": "hasPath",
+      "contents": "hasPath",
+      "annotation": "NavMeshAgent",
+      "details": "boolean Read-only; true while following a complete reachable path"
+    },
+    {
+      "trigger": "pathPending",
+      "contents": "pathPending",
+      "annotation": "NavMeshAgent",
+      "details": "boolean Read-only; destination request awaits the next Play update"
+    },
+    {
+      "trigger": "remainingDistance",
+      "contents": "remainingDistance",
+      "annotation": "NavMeshAgent",
+      "details": "number Read-only remaining path distance"
+    },
+    {
+      "trigger": "status",
+      "contents": "status",
+      "annotation": "NavMeshAgent",
+      "details": "string Read-only navigation status"
+    },
+    {
+      "trigger": "setDestination",
+      "contents": "setDestination",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent, x:number|Vec3, y?:number, z?:number) Queue a path request; resumes movement"
+    },
+    {
+      "trigger": "resetPath",
+      "contents": "resetPath",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent) Clear destination request, route and velocity"
+    },
+    {
+      "trigger": "updateRotation",
+      "contents": "updateRotation",
+      "annotation": "NavMeshAgent",
+      "details": "boolean Automatically face the navigation path; default true"
+    },
+    {
+      "trigger": "angularSpeed",
+      "contents": "angularSpeed",
+      "annotation": "NavMeshAgent",
+      "details": "number Degrees per second, 0..3600"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "NavMeshObstacle",
+      "details": "boolean"
+    },
+    {
+      "trigger": "size",
+      "contents": "size",
+      "annotation": "NavMeshObstacle",
+      "details": "Vec3 Local box dimensions, positive; assign a whole vector"
+    },
+    {
+      "trigger": "center",
+      "contents": "center",
+      "annotation": "NavMeshObstacle",
+      "details": "Vec3 Local box center; assign a whole vector"
+    }
+  ]
+}

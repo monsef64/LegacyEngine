@@ -994,18 +994,3 @@ function Vector3(x,y,z) end
 ---@field size Vec3 Local box dimensions, positive; assign a whole vector
 ---@field center Vec3 Local box center; assign a whole vector
 NavMeshObstacle = nil
-
----@class Animator
----@field enabled boolean
----@field sheet string Project-relative .animatorsheet asset
----@field currentState string Read-only
----@field error string Read-only
----@field setFloat fun(self:Animator, name:string, value:number)
----@field setBool fun(self:Animator, name:string, value:boolean)
----@field setTrigger fun(self:Animator, name:string)
----@field resetTrigger fun(self:Animator, name:string)
----@field getFloat fun(self:Animator, name:string):number
----@field getBool fun(self:Animator, name:string):boolean
----@field play fun(self:Animator, state:string)
----@field crossFade fun(self:Animator, state:string, seconds?:number)
-Animator = nil

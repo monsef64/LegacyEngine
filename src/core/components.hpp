@@ -5,7 +5,6 @@
 #pragma once
 
 #include "animation/animation_component.hpp"
-#include "animation/animator.hpp"
 #include "animation/bone_attachment.hpp"
 #include "audio/audio_source.hpp"
 #include "core/ecs.hpp"

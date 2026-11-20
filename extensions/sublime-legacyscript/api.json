@@ -1,0 +1,1002 @@
+[
+  {
+    "name": "Vector3",
+    "signature": "Vector3(x,y,z) - Construct a vector table accepted by position, rotation, destination and obstacle vector setters."
+  },
+  {
+    "name": "NavMeshObstacle",
+    "signature": "NavMeshObstacle - Dynamic conservative box avoidance for NavMeshAgent. Fields enabled, size and center (local-space Vector3, assign whole vectors). Excluded from navigation bake. No runtime carving; detours are bounded to 32 obstacles."
+  },
+  {
+    "name": "NavMeshAgent",
+    "signature": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(). Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Agent origin is at feet. No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
+  },
+  {
+    "name": "TPSCamera",
+    "signature": "TPSCamera - Third person target/parent follow camera. Fields: enabled, target (GameObject or nil for parent), offset (complete world-space vector), mouseLook, lockMouse (bool, default false; locks cursor only in focused Play), collision, distance/minDistance/maxDistance, yaw/pitch/minPitch/maxPitch (degrees), sensitivity, zoomSpeed, smoothing, shoulder, collisionRadius. Read-only resolvedDistance. During Play, hold right mouse or lock cursor to orbit; wheel zooms. Requires Camera+Transform, colliders for obstruction avoidance; incompatible with FPSCamera. Use Camera APIs on getComponent(Camera)."
+  },
+  {
+    "name": "affectEnvironment",
+    "signature": "Skybox.affectEnvironment: boolean, opt-in sky-colored ambient illumination on lit meshes, terrain and foliage; not shadowed GI"
+  },
+  {
+    "name": "environmentIntensity",
+    "signature": "Skybox.environmentIntensity: 0..5, default 1; used when affectEnvironment is true"
+  },
+  {
+    "name": "stabilityAssist",
+    "signature": "Vehicle.stabilityAssist: 0..1, default 1; speed-dependent steering reduction to limit cornering rollover. Does not lock rotation or prevent impact rollovers."
+  },
+  {
+    "name": "Water",
+    "signature": "Water - shared River water settings on arbitrary static .mesh or built-in MeshRenderer geometry; mesh (optional asset), shaderStyle (0..7), waveHeight, waveLength, waveSpeed. Upward triangles define buoyancy and contact coverage; not a sealed fluid volume. Ignores own solid collider/rigid-body integration."
+  },
+  {
+    "name": "BoneAttachment",
+    "signature": "BoneAttachment - enabled, source (animated GameObject), node (skeleton index), offset (complete vector), rotation (Euler degrees complete vector). Drives Transform position/rotation from evaluated bone pose; errors are read-only. Avoid dynamic RigidBody and attachment dependency cycles."
+  },
+  {
+    "name": "shaderStyle",
+    "signature": "Water/River.shaderStyle: 0 Classic, 1 Clear, 2 Ocean, 3 Lake, 4 Rapids, 5 Tropical, 6 Marsh, 7 Industrial canal (screenshot-inspired approximation)"
+  },
+  {
+    "name": "waveHeight",
+    "signature": "Water/River.waveHeight: 0..3 metres, geometric waves; zero disables displacement"
+  },
+  {
+    "name": "waveLength",
+    "signature": "Water/River.waveLength: 0.1..100 metres"
+  },
+  {
+    "name": "waveSpeed",
+    "signature": "Water/River.waveSpeed: 0..10 multiplier; Flowing and flow speed also apply"
+  },
+  {
+    "name": "Vehicle",
+    "signature": "Vehicle - four-wheel raycast chassis, local -Z forward. enabled; throttle (-1..1), steering (-1..1), brake (0..1), handbrake (boolean). Read-only speed (signed m/s), groundedWheels, isGrounded, wheelCompression (copy, FL/FR/RL/RR). Settings: wheelBase, trackWidth, mountHeight, wheelRadius, suspensionLength, springStrength, suspensionDamping, engineForce, brakeForce, tireGrip, maxSteerAngle (degrees), maxSpeed (m/s). Requires dynamic primitive chassis; adding supplies missing dependencies only."
+  },
+  {
+    "name": "throttle",
+    "signature": "Vehicle.throttle: -1..1, negative reverse, commands persist until reassigned"
+  },
+  {
+    "name": "steering",
+    "signature": "Vehicle.steering: -1..1, positive steers right"
+  },
+  {
+    "name": "brake",
+    "signature": "Vehicle.brake: 0..1, four-wheel service brake"
+  },
+  {
+    "name": "handbrake",
+    "signature": "Vehicle.handbrake: boolean, rear-wheel braking with reduced lateral grip"
+  },
+  {
+    "name": "groundedWheels",
+    "signature": "Vehicle.groundedWheels: read-only count 0..4"
+  },
+  {
+    "name": "wheelCompression",
+    "signature": "Vehicle.wheelCompression: read-only copied array, front-left/front-right/rear-left/rear-right, 0..1"
+  },
+  {
+    "name": "CloudSystem",
+    "signature": "CloudSystem - enabled, volumetric (false=2D, true=volume), color, size, coverage, density, scale, speed, opacity, steps (4..24). Vector getters return copies; assign a complete vector table. Requires Transform."
+  },
+  {
+    "name": "River",
+    "signature": "River - enabled, color, width, opacity, speed, flowing, flowAmount (0..2), transparent, collisionEffects, collisionStrength (0..2), waveScale, waveStrength, foam, subdivisions (2..32), points (2..64 local vectors). Getters return copies; assign the complete points list to update the curve. Requires Transform; visual water, no fluid physics."
+  },
+  {
+    "name": "Fog",
+    "signature": "Fog - enabled, color (complete RGB vector), density (0..10), start (>=0), end (>start, <=1000000). Global distance fog; first enabled active entity wins. Use bracket notation for the end field (a Lua keyword)."
+  },
+  {
+    "name": "fadeToColor",
+    "signature": "fadeToColor(rgb) -> ColorFade for the current active camera; RGB 0..1, e.g. color.black. Call start(seconds=1) to fade to opaque, stop(seconds=1) to fade to transparent; 0..3600 playing seconds, 0 immediate. Controllers share camera state."
+  },
+  {
+    "name": "CameraEffects",
+    "signature": "CameraEffects - optional OpenGL camera post effects; enabled, bloom, colorGrading, vignette, depthOfField, motionBlur, filmGrain, chromaticAberration, antiAliasing, ambientOcclusion, nightVision, nausea; bloomIntensity, bloomThreshold, exposure, contrast, saturation, temperature, vignetteIntensity, focusDistance, focusRange, dofStrength, motionStrength, grainIntensity, aberrationStrength, aoIntensity, aoRadius, nightVisionMode (0 green, 1 infrared-style), nightVisionIntensity (0..1), nauseaIntensity (0..1), nauseaSpeed (0..5). All effects default off; motion blur is camera-only; antiAliasing uses FXAA-style filtering."
+  },
+  {
+    "name": "LightShafts",
+    "signature": "LightShafts - fast visual shaft; enabled, direction, height, width, endWidth, color, intensity, density, falloff, streaks, fade, nearFade, useBakedTexture and texture"
+  },
+  {
+    "name": "Laser",
+    "signature": "Laser - local -Z collider-clipped beam; enabled, color, intensity, range, width, glowWidth, impactSize; hit, endPosition and hitNormal are read-only"
+  },
+  {
+    "name": "ParticleSystem",
+    "signature": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles/Blood/Explosion); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"
+  },
+  {
+    "name": "Animation",
+    "signature": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"
+  },
+  {
+    "name": "onAnimationFinish",
+    "signature": "onAnimationFinish() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "onAnimationStart",
+    "signature": "onAnimationStart() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "onAnimationStopped",
+    "signature": "onAnimationStopped() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "onAnimationPause",
+    "signature": "onAnimationPause() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "onAnimationResume",
+    "signature": "onAnimationResume() - targeted animation lifecycle callback"
+  },
+  {
+    "name": "getComponentInParent",
+    "signature": "getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent"
+  },
+  {
+    "name": "getComponentInChildren",
+    "signature": "getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants"
+  },
+  {
+    "name": "findComponentInParent",
+    "signature": "findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent"
+  },
+  {
+    "name": "findComponentInChildren",
+    "signature": "findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren"
+  },
+  {
+    "name": "meshDetail",
+    "signature": "Collider.meshDetail: integer 2..15 (default 8), 15 preserves source triangles; lower simplifies the static mesh"
+  },
+  {
+    "name": "onCollisionEnter",
+    "signature": "onCollisionEnter(collider) - solid Rigidbody contact begins; collider exposes gameObject and transform"
+  },
+  {
+    "name": "onCollisionStay",
+    "signature": "onCollisionStay(collider) - solid contact persists during a physics step"
+  },
+  {
+    "name": "onCollisionExit",
+    "signature": "onCollisionExit(collider) - solid contact ends; other collider may be nil if removed"
+  },
+  {
+    "name": "Raycast",
+    "signature": "Raycast - Line, adjustable LineOfSight fan, or Sphere overlap query component"
+  },
+  {
+    "name": "color",
+    "signature": "color.red, green, blue, white, black, yellow, cyan, magenta, gray, orange, purple, pink - RGB vectors"
+  },
+  {
+    "name": "cast",
+    "signature": "query:cast() -> nearest hit or nil"
+  },
+  {
+    "name": "castAll",
+    "signature": "query:castAll() -> distance-sorted distinct hit objects"
+  },
+  {
+    "name": "setLayers",
+    "signature": "query:setLayers({'Default','Enemies'}) - ignore other layers before finding hits"
+  },
+  {
+    "name": "addForce",
+    "signature": "body:addForce(x,y,z) - world force for next fixed step; also accepts a vector table"
+  },
+  {
+    "name": "addImpulse",
+    "signature": "body:addImpulse(x,y,z) - world impulse for next fixed step"
+  },
+  {
+    "name": "setVelocity",
+    "signature": "body:setVelocity(x,y,z) - metres per second"
+  },
+  {
+    "name": "getVelocity",
+    "signature": "body:getVelocity() -> world velocity vector"
+  },
+  {
+    "name": "addVelocity",
+    "signature": "body:addVelocity(x,y,z)"
+  },
+  {
+    "name": "movePosition",
+    "signature": "body:movePosition(x,y,z) - world position, teleport rather than sweep"
+  },
+  {
+    "name": "moveRotation",
+    "signature": "body:moveRotation(x,y,z) - Euler degrees, or quaternion table"
+  },
+  {
+    "name": "onTriggerEnter",
+    "signature": "onTriggerEnter(collider) - non-solid overlap begins"
+  },
+  {
+    "name": "onTriggerStay",
+    "signature": "onTriggerStay(collider) - non-solid overlap persists"
+  },
+  {
+    "name": "onTriggerExit",
+    "signature": "onTriggerExit(collider) - overlap ends; collider may be nil if destroyed"
+  },
+  {
+    "name": "CharacterController",
+    "signature": "CharacterController - upright capsule movement, grounded jumping and sprinting"
+  },
+  {
+    "name": "FPSCamera",
+    "signature": "FPSCamera - Camera extension with native mouse look and optional freecam movement"
+  },
+  {
+    "name": "move",
+    "signature": "controller:move(x,z) - persistent local direction; forward is negative Z, no deltaTime multiplication"
+  },
+  {
+    "name": "jump",
+    "signature": "controller:jump() - request a grounded jump if canJump"
+  },
+  {
+    "name": "sprint",
+    "signature": "controller:sprint(enabled=true) - request sprint if canSprint and moving"
+  },
+  {
+    "name": "linkToCharacter",
+    "signature": "fps:linkToCharacter(controller, x,y,z) - parent using local position offset"
+  },
+  {
+    "name": "setIsFreecam",
+    "signature": "fps:setIsFreecam(enabled) - allow unparented free movement"
+  },
+  {
+    "name": "getIsFreecam",
+    "signature": "fps:getIsFreecam() -> boolean"
+  },
+  {
+    "name": "getForward",
+    "signature": "object:getForward() -> world-space normalized local -Z direction"
+  },
+  {
+    "name": "getBackward",
+    "signature": "object:getBackward() -> world-space normalized local +Z direction"
+  },
+  {
+    "name": "getRight",
+    "signature": "object:getRight() -> world-space normalized local +X direction"
+  },
+  {
+    "name": "getLeft",
+    "signature": "object:getLeft() -> world-space normalized local -X direction"
+  },
+  {
+    "name": "getUp",
+    "signature": "object:getUp() -> world-space normalized local +Y direction"
+  },
+  {
+    "name": "getDown",
+    "signature": "object:getDown() -> world-space normalized local -Y direction"
+  },
+  {
+    "name": "spawn",
+    "signature": "spawn(prefabPathOrGameObject, position, rotation) -> new GameObject root"
+  },
+  {
+    "name": "destroy",
+    "signature": "destroy(gameObject, delay=0) - destroy subtree now or after playing seconds"
+  },
+  {
+    "name": "setCubemap",
+    "signature": "sky:setCubemap(projectRelativeCubemapPath) - select a .cubemap asset"
+  },
+  {
+    "name": "task",
+    "signature": "task(function() ... end) - run an independent cooperative block; waits pause only that task; call inside lifecycle/object callbacks or tasks"
+  },
+  {
+    "name": "waitForSeconds",
+    "signature": "waitForSeconds(seconds) - suspend this callback, not the engine"
+  },
+  {
+    "name": "wait",
+    "signature": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event"
+  },
+  {
+    "name": "isActive",
+    "signature": "object:isActive() -> effective activity including parents"
+  },
+  {
+    "name": "on",
+    "signature": "on(eventName, callback) -> listener token; receives queued custom events"
+  },
+  {
+    "name": "off",
+    "signature": "off(token) -> boolean; remove this script's listener"
+  },
+  {
+    "name": "emit",
+    "signature": "emit(eventName, ...) -> boolean; queue up to eight primitive arguments"
+  },
+  {
+    "name": "onLevelLoaded",
+    "signature": "onLevelLoaded(name) - destination callback after its scripts start"
+  },
+  {
+    "name": "onLevelFailedToLoad",
+    "signature": "onLevelFailedToLoad(name, error) - current level stays active"
+  },
+  {
+    "name": "fadeSkybox",
+    "signature": "fadeSkybox(destination, speed) or fadeSkybox(source, destination, speed) - activate destination after smooth crossfade"
+  },
+  {
+    "name": "fadeTo",
+    "signature": "sky:fadeTo(destination, speed) - smooth skybox transition"
+  },
+  {
+    "name": "loadLevel",
+    "signature": "loadLevel(name=nil) -> accepted, error; switch at next frame boundary"
+  },
+  {
+    "name": "loadLevelAsync",
+    "signature": "loadLevelAsync(name=nil) -> accepted, error; background file read"
+  },
+  {
+    "name": "unloadLevel",
+    "signature": "unloadLevel(name=nil) -> accepted, error; unload current level"
+  },
+  {
+    "name": "restartLevel",
+    "signature": "restartLevel() -> accepted, error; reload current level from disk"
+  },
+  {
+    "name": "getCurrentLevel",
+    "signature": "getCurrentLevel() -> string or nil"
+  },
+  {
+    "name": "setCurrentLevel",
+    "signature": "setCurrentLevel(name) -> accepted, error; alias for loadLevel"
+  },
+  {
+    "name": "nextLevel",
+    "signature": "nextLevel() -> accepted, error; next registered level, no wrapping"
+  },
+  {
+    "name": "previousLevel",
+    "signature": "previousLevel() -> accepted, error; previous registered level, no wrapping"
+  },
+  {
+    "name": "createAudioSource",
+    "signature": "createAudioSource(owner=self, clipPath=nil) -> AudioSource"
+  },
+  {
+    "name": "AudioClip",
+    "signature": "AudioClip(projectRelativeAudioPath) -> AudioClip path"
+  },
+  {
+    "name": "DirectionalLight",
+    "signature": "DirectionalLight - dynamic directional illumination and shadows"
+  },
+  {
+    "name": "PointLight",
+    "signature": "PointLight - dynamic omnidirectional light with range and six shadow faces"
+  },
+  {
+    "name": "SpotLight",
+    "signature": "SpotLight - cone light with innerAngle/outerAngle in degrees; cookie is a project-relative projected RGB/alpha image, empty disables"
+  },
+  {
+    "name": "Texture",
+    "signature": "Texture - export-only image or HDR asset path; @export image Texture"
+  },
+  {
+    "name": "AudioListener",
+    "signature": "AudioListener - receives sound at its GameObject world position; pause() disables reception, start() enables it"
+  },
+  {
+    "name": "spatialBlend",
+    "signature": "audio:spatialBlend(value) -> 0 (2D) to 1 (3D)"
+  },
+  {
+    "name": "setSpatialBlend",
+    "signature": "audio:setSpatialBlend(value) -> alias for spatialBlend"
+  },
+  {
+    "name": "AudioSource",
+    "signature": "AudioSource - audio component type token"
+  },
+  {
+    "name": "play",
+    "signature": "audio:play() - restart assigned clip"
+  },
+  {
+    "name": "stop",
+    "signature": "audio:stop() - stop and rewind"
+  },
+  {
+    "name": "pause",
+    "signature": "audio:pause()"
+  },
+  {
+    "name": "resume",
+    "signature": "audio:resume()"
+  },
+  {
+    "name": "setPitch",
+    "signature": "audio:setPitch(pitch) -> clamped 0.1 to 4"
+  },
+  {
+    "name": "fadeIn",
+    "signature": "audio:fadeIn(seconds) - restart and fade from silence"
+  },
+  {
+    "name": "fadeOut",
+    "signature": "audio:fadeOut(seconds) - fade then stop"
+  },
+  {
+    "name": "setVolume",
+    "signature": "audio:setVolume(volume) -> clamped 0 to 1"
+  },
+  {
+    "name": "mute",
+    "signature": "audio:mute()"
+  },
+  {
+    "name": "unmute",
+    "signature": "audio:unmute()"
+  },
+  {
+    "name": "setLooping",
+    "signature": "audio:setLooping(enabled) -> boolean"
+  },
+  {
+    "name": "setPan",
+    "signature": "audio:setPan(pan) -> clamped -1 left to 1 right"
+  },
+  {
+    "name": "setDistance",
+    "signature": "audio:setDistance(distance) -> maximum audible distance (3D)"
+  },
+  {
+    "name": "isPlaying",
+    "signature": "audio:isPlaying() -> boolean"
+  },
+  {
+    "name": "playOneShot",
+    "signature": "audio:playOneShot(AudioClip) - overlapping nonlooping clip"
+  },
+  {
+    "name": "lockCursor",
+    "signature": "lockCursor() -> boolean; viewport-confined motion, cursor hidden"
+  },
+  {
+    "name": "unlockCursor",
+    "signature": "unlockCursor() -> boolean"
+  },
+  {
+    "name": "hideCursor",
+    "signature": "hideCursor() -> boolean"
+  },
+  {
+    "name": "showCursor",
+    "signature": "showCursor() -> boolean"
+  },
+  {
+    "name": "isCursorVisible",
+    "signature": "isCursorVisible() -> boolean"
+  },
+  {
+    "name": "isCursorLocked",
+    "signature": "isCursorLocked() -> boolean"
+  },
+  {
+    "name": "isKeyPressed",
+    "signature": "isKeyPressed(keyNameOrScancode) -> boolean"
+  },
+  {
+    "name": "isKeyDown",
+    "signature": "isKeyDown(keyNameOrScancode) -> boolean"
+  },
+  {
+    "name": "isKeyReleased",
+    "signature": "isKeyReleased(keyNameOrScancode) -> boolean"
+  },
+  {
+    "name": "isMouseButtonPressed",
+    "signature": "isMouseButtonPressed(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "isMouseButtonDown",
+    "signature": "isMouseButtonDown(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "isMouseButtonReleased",
+    "signature": "isMouseButtonReleased(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "getMousePosition",
+    "signature": "getMousePosition() -> {x,y} window pixels"
+  },
+  {
+    "name": "getMouseDelta",
+    "signature": "getMouseDelta() -> {x,y} relative pixels this frame"
+  },
+  {
+    "name": "getMouseWheelDelta",
+    "signature": "getMouseWheelDelta() -> {x,y} wheel units this frame"
+  },
+  {
+    "name": "getInputAxis",
+    "signature": "getInputAxis(negativeButton,positiveButton) -> -1 to 1"
+  },
+  {
+    "name": "getInputVector",
+    "signature": "getInputVector(leftButton,rightButton,downButton,upButton) -> normalized {x,y}"
+  },
+  {
+    "name": "isGamepadButtonPressed",
+    "signature": "isGamepadButtonPressed(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "isGamepadButtonDown",
+    "signature": "isGamepadButtonDown(buttonNameOrNumber) -> boolean"
+  },
+  {
+    "name": "getGamepadAxis",
+    "signature": "getGamepadAxis(axisNameOrNumber) -> -1 to 1"
+  },
+  {
+    "name": "getGamepadStick",
+    "signature": "getGamepadStick(leftOrRight) -> {x,y}"
+  },
+  {
+    "name": "isButtonPressed",
+    "signature": "isButtonPressed(projectButtonName) -> boolean"
+  },
+  {
+    "name": "isButtonReleased",
+    "signature": "isButtonReleased(projectButtonName) -> boolean"
+  },
+  {
+    "name": "isButtonDown",
+    "signature": "isButtonDown(projectButtonName) -> boolean"
+  },
+  {
+    "name": "debug",
+    "signature": "debug - safe logging only; no Lua debug introspection"
+  },
+  {
+    "name": "log",
+    "signature": "debug.log(...) - write a normal message"
+  },
+  {
+    "name": "error",
+    "signature": "debug.error(...) - write an error without throwing"
+  },
+  {
+    "name": "warning",
+    "signature": "debug.warning(...) - write a warning"
+  },
+  {
+    "name": "new",
+    "signature": "GameObject.new(name) / Camera.new(name)"
+  },
+  {
+    "name": "find",
+    "signature": "GameObject.find(name) -> GameObject or nil"
+  },
+  {
+    "name": "getActive",
+    "signature": "Camera.getActive() -> Camera GameObject or nil"
+  },
+  {
+    "name": "setPosition",
+    "signature": "object:setPosition(x,y,z) or object:setPosition({x,y,z})"
+  },
+  {
+    "name": "getPosition",
+    "signature": "object:getPosition() -> position copy"
+  },
+  {
+    "name": "setRotation",
+    "signature": "object:setRotation(x,y,z) degrees or quaternion/table"
+  },
+  {
+    "name": "getRotation",
+    "signature": "object:getRotation() -> quaternion copy"
+  },
+  {
+    "name": "setScale",
+    "signature": "object:setScale(x,y,z) or vector"
+  },
+  {
+    "name": "getScale",
+    "signature": "object:getScale() -> scale copy"
+  },
+  {
+    "name": "translate",
+    "signature": "object:translate(x,y,z) or vector"
+  },
+  {
+    "name": "setName",
+    "signature": "object:setName(name)"
+  },
+  {
+    "name": "getName",
+    "signature": "object:getName() -> string"
+  },
+  {
+    "name": "destroy",
+    "signature": "destroy(object, delay=0) / object:destroy()"
+  },
+  {
+    "name": "setActive",
+    "signature": "object:setActive(enabled=true) - activity inherited by children; Camera also selects active camera"
+  },
+  {
+    "name": "setTarget",
+    "signature": "camera:setTarget(objectOrPositionOrNil)"
+  },
+  {
+    "name": "setShake",
+    "signature": "camera:setShake(intensity,seconds)"
+  },
+  {
+    "name": "createCamera",
+    "signature": "createCamera(name) -> Camera GameObject"
+  },
+  {
+    "name": "setActiveCamera",
+    "signature": "setActiveCamera(cameraOrNil)"
+  },
+  {
+    "name": "getActiveCamera",
+    "signature": "getActiveCamera() -> Camera GameObject or nil"
+  },
+  {
+    "name": "setCameraPosition",
+    "signature": "setCameraPosition(camera, {x,y,z})"
+  },
+  {
+    "name": "setCameraRotation",
+    "signature": "setCameraRotation(camera, Euler degrees {x,y,z} or quaternion {x,y,z,w})"
+  },
+  {
+    "name": "lookAt",
+    "signature": "lookAt(camera, worldPositionOrGameObject) - one-shot aim"
+  },
+  {
+    "name": "setFieldOfView",
+    "signature": "setFieldOfView(camera, degrees)"
+  },
+  {
+    "name": "setProjectionMode",
+    "signature": "setProjectionMode(camera, Perspective | Orthographic)"
+  },
+  {
+    "name": "setNearClipPlane",
+    "signature": "setNearClipPlane(camera, distance)"
+  },
+  {
+    "name": "setFarClipPlane",
+    "signature": "setFarClipPlane(camera, distance)"
+  },
+  {
+    "name": "setViewport",
+    "signature": "setViewport(camera, x,y,width,height) - normalized top-left viewport"
+  },
+  {
+    "name": "setCameraTarget",
+    "signature": "setCameraTarget(camera, pointOrObjectOrNil) - continuous aim"
+  },
+  {
+    "name": "setFollowTarget",
+    "signature": "setFollowTarget(camera, pointOrObjectOrNil, worldOffset)"
+  },
+  {
+    "name": "setCameraShake",
+    "signature": "setCameraShake(camera, intensity, durationSeconds)"
+  },
+  {
+    "name": "worldToScreen",
+    "signature": "worldToScreen(camera, worldPosition) -> normalized {x,y,zDepth}"
+  },
+  {
+    "name": "screenToWorld",
+    "signature": "screenToWorld(camera, normalized {x,y,zDepth}) -> world position"
+  },
+  {
+    "name": "Camera",
+    "signature": "Camera - camera component type token"
+  },
+  {
+    "name": "onMouseDown",
+    "signature": "onMouseDown() - targeted GameObject callback"
+  },
+  {
+    "name": "onMouseUp",
+    "signature": "onMouseUp() - targeted GameObject callback"
+  },
+  {
+    "name": "onMouseEnter",
+    "signature": "onMouseEnter() - targeted GameObject callback"
+  },
+  {
+    "name": "onMouseExit",
+    "signature": "onMouseExit() - targeted GameObject callback"
+  },
+  {
+    "name": "onMouseOver",
+    "signature": "onMouseOver() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioStarted",
+    "signature": "onAudioStarted() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioFinished",
+    "signature": "onAudioFinished() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioPaused",
+    "signature": "onAudioPaused() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioResumed",
+    "signature": "onAudioResumed() - targeted GameObject callback"
+  },
+  {
+    "name": "onAudioStopped",
+    "signature": "onAudioStopped() - targeted GameObject callback"
+  },
+  {
+    "name": "onStart",
+    "signature": "onStart() - called when Execute succeeds"
+  },
+  {
+    "name": "onUpdate",
+    "signature": "onUpdate(deltaTime) - once per frame, seconds"
+  },
+  {
+    "name": "onFixedUpdate",
+    "signature": "onFixedUpdate(deltaTime) - before each 1/60 s physics step"
+  },
+  {
+    "name": "onDestroy",
+    "signature": "onDestroy() - object destruction or runtime shutdown/reset"
+  },
+  {
+    "name": "createGameObject",
+    "signature": "createGameObject(name) -> GameObject"
+  },
+  {
+    "name": "destroyGameObject",
+    "signature": "destroyGameObject(gameObject) - immediately destroy object and all descendants"
+  },
+  {
+    "name": "getComponent",
+    "signature": "getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil"
+  },
+  {
+    "name": "addComponent",
+    "signature": "addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner"
+  },
+  {
+    "name": "removeComponent",
+    "signature": "removeComponent(gameObject, componentType)"
+  },
+  {
+    "name": "findGameObjectByName",
+    "signature": "findGameObjectByName(name) -> GameObject or nil"
+  },
+  {
+    "name": "findGameObjectsByComponent",
+    "signature": "findGameObjectsByComponent(componentType) -> GameObject[]"
+  },
+  {
+    "name": "setParent",
+    "signature": "setParent(child, parentOrNil) - keep world pose; reject cycles"
+  },
+  {
+    "name": "getParent",
+    "signature": "getParent(child) -> GameObject or nil"
+  },
+  {
+    "name": "Transform",
+    "signature": "Transform - component type token"
+  },
+  {
+    "name": "RigidBody",
+    "signature": "RigidBody - component type token"
+  },
+  {
+    "name": "Collider",
+    "signature": "Collider - component type token"
+  },
+  {
+    "name": "BoxCollider",
+    "signature": "BoxCollider - alias of Collider"
+  },
+  {
+    "name": "Skybox",
+    "signature": "Skybox - component type token; first enabled Skybox supplies scene background"
+  },
+  {
+    "name": "setType",
+    "signature": "sky:setType('Textures'|'HDR') - Cubemap or HDR skybox (Textures is a legacy alias)"
+  },
+  {
+    "name": "setHDR",
+    "signature": "sky:setHDR(Texture) - project .hdr panorama; nil clears"
+  },
+  {
+    "name": "setFace",
+    "signature": "sky:setFace(face,Texture) - right/left/top/bottom/front/back; nil clears"
+  },
+  {
+    "name": "setTextures",
+    "signature": "sky:setTextures(right,left,top,bottom,front,back)"
+  },
+  {
+    "name": "hdr",
+    "signature": "Skybox.hdr: project-relative Radiance .hdr panorama"
+  },
+  {
+    "name": "MeshRenderer",
+    "signature": "MeshRenderer - component type token"
+  },
+  {
+    "name": "material",
+    "signature": "MeshRenderer.material: project-relative .mat asset path"
+  },
+  {
+    "name": "setMaterial",
+    "signature": "mesh:setMaterial(path) - assign .mat asset, reset overrides"
+  },
+  {
+    "name": "setMaterialColor",
+    "signature": "mesh:setMaterialColor(r,g,b) - instance color override"
+  },
+  {
+    "name": "setMaterialTexture",
+    "signature": "mesh:setMaterialTexture(Texture) - instance albedo override; nil clears"
+  },
+  {
+    "name": "setMaterialNormalMap",
+    "signature": "mesh:setMaterialNormalMap(Texture) - instance normal map override; nil clears"
+  },
+  {
+    "name": "setMaterialShader",
+    "signature": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"
+  },
+  {
+    "name": "setMaterialNormalStrength",
+    "signature": "mesh:setMaterialNormalStrength(value) - 0..4"
+  },
+  {
+    "name": "setMaterialTiling",
+    "signature": "mesh:setMaterialTiling(x,y) - nonzero UV repeat scale"
+  },
+  {
+    "name": "setMaterialSpecular",
+    "signature": "mesh:setMaterialSpecular(value) - 0..1"
+  },
+  {
+    "name": "resetMaterialOverrides",
+    "signature": "mesh:resetMaterialOverrides() - restore shared asset properties"
+  },
+  {
+    "name": "ObjectName",
+    "signature": "ObjectName - component type token"
+  },
+  {
+    "name": "LuaScript",
+    "signature": "LuaScript - attached script component (path, enabled)"
+  },
+  {
+    "name": "self",
+    "signature": "self - GameObject owning the attached Lua Script"
+  },
+  {
+    "name": "enabled",
+    "signature": "LuaScript.enabled: boolean"
+  },
+  {
+    "name": "path",
+    "signature": "LuaScript.path: relative asset path"
+  },
+  {
+    "name": "parent",
+    "signature": "GameObject.parent: GameObject or nil"
+  },
+  {
+    "name": "position",
+    "signature": "Transform.position: {x,y,z}"
+  },
+  {
+    "name": "rotation",
+    "signature": "Transform.rotation: quaternion {x,y,z,w}"
+  },
+  {
+    "name": "scale",
+    "signature": "Transform.scale: {x,y,z}"
+  },
+  {
+    "name": "mass",
+    "signature": "RigidBody.mass: number"
+  },
+  {
+    "name": "useGravity",
+    "signature": "RigidBody.useGravity: boolean"
+  },
+  {
+    "name": "floatOnRivers",
+    "signature": "RigidBody.floatOnRivers: boolean, default false. Dynamic bodies with gravity and primitive non-trigger colliders receive river buoyancy, water drag and gentle bobbing."
+  },
+  {
+    "name": "linearVelocity",
+    "signature": "RigidBody.linearVelocity: {x,y,z}"
+  },
+  {
+    "name": "angularVelocity",
+    "signature": "RigidBody.angularVelocity: {x,y,z}"
+  },
+  {
+    "name": "shape",
+    "signature": "Collider.shape: Box | Sphere | Capsule | Cone | Mesh; Collider.model selects a static .mesh triangle source"
+  },
+  {
+    "name": "radius",
+    "signature": "Collider.radius: number"
+  },
+  {
+    "name": "height",
+    "signature": "Collider.height: number"
+  },
+  {
+    "name": "size",
+    "signature": "Collider.size: {x,y,z}"
+  },
+  {
+    "name": "center",
+    "signature": "Collider.center: {x,y,z}"
+  },
+  {
+    "name": "friction",
+    "signature": "Collider.friction: number"
+  },
+  {
+    "name": "bounciness",
+    "signature": "Collider.bounciness: number"
+  },
+  {
+    "name": "mesh",
+    "signature": "MeshRenderer.mesh: Cube | Sphere | Capsule | Cone | Plane"
+  },
+  {
+    "name": "color",
+    "signature": "MeshRenderer.color: {x,y,z}"
+  },
+  {
+    "name": "checkerboard",
+    "signature": "MeshRenderer.checkerboard: boolean"
+  },
+  {
+    "name": "specular",
+    "signature": "MeshRenderer.specular: number"
+  },
+  {
+    "name": "name",
+    "signature": "GameObject.name: string"
+  },
+  {
+    "name": "value",
+    "signature": "ObjectName.value: string"
+  }
+]

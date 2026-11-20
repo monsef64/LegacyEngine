@@ -602,19 +602,5 @@
     "enabled": "boolean",
     "size": "Vec3 Local box dimensions, positive; assign a whole vector",
     "center": "Vec3 Local box center; assign a whole vector"
-  },
-  "Animator": {
-    "enabled": "boolean",
-    "sheet": "string Project-relative .animatorsheet asset",
-    "currentState": "string Read-only",
-    "error": "string Read-only",
-    "setFloat": "fun(self:Animator, name:string, value:number)",
-    "setBool": "fun(self:Animator, name:string, value:boolean)",
-    "setTrigger": "fun(self:Animator, name:string)",
-    "resetTrigger": "fun(self:Animator, name:string)",
-    "getFloat": "fun(self:Animator, name:string):number",
-    "getBool": "fun(self:Animator, name:string):boolean",
-    "play": "fun(self:Animator, state:string)",
-    "crossFade": "fun(self:Animator, state:string, seconds?:number)"
   }
 }
