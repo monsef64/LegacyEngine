@@ -2,10 +2,10 @@
   "scope": "source.legacyscript - comment - string",
   "completions": [
     {
-      "trigger": "ui",
-      "contents": "ui",
+      "trigger": "GUI",
+      "contents": "GUI",
       "annotation": "LegacyEngine",
-      "details": "ui - RmlUi Play-mode overlay loaded from Assets/UI/main.rml. ui.isLoaded(), ui.setText(id, plainText) returns success, ui.wasClicked(id) consumes a pending click. Stop resets the document. See data/examples/rmlui."
+      "details": "GUI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(GUI) or @export hud GUI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
     },
     {
       "trigger": "Vector3",
@@ -1547,37 +1547,37 @@
       "trigger": "getComponent",
       "contents": "getComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil"
     },
     {
       "trigger": "getComponentInParent",
       "contents": "getComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil"
     },
     {
       "trigger": "getComponentInChildren",
       "contents": "getComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil"
     },
     {
       "trigger": "findComponentInParent",
       "contents": "findComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil"
     },
     {
       "trigger": "findComponentInChildren",
       "contents": "findComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil"
     },
     {
       "trigger": "addComponent",
       "contents": "addComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI"
     },
     {
       "trigger": "removeComponent",
@@ -4628,22 +4628,40 @@
       "details": "Vec3 Local box center; assign a whole vector"
     },
     {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "GUI",
+      "details": "boolean Show this GUI when its owner is active; defaults to true."
+    },
+    {
+      "trigger": "rml",
+      "contents": "rml",
+      "annotation": "GUI",
+      "details": "string Project-relative .rml asset; both rml and rcss must be assigned."
+    },
+    {
+      "trigger": "rcss",
+      "contents": "rcss",
+      "annotation": "GUI",
+      "details": "string Project-relative .rcss asset; applied to this document."
+    },
+    {
       "trigger": "isLoaded",
       "contents": "isLoaded",
-      "annotation": "GameUI",
-      "details": "fun():boolean Whether Assets/UI/main.rml is loaded in Play."
+      "annotation": "GUI",
+      "details": "fun(self:GUI):boolean Whether this component's document is loaded in Play."
     },
     {
       "trigger": "setText",
       "contents": "setText",
-      "annotation": "GameUI",
-      "details": "fun(id:string, plainText:string):boolean Set escaped plain text of an element; false when not loaded/id missing."
+      "annotation": "GUI",
+      "details": "fun(self:GUI,id:string,plainText:string):boolean Set escaped plain text in this GUI document."
     },
     {
-      "trigger": "wasClicked",
-      "contents": "wasClicked",
-      "annotation": "GameUI",
-      "details": "fun(id:string):boolean Consume a queued click for the element id; repeated clicks coalesce until polled."
+      "trigger": "onClick",
+      "contents": "onClick",
+      "annotation": "GUI",
+      "details": "fun(self:GUI,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart."
     }
   ]
 }

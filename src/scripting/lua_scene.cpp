@@ -43,21 +43,37 @@ struct Vector {
     Component component;
     char field[32];
 };
-const char* types[]{"Transform",      "RigidBody",
-                    "Collider",       "MeshRenderer",
-                    "ObjectName",     "LuaScript",
-                    "Camera",         "AudioSource",
-                    "AudioListener",  "DirectionalLight",
-                    "PointLight",     "SpotLight",
-                    "Skybox",         "CharacterController",
-                    "FPSCamera",      "Raycast",
-                    "Animation",      "ParticleSystem",
-                    "Laser",          "LightShafts",
-                    "CameraEffects",  "Fog",
-                    "CloudSystem",    "River",
-                    "Vehicle",        "Water",
-                    "BoneAttachment", "TPSCamera",
-                    "NavMeshAgent",   "NavMeshObstacle"};
+const char* types[]{"Transform",
+                    "RigidBody",
+                    "Collider",
+                    "MeshRenderer",
+                    "ObjectName",
+                    "LuaScript",
+                    "Camera",
+                    "AudioSource",
+                    "AudioListener",
+                    "DirectionalLight",
+                    "PointLight",
+                    "SpotLight",
+                    "Skybox",
+                    "CharacterController",
+                    "FPSCamera",
+                    "Raycast",
+                    "Animation",
+                    "ParticleSystem",
+                    "Laser",
+                    "LightShafts",
+                    "CameraEffects",
+                    "Fog",
+                    "CloudSystem",
+                    "River",
+                    "Vehicle",
+                    "Water",
+                    "BoneAttachment",
+                    "TPSCamera",
+                    "NavMeshAgent",
+                    "NavMeshObstacle",
+                    "GUI"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -66,7 +82,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 30; ++i) {
+    for (int i = 0; i < 31; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -122,6 +138,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<Water>(h.entity);
     case 26:
         return h.world->has<BoneAttachment>(h.entity);
+    case 30:
+        return h.world->has<GUI>(h.entity);
     case 29:
         return h.world->has<NavMeshObstacle>(h.entity);
     case 28:
@@ -466,30 +484,6 @@ LuaScene::LuaScene(lua_State* L,
         lua_setfield(L, -2, colorNames[i]);
     }
     lua_setglobal(L, "color");
-    lua_newtable(L);
-    lua_pushcfunction(L, [](lua_State* state) -> int {
-        auto* ui = GameUI::current();
-        const char* id = luaL_checkstring(state, 1);
-        const char* text = luaL_checkstring(state, 2);
-        lua_pushboolean(state, ui && ui->setText(id, text));
-        return 1;
-    });
-    lua_setfield(L, -2, "setText");
-    lua_pushcfunction(L, [](lua_State* state) -> int {
-        auto* ui = GameUI::current();
-        const char* id = luaL_checkstring(state, 1);
-        lua_pushboolean(state, ui && ui->takeClick(id));
-        return 1;
-    });
-    lua_setfield(L, -2, "wasClicked");
-    lua_pushcfunction(L, [](lua_State* state) -> int {
-        auto* ui = GameUI::current();
-        lua_pushboolean(state, ui && ui->loaded());
-        return 1;
-    });
-    lua_setfield(L, -2, "isLoaded");
-    lua_setglobal(L, "ui");
-
     const char* metas[]{"GameObject", "Component", "Vector"};
     const lua_CFunction reads[]{objectIndex, componentIndex, vectorIndex};
     const lua_CFunction writes[]{objectNewIndex, componentNewIndex, vectorNewIndex};
@@ -511,7 +505,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 30; ++i) {
+    for (int i = 0; i < 31; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -748,6 +742,9 @@ int LuaScene::api(lua_State* L) {
         case 25:
             self.world_.each<Water>([&](Entity e, Water&) { collect(e); });
             break;
+        case 30:
+            self.world_.each<GUI>([&](Entity e, GUI&) { collect(e); });
+            break;
         case 29:
             self.world_.each<NavMeshObstacle>([&](Entity e, NavMeshObstacle&) { collect(e); });
             break;
@@ -942,6 +939,9 @@ int LuaScene::api(lua_State* L) {
         case 25:
             self.world_.remove<Water>(h.entity);
             break;
+        case 30:
+            self.world_.remove<GUI>(h.entity);
+            break;
         case 29:
             self.world_.remove<NavMeshObstacle>(h.entity);
             break;
@@ -1048,6 +1048,12 @@ int LuaScene::api(lua_State* L) {
                 self.world_.add(h.entity, Transform{});
             }
             self.world_.add(h.entity, Water{});
+            break;
+        case 30:
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            self.world_.add(h.entity, GUI{});
             break;
         case 29:
             if (!self.world_.has<Transform>(h.entity)) {
@@ -1352,6 +1358,26 @@ int LuaScene::componentIndex(lua_State* L) {
     if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
         return luaL_error(L, "Component no longer exists");
     }
+    if (c.type == 30) {
+        const auto& g = c.object.world->get<GUI>(c.object.entity);
+        if (!std::strcmp(key, "enabled")) {
+            lua_pushboolean(L, g.enabled);
+            return 1;
+        }
+        if (!std::strcmp(key, "rml") || !std::strcmp(key, "rcss")) {
+            lua_pushstring(L, !std::strcmp(key, "rml") ? g.rml.c_str() : g.rcss.c_str());
+            return 1;
+        }
+        const char* methods[]{"isLoaded", "setText", "onClick"};
+        for (int i = 0; i < 3; ++i) {
+            if (!std::strcmp(key, methods[i])) {
+                lua_pushvalue(L, 1);
+                lua_pushinteger(L, i);
+                lua_pushcclosure(L, guiMethod, 2);
+                return 1;
+            }
+        }
+    }
     const char* sharedMethods[]{"getComponent",
                                 "addComponent",
                                 "removeComponent",
@@ -1394,7 +1420,7 @@ int LuaScene::componentIndex(lua_State* L) {
         return objectIndex(L);
     }
     // Component aliases resolve on the same owner, without storing raw pointers.
-    for (int type = 0; type < 30; ++type) {
+    for (int type = 0; type < 31; ++type) {
         std::string alias = type == 14   ? "fpsCamera"
                             : type == 27 ? "tpsCamera"
                             : type == 28 ? "navMeshAgent"
@@ -2127,6 +2153,29 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 30) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
+            return luaL_error(L, "GUI no longer exists");
+        }
+        auto& g = c.object.world->get<GUI>(c.object.entity);
+        const char* key = luaL_checkstring(L, 2);
+        if (!std::strcmp(key, "enabled")) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            g.enabled = lua_toboolean(L, 3);
+            return 0;
+        }
+        if (std::strcmp(key, "rml") && std::strcmp(key, "rcss")) {
+            return luaL_error(L, "Unknown or read-only GUI property");
+        }
+        const char* path = luaL_checkstring(L, 3);
+        if (!exportAssetPath(path) ||
+            (*path &&
+             AssetManager::extension(path) != (!std::strcmp(key, "rml") ? ".rml" : ".rcss"))) {
+            return luaL_error(L, "Expected a project-relative RML/RCSS asset path");
+        }
+        (!std::strcmp(key, "rml") ? g.rml : g.rcss) = path;
+        return 0;
+    }
     if (c.type == 29) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
             return luaL_error(L, "Component no longer exists");
@@ -3803,7 +3852,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 30; ++type) {
+                for (; type < 31; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }
@@ -4046,4 +4095,60 @@ int LuaScene::fadeColorControl(lua_State* L) {
         fx.fadeAmount = fx.fadeTarget;
     }
     return 0;
+}
+
+int LuaScene::guiMethod(lua_State* L) {
+    const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
+    if (!c.object.world->alive(c.object.entity) || !has(c.object, 30)) {
+        return luaL_error(L, "GUI no longer exists");
+    }
+    const int op = int(lua_tointeger(L, lua_upvalueindex(2)));
+    const int arg = luaL_testudata(L, 1, "Component") ? 2 : 1;
+    auto* ui = GameUI::current();
+    const auto& g = c.object.world->get<GUI>(c.object.entity);
+    const bool available = ui && g.enabled && isActive(*c.object.world, c.object.entity) &&
+                           ui->loaded(c.object.entity);
+    if (op == 0) {
+        lua_pushboolean(L, available);
+        return 1;
+    }
+    size_t length = 0;
+    const char* id = luaL_checklstring(L, arg, &length);
+    if (!length || length > 64 || std::strlen(id) != length) {
+        return luaL_error(L, "GUI element id must be 1..64 bytes");
+    }
+    if (op == 1) {
+        const char* text = luaL_checkstring(L, arg + 1);
+        lua_pushboolean(L, available && ui->setText(c.object.entity, id, text));
+        return 1;
+    }
+    if (lua_isnoneornil(L, arg + 1)) {
+        lua_pushboolean(L, available && ui->takeClick(c.object.entity, id));
+        return 1;
+    }
+    luaL_checktype(L, arg + 1, LUA_TFUNCTION);
+    // Reuse the bounded event subscription dispatcher, instruction budgets,
+    // error reporting and shutdown cleanup. Register once (usually onStart).
+    lua_getglobal(L, "on");
+    lua_pushstring(L, GameUI::clickEvent(c.object.entity, id).c_str());
+    lua_pushvalue(L, lua_upvalueindex(1));
+    lua_pushvalue(L, arg + 1);
+    lua_pushcclosure(
+        L,
+        [](lua_State* state) -> int {
+            const auto bound = *static_cast<Component*>(lua_touserdata(state, lua_upvalueindex(1)));
+            auto* runtime = GameUI::current();
+            if (!bound.object.world->alive(bound.object.entity) || !has(bound.object, 30) ||
+                !isActive(*bound.object.world, bound.object.entity) ||
+                !bound.object.world->get<GUI>(bound.object.entity).enabled || !runtime ||
+                !runtime->loaded(bound.object.entity)) {
+                return 0;
+            }
+            lua_pushvalue(state, lua_upvalueindex(2));
+            lua_call(state, 0, 0);
+            return 0;
+        },
+        2);
+    lua_call(L, 2, 1);
+    return 1;
 }

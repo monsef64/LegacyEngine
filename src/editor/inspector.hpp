@@ -401,6 +401,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Water>) {
             type = 26;
         }
+        if constexpr (std::is_same_v<T, GUI>) {
+            type = 32;
+        }
         if constexpr (std::is_same_v<T, NavMeshObstacle>) {
             type = 30;
         }
@@ -471,8 +474,10 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "BoneAttachment",
                                 "TPSCamera",
                                 "NavMeshAgent",
-                                "NavMeshObstacle"};
-            for (int i = 0; i < 31; ++i) {
+                                "NavMeshObstacle",
+                                "RemovedAnimator",
+                                "GUI"};
+            for (int i = 0; i < 33; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -552,7 +557,9 @@ inline void drawScriptExports(World& world,
                                  "BoneAttachment",
                                  "TPSCamera",
                                  "NavMeshAgent",
-                                 "NavMeshObstacle"};
+                                 "NavMeshObstacle",
+                                 "RemovedAnimator",
+                                 "GUI"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -611,7 +618,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 31 &&
+                        if (target.type >= 0 && target.type < 33 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -825,18 +832,33 @@ inline void drawInspector(World& world,
                 ImGui::EndCombo();
             }
             ImGui::Separator();
-            auto ordered =
-                world.has<InspectorOrder>(selected)
-                    ? world.get<InspectorOrder>(selected).types
-                    : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15,
-                                       16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30};
-            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15,
-                           16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30}) {
+            auto ordered = world.has<InspectorOrder>(selected)
+                               ? world.get<InspectorOrder>(selected).types
+                               : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,
+                                                  5,  13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                                                  23, 24, 25, 26, 27, 28, 29, 30, 32};
+            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15, 16,
+                           17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
             }
             for (int componentID : ordered) {
+                if (componentID == 32) {
+                    if (auto* g = world.tryGet<GUI>(selected);
+                        g && componentHeader<GUI>(world, selected, "GUI")) {
+                        EditorValues::Checkbox("Enabled", &g->enabled);
+                        assetPicker("RML asset", g->rml, assets, [](const std::string& file) {
+                            return AssetManager::extension(file) == ".rml";
+                        });
+                        assetPicker("RCSS asset", g->rcss, assets, [](const std::string& file) {
+                            return AssetManager::extension(file) == ".rcss";
+                        });
+                        ImGui::TextWrapped(
+                            "Assign both assets to show this GUI in Game during Play. Paths may be anywhere in Assets. Scripts: self:getComponent(GUI), or export a GUI reference.");
+                    }
+                }
+
                 if (auto* p = world.tryGet<ParticleSystem>(selected);
                     componentID == 17 && p &&
                     componentHeader<ParticleSystem>(world, selected, "ParticleSystem")) {
@@ -2098,6 +2120,9 @@ inline void drawInspector(World& world,
                         world.add(selected, Transform{});
                     }
                     world.add(selected, BoneAttachment{});
+                }
+                if (!world.has<GUI>(selected) && ImGui::MenuItem("GUI")) {
+                    world.add(selected, GUI{});
                 }
                 if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("Camera Effects")) {
                     world.add(selected, CameraEffects{});

@@ -1,106 +1,151 @@
-# In-game UI (RmlUi)
+# GUI component (RmlUi)
 
-LegacyEngine uses **RmlUi 6.1** for optional in-game interfaces, rendered with
-OpenGL 3.3 over the Game image. ImGui remains the editor UI. There is no second
-windowing backend, browser, JavaScript runtime, or Vulkan renderer.
+LegacyEngine uses **RmlUi 6.1** for in-game interfaces rendered with OpenGL 3.3.
+ImGui remains the editor UI. Each GameObject's **GUI** component owns a separate
+runtime document. Nothing is loaded automatically from an `UI` folder.
 
-## Quick start
+## Setup
 
-The runtime entry point is **`Assets/UI/main.rml`** in the current project. If it
-does not exist, no RmlUi context/renderer is created and gameplay is unchanged.
-Documents/styles are loaded on entering Play, not persisted into the scene, and
-unloaded on Stop. Stop/Play reloads edited RML and RCSS (including style caches).
-The Game overlay renders even with no Camera, above the empty Game background.
-It is not drawn in Scene view or camera previews.
+1. Import your `.rml` and `.rcss` files anywhere inside the project's Assets.
+2. Select a GameObject and choose **Add Component > GUI**.
+3. Assign **RML asset** and **RCSS asset** in its Inspector. **Both are required.**
+   Keep **Enabled** checked and the owner/its parents active.
+4. Press Play and focus Game. Unlock the player cursor to click controls.
 
-Copy the complete [interactive HUD example](../data/examples/rmlui/README.md):
+GUI is a screen-space Game overlay, independent of the owner's Transform. No
+Camera is required. Multiple GUI components can display simultaneously; ids are
+scoped to each document, so separate GUIs may use the same element ids. Documents
+are shown in creation order, with newly shown documents in front. There is no
+explicit layer-order control yet. Scene view and camera previews do not show GUI.
 
-- [`main.rml`](../data/examples/rmlui/main.rml) → `Assets/UI/main.rml`
-- [`hud.rcss`](../data/examples/rmlui/hud.rcss) → `Assets/UI/hud.rcss`
-- [`hud.lua`](../data/examples/rmlui/hud.lua) → any location in Assets; attach it to
-  **one** object's LegacyScript component.
+Configuration is saved with projects, levels and prefabs and supports component
+Reset/Remove, duplicate/copy, undo and exported script references. Document state
+is runtime-only. Stop unloads documents; Play reloads their original content.
+Disabling/removing GUI, deactivating its owner/ancestor, or clearing either asset
+unloads that document. Re-enabling creates a fresh document. Changing an assigned
+asset path reloads that GUI on the next runtime synchronization.
 
-Press Play, focus Game and unlock your player cursor. The example includes health,
-supplies, two clickable buttons and a text-input focus demonstration. No extra
-font assets are needed: `font-family: Roboto` uses the engine's embedded font.
+## Script access
 
-## Markup, styles and assets
-
-RML and RCSS are RmlUi's HTML/CSS-like formats, **not** a web browser. External
-RCSS references and images resolve relative to their document/style sheet.
-The example uses RmlUi `dp` units so its sizes follow display density. The GL3
-backend supports RmlUi clipping, transforms, layers and filters. Images
-use the existing engine image decoder, including PNG/JPEG/BMP/TGA; color data is
-converted to premultiplied alpha before upload. Per-image limits are 64 MiB encoded
-and 8192 pixels per dimension. SVG/Lottie plugins and arbitrary downloadable web
-fonts are not enabled. Use the upstream RmlUi documentation for supported markup
-and RCSS properties: <https://github.com/mikke89/RmlUi>.
-
-Use `pointer-events: none` on a full-screen HUD body and `pointer-events: auto` on
-interactive panels to allow clicks on empty screen space to reach the game. Cursor
-coordinates are mapped from the embedded image (or separate Game window) into
-framebuffer pixels. Pointer input is not sent to the UI when gameplay locks the
-cursor. UI elements consume mouse input over their interactive area, including
-blocking world object hover/picking there. Release events still reach gameplay
-to prevent held mouse buttons getting stuck. Text/select input focus suspends
-gameplay keyboard polling; clicking empty game space or leaving Game clears focus.
-
-## Lua bridge
-
-These functions are available to ordinary attached LegacyScript scripts; no
-RmlUi Lua plugin or inline RML event scripts are required:
+Get the component on the attached object:
 
 ```lua
-function onUpdate(dt)
-    if not ui.isLoaded() then return end
-    if ui.wasClicked("buy") then
-        ui.setText("message", "Purchased!")
+local gui
+function onStart()
+    gui = self:getComponent(GUI)
+    if not gui then return end
+    gui:onClick("buy", function()
+        gui:setText("message", "Purchased!")
+    end)
+end
+```
+
+Or expose an Inspector slot and drag a GUI component (or an object with GUI)
+onto it. The script and GUI can be on different objects:
+
+```lua
+@export HUD GUI
+
+function onStart()
+    if HUD then
+        HUD:onClick("buy", function()
+            HUD:setText("message", "Purchased!")
+        end)
     end
 end
 ```
 
-- `ui.isLoaded()` → boolean. The entry document has loaded in the runtime context.
-  It may not be ready during the first `onStart`; check it in `onUpdate`.
-- `ui.setText(id, plainText)` → boolean success. Finds an element by id in the entry
-  document and replaces its content with **escaped plain text**, not executable
-  markup. Returns false when the document or id is missing.
-- `ui.wasClicked(id)` → boolean. Consumes a pending click for that id. Nested
-  label clicks bubble to the nearest ancestor with an id. Repeated clicks before
-  polling coalesce. One script should own each control. Pending ids are bounded
-  to 256 and reset when the document is unloaded.
+Use **colon** calls on the component:
 
-This initial bridge intentionally does not expose a full DOM, binding arbitrary
-Lua callbacks inside RML, or editing RML in the Script Editor. Edit `.rml`/`.rcss`
-with an external editor. Text input is interactive but its value is not exposed
-through this minimal bridge yet. Missing/invalid documents log an error and do
-not prevent the world from playing; correct the file and restart Play.
+- `gui:isLoaded()` → boolean. Whether this component's document is loaded and
+  enabled. It may not yet be loaded in the first `onStart`; callbacks can still
+  be registered there. Guard text updates in `onUpdate` when necessary.
+- `gui:setText(id, plainText)` → boolean success. Sets **escaped plain text** in
+  this GUI document; no markup injection. False when the document/id is missing.
+- `gui:onClick(id, callback)` → integer subscription token. **Register once**,
+  usually in `onStart`, not on every update. The callback receives no arguments.
+  It runs in the normal budgeted event dispatcher, not inside rendering/SDL.
+  Cancel with `off(token)`. Script shutdown removes its subscriptions; callbacks
+  are skipped while the GUI/owner is disabled or missing. Callback errors use
+  the existing event error handling and instruction budget. `wait` and `task` are not
+  supported inside these event callbacks; set a flag for `onUpdate` to handle
+  deferred work.
+- `gui:onClick(id)` → boolean polling form. Consumes a queued click. Repeated
+  clicks before polling coalesce. Do not combine polling and callback forms for
+  the same gameplay action unless you intentionally want both notifications.
+- `gui.enabled` → boolean. Toggle display; `gui.rml` and `gui.rcss` are writable
+  project-relative asset paths. Assign complete strings, e.g.
+  `gui.rml = "Menus/Pause.rml"` and `gui.rcss = "Styles/Pause.rcss"`.
+
+Element ids for scripting are 1–64 bytes. Nested label clicks bubble to the
+nearest element with an id. Pending polling ids are bounded to 256 per document;
+callback subscriptions use the existing 128-listener-per-script limit. Both
+forms refer to this GUI's document, not any other GUI with the same id.
+
+**Migration:** the global `ui` table and `wasClicked` name have been removed.
+Replace `ui.setText(...)` with `gui:setText(...)` and `ui.wasClicked(id)` with
+`gui:onClick(id)` or register an `onClick` callback. Existing files at
+`Assets/UI/main.rml` are not automatically loaded: add GUI and assign both assets.
+
+## Included interactive example
+
+See [`data/examples/rmlui/README.md`](../data/examples/rmlui/README.md).
+Import [`main.rml`](../data/examples/rmlui/main.rml),
+[`hud.rcss`](../data/examples/rmlui/hud.rcss), and
+[`hud.lua`](../data/examples/rmlui/hud.lua) into any Assets subfolder.
+Add GUI, assign those RML/RCSS assets, and attach the script to that same object,
+or assign the exported **HUD** slot to a different object's GUI.
+
+Collect supplies, press H to take damage, then heal. The callsign field demonstrates
+text-input focus, but reading its value through Lua is not implemented yet.
+
+## Styles, assets and input
+
+RML/RCSS are HTML/CSS-like formats, **not a browser**: no JavaScript, network
+fetch, full browser CSS, or full DOM Lua binding. The component's assigned RCSS is
+applied in addition to document styles, with assigned styles taking precedence.
+An RML `<link>` is not required. References inside the document and stylesheet
+remain relative to their own source files. Both assigned assets must exist, have
+the correct extensions and be at most 4 MiB each. Invalid assets log a GUI error
+without stopping gameplay. Correct them and Stop/Play to retry loading.
+
+`font-family: Roboto` uses the engine's embedded font. The example uses RmlUi `dp`
+units for display-density-aware sizing. PNG/JPEG/BMP/TGA images use the existing
+engine decoder and premultiplied alpha; per-image limits are 64 MiB encoded and
+8192 pixels per dimension. SVG/Lottie plugins are disabled.
+
+For a HUD that does not block the whole Game image, use `pointer-events: none` on
+its body and `pointer-events: auto` on interactive panels. Pointer positions are
+mapped into Game framebuffer pixels, including the separate/fullscreen Game
+window. Locked gameplay cursors bypass GUI pointer handling. Interactive GUI
+areas block world picking; release events still reach gameplay to avoid stuck
+mouse buttons. Text/select focus suspends gameplay key polling. Click empty Game
+space or leave Game to clear focus.
 
 ## Build and manual verification
 
-CMake fetches pinned RmlUi and FreeType sources and links them statically, including
-on MinGW-w64. Examples/tests/Lua bindings are disabled. The engine uses its existing
-GL loader and SDL3 window; RmlUi does not create a graphics context. A small
-build-time adaptation directs upstream GL3's final composition to the offscreen
-Game framebuffer rather than framebuffer zero. Original upstream license headers
-are preserved in that generated backend source. The pinned RmlUi hash-map header
-also receives a missing `<cstdint>` include at configure time, so MinGW builds do
-not depend on transitive integer definitions or RmlUi's precompiled header. This
-fixes the misleading `robin_hood.h: Unsupported bitness` error and subsequent
-missing `uint64_t`/`UINT64_C` errors; no pointer-width override is needed. Re-run
-CMake configuration before rebuilding an existing build directory.
+CMake fetches pinned RmlUi/FreeType and links statically, including MinGW-w64.
+The existing SDL3 window, OpenGL loader and offscreen Game framebuffer are reused.
+The backend's final composition destination is adapted at configure time. The
+pinned hash-map header receives its missing `<cstdint>` include to fix recent
+MinGW's misleading `Unsupported bitness` error. No pointer-width override is used.
+Re-run CMake configuration when upgrading an existing build directory.
 
-Manual checks (no automated tests):
+Manual verification (no automated tests):
 
-1. Play a project with no `UI/main.rml`: existing rendering/input must be unchanged.
-2. Run the example; collect, take damage and heal. Verify numeric/status updates.
-3. Type H/W/Space into the callsign field: no keyboard gameplay actions. Click
-   outside the panel and verify gameplay keys work again.
-4. Resize/dock Game, try display scaling, then separate Game and fullscreen. Check
-   click alignment, alpha, clipping, input focus, and no UI in Scene view.
-5. Lock cursor with an FPS/TPS script; UI should stop taking pointer input.
-6. Release a gameplay-held mouse button over the HUD; it must not stay held.
-7. Stop/Play, switch projects and close the separate Game window. Confirm clean
-   UI lifetime, no stale clicks, no runtime world edits saved, and reloaded styles.
-8. Break/restore the RML path and restart Play; inspect logs and verify recovery.
-9. Check a PNG with transparent edges over the 3D image and a scrollable/clipped
-   panel. Verify editor UI remains unaffected after drawing the game overlay.
+1. Leave an old `Assets/UI/main.rml` in a scene without GUI: nothing should load.
+2. Add GUI; leave either slot empty, then assign both from unrelated Assets
+   folders. Confirm it displays only when both are assigned and enabled.
+3. Run the example; verify callback text updates, H damage, supply collection and
+   healing. Assign its exported HUD to another object's GUI and repeat.
+4. Display two GUIs using the same ids and verify each script changes only its
+   assigned document. Disable/remove/deactivate one and confirm the other remains.
+5. Change paths, Stop/Play, save/reopen, duplicate, prefab-spawn and undo/redo.
+   Ensure GUI configuration survives but runtime text/state is never saved.
+6. Drag the GUI header and its GameObject into a GUI export slot. Check wrong
+   component types are rejected. Rename/move the assigned asset folder and check
+   live and saved level/prefab component paths follow the rename.
+7. Resize/dock Game, test HiDPI, separate/fullscreen Game, text-field focus,
+   transparent PNG edges, clipping, locked cursors and release outside the panel.
+8. Remove a GUI with a subscribed callback, then click elsewhere. Confirm no stale
+   callbacks/crashes. Use `off(token)` and verify the callback stops firing.

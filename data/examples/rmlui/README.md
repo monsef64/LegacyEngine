@@ -1,29 +1,43 @@
-# RmlUi in-game HUD example
+# GUI component HUD example
 
-1. Create/open any LegacyEngine project (even an empty scene).
-2. Create `UI` inside that project's Assets directory. Copy `main.rml` and
-   `hud.rcss` into it. The runtime entry point is **Assets/UI/main.rml**.
-3. Copy `hud.lua` into Assets and attach it to one object's **LegacyScript**.
-4. Press Play and focus Game. Unlock the cursor if your player script locks it.
-5. Click **Collect supply**, press **H**, then click **Use supply**. The text
-   changes through the engine's `ui` Lua API. Try typing into the callsign field;
-   keyboard gameplay input is suspended while that field owns focus.
-6. Stop and Play again to reset both the document and Lua state. Edit RML/RCSS
-   while stopped and restart Play to reload them.
+1. Import `main.rml`, `hud.rcss` and `hud.lua` into any folder inside your
+   project's Assets. There is **no required UI folder or automatic entry point**.
+2. Create/select a GameObject. Choose **Add Component > GUI** and assign
+   `main.rml` to **RML asset** and `hud.rcss` to **RCSS asset**. Both are required.
+3. Attach `hud.lua` to that object's **LegacyScript** component. Alternatively,
+   attach it to another object and drag the GUI header (or the GUI's GameObject)
+   onto the script's exported **HUD (GUI)** slot. Use only one HUD driver.
+4. Press Play, focus Game and unlock the mouse if your player script locks it.
+   No Camera or mesh is required for the overlay.
+5. Click **Collect supply**, press **H**, then **Use supply**. The example uses
+   component-scoped `gui:onClick(id, callback)` handlers and `gui:setText` updates.
+6. Try the callsign text field; gameplay key polling should stop while editing.
+   Click empty Game space to restore it. Lua text-field value access is not yet
+   available in this bridge.
+7. Stop/Play resets the GUI and script. Edit RML/RCSS while stopped and restart
+   Play to reload file contents. Runtime text changes are never written to assets.
 
-The overlay also works in the separate Game window/fullscreen. It is never part
-of the Scene/editor view or saved runtime world state. No external fonts are
-needed: the engine registers its embedded Roboto face as `Roboto`.
+GUI uses its assigned stylesheet, so this example does not need an RML `<link>`.
+RML images and RCSS resources still resolve relative to their respective files.
+Embedded `font-family: Roboto` needs no external font asset. RmlUi is not a web
+browser: no JavaScript or full DOM Lua binding is provided.
 
-This is RmlUi markup/CSS, **not a web browser**: there is no JavaScript, DOM Lua
-binding, network asset fetch, or full browser CSS compatibility. The small Lua
-bridge exposes `ui.isLoaded()`, `ui.setText(id, plainText)` and
-`ui.wasClicked(id)`. `setText` escapes markup. `wasClicked` consumes a pending
-click, so one script should own each button. Clicks on labels bubble to the
-nearest element with an id. Repeated clicks before polling coalesce per id.
+API:
 
-Images use the engine decoder (PNG/JPEG/BMP/TGA, including alpha). Paths in
-`<img src="..." />` and RCSS are relative to the document/style sheet. Images
-are limited to 8192 pixels per dimension and 64 MiB per encoded file.
-RML/RCSS and relative asset references are project files; no automatic copying
-into a project is performed.
+- `local gui = self:getComponent(GUI)` or `@export HUD GUI`.
+- `gui:isLoaded()` returns a boolean (loading may finish after first onStart).
+- `gui:setText(id, plainText)` returns success and escapes markup.
+- `local token = gui:onClick(id, function() ... end)` registers once; `off(token)`
+  cancels it. Never register on every update. Callbacks use the normal bounded
+  event dispatcher and do not support `wait`.
+- `gui:onClick(id)` is the optional boolean polling form. It replaces
+  `wasClicked`; repeated clicks coalesce until polled.
+- `gui.enabled`, `gui.rml`, `gui.rcss` configure that GUI only.
+
+Each GUI has its own document/id scope. Put the same example on two objects to
+check independent GUI state (overlapping panels will cover one another; move a
+panel in a separate stylesheet to see both). The old global `ui` table and
+`Assets/UI/main.rml` automatic loading have been removed.
+
+Images use PNG/JPEG/BMP/TGA, including alpha, limited to 8192 pixels per dimension
+and 64 MiB per encoded file. See `docs/game-ui.md` for the full setup/API guide.

@@ -7,16 +7,16 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'|'GUI'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
----@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
----@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
----@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
----@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent
+---@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onAnimationFinish fun()|nil
 ---@field onAnimationStart fun()|nil
@@ -94,7 +94,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|GUI|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -995,9 +995,11 @@ function Vector3(x,y,z) end
 ---@field center Vec3 Local box center; assign a whole vector
 NavMeshObstacle = nil
 
----@class GameUI
----@field isLoaded fun():boolean Whether Assets/UI/main.rml is loaded in Play.
----@field setText fun(id:string, plainText:string):boolean Set escaped plain text of an element; false when not loaded/id missing.
----@field wasClicked fun(id:string):boolean Consume a queued click for the element id; repeated clicks coalesce until polled.
----@type GameUI
-ui = {}
+---@class GUI
+---@field enabled boolean Show this GUI when its owner is active; defaults to true.
+---@field rml string Project-relative .rml asset; both rml and rcss must be assigned.
+---@field rcss string Project-relative .rcss asset; applied to this document.
+---@field isLoaded fun(self:GUI):boolean Whether this component's document is loaded in Play.
+---@field setText fun(self:GUI,id:string,plainText:string):boolean Set escaped plain text in this GUI document.
+---@field onClick fun(self:GUI,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart.
+GUI = nil
