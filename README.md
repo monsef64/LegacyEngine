@@ -61,5 +61,7 @@ See [Jolt migration and manual checks](docs/manual/jolt-and-model-imports.md) fo
 
 ### In-game UI
 
-RmlUi provides an optional OpenGL in-game overlay, separate from the ImGui editor.
+The GUI component displays assigned RML/RCSS assets with RmlUi/OpenGL, separate
+from the ImGui editor. Scripts access a specific GUI component; no UI folder
+is auto-loaded.
 See the [setup/API guide](docs/game-ui.md) and [interactive HUD example](data/examples/rmlui/README.md).

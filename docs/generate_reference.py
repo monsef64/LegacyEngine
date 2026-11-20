@@ -170,11 +170,11 @@ def example(entry):
         return 'local object = GameObject.new("Player")' if name == 'new' else 'local object = GameObject.find("Player")\nif object then debug.log(object:getName()) end'
     if owner == 'CameraConstructor':
         return 'local camera = Camera.new("Player Camera")' if name == 'new' else 'local camera = Camera.getActive()\nif camera then debug.log(camera:getName()) end'
-    if owner == 'GameUI':
+    if owner == 'GUI':
         return {
-            'isLoaded': 'if ui.isLoaded() then debug.log("HUD document ready") end',
-            'setText': 'ui.setText("health", "100 / 100")',
-            'wasClicked': 'function onUpdate(dt)\n    if ui.wasClicked("collect") then ui.setText("status", "Collected!") end\nend',
+            'isLoaded': 'local gui = self:getComponent(GUI)\nif gui and gui:isLoaded() then debug.log("GUI ready") end',
+            'setText': 'local gui = self:getComponent(GUI)\nif gui then gui:setText("health", "100 / 100") end',
+            'onClick': 'function onStart()\n    local gui = self:getComponent(GUI)\n    if gui then gui:onClick("collect", function() gui:setText("status", "Collected!") end) end\nend',
         }[name]
     if owner == 'ColorFade':
         return f'local fade = fadeToColor(color.black)\nfade:{name}(1)'
@@ -276,7 +276,7 @@ GameObject reference, `offset` is assigned as a complete vector and
 locks chassis pitch/roll to prevent flipping (boolean; default true).
 
 
-See [In-game UI](game-ui.md) for RML/RCSS setup and the `ui` bridge example.
+See [In-game UI](game-ui.md) for RML/RCSS setup and the `GUI` component example.
 """
 
 def render_reference():

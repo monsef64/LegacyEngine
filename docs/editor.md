@@ -291,7 +291,9 @@ The editor toolbar also provides **Fullscreen Game / Windowed Game** while that
 window is open. These shortcuts are reserved for window control and are not
 forwarded to gameplay. Repeated key-down events do not toggle repeatedly.
 
-Asset import now offers **Files / Models** and **Directory (full structure)**.
+Asset import offers **Files / Models** and **Folder (keep structure)...**.
+The Assets toolbar also has a direct **Folder...** button; the folder picker
+accepts multiple selections.
 Imports and OS drops go into the current Assets folder. Clicking a model opens
 its shared import-scale settings in Inspector; see [models](models.md) for
 multiple mesh/material support and static triangle-mesh collision geometry. Instantiation
@@ -495,3 +497,47 @@ picking, camera obstruction queries or scripted queries.
 - Bake a static terrain and mesh scene; check terrain occluders and chunk bounds in
   the selected-camera debug overlay. Sculpt/move the terrain: bake must bypass
   until rebaked. Terrain shadow casters should remain correct.
+
+
+## Folder import, orbit capture and mesh-part selection
+
+**Folder...** in Assets copies each selected folder into the currently open
+Assets folder, preserving nested paths and empty directories. Dropping a folder
+from the OS file manager uses the same background import queue. Existing folder
+names get numbered copies rather than merging or overwriting. Supported model
+sources inside the copied tree are converted in their own subfolders; the original
+files and relative resource layout remain in place. Import still rejects symlinks,
+unsupported Blender sources and oversized batches (10,000 files, 1 GiB total,
+256 MiB per file); model conversion failures are reported without deleting the
+copied source tree.
+
+**Alt+left-drag** starts Scene orbit even after editing an Inspector/script text
+field. It transfers focus to Scene, commits the active transform gesture, and
+uses relative mouse deltas without relying on a Windows motion-event button
+mask. Left-button release, Escape or window-focus loss releases capture. An
+Alt-click without movement does not jump the view or change selection.
+
+Scene selection now defaults to the visible **child/mesh part** hit by the ray.
+The Scene toolbar's **Select model roots** checkbox restores assembly-root
+selection; **Ctrl-click** still picks the part when that checkbox is enabled.
+Visible triangles take priority over enclosing collider proxies, so a parent's
+large collider cannot prevent selecting its mesh children. Children can then be
+moved, rotated and edited independently in Inspector. Invisible/occluded children
+and empty objects remain directly selectable through Hierarchy. This selects
+existing child GameObjects/model parts, not individual vertices or arbitrary
+triangle islands within a single mesh.
+
+Manual verification (no automated tests):
+
+- Import a folder containing two nested subfolders with identically named files,
+  an empty directory, and a glTF with relative textures/bin files. Verify paths,
+  converted model placement and materials. Repeat import and check numbered
+  copies, then select multiple folders and try OS folder drag/drop.
+- Select a model, edit an Inspector text field, then Alt+left-drag in Scene.
+  Confirm continuous orbit on Windows, including over a gizmo. Check plain
+  Alt-click, Escape, release outside Scene and application focus loss; capture
+  must clear and RMB/WASD must continue working.
+- Instantiate a multi-part model, add a large root collider, and click separate
+  visible parts: Inspector should show the exact mesh child. Toggle **Select model
+  roots**, then compare plain click with Ctrl-click. Move a selected child,
+  undo/redo, and verify the parent and siblings remain unchanged.

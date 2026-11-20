@@ -472,5 +472,7 @@ drive gameplay; focus loss and Stop must clear held and pending key state.
 
 ## In-game UI
 
-Use the `ui` bridge to update RmlUi HUD text and poll button clicks. See
-[In-game UI](game-ui.md) for entry-point setup and the interactive HUD example.
+Add a `GUI` component, assign its RML and RCSS assets, and use
+`self:getComponent(GUI)` or an exported `GUI` reference. Call
+`gui:setText(id, text)` and register `gui:onClick(id, callback)` once in onStart.
+See [In-game UI](game-ui.md) for component setup and the interactive example.

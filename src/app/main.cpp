@@ -268,6 +268,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
     GameUI gameUI;
+    gameUI.clicked = [](Entity owner, const std::string& id) {
+        LuaConsole::postEvent(GameUI::clickEvent(owner, id));
+    };
     auto lastSceneRender = std::chrono::steady_clock::time_point{};
     int lastSceneWidth = 0, lastSceneHeight = 0;
     AssetPreviewRenderer assetPreviews(
@@ -341,6 +344,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     constexpr unsigned smokeFrames = 120;
     std::optional<Vec3> orbitPivot;
     bool orbitStarted = false;
+    bool selectModelRoots = false;
     bool focusSuspended = false;
     while (running) {
         if (!smokeTest && !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
@@ -394,6 +398,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             scripts.shutdown();
             input.releaseMouse();
             LuaConsole::clearEvents();
+            gameUI.sync(world, false, browser.assets.root, window);
             world.restore(transition->level->world);
             resetHierarchyExpansion();
             try {
@@ -450,7 +455,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         input.mouseEnabled = externalFocus || gameHovered || sceneHovered || input.mouseLocked;
         input.beginFrame();
         try {
-            gameUI.sync(playMode.active(), browser.assets.root, input.window);
+            gameUI.sync(world, playMode.active(), browser.assets.root, input.window);
         } catch (const std::exception& error) {
             terminalErrors.report("Game UI", error.what());
         }
@@ -471,7 +476,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 event.window.windowID == SDL_GetWindowID(gameWindow)) {
                 input.releaseMouse();
                 input.window = window;
-                gameUI.sync(false, browser.assets.root, window);
+                gameUI.sync(world, false, browser.assets.root, window);
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
                 continue;
@@ -530,7 +535,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 SDL_SetWindowMouseGrab(window, false);
                 SDL_SetWindowMouseRect(window, nullptr);
             }
-            if (cameraLooking && event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
+            if ((cameraLooking || orbitPivot) && event.type == SDL_EVENT_KEY_DOWN &&
+                event.key.key == SDLK_ESCAPE) {
                 cameraLooking = false;
                 orbitPivot.reset();
                 input.releaseMouse();
@@ -628,8 +634,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     orbitStarted = false;
                     if (sceneHovered && layout.scene.contains(event.button.x, event.button.y) &&
                         (SDL_GetModState() & SDL_KMOD_ALT) &&
-                        !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) &&
-                        !ImGui::GetIO().WantTextInput) {
+                        !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) {
+                        // A deliberate Scene orbit gesture takes focus from text
+                        // fields just like RMB navigation does.
+                        ImGui::ClearActiveID();
+                        ImGui::SetWindowFocus("Scene");
                         editor.finish(world);
                         if (const auto* pose = world.tryGet<Transform>(selectedEntity)) {
                             orbitPivot = pose->position;
@@ -655,8 +664,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 // Right-drag looks around from the camera's position. Left-drag
                 // cancels a click but never moves the camera or selects.
-                if (orbitPivot && (event.motion.state & SDL_BUTTON_LMASK) &&
-                    (SDL_GetModState() & SDL_KMOD_ALT) &&
+                // Relative motion on Windows need not carry a button mask.
+                // The explicit button-down/up gesture owns orbit capture.
+                if (orbitPivot && (SDL_GetModState() & SDL_KMOD_ALT) &&
                     !(SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_GUI))) {
                     clicking = false;
                     const auto motion = input.lockedMotion(event.motion);
@@ -711,11 +721,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         {
                             RayHit hit;
                             const bool found = physics.raycast(ray, kClickReach, hit);
-                            selectedEntity = found ? hit.entity : Entity{};
-                            float closest = found ? hit.distance : kClickReach;
-                            selectedEntity = ScenePicking::pick(
-                                world, browser.assets, ray, closest, selectedEntity);
-                            if (world.has<MeshRenderer>(selectedEntity) &&
+                            // Pick visible geometry before collider proxies. A
+                            // model's enclosing root collider must not hide parts.
+                            float closest = kClickReach;
+                            selectedEntity =
+                                ScenePicking::pick(world, browser.assets, ray, closest);
+                            if (selectedEntity == Entity{} && found) {
+                                selectedEntity = hit.entity;
+                                closest = hit.distance;
+                            }
+                            if (selectModelRoots && world.has<MeshRenderer>(selectedEntity) &&
                                 !(SDL_GetModState() & SDL_KMOD_CTRL)) {
                                 selectedEntity = ScenePicking::modelRoot(world, selectedEntity);
                             }
@@ -1694,7 +1709,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (gameWindow) {
                 input.releaseMouse();
                 input.window = window;
-                gameUI.sync(false, browser.assets.root, window);
+                gameUI.sync(world, false, browser.assets.root, window);
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
             }
@@ -2145,6 +2160,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                   ImGuiWindowFlags_HorizontalScrollbar |
                                       ImGuiWindowFlags_NoScrollWithMouse);
                 editor.drawToolbar();
+                ImGui::SameLine();
+                ImGui::Checkbox("Select model roots", &selectModelRoots);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "Off: select the clicked child/mesh part. On: select its assembly root. Ctrl-click always selects the part. Use Hierarchy for hidden children.");
+                }
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(100);
                 if (ImGui::SliderFloat(
@@ -2898,7 +2919,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (gameWindow) {
                     input.releaseMouse();
                     input.window = window;
-                    gameUI.sync(false, browser.assets.root, window);
+                    gameUI.sync(world, false, browser.assets.root, window);
                     SDL_DestroyWindow(gameWindow);
                     gameWindow = nullptr;
                 }
@@ -3004,7 +3025,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     if (gameWindow) {
         input.releaseMouse();
         input.window = window;
-        gameUI.sync(false, browser.assets.root, window);
+        gameUI.sync(world, false, browser.assets.root, window);
         SDL_DestroyWindow(gameWindow);
     }
     scripts.shutdown();

@@ -1,23 +1,29 @@
--- Copy main.rml + hud.rcss to Assets/UI/ in your project.
--- Copy this file anywhere in Assets and attach it to one object's LegacyScript.
--- Play, focus Game and unlock the mouse. No Camera or mesh is required for the UI.
--- Use one HUD driver: wasClicked consumes each ID's queued click once.
+-- Add GUI to this object and assign main.rml + hud.rcss (any Assets subfolder).
+-- Optional: export a GUI reference and drag a different object's GUI onto HUD.
+-- Attach this script to one object only. Keep the Game cursor unlocked.
+@export HUD GUI
+local gui
 local health, supplies = 100, 0
 
 local function refresh(message)
-    ui.setText("health", tostring(health) .. " / 100")
-    ui.setText("supplies", tostring(supplies))
-    ui.setText("status", message)
+    gui:setText("health", tostring(health) .. " / 100")
+    gui:setText("supplies", tostring(supplies))
+    gui:setText("status", message)
 end
 
-function onUpdate(dt)
-    -- The document is created on the first runtime frame, not in editor mode.
-    if not ui.isLoaded() then return end
-    if ui.wasClicked("collect") then
+function onStart()
+    gui = HUD or self:getComponent(GUI)
+    if not gui then
+        debug.error("Assign HUD in Inspector, or add GUI to this object")
+        return
+    end
+    -- Register once, not every update. Callbacks run through the budgeted
+    -- event dispatcher and are removed when the script stops.
+    gui:onClick("collect", function()
         supplies = supplies + 1
         refresh("Supply collected. You now have " .. supplies .. ".")
-    end
-    if ui.wasClicked("heal") then
+    end)
+    gui:onClick("heal", function()
         if supplies > 0 and health < 100 then
             supplies = supplies - 1
             health = math.min(100, health + 10)
@@ -27,8 +33,11 @@ function onUpdate(dt)
         else
             refresh("No supplies left. Collect one first.")
         end
-    end
-    if isKeyPressed("H") then
+    end)
+end
+
+function onUpdate(dt)
+    if gui and gui:isLoaded() and isKeyPressed("H") then
         health = math.max(0, health - 10)
         refresh("Took 10 damage.")
     end

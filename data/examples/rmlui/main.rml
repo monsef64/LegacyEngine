@@ -1,7 +1,6 @@
 <rml>
 <head>
     <title>LegacyEngine - RmlUi example</title>
-    <link type="text/rcss" href="hud.rcss" />
 </head>
 <body>
     <div id="hud">

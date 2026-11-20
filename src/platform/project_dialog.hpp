@@ -67,6 +67,7 @@ class ProjectDialog {
                                                     {"Wavefront OBJ", "obj"},
                                                     {"LegacyEngine Mesh", "lemesh"},
                                                     {"Scripts", "ls;lua"},
+                                                    {"GUI documents / styles", "rml;rcss"},
                                                     {"Images", "png;jpg;jpeg;bmp;tga;hdr"},
                                                     {"Audio", "wav;mp3;ogg;flac"},
                                                     {"All files", "*"}};
@@ -86,7 +87,7 @@ class ProjectDialog {
             }
             state_->busy = true;
         }
-        SDL_ShowOpenFolderDialog(callback, new Request{state_, false}, window, nullptr, false);
+        SDL_ShowOpenFolderDialog(callback, new Request{state_, false, true}, window, nullptr, true);
     }
     std::optional<Result> poll() {
         std::lock_guard<std::mutex> lock(state_->mutex);

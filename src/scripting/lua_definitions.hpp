@@ -7,7 +7,7 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions[]{
-    {"ui", "ui - RmlUi Play-mode overlay loaded from Assets/UI/main.rml. ui.isLoaded(), ui.setText(id, plainText) returns success, ui.wasClicked(id) consumes a pending click. Stop resets the document. See data/examples/rmlui."},
+    {"GUI", "GUI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(GUI) or @export hud GUI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."},
     {"Vector3", "Vector3(x,y,z) - Construct a vector table accepted by position, rotation, destination and obstacle vector setters."},
     {"NavMeshObstacle", "NavMeshObstacle - Dynamic conservative box avoidance for NavMeshAgent. Fields enabled, size and center (local-space Vector3, assign whole vectors). Excluded from navigation bake. No runtime carving; detours are bounded to 32 obstacles."},
     {"NavMeshAgent", "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(). Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Agent origin is at feet. No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."},

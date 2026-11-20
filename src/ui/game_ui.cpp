@@ -1,11 +1,14 @@
 #include "game_ui.hpp"
 #include "RmlUi_Platform_SDL.h"
 #include "RmlUi_Renderer_GL3.h"
+#include "assets/assets.hpp"
+#include "core/hierarchy.hpp"
 #include "editor_font.hpp"
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/EventListener.h>
 #include <algorithm>
 #include <filesystem>
+#include <map>
 #include <set>
 #include <stb_image.h>
 #include <stdexcept>
@@ -55,41 +58,73 @@ class GameRenderer : public RenderInterface_GL3 {
     }
 };
 } // namespace
+namespace {
+std::uint64_t guiKey(Entity e) {
+    return (std::uint64_t(e.generation) << 32) | e.index;
+}
+} // namespace
 struct GameUI::Impl : Rml::EventListener {
+    struct Document {
+        Entity owner;
+        std::string rml, rcss;
+        Rml::ElementDocument* document = nullptr;
+        std::set<std::string> clicks;
+    };
+    GameUI* facade = nullptr;
     SystemInterface_SDL system;
     std::unique_ptr<GameRenderer> renderer;
     Rml::Context* context = nullptr;
-    Rml::ElementDocument* document = nullptr;
-    bool initialized = false, attempted = false;
+    bool initialized = false;
     std::filesystem::path root;
-    std::set<std::string> clicks;
+    std::map<std::uint64_t, Document> documents;
     float x = 0, y = 0, w = 1, h = 1;
     int pw = 1, ph = 1;
     void ProcessEvent(Rml::Event& event) override {
-        // Bubble nested label clicks to the nearest element with an id.
-        for (auto* element = event.GetTargetElement(); element;
-             element = element->GetParentNode()) {
-            if (!element->GetId().empty()) {
-                if (clicks.size() < 256) {
-                    clicks.insert(element->GetId());
+        auto* element = event.GetTargetElement();
+        auto* document = element ? element->GetOwnerDocument() : nullptr;
+        for (auto& entry : documents) {
+            auto& d = entry.second;
+            if (d.document != document) {
+                continue;
+            }
+            for (; element; element = element->GetParentNode()) {
+                if (!element->GetId().empty()) {
+                    const auto id = element->GetId();
+                    if (id.size() <= 64) {
+                        if (d.clicks.size() < 256) {
+                            d.clicks.insert(id);
+                        }
+                        if (facade->clicked) {
+                            facade->clicked(d.owner, id);
+                        }
+                    }
+                    return;
                 }
-                break;
             }
         }
     }
+    void unload(Document& d) {
+        if (d.document) {
+            d.document->RemoveEventListener("click", this);
+            context->UnloadDocument(d.document);
+            d.document = nullptr;
+        }
+    }
     void close() {
+        for (auto& entry : documents) {
+            unload(entry.second);
+        }
+        documents.clear();
         if (context) {
             Rml::RemoveContext("legacy-game");
             Rml::ReleaseTextures();
         }
         context = nullptr;
-        document = nullptr;
-        clicks.clear();
-        attempted = false;
     }
 };
 GameUI::GameUI() : impl_(std::make_unique<Impl>()) {
     instance = this;
+    impl_->facade = this;
 }
 GameUI::~GameUI() {
     impl_->system.SetWindow(nullptr);
@@ -104,10 +139,17 @@ GameUI::~GameUI() {
 GameUI* GameUI::current() {
     return instance;
 }
-bool GameUI::loaded() const {
-    return impl_->document != nullptr;
+std::string GameUI::clickEvent(Entity owner, const std::string& id) {
+    return "GUI:" + std::to_string(guiKey(owner)) + ":" + id;
 }
-void GameUI::sync(bool active, const std::filesystem::path& assetRoot, SDL_Window* window) {
+bool GameUI::loaded(Entity owner) const {
+    const auto it = impl_->documents.find(guiKey(owner));
+    return it != impl_->documents.end() && it->second.document;
+}
+void GameUI::sync(World& world,
+                  bool active,
+                  const std::filesystem::path& assetRoot,
+                  SDL_Window* window) {
     auto& ui = *impl_;
     ui.system.SetWindow(window);
     if (!active || ui.root != assetRoot) {
@@ -117,44 +159,90 @@ void GameUI::sync(bool active, const std::filesystem::path& assetRoot, SDL_Windo
     if (!active) {
         return;
     }
-    if (ui.attempted) {
-        return;
-    }
-    ui.attempted = true;
-    auto path = std::filesystem::absolute(std::filesystem::path(assetRoot) / "UI/main.rml");
-    if (!std::filesystem::is_regular_file(path)) {
-        return;
-    }
-    if (!ui.initialized) {
-        ui.renderer = std::make_unique<GameRenderer>();
-        if (!*ui.renderer) {
-            throw std::runtime_error("RmlUi OpenGL renderer initialization failed");
+    std::set<std::uint64_t> wanted;
+    world.eachReadOnly<GUI>([&](Entity e, const GUI& g) {
+        if (!g.enabled || !isActive(world, e) || g.rml.empty() || g.rcss.empty()) {
+            return;
         }
-        Rml::SetSystemInterface(&ui.system);
-        Rml::SetRenderInterface(ui.renderer.get());
-        if (!Rml::Initialise()) {
-            throw std::runtime_error("RmlUi initialization failed");
+        const auto key = guiKey(e);
+        wanted.insert(key);
+        auto it = ui.documents.find(key);
+        if (it != ui.documents.end() && it->second.rml == g.rml && it->second.rcss == g.rcss) {
+            return;
         }
-        ui.initialized = true;
-        if (!Rml::LoadFontFace({editorFontData, sizeof(editorFontData)},
-                               "Roboto",
-                               Rml::Style::FontStyle::Normal)) {
-            throw std::runtime_error("RmlUi embedded font could not load");
+        if (it != ui.documents.end()) {
+            ui.unload(it->second);
+            ui.documents.erase(it);
+        }
+        auto& d = ui.documents[key];
+        d.owner = e;
+        d.rml = g.rml;
+        d.rcss = g.rcss;
+        try {
+            AssetManager assets;
+            assets.root = assetRoot;
+            if (AssetManager::extension(g.rml) != ".rml" ||
+                AssetManager::extension(g.rcss) != ".rcss") {
+                throw std::runtime_error("GUI requires .rml and .rcss assets");
+            }
+            const auto rml = assets.resolve(g.rml), rcss = assets.resolve(g.rcss);
+            if (!std::filesystem::is_regular_file(rml) || !std::filesystem::is_regular_file(rcss) ||
+                std::filesystem::file_size(rml) > 4 * 1024 * 1024 ||
+                std::filesystem::file_size(rcss) > 4 * 1024 * 1024) {
+                throw std::runtime_error("GUI asset missing or larger than 4 MiB");
+            }
+            if (!ui.initialized) {
+                ui.renderer = std::make_unique<GameRenderer>();
+                if (!*ui.renderer) {
+                    throw std::runtime_error("RmlUi OpenGL initialization failed");
+                }
+                Rml::SetSystemInterface(&ui.system);
+                Rml::SetRenderInterface(ui.renderer.get());
+                if (!Rml::Initialise()) {
+                    throw std::runtime_error("RmlUi initialization failed");
+                }
+                ui.initialized = true;
+                if (!Rml::LoadFontFace({editorFontData, sizeof(editorFontData)},
+                                       "Roboto",
+                                       Rml::Style::FontStyle::Normal)) {
+                    throw std::runtime_error("RmlUi embedded font could not load");
+                }
+            }
+            if (!ui.context) {
+                ui.context = Rml::CreateContext("legacy-game", {ui.pw, ui.ph});
+                if (!ui.context) {
+                    throw std::runtime_error("RmlUi context creation failed");
+                }
+            }
+            Rml::Factory::ClearStyleSheetCache();
+            Rml::Factory::ClearTemplateCache();
+            auto style = Rml::Factory::InstanceStyleSheetFile(rcss.generic_string());
+            if (!style) {
+                throw std::runtime_error("GUI RCSS could not load");
+            }
+            d.document = ui.context->LoadDocument(rml.generic_string());
+            if (!d.document) {
+                throw std::runtime_error("GUI RML could not load");
+            }
+            if (auto* existing = d.document->GetStyleSheetContainer()) {
+                style = existing->CombineStyleSheetContainer(*style);
+            }
+            d.document->SetStyleSheetContainer(style);
+            d.document->AddEventListener("click", &ui);
+            d.document->Show();
+        } catch (const std::exception& error) {
+            ui.unload(d);
+            SDL_Log("GUI %u (%s): %s", e.index, g.rml.c_str(), error.what());
+        }
+    });
+    for (auto it = ui.documents.begin(); it != ui.documents.end();) {
+        if (!wanted.count(it->first)) {
+            ui.unload(it->second);
+            it = ui.documents.erase(it);
+        } else {
+            ++it;
         }
     }
-    ui.context = Rml::CreateContext("legacy-game", {ui.pw, ui.ph});
-    if (!ui.context) {
-        throw std::runtime_error("RmlUi context creation failed");
-    }
-    Rml::Factory::ClearStyleSheetCache();
-    Rml::Factory::ClearTemplateCache();
-    ui.document = ui.context->LoadDocument(path.generic_string());
-    if (!ui.document) {
-        SDL_Log("RmlUi: cannot load %s; check RML/RCSS and restart Play", path.string().c_str());
-        return;
-    }
-    ui.document->AddEventListener("click", &ui);
-    ui.document->Show();
 }
 void GameUI::viewport(float x, float y, float w, float h, int pw, int ph) {
     auto& ui = *impl_;
@@ -171,7 +259,7 @@ void GameUI::viewport(float x, float y, float w, float h, int pw, int ph) {
 }
 bool GameUI::event(SDL_Event event, SDL_Window* window, bool focused, bool mouseLocked) {
     auto& ui = *impl_;
-    if (!ui.document) {
+    if (!ui.context || ui.documents.empty()) {
         return false;
     }
     if (!focused || mouseLocked || event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
@@ -231,7 +319,7 @@ bool GameUI::event(SDL_Event event, SDL_Window* window, bool focused, bool mouse
 }
 void GameUI::render(int width, int height, bool update) {
     auto& ui = *impl_;
-    if (!ui.document) {
+    if (!ui.context || ui.documents.empty()) {
         return;
     }
     ui.context->SetDimensions({width, height});
@@ -243,11 +331,12 @@ void GameUI::render(int width, int height, bool update) {
     ui.context->Render();
     ui.renderer->EndFrame();
 }
-bool GameUI::setText(const std::string& id, const std::string& text) {
-    if (!impl_->document) {
+bool GameUI::setText(Entity owner, const std::string& id, const std::string& text) {
+    const auto it = impl_->documents.find(guiKey(owner));
+    if (it == impl_->documents.end() || !it->second.document) {
         return false;
     }
-    auto* element = impl_->document->GetElementById(id);
+    auto* element = it->second.document->GetElementById(id);
     if (!element) {
         return false;
     }
@@ -267,12 +356,13 @@ bool GameUI::setText(const std::string& id, const std::string& text) {
     element->SetInnerRML(escaped);
     return true;
 }
-bool GameUI::takeClick(const std::string& id) {
-    return impl_->clicks.erase(id) != 0;
+bool GameUI::takeClick(Entity owner, const std::string& id) {
+    auto it = impl_->documents.find(guiKey(owner));
+    return it != impl_->documents.end() && it->second.clicks.erase(id) != 0;
 }
 
 bool GameUI::capturesKeyboard() const {
-    if (!impl_->document) {
+    if (!impl_->context || impl_->documents.empty()) {
         return false;
     }
     auto* focus = impl_->context->GetFocusElement();
@@ -284,5 +374,5 @@ bool GameUI::capturesKeyboard() const {
 }
 
 bool GameUI::capturesMouse() const {
-    return impl_->document && impl_->context->IsMouseInteracting();
+    return impl_->context && !impl_->documents.empty() && impl_->context->IsMouseInteracting();
 }

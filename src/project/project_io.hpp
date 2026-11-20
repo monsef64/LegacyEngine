@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 34\n";
+    out << std::setprecision(9) << "LegacyEngineProject 35\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -116,7 +116,8 @@ inline std::string encodeLegacy(World& world,
             (world.has<BoneAttachment>(e) ? 2147483648u : 0u) |
             (world.has<TPSCamera>(e) ? 4294967296ull : 0ull) |
             (world.has<NavMeshAgent>(e) ? 8589934592ull : 0ull) |
-            (world.has<NavMeshObstacle>(e) ? 17179869184ull : 0ull);
+            (world.has<NavMeshObstacle>(e) ? 17179869184ull : 0ull) |
+            (world.has<GUI>(e) ? 68719476736ull : 0ull);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -352,6 +353,10 @@ inline std::string encodeLegacy(World& world,
             out << std::quoted(Navigation::obstacleSettings(*o).dump()) << ' ';
         }
 
+        if (const auto* g = world.tryGet<GUI>(e)) {
+            require(exportAssetPath(g->rml) && exportAssetPath(g->rcss));
+            out << g->enabled << ' ' << std::quoted(g->rml) << ' ' << std::quoted(g->rcss) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -369,7 +374,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 34));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 35));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -450,7 +455,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 32 ? std::uint64_t(UINT32_MAX)
                          : version < 33 ? 8589934591ull
                          : version < 34 ? 17179869183ull
-                                        : 68719476735ull) &&
+                         : version < 35 ? 68719476735ull
+                                        : 137438953471ull) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -722,7 +728,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= (version >= 34   ? 32u
+            require(types.size() <= (version >= 35   ? 33u
+                                     : version >= 34 ? 32u
                                      : version >= 33 ? 30u
                                      : version >= 32 ? 29u
                                      : version >= 31 ? 28u
@@ -737,7 +744,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::vector<int> seen;
             for (int id : types) {
                 require(id >= 0 &&
-                        id < (version >= 34   ? 32
+                        id < (version >= 35   ? 33
+                              : version >= 34 ? 32
                               : version >= 33 ? 30
                               : version >= 32 ? 29
                               : version >= 31 ? 28
@@ -877,6 +885,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             require(text.size() <= 16384);
             // Animator was removed. Consume legacy settings without recreating the component.
             (void)parseJson(text);
+        }
+        if (mask & 68719476736ull) {
+            GUI g;
+            in >> g.enabled >> std::quoted(g.rml) >> std::quoted(g.rcss);
+            require(exportAssetPath(g.rml) && exportAssetPath(g.rcss));
+            result.world.add(e, g);
         }
         require(bool(in));
     }

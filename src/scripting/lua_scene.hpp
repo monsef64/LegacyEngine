@@ -88,6 +88,7 @@ class LuaScene {
     static int lightMethod(lua_State* state);
     static int listenerMethod(lua_State* state);
     static int audioMethod(lua_State* state);
+    static int guiMethod(lua_State* state);
     static int particleMethod(lua_State* state);
     static int animationMethod(lua_State* state);
     static int cameraApi(lua_State* state);

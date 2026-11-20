@@ -253,6 +253,10 @@ class AssetBrowser {
                 }
             }
         });
+        world.each<GUI>([&](Entity, GUI& g) {
+            remap(g.rml);
+            remap(g.rcss);
+        });
         world.each<Collider>([&](Entity, Collider& collider) { remap(collider.model); });
         world.each<LightShafts>([&](Entity, LightShafts& s) { remap(s.texture); });
         auto remapLight = [&](Entity, auto& l) {
@@ -310,7 +314,7 @@ class AssetBrowser {
                             }
                         } else if (value.is_string()) {
                             const std::string keys =
-                                "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                                "|rml|rcss|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                             if (keys.find("|" + key + "|") == std::string::npos) {
                                 return;
                             }
@@ -472,7 +476,7 @@ class AssetBrowser {
                     }
                 } else if (value.is_string()) {
                     const std::string keys =
-                        "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                        "|rml|rcss|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                     if (keys.find("|" + key + "|") == std::string::npos) {
                         return;
                     }
@@ -602,21 +606,30 @@ class AssetBrowser {
             }
             ImGui::BeginDisabled(!editable || dialog.pending());
             ImGui::SetCursorPosX(
-                std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 112));
+                std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - 200));
             if (ImGui::Button("\xef\x95\xad##Import", ImVec2(32, 26))) {
                 ImGui::OpenPopup("Import assets");
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Import files");
+                ImGui::SetTooltip(
+                    "Import files/models, or import folders with their complete structure");
             }
             if (ImGui::BeginPopup("Import assets")) {
                 if (ImGui::MenuItem("Files / Models")) {
                     dialog.showImport(window);
                 }
-                if (ImGui::MenuItem("Directory (full structure)")) {
+                if (ImGui::MenuItem("Folder (keep structure)...")) {
                     dialog.showImportDirectory(window);
                 }
                 ImGui::EndPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Folder...##ImportFolder", ImVec2(80, 26))) {
+                dialog.showImportDirectory(window);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Import folders into the current Assets folder, preserving nested files and empty folders. You can also drop a folder from Explorer.");
             }
             ImGui::SameLine();
             if (ImGui::Button("\xef\x87\x89##NewScript", ImVec2(32, 26))) {

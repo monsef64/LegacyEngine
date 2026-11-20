@@ -1,7 +1,7 @@
 [
   {
-    "name": "ui",
-    "signature": "ui - RmlUi Play-mode overlay loaded from Assets/UI/main.rml. ui.isLoaded(), ui.setText(id, plainText) returns success, ui.wasClicked(id) consumes a pending click. Stop resets the document. See data/examples/rmlui."
+    "name": "GUI",
+    "signature": "GUI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(GUI) or @export hud GUI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
   },
   {
     "name": "Vector3",

@@ -24,6 +24,7 @@
 #include "rendering/mesh.hpp"
 #include "rendering/skybox.hpp"
 #include "terrain/terrain.hpp"
+#include "ui/gui.hpp"
 #include <string>
 #include <vector>
 
