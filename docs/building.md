@@ -197,3 +197,33 @@ rate improvement has been benchmarked on Windows 7 hardware.
   the confined-warp fallback and log a warning rather than silently refuse RMB.
 - Compare a fresh project against an existing project: low-end defaults should
   affect only missing settings, and saved rendering settings must survive reload.
+
+## Windows console and Assets panel performance
+
+Windows builds use the GUI subsystem and do not open a command window on normal
+launch. To enable a debug console, run `LegacyEngine.exe -debug` (or add `-debug`
+to a shortcut's target). It attaches to the launching console when possible,
+otherwise opens one; engine logs go there. This also applies to the experimental
+Windows 7 package. Linux terminal behavior is unchanged.
+
+The Assets panel caches directory listings and file/directory metadata instead
+of canonicalizing/stat-ing paths on every frame and sort comparison. Folder,
+project, search-scope and asset-revision changes refresh the snapshot; external
+filesystem edits are picked up within roughly one second while the panel is
+visible. New folders/scripts/materials/cubemaps invalidate the listing directly.
+Path containment validation remains in place when collecting entries and when
+performing file operations.
+
+Manual verification (no automated tests required):
+- With the same scene, compare Profiler > Editor / panels / assets with Assets
+  visible and with Console visible; compare warmed-up averages, not startup or
+  thumbnail generation. Repeat in grid/list mode and with a large folder/search.
+- Create/import/rename/copy/move/delete/undo assets; navigate folders, expand
+  multi-mesh models, change projects, and verify the listing and thumbnails.
+- Add/remove/change files externally and wait a second with Assets visible.
+- On Windows, double-click the executable: no console should flash or remain.
+  Repeat with a shortcut containing `-debug` and from a command prompt; logs
+  should appear in the allocated/attached console. Repeat on Windows 7 if used.
+
+Windows runtime behavior and FPS improvements require manual desktop validation;
+no specific FPS gain is promised by the filesystem cache.

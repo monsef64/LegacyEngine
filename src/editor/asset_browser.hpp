@@ -31,6 +31,16 @@ class AssetBrowser {
     std::map<std::string, ModelGroup> modelGroups_;
     std::set<std::string> expandedModels_;
 
+    // UI snapshots only: all actual file operations still use AssetManager::resolve.
+    // Never canonicalize/stat paths from a sort comparator or every drawn tile.
+    std::filesystem::path listingRoot_;
+    std::string listingFolder_;
+    bool listingRecursive_ = false;
+    unsigned listingRevision_ = ~0u;
+    double listingUntil_ = 0, selectionCheckAt_ = 0;
+    std::vector<std::string> listingFiles_;
+    std::map<std::string, bool> listingDirectories_;
+
     std::string transientError_;
     double errorUntil_ = 0;
     unsigned thumbnailRevision_ = ~0u;
@@ -518,6 +528,7 @@ class AssetBrowser {
         transientError_.clear();
         errorUntil_ = 0;
         assets.root = root;
+        listingUntil_ = selectionCheckAt_ = 0;
         currentFolder.clear();
         selected.clear();
         openedScript.clear();
@@ -545,8 +556,11 @@ class AssetBrowser {
             thumbnails.clear();
             thumbnailRevision_ = modelAssetRevision;
         }
-        if (!selected.empty() && !std::filesystem::exists(assets.resolve(selected))) {
-            selected.clear();
+        if (ImGui::GetTime() >= selectionCheckAt_) {
+            selectionCheckAt_ = ImGui::GetTime() + 1.0;
+            if (!selected.empty() && !std::filesystem::exists(assets.resolve(selected))) {
+                selected.clear();
+            }
         }
         thumbnails.beginFrame(assets);
         if (dockedEditor && !panelOpen[5]) {
@@ -636,39 +650,66 @@ class AssetBrowser {
                 errorUntil_ = ImGui::GetTime() + 5;
             }
             search.Draw("Search assets", -1);
-            if (!currentFolder.empty() &&
-                !std::filesystem::is_directory(assets.resolve(currentFolder))) {
-                currentFolder.clear();
-            }
             ImGui::BeginChild("Asset files", ImVec2(0, -32));
             try {
-                std::vector<std::string> files;
-                const auto folder = assets.resolve(currentFolder);
-                if (search.IsActive()) {
-                    for (const auto& path : assets.files()) {
-                        if (currentFolder.empty() || path.rfind(currentFolder + "/", 0) == 0) {
-                            files.push_back(path);
+                const bool rootChanged = listingRoot_ != assets.root;
+                const bool refreshListing = rootChanged || listingFolder_ != currentFolder ||
+                                            listingRecursive_ != search.IsActive() ||
+                                            listingRevision_ != modelAssetRevision ||
+                                            ImGui::GetTime() >= listingUntil_;
+                if (refreshListing) {
+                    if (rootChanged) {
+                        modelGroups_.clear();
+                        expandedModels_.clear();
+                    }
+                    listingUntil_ = ImGui::GetTime() + 1.0;
+                    std::vector<std::string> nextFiles;
+                    std::map<std::string, bool> nextDirectories;
+                    if (!currentFolder.empty() &&
+                        !std::filesystem::is_directory(assets.resolve(currentFolder))) {
+                        currentFolder.clear();
+                    }
+                    const auto folder = assets.resolve(currentFolder);
+                    if (search.IsActive()) {
+                        for (const auto& path : assets.files()) {
+                            if (currentFolder.empty() || path.rfind(currentFolder + "/", 0) == 0) {
+                                nextFiles.push_back(path);
+                                nextDirectories[path] = false;
+                            }
+                        }
+                    } else if (std::filesystem::is_directory(folder)) {
+                        for (const auto& entry : std::filesystem::directory_iterator(folder)) {
+                            if (nextFiles.size() >= 10000) {
+                                break;
+                            }
+                            if (entry.is_symlink()) {
+                                continue;
+                            }
+                            const bool directory = entry.is_directory();
+                            if (directory || entry.is_regular_file()) {
+                                auto path =
+                                    entry.path().lexically_relative(folder).generic_string();
+                                path =
+                                    (std::filesystem::path(currentFolder) / path).generic_string();
+                                assets.resolve(path); // validate once while collecting the snapshot
+                                nextDirectories[path] = directory;
+                                nextFiles.push_back(std::move(path));
+                            }
                         }
                     }
-                } else if (std::filesystem::is_directory(folder)) {
-                    for (const auto& entry : std::filesystem::directory_iterator(folder)) {
-                        if (files.size() >= 10000) {
-                            break;
-                        }
-                        if (!entry.is_symlink() &&
-                            (entry.is_directory() || entry.is_regular_file())) {
-                            auto path =
-                                entry.path().lexically_relative(assets.root).generic_string();
-                            assets.resolve(path);
-                            files.push_back(path);
-                        }
-                    }
+                    std::sort(
+                        nextFiles.begin(), nextFiles.end(), [&](const auto& a, const auto& b) {
+                            const bool da = nextDirectories.at(a), db = nextDirectories.at(b);
+                            return da != db ? da > db : a < b;
+                        });
+                    listingFiles_ = std::move(nextFiles);
+                    listingDirectories_ = std::move(nextDirectories);
+                    listingRoot_ = assets.root;
+                    listingFolder_ = currentFolder;
+                    listingRecursive_ = search.IsActive();
+                    listingRevision_ = modelAssetRevision;
                 }
-                std::sort(files.begin(), files.end(), [&](const auto& a, const auto& b) {
-                    const bool da = std::filesystem::is_directory(assets.resolve(a));
-                    const bool db = std::filesystem::is_directory(assets.resolve(b));
-                    return da != db ? da > db : a < b;
-                });
+                auto files = listingFiles_;
                 std::map<std::string, std::string> childOwners, childNames;
                 // Root model names sort before their namespaced child files.
                 // Cache only the small manifest, not the decoded geometry.
@@ -678,7 +719,10 @@ class AssetBrowser {
                     }
                     auto& group = modelGroups_[file];
                     try {
-                        const auto stamp = std::filesystem::last_write_time(assets.resolve(file));
+                        const auto stamp =
+                            refreshListing || group.revision != modelAssetRevision
+                                ? std::filesystem::last_write_time(assets.resolve(file))
+                                : group.stamp;
                         if (group.revision != modelAssetRevision || group.stamp != stamp) {
                             group = {};
                             group.stamp = stamp;
@@ -718,8 +762,8 @@ class AssetBrowser {
                     if (group != modelGroups_.end() &&
                         (expandedModels_.count(file) || search.IsActive())) {
                         for (const auto& child : group->second.children) {
-                            if (childOwners[child] == file &&
-                                std::filesystem::is_regular_file(assets.resolve(child))) {
+                            if (childOwners[child] == file && listingDirectories_.count(child) &&
+                                !listingDirectories_.at(child)) {
                                 grouped.push_back(child);
                             }
                         }
@@ -735,7 +779,7 @@ class AssetBrowser {
                           : 1;
                 if (ImGui::BeginTable("Asset items", columns, ImGuiTableFlags_SizingStretchSame)) {
                     for (const auto& file : files) {
-                        const bool folderItem = std::filesystem::is_directory(assets.resolve(file));
+                        const bool folderItem = listingDirectories_.at(file);
                         const auto assetPath = std::filesystem::path(file);
                         const std::string fullName = childNames.count(file) ? childNames.at(file)
                                                      : folderItem ? assetPath.filename().string()
@@ -1069,6 +1113,7 @@ class AssetBrowser {
                                                .generic_string();
                                 }
                                 saveCubemap(assets, path, CubemapAsset{});
+                                listingUntil_ = 0;
                                 selected = path;
                                 editCubemapRequest = path;
                             } catch (const std::exception& e) {
@@ -1078,6 +1123,7 @@ class AssetBrowser {
                         if (ImGui::MenuItem("Material (.mat)")) {
                             try {
                                 selected = createMaterial(assets, currentFolder);
+                                listingUntil_ = 0;
                             } catch (const std::exception& e) {
                                 assets.error = e.what();
                             }
@@ -1349,6 +1395,7 @@ class AssetBrowser {
     void createFolder() {
         try {
             selected = assets.createFolder(currentFolder);
+            listingUntil_ = 0;
         } catch (const std::exception& e) {
             assets.error = e.what();
         }
@@ -1373,6 +1420,7 @@ class AssetBrowser {
                 }
             }
             selected = name;
+            listingUntil_ = 0;
         } catch (const std::exception& e) {
             assets.error = e.what();
         }
