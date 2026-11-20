@@ -7,6 +7,7 @@
 #include "scripting/script_exports.hpp"
 #include <algorithm>
 #include <array>
+#include <map>
 #include <string>
 #include <vector>
 struct ImGuiInputTextCallbackData;
@@ -29,6 +30,15 @@ class ScriptEditor {
         if (fileDirty_ && AssetManager::script(assetPath_)) {
             assets.writeScript(assetPath_, source());
             fileDirty_ = false;
+        }
+    }
+    void migrateScriptPaths(const std::map<std::string, std::string>& paths, AssetManager& assets) {
+        const auto found = paths.find(assetPath_);
+        if (found != paths.end()) {
+            assetPath_ = found->second;
+        }
+        if (fileOpen()) {
+            setSource(assets.readScript(assetPath_));
         }
     }
     bool hasUnsavedChanges() const {

@@ -1,7 +1,7 @@
 # LegacyEngine
 
 A C++17 3D editor built with SDL3, OpenGL, Dear ImGui, Jolt, miniaudio and Lua 5.4.
-LegacyScript (`.ls`) adds Inspector-exported fields and engine APIs on top of Lua.
+LegacyScript (`.lua`, with legacy `.ls` compatibility) adds Inspector-exported fields and engine APIs on top of Lua.
 
 ![LegacyEngine editor](docs/screenshot.png)
 
@@ -58,3 +58,8 @@ Toggle VSync in **Project > Project Settings > Rendering**. Engine GLSL lives in
 
 Model source imports support OBJ and glTF/GLB (including skeletal glTF animations).
 See [Jolt migration and manual checks](docs/manual/jolt-and-model-imports.md) for physics details.
+
+### In-game UI
+
+RmlUi provides an optional OpenGL in-game overlay, separate from the ImGui editor.
+See the [setup/API guide](docs/game-ui.md) and [interactive HUD example](data/examples/rmlui/README.md).

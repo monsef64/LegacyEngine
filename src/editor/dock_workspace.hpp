@@ -30,6 +30,7 @@ inline void drawWorkspace(const EditorRect& toolbar, bool& reset) {
         ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, .29f, nullptr, &center);
         ImGuiID prefab = ImGui::DockBuilderSplitNode(left, ImGuiDir_Down, .3f, nullptr, &left);
         ImGui::DockBuilderDockWindow("Hierarchy", left);
+        ImGui::DockBuilderDockWindow("Terrain tools", left);
         ImGui::DockBuilderDockWindow("Prefab Window", prefab);
         ImGui::DockBuilderDockWindow("Inspector", right);
         ImGui::DockBuilderDockWindow("Scene", center);

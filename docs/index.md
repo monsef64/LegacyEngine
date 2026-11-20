@@ -45,6 +45,8 @@ the source tree. Repository-source links point to the revision used for the buil
 
 ## New editor and runtime workflows
 
+- [In-game UI with RmlUi and interactive HUD example](game-ui.md)
+
 - [Settings history, Game window and asset controls](editor.md#settings-history-and-play-destination)
 - [Mouse picking and AudioSource event setup](audio-input.md#gameobject-mouse-callbacks)
 - [Object activation and non-blocking waits](scripting.md#object-activity-mouseaudio-callbacks-and-waits)

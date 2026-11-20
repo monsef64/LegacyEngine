@@ -16,18 +16,17 @@
     X(brakeForce, 12000.f, 0.f, 300000.f)                                                          \
     X(tireGrip, 1.5f, .05f, 5.f)                                                                   \
     X(maxSteerAngle, 30.f, 0.f, 70.f)                                                              \
-    X(maxSpeed, 45.f, 1.f, 150.f)                                                                  \
-    X(stabilityAssist, 1.f, 0.f, 1.f)
+    X(maxSpeed, 45.f, 1.f, 150.f)
 struct Vehicle {
-    bool enabled = true;
+    bool enabled = true, keepUpright = true;
 #define FIELD(name, value, lo, hi) float name = value;
     VEHICLE_SETTINGS(FIELD)
 #undef FIELD
     float throttle = 0, steering = 0, brake = 0;
     bool handbrake = false;
     float speed = 0;
-    float wheelSteerAngle = 0; // Runtime assisted front-wheel angle in radians.
-    float wheelRoll = 0; // Runtime visual rotation, never serialized.
+    float wheelSteerAngle = 0; // Runtime front-wheel angle in radians.
+    float wheelRoll = 0;       // Runtime visual rotation, never serialized.
     int groundedWheels = 0;
     std::array<float, 4> compression{}; // front-left, front-right, rear-left, rear-right
 };
@@ -41,7 +40,7 @@ inline bool valid(const Vehicle& v) {
     return true;
 }
 inline Json settings(const Vehicle& v) {
-    Json j = {{"enabled", v.enabled}};
+    Json j = {{"enabled", v.enabled}, {"keepUpright", v.keepUpright}};
 #define SAVE(name, value, lo, hi) j[#name] = v.name;
     VEHICLE_SETTINGS(SAVE)
 #undef SAVE
@@ -53,6 +52,8 @@ inline Vehicle parse(const Json& j) {
     }
     Vehicle v;
     v.enabled = j.value("enabled", true);
+    v.keepUpright =
+        j.value("keepUpright", true); // retired stabilityAssist is intentionally ignored
 #define LOAD(name, initial, lo, hi) v.name = j.value(#name, v.name);
     VEHICLE_SETTINGS(LOAD)
 #undef LOAD

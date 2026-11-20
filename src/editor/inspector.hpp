@@ -858,7 +858,7 @@ inline void drawInspector(World& world,
                         transformChanged = true;
                     }
                     const auto* c = world.tryGet<Collider>(selected);
-                    if (c && c->shape != ColliderShape::Box) {
+                    if (c && c->shape != ColliderShape::Box && c->shape != ColliderShape::Sphere) {
                         float size = edited.scale.x;
                         const float defaultScale = 1;
                         EditorValues::setDefaultObject(&size, &defaultScale, sizeof(size));
@@ -934,7 +934,7 @@ inline void drawInspector(World& world,
                             if (ImGui::Selectable(names[i], current == i)) {
                                 r->mesh = meshes[i];
                                 r->model.clear();
-                                if (i != 0) {
+                                if (i != 0 && i != 1) {
                                     if (auto* t = world.tryGet<Transform>(selected)) {
                                         const float scale =
                                             std::clamp(std::max({std::abs(t->scale.x),
@@ -1335,6 +1335,10 @@ inline void drawInspector(World& world,
                         auto edited = *v;
                         EditorValues::bindDefaults(edited);
                         EditorValues::Checkbox("Enabled", &edited.enabled);
+                        EditorValues::Checkbox("Keep upright (prevent flipping)",
+                                               &edited.keepUpright);
+                        ImGui::TextWrapped(
+                            "Upright mode locks chassis pitch/roll to world up, even in the air. Disable for unrestricted slope banking and stunts.");
 #define VEHICLE_UI(name, value, lo, hi)                                                            \
     EditorValues::DragFloat(                                                                       \
         #name, &edited.name, .05f, lo, hi, "%.2f", ImGuiSliderFlags_AlwaysClamp);

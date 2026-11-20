@@ -15,7 +15,7 @@ The **engine Release workflow** also builds the extension, publishing
 **`legacyscript.vsix`** as a separate downloadable artifact in the same run. Tagged engine
 releases attach `legacyscript.vsix` alongside the engine package. Use VS Code's
 **Install from VSIX** command with that file. The standalone **LegacyScript VSIX**
-workflow remains available (its artifact is a ZIP to extract first). `.ls` files
+workflow remains available (its artifact is a ZIP to extract first). `.lua` and legacy `.ls` files
 should show **LegacyScript** as their language. It is not on the Marketplace.
 
 ## Error recovery

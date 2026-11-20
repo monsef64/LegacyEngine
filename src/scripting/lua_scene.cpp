@@ -12,6 +12,7 @@
 #include "scene/scene_camera.hpp"
 #include "scene/skybox_transition.hpp"
 #include "scripting/script_exports.hpp"
+#include "ui/game_ui.hpp"
 #include <cstdio>
 extern "C" {
 #include <lauxlib.h>
@@ -465,6 +466,30 @@ LuaScene::LuaScene(lua_State* L,
         lua_setfield(L, -2, colorNames[i]);
     }
     lua_setglobal(L, "color");
+    lua_newtable(L);
+    lua_pushcfunction(L, [](lua_State* state) -> int {
+        auto* ui = GameUI::current();
+        const char* id = luaL_checkstring(state, 1);
+        const char* text = luaL_checkstring(state, 2);
+        lua_pushboolean(state, ui && ui->setText(id, text));
+        return 1;
+    });
+    lua_setfield(L, -2, "setText");
+    lua_pushcfunction(L, [](lua_State* state) -> int {
+        auto* ui = GameUI::current();
+        const char* id = luaL_checkstring(state, 1);
+        lua_pushboolean(state, ui && ui->takeClick(id));
+        return 1;
+    });
+    lua_setfield(L, -2, "wasClicked");
+    lua_pushcfunction(L, [](lua_State* state) -> int {
+        auto* ui = GameUI::current();
+        lua_pushboolean(state, ui && ui->loaded());
+        return 1;
+    });
+    lua_setfield(L, -2, "isLoaded");
+    lua_setglobal(L, "ui");
+
     const char* metas[]{"GameObject", "Component", "Vector"};
     const lua_CFunction reads[]{objectIndex, componentIndex, vectorIndex};
     const lua_CFunction writes[]{objectNewIndex, componentNewIndex, vectorNewIndex};
@@ -2282,6 +2307,7 @@ int LuaScene::componentNewIndex(lua_State* L) {
         try {
             const auto next = Vehicles::parse(j);
             v.enabled = next.enabled;
+            v.keepUpright = next.keepUpright;
 #define COPY_VEHICLE(name, value, lo, hi) v.name = next.name;
             VEHICLE_SETTINGS(COPY_VEHICLE)
 #undef COPY_VEHICLE

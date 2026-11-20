@@ -7,6 +7,7 @@
 #include "models/mesh_simplify.hpp"
 #include "models/model_asset.hpp"
 #include "physics/physics.hpp"
+#include "project/layers.hpp"
 #include "terrain/terrain_mesh.hpp"
 #include <set>
 #include <tuple>
@@ -125,6 +126,11 @@ Box toBox(const BoxCollider& collider, Vec3 scale) {
             ? std::max({std::abs(scale.x), std::abs(scale.y), std::abs(scale.z)})
             : std::max(std::abs(scale.x), std::abs(scale.z));
     box.radius = std::max(std::abs(collider.radius) * radialScale, smallest);
+    if (collider.shape == ColliderShape::Sphere) {
+        box.halfSize = {std::max(std::abs(collider.radius * scale.x), smallest),
+                        std::max(std::abs(collider.radius * scale.y), smallest),
+                        std::max(std::abs(collider.radius * scale.z), smallest)};
+    }
     box.height = std::max(std::abs(collider.height * scale.y), kSmallestBoxSize);
     box.center = collider.center * scale;
     box.friction = std::max(collider.friction, 0.0f);
@@ -202,7 +208,7 @@ struct Physics::Impl {
             return 2;
         }
         JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override {
-            return JPH::BroadPhaseLayer(layer);
+            return JPH::BroadPhaseLayer(layer & 1);
         }
 #if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
         const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer layer) const override {
@@ -212,12 +218,12 @@ struct Physics::Impl {
     } broad;
     struct BroadFilter : JPH::ObjectVsBroadPhaseLayerFilter {
         bool ShouldCollide(JPH::ObjectLayer layer, JPH::BroadPhaseLayer other) const override {
-            return layer != 0 || other.GetValue() != 0;
+            return (layer & 1) != 0 || other.GetValue() != 0;
         }
     } broadFilter;
     struct PairFilter : JPH::ObjectLayerPairFilter {
         bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
-            return a != 0 || b != 0;
+            return ((a & 1) != 0 || (b & 1) != 0) && LayerSettings::collide(a >> 1, b >> 1);
         }
     } pairFilter;
     struct Pair {
@@ -285,7 +291,7 @@ struct Physics::Impl {
         Box box;
         RigidBody rigid;
         bool hasCollider = false, hasRigid = false, sensor = false, controller = false,
-             visited = false, failed = false;
+             visited = false, failed = false, upright = false;
         Pose previous{}, current{};
         Transform shown{};
         JPH::EMotionType motion = JPH::EMotionType::Static;
@@ -479,9 +485,24 @@ struct Physics::Impl {
                              std::min({box.halfSize.x, box.halfSize.y, box.halfSize.z}) * .5f))
                     .Create());
             break;
-        case ColliderShape::Sphere:
-            result = checked(JPH::SphereShapeSettings(box.radius).Create());
+        case ColliderShape::Sphere: {
+            if (std::abs(box.halfSize.x - box.halfSize.y) < 1e-5f &&
+                std::abs(box.halfSize.x - box.halfSize.z) < 1e-5f) {
+                result = checked(JPH::SphereShapeSettings(box.radius).Create());
+            } else {
+                JPH::Array<JPH::Vec3> points;
+                for (int ring = 0; ring <= 12; ++ring) {
+                    for (int slice = 0; slice < 24; ++slice) {
+                        float lat = -kPi * .5f + kPi * ring / 12, lon = 2 * kPi * slice / 24;
+                        points.push_back({box.halfSize.x * std::cos(lat) * std::cos(lon),
+                                          box.halfSize.y * std::sin(lat),
+                                          box.halfSize.z * std::cos(lat) * std::sin(lon)});
+                    }
+                }
+                result = checked(JPH::ConvexHullShapeSettings(points, 0).Create());
+            }
             break;
+        }
         case ColliderShape::Capsule:
             result = checked(JPH::CapsuleShapeSettings(box.height * .5f, box.radius).Create());
             break;
@@ -584,14 +605,18 @@ struct Physics::Impl {
                 motion = JPH::EMotionType::Kinematic;
             }
             const bool controller = world.has<CharacterController>(entity);
+            const auto* vehicle = world.tryGet<Vehicle>(entity);
+            const bool upright = vehicle && vehicle->enabled && vehicle->keepUpright &&
+                                 motion == JPH::EMotionType::Dynamic;
             const bool changed =
                 body.hasCollider != bool(source) || body.hasRigid != bool(rigid) ||
-                body.sensor != sensor || body.controller != controller || body.motion != motion ||
-                box.shape != body.box.shape || box.halfSize != body.box.halfSize ||
-                box.center != body.box.center || box.radius != body.box.radius ||
-                box.height != body.box.height || box.model != body.box.model ||
-                box.meshDetail != body.box.meshDetail || box.revision != body.box.revision ||
-                box.hullScale != body.box.hullScale || (rigid && rigid->mass != body.rigid.mass);
+                body.sensor != sensor || body.controller != controller || body.upright != upright ||
+                body.motion != motion || box.shape != body.box.shape ||
+                box.halfSize != body.box.halfSize || box.center != body.box.center ||
+                box.radius != body.box.radius || box.height != body.box.height ||
+                box.model != body.box.model || box.meshDetail != body.box.meshDetail ||
+                box.revision != body.box.revision || box.hullScale != body.box.hullScale ||
+                (rigid && rigid->mass != body.rigid.mass);
             if (fresh && body.failed && !changed) {
                 return;
             }
@@ -623,15 +648,21 @@ struct Physics::Impl {
                     moved = true;
                 }
             }
+            if (upright) {
+                const auto f = rotateVector(pose.rotation, {0, 0, -1});
+                pose.rotation = axisAngle({0, 1, 0}, std::atan2(-f.x, -f.z));
+            }
             try {
                 if (rebuild) {
                     release(body);
                     const auto geometry = shape(box, source != nullptr, terrain);
-                    JPH::BodyCreationSettings settings(geometry,
-                                                       jvec(pose.position),
-                                                       jquat(pose.rotation),
-                                                       motion,
-                                                       motion == JPH::EMotionType::Static ? 0 : 1);
+                    JPH::BodyCreationSettings settings(
+                        geometry,
+                        jvec(pose.position),
+                        jquat(pose.rotation),
+                        motion,
+                        JPH::ObjectLayer(LayerSettings::effective(world, entity) * 2 +
+                                         (motion == JPH::EMotionType::Static ? 0 : 1)));
                     settings.mUserData = keyOf(entity);
                     settings.mIsSensor = sensor;
                     settings.mCollideKinematicVsNonDynamic = sensor;
@@ -642,6 +673,11 @@ struct Physics::Impl {
                         settings.mAllowedDOFs = JPH::EAllowedDOFs::TranslationX |
                                                 JPH::EAllowedDOFs::TranslationY |
                                                 JPH::EAllowedDOFs::TranslationZ;
+                    }
+                    if (upright && !controller) {
+                        settings.mAllowedDOFs =
+                            JPH::EAllowedDOFs::TranslationX | JPH::EAllowedDOFs::TranslationY |
+                            JPH::EAllowedDOFs::TranslationZ | JPH::EAllowedDOFs::RotationY;
                     }
                     if (motion == JPH::EMotionType::Dynamic) {
                         settings.mOverrideMassProperties =
@@ -697,8 +733,15 @@ struct Physics::Impl {
                 body.hasRigid = rigid != nullptr;
                 body.sensor = sensor;
                 body.controller = controller;
+                body.upright = upright;
                 body.motion = motion;
                 body.rigid = rigid ? *rigid : RigidBody{};
+                const auto objectLayer =
+                    JPH::ObjectLayer(LayerSettings::effective(world, entity) * 2 +
+                                     (motion == JPH::EMotionType::Static ? 0 : 1));
+                if (api.GetObjectLayer(body.id) != objectLayer) {
+                    api.SetObjectLayer(body.id, objectLayer);
+                }
                 body.shown = transform;
                 body.failed = false;
             } catch (const std::exception& error) {
@@ -709,6 +752,7 @@ struct Physics::Impl {
                 body.hasRigid = rigid != nullptr;
                 body.sensor = sensor;
                 body.controller = controller;
+                body.upright = upright;
                 body.motion = motion;
                 body.rigid = rigid ? *rigid : RigidBody{};
                 body.failed = true;
@@ -771,16 +815,21 @@ struct Physics::Impl {
             struct ExcludeSelf : JPH::BodyFilter {
                 JPH::BodyID self;
                 bool mesh;
-                ExcludeSelf(JPH::BodyID id, bool isMesh) : self(id), mesh(isMesh) {}
+                int layer;
+                ExcludeSelf(JPH::BodyID id, bool isMesh, int objectLayer)
+                    : self(id), mesh(isMesh), layer(objectLayer >> 1) {}
                 bool ShouldCollide(const JPH::BodyID& id) const override {
                     return id != self;
                 }
                 bool ShouldCollideLocked(const JPH::Body& body) const override {
                     // Jolt has no mesh-vs-mesh narrow phase. Concave geometry is
                     // retained, not silently replaced by a convex hull.
-                    return !mesh || !body.GetShape()->MustBeStatic();
+                    return LayerSettings::collide(layer, body.GetObjectLayer() >> 1) &&
+                           (!mesh || !body.GetShape()->MustBeStatic());
                 }
-            } filter(sensor.id, sensor.box.shape == ColliderShape::Mesh);
+            } filter(sensor.id,
+                     sensor.box.shape == ColliderShape::Mesh,
+                     system.GetBodyInterface().GetObjectLayer(sensor.id));
             const auto& api = system.GetBodyInterface();
             const auto geometry = api.GetShape(sensor.id);
             JPH::AllHitCollisionCollector<JPH::CollideShapeCollector> collector;
@@ -965,7 +1014,9 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                             ancestor = getParent(world, ancestor);
                         }
                         const auto* c = world.tryGet<Collider>(other);
-                        return !c || !c->isTrigger;
+                        return (!c || !c->isTrigger) &&
+                               LayerSettings::collide(LayerSettings::effective(world, entity),
+                                                      LayerSettings::effective(world, other));
                     });
                 if (!contact || dot(hit.normal, up) < .2f) {
                     continue;
@@ -985,21 +1036,7 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                                                   v.suspensionDamping * dot(relative, up),
                                               0.f,
                                               mass * 9.81f * 2.5f);
-                // Limit commanded cornering acceleration before high-speed
-                // steering can lever a high-grip chassis over its outside tires.
-                const float comHeight =
-                    std::max(.25f, rest + radius - v.mountHeight * verticalScale);
-                const float safeAcceleration = std::min(
-                    8.f,
-                    9.81f * v.trackWidth * std::abs(transform->scale.x) / (2 * comHeight) * .65f);
-                const float speedSquared = v.speed * v.speed;
-                const float stableAngle =
-                    std::atan(safeAcceleration * v.wheelBase * std::abs(transform->scale.z) /
-                              std::max(1.f, speedSquared));
-                const float maxAngle = radians(v.maxSteerAngle);
-                const float assistedAngle =
-                    maxAngle + (std::min(maxAngle, stableAngle) - maxAngle) * v.stabilityAssist;
-                v.wheelSteerAngle = steer * assistedAngle;
+                v.wheelSteerAngle = steer * radians(v.maxSteerAngle);
                 const float angle = front ? v.wheelSteerAngle : 0;
                 auto direction = rotateVector(rotation, {std::sin(angle), 0, -std::cos(angle)});
                 direction = normalize(direction - hit.normal * dot(direction, hit.normal));
@@ -1099,6 +1136,14 @@ void Physics::update(World& world, float seconds, const std::function<void(float
             auto& body = entry.second;
             if (body.id.IsInvalid()) {
                 continue;
+            }
+            if (body.upright) {
+                const auto f = rotateVector(quat(api.GetRotation(body.id)), {0, 0, -1});
+                api.SetRotation(body.id,
+                                jquat(axisAngle({0, 1, 0}, std::atan2(-f.x, -f.z))),
+                                JPH::EActivation::DontActivate);
+                const auto velocity = api.GetAngularVelocity(body.id);
+                api.SetAngularVelocity(body.id, {0, velocity.GetY(), 0});
             }
             body.current = {vec(api.GetPosition(body.id)), quat(api.GetRotation(body.id))};
             if (body.hasRigid) {

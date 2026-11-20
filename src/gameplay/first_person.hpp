@@ -3,6 +3,7 @@
 #include "editor/rotation_editor.hpp"
 #include "input/input.hpp"
 #include "physics/physics.hpp"
+#include "project/layers.hpp"
 
 inline void updateCharacterControllers(World& world, Physics& physics) {
     world.each<CharacterController, Transform, RigidBody, Collider>(
@@ -21,7 +22,9 @@ inline void updateCharacterControllers(World& world, Physics& physics) {
             const bool grounded = physics.raycast(
                 {origin, {0, -1, 0}}, halfHeight + c.groundProbe, groundHit, [&](Entity target) {
                     return target != e && world.has<Collider>(target) &&
-                           !world.get<Collider>(target).isTrigger;
+                           !world.get<Collider>(target).isTrigger &&
+                           LayerSettings::collide(LayerSettings::effective(world, e),
+                                                  LayerSettings::effective(world, target));
                 });
             c.isGrounded = body.linearVelocity.y <= .1f && grounded && groundHit.normal.y > .55f;
             Vec3 direction = rotateVector(t.rotation, c.movement);

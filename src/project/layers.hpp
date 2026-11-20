@@ -9,6 +9,28 @@ struct LayerSettings {
         result[0] = "Default";
         return result;
     }();
+    inline static std::array<std::uint32_t, 32> collisions = [] {
+        std::array<std::uint32_t, 32> a;
+        a.fill(~0u);
+        return a;
+    }();
+    static bool collide(int a, int b) {
+        return a >= 0 && a < 32 && b >= 0 && b < 32 && (collisions[a] & (1u << b)) != 0;
+    }
+    static void setCollision(int a, int b, bool enabled) {
+        if (enabled) {
+            collisions[a] |= 1u << b;
+            collisions[b] |= 1u << a;
+        } else {
+            collisions[a] &= ~(1u << b);
+            collisions[b] &= ~(1u << a);
+        }
+    }
+    static void resetCollision(int layer) {
+        for (int i = 0; i < 32; ++i) {
+            setCollision(layer, i, true);
+        }
+    }
     std::filesystem::path root;
     bool visible = false;
     std::string error;
@@ -38,6 +60,7 @@ struct LayerSettings {
             return;
         }
         root = assets.root;
+        collisions.fill(~0u);
         names = {};
         names[0] = "Default";
         error.clear();
@@ -61,7 +84,19 @@ struct LayerSettings {
                         }
                     }
                 }
+                auto matrix = collisions;
+                if (json.contains("collisions")) {
+                    matrix = json.at("collisions").get<std::array<std::uint32_t, 32>>();
+                    for (int i = 0; i < 32; ++i) {
+                        for (int j = 0; j < 32; ++j) {
+                            if (bool(matrix[i] & (1u << j)) != bool(matrix[j] & (1u << i))) {
+                                throw std::runtime_error("Asymmetric collision matrix");
+                            }
+                        }
+                    }
+                }
                 names = loaded;
+                collisions = matrix;
             }
         } catch (const std::exception& e) {
             error = e.what();
@@ -69,7 +104,8 @@ struct LayerSettings {
     }
     void save(const AssetManager& assets) {
         try {
-            writeJsonFile(file(assets), Json{{"version", 1}, {"names", names}});
+            writeJsonFile(file(assets),
+                          Json{{"version", 1}, {"names", names}, {"collisions", collisions}});
             error.clear();
         } catch (const std::exception& e) {
             error = e.what();

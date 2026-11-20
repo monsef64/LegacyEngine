@@ -6,6 +6,7 @@
 #include "scene/scene_camera.hpp"
 #include "terrain/terrain_tools.hpp"
 #include <imgui.h>
+#include <imgui_internal.h>
 namespace Terrains {
 class Editor {
     Entity selected_{}, stroke_{};
@@ -328,6 +329,12 @@ class Editor {
         }
         if (!visible_) {
             return;
+        }
+        if (dockedEditor) {
+            if (auto* hierarchy = ImGui::FindWindowByName("Hierarchy");
+                hierarchy && hierarchy->DockId) {
+                ImGui::SetNextWindowDockID(hierarchy->DockId, ImGuiCond_Appearing);
+            }
         }
         ImGui::SetNextWindowSize(ImVec2(360, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Terrain tools", &visible_)) {

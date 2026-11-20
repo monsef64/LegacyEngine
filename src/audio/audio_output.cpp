@@ -73,6 +73,17 @@ void AudioOutput::open() {
     }
     self.deviceReady = true;
 }
+void AudioOutput::suspend(bool paused) {
+    auto& self = *impl_;
+    if (!self.deviceReady) {
+        return;
+    }
+    if (paused) {
+        ma_device_stop(&self.device);
+    } else {
+        ma_device_start(&self.device);
+    }
+}
 void AudioOutput::clear() {
     auto& self = *impl_;
     std::lock_guard<std::mutex> lock(self.mutex);

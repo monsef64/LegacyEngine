@@ -1,5 +1,5 @@
 -- Vehicle controller: attach to the ROOT created with Create > Vehicle.
--- Play, then focus the Game view. Do not also attach vehicle_basic.ls.
+-- Play, then focus the Game view. Do not also attach vehicle_basic.lua.
 -- W: forward / brake while reversing. S: reverse / brake while moving forward.
 -- A/D: steer. Space: service brake. Left Shift: rear handbrake.
 -- Uses Vehicle physics; never teleports the chassis or sets its velocity.

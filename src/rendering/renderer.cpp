@@ -593,8 +593,6 @@ void Renderer::draw(World& world,
     glUseProgram(litProgram_);
     glUniform3f(
         glGetUniformLocation(litProgram_, "uSkyAmbient"), skyAmbient.x, skyAmbient.y, skyAmbient.z);
-    terrainRenderer_.draw(
-        world, materialAssets_, viewProjection, cameraPosition, litProgram_, lights_);
     ProfileScope surfaces(ProfilePart::Surfaces);
     glUseProgram(litProgram_);
     const Skybox* environment = activeSky ? (skyFade ? &skyFade->from : activeSky) : nullptr;
@@ -651,6 +649,9 @@ void Renderer::draw(World& world,
                 }
             });
     }
+    terrainRenderer_.draw(
+        world, materialAssets_, viewProjection, cameraPosition, litProgram_, lights_, &occlusion);
+    glUseProgram(litProgram_);
     const ViewFrustum frustum(viewProjection);
     auto visibleMesh = [&](const Transform& transform, const MeshRenderer& renderer) {
         if (renderer.mesh.id >= meshes_.size()) {
@@ -920,16 +921,7 @@ bool Renderer::drawOcclusionCamera(
     }
     drawWire(occluders, Transform{}, sceneVP, {.1f, .8f, 1.f}, .35f);
     const ViewFrustum frustum(vp);
-    world.eachReadOnly<Transform, MeshRenderer>([&](Entity e,
-                                                    const Transform& t,
-                                                    const MeshRenderer& r) {
-        if (!Occlusion::eligible(world, e, t, r) || !opaqueOcclusionMaterial(r)) {
-            return;
-        }
-        Vec3 low, high;
-        if (!meshBounds(r.mesh, low, high)) {
-            return;
-        }
+    auto bounds = [&](Entity e, const Transform& t, Vec3 low, Vec3 high) {
         if (!frustum.visibleBox((low + high) * .5f,
                                 (high - low) * .5f,
                                 transformMatrix(t.position, t.rotation, t.scale))) {
@@ -954,7 +946,30 @@ bool Renderer::drawOcclusionCamera(
         }
         drawWire(
             box, Transform{}, sceneVP, hidden ? Vec3{1, .2f, .15f} : Vec3{.2f, 1, .35f}, .85f, 2);
-    });
+    };
+    world.eachReadOnly<Transform, MeshRenderer>(
+        [&](Entity e, const Transform& t, const MeshRenderer& r) {
+            if (!Occlusion::eligible(world, e, t, r) || !opaqueOcclusionMaterial(r)) {
+                return;
+            }
+            Vec3 low, high;
+            if (meshBounds(r.mesh, low, high)) {
+                bounds(e, t, low, high);
+            }
+        });
+    world.eachReadOnly<Transform, Terrain>(
+        [&](Entity e, const Transform& t, const Terrain& terrain) {
+            if (!terrain.data || !Occlusion::eligible(world, e, t, MeshRenderer{})) {
+                return;
+            }
+            const auto& d = *terrain.data;
+            for (int z = 0; z < Terrains::chunkCount(d); ++z) {
+                for (int x = 0; x < Terrains::chunkCount(d); ++x) {
+                    const auto& b = Terrains::chunkBounds(d, x, z);
+                    bounds(e, t, b.center - b.extent, b.center + b.extent);
+                }
+            }
+        });
     culled = preview.culled;
     tested = preview.tested;
     return true;

@@ -548,7 +548,7 @@
     "tireGrip": "number 0.05..5",
     "maxSteerAngle": "number 0..70 degrees",
     "maxSpeed": "number 1..150 m/s engine cutoff",
-    "stabilityAssist": "number 0..1 speed-dependent safe steering, default 1"
+    "keepUpright": "boolean Default true: hard world-up pitch/roll lock; false permits banking and flips"
   },
   "Water": {
     "mesh": "string Optional .mesh asset; empty uses this MeshRenderer or default plane"
@@ -602,5 +602,10 @@
     "enabled": "boolean",
     "size": "Vec3 Local box dimensions, positive; assign a whole vector",
     "center": "Vec3 Local box center; assign a whole vector"
+  },
+  "GameUI": {
+    "isLoaded": "fun():boolean Whether Assets/UI/main.rml is loaded in Play.",
+    "setText": "fun(id:string, plainText:string):boolean Set escaped plain text of an element; false when not loaded/id missing.",
+    "wasClicked": "fun(id:string):boolean Consume a queued click for the element id; repeated clicks coalesce until polled."
   }
 }

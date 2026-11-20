@@ -1,0 +1,24 @@
+<rml>
+<head>
+    <title>LegacyEngine - RmlUi example</title>
+    <link type="text/rcss" href="hud.rcss" />
+</head>
+<body>
+    <div id="hud">
+        <div class="eyebrow">LEGACYENGINE / RMLUI</div>
+        <h1>Expedition HUD</h1>
+        <p>In-game HTML-style layout, rendered with OpenGL.</p>
+        <div class="stat">Health <span id="health">100 / 100</span></div>
+        <div class="stat">Supplies <span id="supplies">0</span></div>
+        <div class="buttons">
+            <button id="collect">Collect supply</button>
+            <button id="heal">Use supply (+10 HP)</button>
+        </div>
+        <p id="status">Ready. Click Collect supply to begin.</p>
+        <p class="hint">H: take damage | Cursor must be unlocked to click.</p>
+        <input id="callsign" type="text" value="Explorer" maxlength="24" />
+        <p class="hint">This text field demonstrates keyboard focus.</p>
+    </div>
+    <div id="badge">PLAY MODE UI</div>
+</body>
+</rml>

@@ -279,6 +279,10 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma onc
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation)
 
+include(cmake/RmlUi.cmake)
+target_link_libraries(LegacyEngine PRIVATE legacy_game_ui)
+target_link_libraries(lua_console PUBLIC legacy_game_ui)
+
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)
 else()

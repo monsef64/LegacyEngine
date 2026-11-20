@@ -2,6 +2,7 @@
 #include "editor/scene_picking.hpp"
 #include "effects/laser_update.hpp"
 #include "engine_version.hpp"
+#include "ui/game_ui.hpp"
 #include <cctype>
 #include <imgui_internal.h>
 // LegacyEngine - Scene editing and runtime orchestration.
@@ -266,6 +267,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     NavigationWindow navigationWindow;
     ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
+    GameUI gameUI;
     auto lastSceneRender = std::chrono::steady_clock::time_point{};
     int lastSceneWidth = 0, lastSceneHeight = 0;
     AssetPreviewRenderer assetPreviews(
@@ -339,7 +341,36 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     constexpr unsigned smokeFrames = 120;
     std::optional<Vec3> orbitPivot;
     bool orbitStarted = false;
+    bool focusSuspended = false;
     while (running) {
+        if (!smokeTest && !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
+            !(gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS))) {
+            input.releaseMouse();
+            input.clear();
+            cameraLooking = false;
+            orbitPivot.reset();
+            if (!focusSuspended) {
+                audio.suspend(true);
+                focusSuspended = true;
+            }
+            // Do not poll project transitions/import results or run editor work
+            // while backgrounded. Only pump OS events until focus or a close request.
+            while (!(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
+                   !(gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS))) {
+                SDL_Event wake;
+                if (!SDL_WaitEvent(&wake)) {
+                    SDL_Delay(50);
+                    continue;
+                }
+                if (wake.type == SDL_EVENT_QUIT || wake.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+                    SDL_PushEvent(&wake);
+                    break;
+                }
+                ImGui_ImplSDL3_ProcessEvent(&wake);
+            }
+            lastTicks = SDL_GetTicksNS();
+            lastAutosave = std::chrono::steady_clock::now();
+        }
         const Uint64 frameStarted = SDL_GetTicksNS();
         profiler.begin(showProfiler);
         int windowWidth = 1, windowHeight = 1;
@@ -415,15 +446,32 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         playMode.playing() && !cameraLooking &&
                         (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || input.mouseLocked) &&
-                        !inputSettings.visible;
+                        !inputSettings.visible && !gameUI.capturesKeyboard();
         input.mouseEnabled = externalFocus || gameHovered || sceneHovered || input.mouseLocked;
         input.beginFrame();
+        try {
+            gameUI.sync(playMode.active(), browser.assets.root, input.window);
+        } catch (const std::exception& error) {
+            terminalErrors.report("Game UI", error.what());
+        }
+        const auto uiOrigin = ImGui::GetMainViewport()->Pos;
+        int uiW = 1, uiH = 1;
+        if (gameWindow) {
+            SDL_GetWindowSize(gameWindow, &uiW, &uiH);
+        }
+        gameUI.viewport(gameWindow ? 0.f : gameImageOrigin.x - uiOrigin.x,
+                        gameWindow ? 0.f : gameImageOrigin.y - uiOrigin.y,
+                        gameWindow ? float(uiW) : gameImageSize.x,
+                        gameWindow ? float(uiH) : gameImageSize.y,
+                        gameSurface.width,
+                        gameSurface.height);
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (gameWindow && event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
                 event.window.windowID == SDL_GetWindowID(gameWindow)) {
                 input.releaseMouse();
                 input.window = window;
+                gameUI.sync(false, browser.assets.root, window);
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
                 continue;
@@ -439,7 +487,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     }
                     continue;
                 }
-                input.event(event);
+                if (!gameUI.event(event, gameWindow, externalFocus, input.mouseLocked) ||
+                    event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+                    input.event(event);
+                }
                 continue;
             }
             const auto captureButtons =
@@ -496,7 +547,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (!navigationMouse) {
                 ImGui_ImplSDL3_ProcessEvent(&event);
             }
-            input.event(event);
+            if (!gameUI.event(event, window, gameFocused && playMode.active(), input.mouseLocked) ||
+                event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+                input.event(event);
+            }
             const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                                     event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
                                     event.type == SDL_EVENT_MOUSE_MOTION ||
@@ -710,6 +764,32 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
 
+        if (!smokeTest && !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
+            !(gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS))) {
+            input.releaseMouse();
+            input.clear();
+            cameraLooking = false;
+            orbitPivot.reset();
+            if (!focusSuspended) {
+                audio.suspend(true);
+                focusSuspended = true;
+            }
+            profiler.end();
+            // Block instead of rendering/simulating at a background frame rate.
+            // Preserve the wake event for the normal event handler (including Quit).
+            SDL_Event wake;
+            if (running && SDL_WaitEvent(&wake)) {
+                SDL_PushEvent(&wake);
+            }
+            lastTicks = SDL_GetTicksNS();
+            lastAutosave = std::chrono::steady_clock::now();
+            continue;
+        }
+        if (focusSuspended) {
+            audio.suspend(false);
+            focusSuspended = false;
+            lastTicks = SDL_GetTicksNS();
+        }
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         if (cameraLooking || orbitPivot) {
@@ -1106,7 +1186,18 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                             std::filesystem::copy_file(currentProject,
                                                        currentProject + ".before-fix.bak");
                         }
-                        fixProjectAssets(browser.assets, projectMeshes);
+                        scripts.saveFile(browser.assets);
+                        const auto migration = fixProjectAssets(browser.assets, projectMeshes);
+                        remapLegacyScriptWorld(world, migration);
+                        embeddedLegacySource =
+                            remapLegacyScriptLiterals(embeddedLegacySource, migration);
+                        remapLegacyScriptPath(browser.openedScript, migration);
+                        remapLegacyScriptPath(browser.selected, migration);
+                        scripts.migrateScriptPaths(migration, browser.assets);
+                        if (browser.openedScript.empty()) {
+                            scripts.setSource(remapLegacyScriptLiterals(
+                                std::string(scripts.source()), migration));
+                        }
                         saveTo(currentProject);
                     } catch (const std::exception& e) {
                         projectError = e.what();
@@ -1326,6 +1417,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             ImGui::SetNextWindowSizeConstraints(
                 ImVec2(std::min(320.f, area.x), std::min(240.f, area.y)), area);
             if (ImGui::Begin("Layers", &layerSettings.visible)) {
+                ImGui::BeginDisabled(playMode.active());
                 ImGui::TextUnformatted("Default (built-in)");
                 for (int i = 1; i < 32; ++i) {
                     if (!LayerSettings::names[i].empty()) {
@@ -1333,6 +1425,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         ImGui::TextUnformatted(LayerSettings::names[i].c_str());
                         ImGui::SameLine();
                         if (ImGui::SmallButton("Remove")) {
+                            LayerSettings::resetCollision(i);
                             LayerSettings::names[i].clear();
                             world.each<ObjectLayer>([&](Entity, ObjectLayer& layer) {
                                 if (layer.value == i) {
@@ -1361,12 +1454,67 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         if (slot == 32) {
                             layerSettings.error = "Maximum 32 layers";
                         } else {
+                            LayerSettings::resetCollision(slot);
                             LayerSettings::names[slot] = newLayer;
                             newLayer[0] = 0;
                             layerSettings.save(browser.assets);
                         }
                     }
                 }
+                if (ImGui::CollapsingHeader("Layer Collision Matrix",
+                                            ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::TextWrapped(
+                        "Checked pairs collide and generate trigger/contact events. Uncheck to ignore. Query masks are separate.");
+                    std::vector<int> named;
+                    for (int i = 0; i < 32; ++i) {
+                        if (!LayerSettings::names[i].empty()) {
+                            named.push_back(i);
+                        }
+                    }
+                    ImGui::BeginDisabled(playMode.active());
+                    if (ImGui::BeginTable("CollisionMatrix",
+                                          int(named.size()) + 1,
+                                          ImGuiTableFlags_ScrollX | ImGuiTableFlags_BordersInnerV,
+                                          ImVec2(0, 250))) {
+                        ImGui::TableSetupColumn("Layer", ImGuiTableColumnFlags_WidthFixed, 150);
+                        for (int i : named) {
+                            ImGui::TableSetupColumn(LayerSettings::names[i].c_str(),
+                                                    ImGuiTableColumnFlags_WidthFixed,
+                                                    90);
+                        }
+                        ImGui::TableSetupScrollFreeze(1, 1);
+                        ImGui::TableHeadersRow();
+                        for (std::size_t row = 0; row < named.size(); ++row) {
+                            int a = named[row];
+                            ImGui::TableNextRow();
+                            ImGui::TableNextColumn();
+                            ImGui::TextUnformatted(LayerSettings::names[a].c_str());
+                            for (std::size_t col = 0; col < named.size(); ++col) {
+                                ImGui::TableNextColumn();
+                                if (col > row) {
+                                    continue;
+                                }
+                                int b = named[col];
+                                ImGui::PushID(a * 32 + b);
+                                bool enabled = LayerSettings::collide(a, b);
+                                if (ImGui::Checkbox("##Pair", &enabled)) {
+                                    LayerSettings::setCollision(a, b, enabled);
+                                    layerSettings.save(browser.assets);
+                                    physics.reset();
+                                }
+                                if (ImGui::IsItemHovered()) {
+                                    ImGui::SetTooltip("%s / %s",
+                                                      LayerSettings::names[a].c_str(),
+                                                      LayerSettings::names[b].c_str());
+                                }
+                                ImGui::PopID();
+                            }
+                        }
+                        ImGui::EndTable();
+                    }
+                    ImGui::EndDisabled();
+                }
+                ImGui::EndDisabled();
                 if (!layerSettings.error.empty()) {
                     ImGui::TextWrapped("%s", layerSettings.error.c_str());
                 }
@@ -1546,6 +1694,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (gameWindow) {
                 input.releaseMouse();
                 input.window = window;
+                gameUI.sync(false, browser.assets.root, window);
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
             }
@@ -2152,7 +2301,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
             if (beginEditorPanel("Game")) {
                 gameHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
-                gameFocused = ImGui::IsWindowFocused();
+                gameFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
                 const auto active = activeCamera(world);
                 if (active == Entity{}) {
                     const char* message = "No active camera available";
@@ -2269,6 +2418,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         finishEditorTheme(ImGui::GetDrawData());
         profiler.checkpoint(ProfilePart::Editor);
 
+        // Resolve gameplay focus using this frame's UI, not yesterday's tab state.
+        input.enabled = ((SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) || externalFocus) &&
+                        playMode.playing() && !cameraLooking &&
+                        (gameFocused || externalFocus || input.mouseLocked) &&
+                        (!ImGui::GetIO().WantTextInput || gameFocused || input.mouseLocked) &&
+                        !inputSettings.visible && !gameUI.capturesKeyboard();
+        input.synchronizeKeyboard();
         // The time that has passed since the previous frame.
         const Uint64 ticks = SDL_GetTicksNS();
         const float seconds = static_cast<float>(ticks - lastTicks) * 1e-9f;
@@ -2338,8 +2494,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         physics.setAssetRoot(browser.assets.root);
         Terrains::update(world, browser.assets);
         physics.update(world, playMode.playing() ? seconds : 0.0f, [&](float dt) {
+            input.beginFixedInput();
             scripts.fixedUpdate(dt);
             componentScripts.fixedUpdate(dt);
+            input.endFixedInput();
             updateCharacterControllers(world, physics);
             updateHierarchy(world);
             BoneAttachments::update(world, browser.assets);
@@ -2434,7 +2592,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 v = .5f;
                 inside = true;
             }
-            if (inside && u >= 0 && u <= 1 && v >= 0 && v <= 1 && cameraEntity != Entity{}) {
+            if (inside && !gameUI.capturesMouse() && u >= 0 && u <= 1 && v >= 0 && v <= 1 &&
+                cameraEntity != Entity{}) {
                 const auto& c = world.get<Camera>(cameraEntity);
                 const auto& t = world.get<Transform>(cameraEntity);
                 if (u >= c.viewportX && u <= c.viewportX + c.viewportWidth && v >= c.viewportY &&
@@ -2633,6 +2792,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 glClearColor(.1f, .1f, .1f, 1);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             }
+            if (gameVisible && playMode.active()) {
+                glBindFramebuffer(GL_FRAMEBUFFER, gameSurface.framebuffer);
+                gameUI.render(gameSurface.width, gameSurface.height, playMode.playing());
+            }
             if (gameWindow && gameVisible) {
                 auto context = SDL_GL_GetCurrentContext();
                 if (SDL_GL_MakeCurrent(gameWindow, context)) {
@@ -2735,6 +2898,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (gameWindow) {
                     input.releaseMouse();
                     input.window = window;
+                    gameUI.sync(false, browser.assets.root, window);
                     SDL_DestroyWindow(gameWindow);
                     gameWindow = nullptr;
                 }
@@ -2840,6 +3004,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     if (gameWindow) {
         input.releaseMouse();
         input.window = window;
+        gameUI.sync(false, browser.assets.root, window);
         SDL_DestroyWindow(gameWindow);
     }
     scripts.shutdown();

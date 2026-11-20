@@ -2,6 +2,12 @@
   "scope": "source.legacyscript - comment - string",
   "completions": [
     {
+      "trigger": "ui",
+      "contents": "ui",
+      "annotation": "LegacyEngine",
+      "details": "ui - RmlUi Play-mode overlay loaded from Assets/UI/main.rml. ui.isLoaded(), ui.setText(id, plainText) returns success, ui.wasClicked(id) consumes a pending click. Stop resets the document. See data/examples/rmlui."
+    },
+    {
       "trigger": "Vector3",
       "contents": "Vector3",
       "annotation": "LegacyEngine",
@@ -38,12 +44,6 @@
       "details": "Skybox.environmentIntensity: 0..5, default 1; used when affectEnvironment is true"
     },
     {
-      "trigger": "stabilityAssist",
-      "contents": "stabilityAssist",
-      "annotation": "LegacyEngine",
-      "details": "Vehicle.stabilityAssist: 0..1, default 1; speed-dependent steering reduction to limit cornering rollover. Does not lock rotation or prevent impact rollovers."
-    },
-    {
       "trigger": "Water",
       "contents": "Water",
       "annotation": "LegacyEngine",
@@ -78,6 +78,12 @@
       "contents": "waveSpeed",
       "annotation": "LegacyEngine",
       "details": "Water/River.waveSpeed: 0..10 multiplier; Flowing and flow speed also apply"
+    },
+    {
+      "trigger": "keepUpright",
+      "contents": "keepUpright",
+      "annotation": "LegacyEngine",
+      "details": "Vehicle.keepUpright: bool, default true. Hard world-up chassis pitch/roll lock prevents flipping, including airborne impacts. Yaw/translation remain free. Disable for banking and stunts. Replaces retired stabilityAssist steering limiter."
     },
     {
       "trigger": "Vehicle",
@@ -4358,10 +4364,10 @@
       "details": "number 1..150 m/s engine cutoff"
     },
     {
-      "trigger": "stabilityAssist",
-      "contents": "stabilityAssist",
+      "trigger": "keepUpright",
+      "contents": "keepUpright",
       "annotation": "Vehicle",
-      "details": "number 0..1 speed-dependent safe steering, default 1"
+      "details": "boolean Default true: hard world-up pitch/roll lock; false permits banking and flips"
     },
     {
       "trigger": "mesh",
@@ -4620,6 +4626,24 @@
       "contents": "center",
       "annotation": "NavMeshObstacle",
       "details": "Vec3 Local box center; assign a whole vector"
+    },
+    {
+      "trigger": "isLoaded",
+      "contents": "isLoaded",
+      "annotation": "GameUI",
+      "details": "fun():boolean Whether Assets/UI/main.rml is loaded in Play."
+    },
+    {
+      "trigger": "setText",
+      "contents": "setText",
+      "annotation": "GameUI",
+      "details": "fun(id:string, plainText:string):boolean Set escaped plain text of an element; false when not loaded/id missing."
+    },
+    {
+      "trigger": "wasClicked",
+      "contents": "wasClicked",
+      "annotation": "GameUI",
+      "details": "fun(id:string):boolean Consume a queued click for the element id; repeated clicks coalesce until polled."
     }
   ]
 }

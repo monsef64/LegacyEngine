@@ -1,6 +1,14 @@
 {
-    "extensions": ["ls"],
-    "tab_size": 4,
-    "translate_tabs_to_spaces": true,
-    "auto_complete_triggers": [{"selector": "source.legacyscript", "characters": ".:"}]
+  "extensions": [
+    "lua",
+    "ls"
+  ],
+  "tab_size": 4,
+  "translate_tabs_to_spaces": true,
+  "auto_complete_triggers": [
+    {
+      "selector": "source.legacyscript",
+      "characters": ".:"
+    }
+  ]
 }

@@ -122,8 +122,7 @@ void TransformEditor::draw(World& world,
     }
     if (changed && !navigationOnly) {
         const auto* collider = world.tryGet<Collider>(entity);
-        const bool round = collider && (collider->shape == ColliderShape::Sphere ||
-                                        collider->shape == ColliderShape::Capsule ||
+        const bool round = collider && (collider->shape == ColliderShape::Capsule ||
                                         collider->shape == ColliderShape::Cone);
         Transform candidate = transform;
         candidate.position = pivot;
