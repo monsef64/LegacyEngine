@@ -41,12 +41,6 @@ and the VSIX. See [versioning and publishing](docs/building.md#engine-versions-a
 See [documentation build instructions](docs/index.md#build-this-documentation)
 and the [VS Code extension guide](docs/vscode.md).
 
-## License
-
-**GNU General Public License, version 2 only** (`GPL-2.0-only`). See [LICENSE](LICENSE).
-Third-party dependencies and assets retain their respective licenses and notices,
-collected under [`data/license/`](data/license/README.md) and included in releases.
-
 ### Levels and rendering settings
 
 Create and switch project-owned levels through **Project > Levels**. LegacyScript
@@ -63,3 +57,9 @@ See [Jolt migration and manual checks](docs/manual/jolt-and-model-imports.md) fo
 
 RmlUi provides an optional OpenGL in-game overlay, separate from the ImGui editor.
 See the [setup/API guide](docs/game-ui.md) and [interactive HUD example](data/examples/rmlui/README.md).
+
+## License
+
+**GNU General Public License, version 2 only** (`GPL-2.0-only`). See [LICENSE](LICENSE).
+Third-party dependencies and assets retain their respective licenses and notices,
+collected under [`data/license/`](data/license/README.md) and included in releases.
