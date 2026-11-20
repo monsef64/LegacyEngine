@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      engine_version:
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -42,7 +47,14 @@ jobs:
       - name: Resolve engine version
         id: version
         shell: pwsh
-        run: python tools/release_version.py
+        env:
+          ENGINE_VERSION_OVERRIDE: ${{ inputs.engine_version }}
+        run: |
+          if ($env:ENGINE_VERSION_OVERRIDE) {
+            "version=$env:ENGINE_VERSION_OVERRIDE" >> $env:GITHUB_OUTPUT
+          } else {
+            python tools/release_version.py
+          }
       - name: Install MinGW-w64 toolchain
         uses: msys2/setup-msys2@v2
         with:
@@ -85,8 +97,14 @@ jobs:
       - name: Audit Windows 7 package imports
         if: matrix.win7 == 'ON'
         run: python tools/audit_windows7_imports.py package/LegacyEngine
+      - name: Create downloadable Windows archive
+        shell: pwsh
+        env:
+          ENGINE_VERSION: ${{ steps.version.outputs.version }}
+          PACKAGE_SUFFIX: ${{ matrix.suffix }}
+        run: Compress-Archive -Path package/LegacyEngine -DestinationPath "LegacyEngine-$env:ENGINE_VERSION-$env:PACKAGE_SUFFIX.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: LegacyEngine-${{ steps.version.outputs.version }}-${{ matrix.suffix }}
-          path: package/LegacyEngine/
+          path: LegacyEngine-*.zip
           if-no-files-found: error

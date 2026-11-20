@@ -95,9 +95,31 @@ edit a second hard-coded UI version. Update `VERSION` in a normal change when
 advancing the development baseline. Release tags override this baseline; a
 release does not automatically modify or commit `VERSION`.
 
+### Automatic releases after all packages succeed
+
+After these workflow changes land on `main`, eligible pushes to `main` automatically
+build all packages and publish a development **prerelease** named
+`v<VERSION>-dev.<12-character-commit>`. Feature branches and PRs only produce
+Actions artifacts. Development prereleases do not replace the latest stable release.
+The Release workflow waits for Linux, both Windows MinGW-w64 variants,
+documentation, VSIX and the Sublime package. A failed/cancelled build prevents publication.
+A draft release is used during upload and is published only once all assets are attached.
+
+The complete release includes:
+
+- Linux x86_64 `.tar.gz`;
+- Windows x64 `.zip`;
+- experimental Windows 7 SP1 x64 `.zip`;
+- offline documentation `.zip`;
+- LegacyScript `.vsix` and Sublime Text 4 `.zip`;
+- `SHA256SUMS.txt` for the downloadable files.
+
+Push a SemVer tag such as `v1.2.3` for a stable release, or `v1.3.0-rc.1` for an RC
+prerelease. These also wait for every package, rather than publishing Linux first.
+
 ### Publish from Actions
 
-After the workflow changes land on the default branch:
+You can still choose a version manually:
 
 1. Open **Actions > Release > Run workflow**.
 2. Choose the branch/commit to build and enter **version**, such as `1.2.3` or
@@ -105,7 +127,8 @@ After the workflow changes land on the default branch:
 3. Keep **Publish GitHub Release** checked and run the workflow. It validates the version, builds the selected commit, then
    creates `v1.2.3` and a GitHub Release with generated notes. The engine archive
    is named `LegacyEngine-1.2.3-linux-x86_64.tar.gz` and its About window shows
-   `1.2.3`. Documentation ZIP and LegacyScript VSIX are attached too.
+   `1.2.3`. Both Windows archives, documentation, VSIX, Sublime package and checksums
+   are attached to that same release.
 
 The result appears at [GitHub Releases](https://github.com/monsef64/LegacyEngine/releases),
 not just in Actions artifacts. The run summary contains a direct release link.
@@ -121,17 +144,16 @@ prereleases; build metadata (`+...`) is not supported.
 Existing tags may only be reused for the same commit. Rerunning that release
 replaces matching assets, so prefer a new version for changed code. Publication
 requires the repository's Actions policy to allow `contents: write`; no PAT is
-needed. The release is created after the Linux build, with the VSIX attached by
-a dependent job; if that job fails, rerun failed jobs to finish the release.
-
-The existing Windows MinGW-w64 workflow also builds pushed version tags and embeds
-the tag version in About. Its versioned Windows package remains an **Actions
-artifact**, not a GitHub Release attachment. Tags created by the manual workflow's
-`GITHUB_TOKEN` do not trigger other workflows: run Windows manually on that tag
-if a Windows artifact is needed for a manually published release.
+needed. Windows builds are called directly by the Release workflow, so manual
+publishing does not rely on a newly created tag triggering another workflow.
+Only the final publishing job receives `contents: write`; build jobs remain read-only.
+If upload fails, a new release stays a draft; rerun failed jobs to complete it.
+Rerunning an already published release replaces its assets in place.
 
 ### Manual verification
 
+- Merge an eligible change to `main`; verify a development prerelease appears only after all package jobs succeed.
+- Verify a failed Windows/VSIX/Linux job leaves no newly published release.
 - Configure/build locally and open About; check `<VERSION>-dev`.
 - Reconfigure with `-DLEGACY_ENGINE_VERSION=1.2.3-rc.1`; rebuild and check About.
 - Dispatch with **Publish GitHub Release** unchecked; confirm development artifacts and no release.
