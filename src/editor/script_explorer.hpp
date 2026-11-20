@@ -52,7 +52,7 @@ struct ScriptTree {
             const bool open = ImGui::TreeNode(name.c_str());
             scriptFolderDrop(prefix + name, action);
             if (createScriptIn && ImGui::BeginPopupContextItem()) {
-                if (ImGui::MenuItem("New LegacyScript (.ls)")) {
+                if (ImGui::MenuItem("New LegacyScript (.lua)")) {
                     *createScriptIn = prefix + name;
                 }
                 ImGui::EndPopup();

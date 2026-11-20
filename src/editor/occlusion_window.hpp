@@ -88,7 +88,7 @@ class OcclusionWindow {
             return;
         }
         ImGui::TextWrapped(
-            "Bake static opaque mesh triangles. Only objects marked Static are tested. Dynamic objects, water, animated hierarchies, transparent materials and material overrides are excluded conservatively.");
+            "Bake static opaque mesh and terrain surface triangles. Only objects marked Static are tested. Dynamic objects, water, animated hierarchies, transparent materials and material overrides are excluded conservatively.");
         ImGui::Checkbox("Enable baked occlusion", &bake.enabled);
         ImGui::Checkbox("Visualize selected camera", &visualizeSelectedCamera);
         if (visualizeSelectedCamera) {
@@ -109,6 +109,8 @@ class OcclusionWindow {
         ImGui::BeginDisabled(!editAllowed || assets.root.empty());
         if (ImGui::Button("Bake static objects")) {
             try {
+                world.each<Terrain>(
+                    [&](Entity, Terrain& terrain) { Terrains::load(terrain, assets); });
                 bake.generate(
                     world,
                     modelAssetRevision,

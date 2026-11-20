@@ -7,7 +7,7 @@
    0.35, cylinder height 1.1), a dynamic RigidBody, and CharacterController.
 2. Create a Plane with its Collider at ground level. Keep the character upright,
    uniformly scaled, and without a parent for predictable physics.
-3. Copy [`scripts/examples/character_controller_fps.ls`](../scripts/examples/character_controller_fps.ls)
+3. Copy [`scripts/examples/character_controller_fps.lua`](../scripts/examples/character_controller_fps.lua)
    into the project's Assets scripts folder and attach it to the character.
 4. Play and focus Game. The script creates/activates a linked FPS camera.
    **WASD** moves, **Left Shift** sprints, **Space** jumps, and the mouse looks.

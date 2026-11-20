@@ -620,7 +620,7 @@ class AssetBrowser {
             }
             ImGui::SameLine();
             if (ImGui::Button("\xef\x87\x89##NewScript", ImVec2(32, 26))) {
-                createFile(".ls");
+                createFile(".lua");
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("New LegacyScript");
@@ -1129,8 +1129,8 @@ class AssetBrowser {
                             }
                         }
 
-                        if (ImGui::MenuItem("LegacyScript (.ls)")) {
-                            createFile(".ls");
+                        if (ImGui::MenuItem("LegacyScript (.lua)")) {
+                            createFile(".lua");
                         }
                         if (ImGui::MenuItem("Text file (.txt)")) {
                             createFile(".txt");
@@ -1403,7 +1403,7 @@ class AssetBrowser {
     }
     void createFile(const std::string& extension) {
         try {
-            const std::string base = extension == ".ls" ? "NewScript" : "NewText";
+            const std::string base = extension == ".lua" ? "NewScript" : "NewText";
             const auto prefix = std::filesystem::path(currentFolder);
             std::string name = (prefix / (base + extension)).generic_string();
             int n = 2;
@@ -1411,7 +1411,7 @@ class AssetBrowser {
                 name = (prefix / (base + " (" + std::to_string(n++) + ")" + extension))
                            .generic_string();
             }
-            if (extension == ".ls") {
+            if (extension == ".lua") {
                 assets.writeScript(name, "");
             } else {
                 std::filesystem::create_directories(assets.root);

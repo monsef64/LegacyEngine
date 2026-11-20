@@ -1,8 +1,11 @@
 #pragma once
 #include "core/hierarchy.hpp"
 #include "models/model_asset.hpp"
+#include "terrain/terrain_mesh.hpp"
 #include <array>
+#include <cstring>
 #include <functional>
+#include <map>
 #include <sstream>
 
 // Conservative baked triangle occlusion, independent of view direction/camera cells.
@@ -38,6 +41,40 @@ state(World& world, unsigned revision, const std::function<bool(const MeshRender
                 << ',' << t.scale.x << ',' << t.scale.y << ',' << t.scale.z << ':' << r.model.size()
                 << ':' << r.model << ':' << (r.model.empty() ? r.mesh.id : 0) << ':'
                 << r.material.size() << ':' << r.material << ';';
+        });
+    world.eachReadOnly<Transform, Terrain>(
+        [&](Entity e, const Transform& t, const Terrain& terrain) {
+            if (!t.isStatic) {
+                return;
+            }
+            out << "terrain:" << e.index << ':' << e.generation << ':'
+                << eligible(world, e, t, MeshRenderer{}) << ':' << terrain.asset << ':'
+                << t.position.x << ',' << t.position.y << ',' << t.position.z << ',' << t.rotation.x
+                << ',' << t.rotation.y << ',' << t.rotation.z << ',' << t.rotation.w << ','
+                << t.scale.x << ',' << t.scale.y << ',' << t.scale.z << ':';
+            if (terrain.data) {
+                const auto& d = *terrain.data;
+                struct Hash {
+                    unsigned revision = ~0u;
+                    std::uint64_t value = 0;
+                };
+                static std::map<unsigned, Hash> hashes;
+                if (hashes.size() > 1024) {
+                    hashes.clear();
+                }
+                auto& h = hashes[d.identity];
+                if (h.revision != d.shapeRevision) {
+                    h.value = 14695981039346656037ull;
+                    for (float v : d.heights) {
+                        unsigned bits;
+                        std::memcpy(&bits, &v, sizeof(bits));
+                        h.value = (h.value ^ bits) * 1099511628211ull;
+                    }
+                    h.revision = d.shapeRevision;
+                }
+                out << d.resolution << ':' << d.size << ':' << h.value;
+            }
+            out << ';';
         });
     return out.str();
 }
@@ -94,13 +131,7 @@ class Bake {
                   const std::function<bool(const MeshRenderer&)>& opaque) {
         std::vector<Triangle> result;
         std::size_t scanned = 0;
-        world.eachReadOnly<Transform, MeshRenderer>([&](Entity e,
-                                                        const Transform& t,
-                                                        const MeshRenderer& r) {
-            if (!eligible(world, e, t, r) || !opaque(r)) {
-                return;
-            }
-            const auto mesh = geometry(r);
+        auto append = [&](Entity e, const Transform& t, const MeshData& mesh) {
             if (mesh.topology != MeshData::Topology::Triangles) {
                 return;
             }
@@ -129,7 +160,28 @@ class Bake {
                     result.resize(2048);
                 }
             }
-        });
+        };
+        world.eachReadOnly<Transform, MeshRenderer>(
+            [&](Entity e, const Transform& t, const MeshRenderer& r) {
+                if (eligible(world, e, t, r) && opaque(r)) {
+                    append(e, t, geometry(r));
+                }
+            });
+        world.eachReadOnly<Transform, Terrain>(
+            [&](Entity e, const Transform& t, const Terrain& terrain) {
+                if (terrain.data && eligible(world, e, t, MeshRenderer{})) {
+                    const auto& d = *terrain.data;
+                    for (int z = 0; z < Terrains::chunkCount(d); ++z) {
+                        for (int x = 0; x < Terrains::chunkCount(d); ++x) {
+                            MeshData mesh;
+                            for (const auto& v : Terrains::chunk(d, x, z, 1)) {
+                                mesh.vertices.push_back({v.position, v.normal});
+                            }
+                            append(e, t, mesh);
+                        }
+                    }
+                }
+            });
         std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
             return a.area > b.area;
         });

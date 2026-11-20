@@ -961,7 +961,7 @@ TPSCamera = nil
 ---@field environmentIntensity number 0..5, default 1
 
 ---@class Vehicle
----@field stabilityAssist number 0..1 speed-dependent safe steering, default 1
+---@field keepUpright boolean Default true: hard world-up pitch/roll lock; false permits banking and flips
 
 ---@class NavMeshAgent
 ---@field enabled boolean
@@ -994,3 +994,10 @@ function Vector3(x,y,z) end
 ---@field size Vec3 Local box dimensions, positive; assign a whole vector
 ---@field center Vec3 Local box center; assign a whole vector
 NavMeshObstacle = nil
+
+---@class GameUI
+---@field isLoaded fun():boolean Whether Assets/UI/main.rml is loaded in Play.
+---@field setText fun(id:string, plainText:string):boolean Set escaped plain text of an element; false when not loaded/id missing.
+---@field wasClicked fun(id:string):boolean Consume a queued click for the element id; repeated clicks coalesce until polled.
+---@type GameUI
+ui = {}

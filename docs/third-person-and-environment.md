@@ -106,16 +106,11 @@ Multiple skyboxes use the first enabled active one, as the background already do
 
 ## Vehicle steering stability
 
-**Vehicle > stabilityAssist** (also `vehicle.stabilityAssist` in Lua) defaults to
-1 and reduces the maximum commanded steering angle as speed rises. The limit
-estimates a conservative cornering acceleration from wheelbase, track width and
-suspension-derived center-of-mass height. Front wheel visuals use the assisted
-angle. Zero restores unrestricted steering; intermediate values blend the limit.
-
-This addresses steering-induced rollover without locking chassis rotation or
-teleporting it upright. Collisions, curbs, jumps, extreme slopes, unsuitable
-geometry/mass/grip settings or reducing the assist can still flip a real simulated
-vehicle. Keep the physics root at unit scale and model dimensions consistent.
+**Vehicle > Keep upright (prevent flipping)** (`vehicle.keepUpright` in Lua)
+defaults to true. The solver locks chassis pitch/roll to world up while leaving
+yaw and translation free, preventing flips even during collisions or airborne
+motion. Disable it for terrain banking, realistic pitching and stunts. The retired
+`stabilityAssist` steering reduction is no longer used. See [Vehicles](vehicles.md#hard-upright-mode-prevents-flipping).
 
 ## Terrain and Scene selection
 

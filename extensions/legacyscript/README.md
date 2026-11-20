@@ -1,6 +1,6 @@
 # LegacyScript for VS Code
 
-A bundled Node LSP server for LegacyEngine's Lua-based `.ls` scripts. No separate
+A bundled Node LSP server for LegacyEngine's Lua-based `.lua` scripts (legacy `.ls` files are also accepted). No separate
 Lua installation, Lua extension or online service is needed. Never executes scripts.
 
 ## Install
@@ -16,8 +16,8 @@ code --install-extension legacyscript.vsix
 ```
 
 Alternatively use **Extensions → … → Install from VSIX** in VS Code.
-Open a `.ls` file and check that its language is **LegacyScript**. Remove user
-`*.ls: lua` file associations if they override it. `.lua` files remain unchanged.
+Open a `.lua` file and check that its language is **LegacyScript**. Remove user
+`*.lua: lua` file associations if they override it. For engine scripts, select **LegacyScript** as the language mode if another Lua extension takes precedence. Both `.lua` and legacy `.ls` are associated with this extension.
 
 ## Features
 
@@ -69,7 +69,7 @@ preferred bare form, and both forms supply completion and hover information.
 
 ## Error diagnostics
 
-Version 0.1.1 validates open `.ls` documents on open/save and shortly after edits.
+Version 0.1.1 validates open `.lua` / `.ls` documents on open/save and shortly after edits.
 Errors appear inline and in **View → Problems** with source **LegacyScript**;
 fixed errors disappear automatically, and closed files clear their diagnostics.
 Syntax checking never executes scripts. It understands engine `@export` lines and
@@ -86,4 +86,4 @@ plus export-declaration errors. Correcting that error may reveal the next one.
 Internal language-service failures now produce a visible notification (rate-limited)
 and details in **Output → LegacyScript** instead of only silently logging. If no
 errors appear, verify the file language is **LegacyScript**, install the updated
-VSIX and reload VS Code. Existing Lua extensions/file associations can override `.ls`.
+VSIX and reload VS Code. Existing Lua extensions/file associations can override `.lua` / `.ls`.

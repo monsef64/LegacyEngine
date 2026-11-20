@@ -72,6 +72,9 @@ class AudioSystem {
     }
 
   public:
+    void suspend(bool paused) {
+        output.suspend(paused);
+    }
     std::string error;
     explicit AudioSystem(bool nullDevice = false) : output(nullDevice) {}
     void clear() {

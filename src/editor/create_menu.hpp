@@ -123,7 +123,6 @@ inline Entity createLevelObject(World& world,
         Collider collider;
         collider.shape = shape;
         world.add(e, collider);
-        world.add(e, RigidBody{});
     }
     return e;
 }

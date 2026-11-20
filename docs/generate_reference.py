@@ -9,6 +9,7 @@ OUTPUT = ROOT / 'docs/scripting-reference.md'
 
 # Executable fragments, not pseudo-code. Asset names are project-relative examples.
 GLOBALS = {
+ 'Vector3': 'local destination = Vector3(2, 0, 4)\nself:setPosition(destination)',
  'task': 'function onStart()\n    task(function()\n        wait(1)\n        debug.log("Independent task completed")\n    end)\nend',
 
 'fadeToColor': 'local fade = fadeToColor(color.black)\nfade:start(1)\n-- Later, reverse toward transparent:\nfade:stop(0.5)',
@@ -58,6 +59,7 @@ GLOBALS['wait'] = 'function onStart()\n    local audio = createAudioSource(self,
 GLOBALS['spawn'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=90, z=0})\ndebug.log(copy:getName())'
 GLOBALS['destroy'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=0, z=0})\ndestroy(copy, 5)'
 CAMERA_GLOBALS = {
+ 'Vector3': 'local destination = Vector3(2, 0, 4)\nself:setPosition(destination)',
 'onCollisionEnter': 'function onCollisionEnter(collider)\n    if collider then debug.log("Hit", collider.gameObject:getName()) end\nend',
 'onCollisionStay': 'function onCollisionStay(collider)\n    if collider then debug.log("Touching", collider.gameObject:getName()) end\nend',
 'onCollisionExit': 'function onCollisionExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Removed collider", "separated")\nend',
@@ -97,6 +99,7 @@ for name in ('lockCursor', 'unlockCursor', 'hideCursor', 'showCursor', 'isCursor
     GLOBALS[name] = f'local result = {name}()\ndebug.log(result)'
 
 METHOD_ARGS = {
+ 'setDestination': 'Vector3(8, 0, 4)',
 'emit':'10', 'setPreset':'"Fire"',
 'getComponentInParent':'RigidBody', 'getComponentInChildren':'Camera',
 'findComponentInParent':'RigidBody', 'findComponentInChildren':'Camera',
@@ -122,7 +125,7 @@ METHOD_ARGS = {
 'setCubemap':'"Sky/Evening.cubemap"', 'setHDR':'"Sky/studio.hdr"', 'setFace':'"front", "Sky/front.png"',
 'setTextures':', '.join(f'"Sky/{face}.png"' for face in ('right','left','top','bottom','front','back')),
 }
-NO_ARGS = set('restart clear reset cast castAll getVelocity getForward getBackward getRight getLeft getUp getDown jump getIsFreecam isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
+NO_ARGS = set('resetPath restart clear reset cast castAll getVelocity getForward getBackward getRight getLeft getUp getDown jump getIsFreecam isActive getPosition getRotation getScale getParent getName destroy resetMaterialOverrides play stop pause resume mute unmute isPlaying start'.split())
 
 
 def inventory():
@@ -167,6 +170,12 @@ def example(entry):
         return 'local object = GameObject.new("Player")' if name == 'new' else 'local object = GameObject.find("Player")\nif object then debug.log(object:getName()) end'
     if owner == 'CameraConstructor':
         return 'local camera = Camera.new("Player Camera")' if name == 'new' else 'local camera = Camera.getActive()\nif camera then debug.log(camera:getName()) end'
+    if owner == 'GameUI':
+        return {
+            'isLoaded': 'if ui.isLoaded() then debug.log("HUD document ready") end',
+            'setText': 'ui.setText("health", "100 / 100")',
+            'wasClicked': 'function onUpdate(dt)\n    if ui.wasClicked("collect") then ui.setText("status", "Collected!") end\nend',
+        }[name]
     if owner == 'ColorFade':
         return f'local fade = fadeToColor(color.black)\nfade:{name}(1)'
     if owner == 'LegacyDebug':
@@ -229,6 +238,46 @@ CALLABLE_DETAILS = {
     'GameObject.isActive': 'Returns effective activity, including all parents. It can be false even if this object is locally enabled. Destroyed handles raise a script error rather than returning false.',
 }
 
+
+# Supplemental setup notes kept alongside the generated inventory.
+EXTRA_REFERENCE = """
+## Vehicle component
+
+See [Vehicle physics and scripting](vehicles.md) for setup, tuning ranges and a
+complete driving example. Use `self:getComponent(Vehicle)` or
+`self:addComponent(Vehicle)`. Both the type token and string `"Vehicle"` work.
+
+Writable commands: `throttle` (-1..1), `steering` (-1..1, positive right), `brake`
+(0..1), `handbrake` (boolean). Read-only state: `speed` (signed m/s),
+`groundedWheels`, `isGrounded`, `wheelCompression` (copied FL/FR/RL/RR array).
+All vehicle configuration is writable through the same property names shown in
+the Inspector; runtime commands/state are not serialized.
+
+
+## Water and BoneAttachment components
+
+[Water meshes and bone attachments](water-and-attachments.md) documents both new
+component APIs. Water shares River fields and adds `mesh`; both support
+`shaderStyle` (0..7), `waveHeight`, `waveLength` and `waveSpeed`.
+BoneAttachment exposes `enabled`, `source` (GameObject), `node` (index), `offset`
+and `rotation` (complete vector assignments), plus read-only `error`. Bone pose
+evaluation drives its owner's Transform; a dynamic RigidBody is not supported.
+
+
+## TPS Camera and skybox ambient lighting
+
+The [TPS/environment guide](third-person-and-environment.md) documents `TPSCamera`
+settings, target/parent following, orbit input and collision limits. TPSCamera is
+available through component lookup/add/remove/find/export APIs; `target` is a
+GameObject reference, `offset` is assigned as a complete vector and
+`resolvedDistance` is read-only. Camera projection/activation remains on Camera.
+`Skybox.affectEnvironment` enables sampled sky-colored ambient light and
+`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.keepUpright`
+locks chassis pitch/roll to prevent flipping (boolean; default true).
+
+
+See [In-game UI](game-ui.md) for RML/RCSS setup and the `ui` bridge example.
+"""
 
 def render_reference():
     entries, properties = inventory()
@@ -334,7 +383,7 @@ def render_reference():
               '    local skybox1 = GameObject.find("Skybox1")',
               '    local skybox2 = GameObject.find("Skybox2")',
               '    if skybox1 and skybox2 then fadeSkybox(skybox1, skybox2, 0.5) end', 'end', '```', '']
-    return '\n'.join(lines)
+    return '\n'.join(lines) + EXTRA_REFERENCE
 
 
 if __name__ == '__main__':

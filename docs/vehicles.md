@@ -10,7 +10,7 @@
 2. Place the root about 1.2 metres above a broad plane or Terrain with collision.
    Local **-Z is forward**, +Y is up. Keep the physics root at unit positive scale
    initially; scale the visual child to fit your model instead.
-3. Attach [vehicle_basic.ls](../scripts/examples/vehicle_basic.ls) to the root's
+3. Attach [vehicle_basic.lua](../scripts/examples/vehicle_basic.lua) to the root's
    LegacyScript component. Supply a Game camera overlooking the course, or parent
    a camera to the vehicle for a simple follow view.
 4. Play and focus the Game view. **W/S** accelerate/reverse, **A/D** steer,
@@ -36,8 +36,8 @@ velocity. Wheel transforms/roll changed during Play revert on Stop.
 ## Ready-to-use driving controller
 
 For smoother keyboard driving, attach
-[`vehicle_controller.ls`](../scripts/examples/vehicle_controller.ls) to the
-**Vehicle root**, instead of `vehicle_basic.ls`. Do not run both controllers on
+[`vehicle_controller.lua`](../scripts/examples/vehicle_controller.lua) to the
+**Vehicle root**, instead of `vehicle_basic.lua`. Do not run both controllers on
 the same vehicle: they write the same input commands.
 
 - **W**: accelerate forward; brake first if reversing.
@@ -201,14 +201,23 @@ Linux compilation does not validate native desktop behavior or driving feel;
 these interactive checks remain pending.
 
 
-### Steering rollover assist
+### Hard upright mode (prevents flipping)
 
-`stabilityAssist` is a 0..1 Vehicle setting (default 1), also scriptable. It reduces
-steering authority at speed using a conservative track/ride-height cornering
-acceleration estimate; visible front-wheel steering follows the reduced angle.
-Zero restores unrestricted steering. It does not lock roll/pitch or guarantee
-that impacts/curbs/slopes cannot flip the chassis. See the
-[follow-up guide](third-person-and-environment.md#vehicle-steering-stability)
-for manual checks and limits. Keyboard-controller steering reduction combines
-with this physics-side assist; adjust the sample's high-speed steering fraction
-if you want less additional script-side reduction.
+`Vehicle.keepUpright` is a boolean, default **true**, shown as **Keep upright
+(prevent flipping)**. It replaces the retired `stabilityAssist` steering limiter.
+The chassis has only world-Y yaw rotation plus free translation in the solver;
+pitch and roll are locked, with a post-step upright correction for numerical drift.
+Steering retains its full configured angle. This also prevents impact/airborne
+flipping and uprights an initially tilted chassis when physics takes over.
+
+This is intentionally arcade behavior: the chassis cannot bank or pitch to match
+slopes. Set `vehicle.keepUpright = false` for unrestricted suspension/body rotation,
+stunts or realistic banking. Changing the mode rebuilds the chassis constraints.
+Old serialized `stabilityAssist` values are ignored; Fix Project removes them.
+The existing sample's optional script-side steering smoothing/reduction remains
+independent of this solver constraint.
+
+Manual checks: drive hard turns into a curb, collide sideways with another body,
+drop the vehicle from a jump and start it tilted. With upright mode on, roll/pitch
+must remain zero while steering/yaw/translation work. Toggle off and verify free
+rotation, then on to recover. Test save/reopen and scripting the checkbox.

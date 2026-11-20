@@ -44,7 +44,7 @@ void ScriptEditor::draw(const EditorLayout* layout,
                 }
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip(
-                        "Create a .ls file beside the open script, or in Assets if none is open");
+                        "Create a .lua file beside the open script, or in Assets if none is open");
                 }
                 try {
                     if (treeRoot_ != assets->root || ImGui::GetTime() >= treeRefresh_) {
@@ -136,9 +136,9 @@ void ScriptEditor::draw(const EditorLayout* layout,
                         // Save the current document before switching to the newly created asset.
                         saveFile(*assets);
                         const auto folder = std::filesystem::path(*createScriptIn);
-                        auto path = (folder / "NewScript.ls").generic_string();
+                        auto path = (folder / "NewScript.lua").generic_string();
                         for (unsigned n = 2; std::filesystem::exists(assets->resolve(path)); ++n) {
-                            path = (folder / ("NewScript (" + std::to_string(n) + ").ls"))
+                            path = (folder / ("NewScript (" + std::to_string(n) + ").lua"))
                                        .generic_string();
                         }
                         assets->writeScript(path, "");

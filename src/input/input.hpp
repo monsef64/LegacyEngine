@@ -182,6 +182,8 @@ struct InputState {
         }
     }
     void clear() {
+        pendingKeyPressed.fill(false);
+        pendingKeyReleased.fill(false);
         keys.fill(false);
         pressed.fill(false);
         released.fill(false);
@@ -193,6 +195,36 @@ struct InputState {
         padReleased.fill(false);
         axes.fill(0);
         dx = dy = wheelX = wheelY = 0;
+    }
+    std::array<bool, SDL_SCANCODE_COUNT> pendingKeyPressed{}, pendingKeyReleased{},
+        renderKeyPressed{}, renderKeyReleased{};
+    void synchronizeKeyboard() {
+        if (!enabled) {
+            clear();
+            return;
+        }
+        int count = 0;
+        const bool* state = SDL_GetKeyboardState(&count);
+        for (int i = 1; i < std::min(count, int(SDL_SCANCODE_COUNT)); ++i) {
+            const bool held = state[i];
+            pressed[i] |= held && !keys[i];
+            released[i] |= !held && keys[i];
+            keys[i] = held;
+            pendingKeyPressed[i] |= pressed[i];
+            pendingKeyReleased[i] |= released[i];
+        }
+    }
+    void beginFixedInput() {
+        renderKeyPressed = pressed;
+        renderKeyReleased = released;
+        pressed = pendingKeyPressed;
+        released = pendingKeyReleased;
+        pendingKeyPressed.fill(false);
+        pendingKeyReleased.fill(false);
+    }
+    void endFixedInput() {
+        pressed = renderKeyPressed;
+        released = renderKeyReleased;
     }
     void beginFrame() {
         pressed.fill(false);

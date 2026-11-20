@@ -15,6 +15,8 @@ license remains in the repository/package root `LICENSE`.
 | Dear ImGui | v1.92.5-docking | DearImGui.txt |
 | ImGuizmo | 105e4fde45e4e74aae8973d98750820ef7aca7e2 | ImGuizmo.txt |
 | Lua | v5.4.8 | Lua.txt |
+| RmlUi (core and SDL3/OpenGL3 adapters) | 6.1 / 58c751531f4c1a1eb2dc56f409b8e8a323a0c9ad | RmlUi.txt, RmlUi-containers.txt |
+| FreeType (font rasterizer) | 2.13.3, used under the FreeType License (FTL) | FreeType.txt, freetype-bundled/ |
 | glad and generated OpenGL/Khronos headers | glad 2.0.8 | glad.txt, Khronos.txt, Apache-2.0.txt |
 | miniaudio | vendored `third_party/miniaudio` | miniaudio.txt |
 | simdjson | vendored 3.12.3 | simdjson.txt |
@@ -50,3 +52,6 @@ Release packaging runs this command before copying `data/`. If dependencies or
 vendored assets change, review this index and any new embedded notices as well.
 A build using a system-provided SDL may need the corresponding distributor's
 additional notices; the checked-in SDL notice matches the default vendored build.
+
+Portions of this software are copyright © 2024 The FreeType Project
+(<https://freetype.org>). All rights reserved. See FreeType.txt.

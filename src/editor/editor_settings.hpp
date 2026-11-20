@@ -16,7 +16,7 @@ struct EditorSettings {
     int externalEditor = 0; // 0: VS Code, 1: Sublime Text 4
     float scrollZoomSpeed = 1.f;
     float raycastThickness = 2.f; // viewport pixels; editor gizmo only
-    int maxFps = 0;               // zero disables foreground cap; background still sleeps
+    int maxFps = 0;               // zero disables foreground cap; background pauses
     int autosaveSeconds = 120;    // zero disables autosave
     GridSettings grid;
     std::string error;
@@ -250,7 +250,7 @@ struct EditorSettings {
                 save();
             }
             ImGui::TextDisabled(
-                "VSync takes priority. Limit 0 = uncapped; background target = 30 FPS.");
+                "VSync takes priority. Limit 0 = uncapped; unfocused engine updates/rendering are paused.");
             if (EditorValues::InputInt("Autosave delay (seconds)", &autosaveSeconds)) {
                 autosaveSeconds = std::clamp(autosaveSeconds, 0, 3600);
                 save();

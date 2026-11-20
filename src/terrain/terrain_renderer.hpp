@@ -4,6 +4,7 @@
 #include "lighting/lighting.hpp"
 #include "lighting/lightmap_state.hpp"
 #include "rendering/material_textures.hpp"
+#include "rendering/occlusion_bake.hpp"
 #include "rendering/shader_data.hpp"
 #include "terrain/terrain_mesh.hpp"
 #include <SDL3/SDL.h>
@@ -328,7 +329,8 @@ void main(){
               const Mat4& vp,
               Vec3 eye,
               GLuint lightingProgram,
-              const std::vector<Lighting::Light>& lights) {
+              const std::vector<Lighting::Light>& lights,
+              Occlusion::Bake* occlusion = nullptr) {
         bool any = false;
         world.eachReadOnly<Terrain>(
             [&](Entity e, const Terrain& t) { any |= bool(t.data) && isActive(world, e); });
@@ -451,6 +453,15 @@ void main(){
                     const int index = z * count + x;
                     const auto& bounds = chunkBounds(d, x, z);
                     if (!frustum.visibleBox(bounds.center, bounds.extent, model)) {
+                        continue;
+                    }
+                    if (occlusion && occlusion->valid &&
+                        Occlusion::eligible(world, e, t, MeshRenderer{}) &&
+                        occlusion->hidden(e,
+                                          t,
+                                          bounds.center - bounds.extent,
+                                          bounds.center + bounds.extent,
+                                          eye)) {
                         continue;
                     }
                     auto key = std::make_tuple(e.index, e.generation, index);

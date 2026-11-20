@@ -48,6 +48,10 @@
     "title": "LegacyScript"
   },
   {
+    "file": "game-ui.md",
+    "title": "In-game UI (RmlUi)"
+  },
+  {
     "file": "first-person.md",
     "title": "Character controller and FPS camera"
   },

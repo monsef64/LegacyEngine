@@ -2,7 +2,7 @@
 
 [Complete Scripting Reference: every function, method and event with examples](scripting-reference.md)
 
-Create a `.ls` asset, save it, and attach it to a GameObject. Multiple independently
+Create a `.lua` asset, save it, and attach it to a GameObject. Multiple independently
 enabled scripts run in isolated Lua states with `self` bound to their owner.
 Existing `.lua` assets remain supported. Lifecycle callbacks are `onStart`,
 `onUpdate(deltaTime)`, `onFixedUpdate(deltaTime)` and `onDestroy`.
@@ -200,7 +200,7 @@ Editor deletion follows the same subtree rule and supports undo/redo.
 
 See [Character controllers and FPS cameras](first-person.md) for movement APIs,
 state flags, GameObject direction vectors, and the complete attached-script example
-in `scripts/examples/character_controller_fps.ls`.
+in `scripts/examples/character_controller_fps.lua`.
 
 [Physics scripting and queries](physics-queries.md) covers RigidBody methods,
 `color.red`-style RGB values, Collider trigger callbacks, Raycast results and layer masks.
@@ -421,3 +421,56 @@ provides an editable Catmull-Rom path and lightweight animated water. Both expos
 validated fields to Lua; vector and point-list reads return copies. See the
 [clouds and rivers guide](../docs/manual/clouds-and-rivers.md) (repository) for examples,
 Scene editing, performance controls and rendering limitations.
+
+## Lua file extension and old-project migration
+
+New script assets use **`.lua`** throughout Assets and Script Editor creation.
+The component and API remain named LegacyScript/LuaScript; only the default file
+extension changes. Existing `.ls` files still load without conversion.
+
+To convert an old project, stop Play, save your work, then choose **Project > Fix
+Project**. It plans `.ls` → `.lua` renames, validates scenes/prefabs, backs up
+changed originals as `.before-fix.bak`, updates saved level/prefab references and
+the current world's primary/additional script attachments and exported paths,
+then saves the current project. Direct quoted asset paths in scripts are updated;
+dynamically assembled paths cannot be inferred and should be reviewed manually.
+If both `name.ls` and `name.lua` exist, conversion stops before making changes
+instead of overwriting either. Resolve the conflict and run Fix Project again.
+Older undo/snapshot references can read a matching migrated `.lua` if their `.ls`
+file is absent. Keep backups until you have reopened and checked the project.
+
+VS Code and Sublime packages support both extensions. Reinstall/update the package,
+then select **LegacyScript** as language mode if a standard Lua extension owns
+`.lua` on your system.
+
+## 100 attached-object Lua examples
+
+The indexed collection is in
+[`scripts/examples/lua100/README.md`](../scripts/examples/lua100/README.md).
+There are exactly 100 numbered standalone scripts covering transforms, hierarchy,
+keyboard/gamepad input, rigid bodies/triggers, materials/lights, audio, animations,
+particles, navigation/obstacles, vehicles and small gameplay patterns. Copy a chosen
+file into project Assets, read its setup header, attach it and focus Game in Play.
+Use only one movement/vehicle driver per object. Audio/animation assets and navmesh
+bakes must be supplied where requested; examples do not include extra model/audio
+assets. Source syntax is checked, but individual scenes require manual testing.
+
+### Keyboard sampling and fixed-step presses
+
+Gameplay input focus is resolved from the current Game tab, including child windows.
+Held keys are reconciled with SDL's physical keyboard snapshot so an initial missed
+or repeated event cannot leave a held key permanently unrecognized. Press/release
+edges are also queued until a fixed physics step consumes them: a render frame with
+no physics step no longer loses a jump/action in `onFixedUpdate`. An edge is consumed
+once, not repeated across catch-up fixed steps. `onUpdate` still sees its ordinary
+per-render-frame edges. Do not trigger the same action in both callbacks.
+
+Manual checks: click Game and hold W immediately, change tabs/focus with W held,
+test press/release in an FPS/TPS setup and test a Space action in onFixedUpdate at
+frame rates above/below physics frequency. Typing in editor text fields must not
+drive gameplay; focus loss and Stop must clear held and pending key state.
+
+## In-game UI
+
+Use the `ui` bridge to update RmlUi HUD text and poll button clicks. See
+[In-game UI](game-ui.md) for entry-point setup and the interactive HUD example.

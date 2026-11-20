@@ -76,7 +76,11 @@ inline MeshData colliderWireframe(const Collider& collider,
             auto circle = [&](int i) {
                 const float angle = 2 * kPi * i / slices;
                 const float a = radius * std::cos(angle), b = radius * std::sin(angle);
-                return axis == 0 ? Vec3{0, a, b} : (axis == 1 ? Vec3{a, 0, b} : Vec3{a, b, 0});
+                const Vec3 ratios{std::abs(scale.x) / std::max(radialScale, .00001f),
+                                  std::abs(scale.y) / std::max(radialScale, .00001f),
+                                  std::abs(scale.z) / std::max(radialScale, .00001f)};
+                return (axis == 0 ? Vec3{0, a, b} : (axis == 1 ? Vec3{a, 0, b} : Vec3{a, b, 0})) *
+                       ratios;
             };
             for (int i = 0; i < slices; ++i) {
                 line(circle(i), circle(i + 1));

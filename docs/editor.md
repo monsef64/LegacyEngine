@@ -252,11 +252,11 @@ directly from Project, without a Project Settings submenu.
 
 ### Creating scripts in Script Explorer
 
-Use **New Script** in Script Editor's explorer to create and open an empty `.ls`
+Use **New Script** in Script Editor's explorer to create and open an empty `.lua`
 asset beside the current script, or in Assets when no script is open. Right-click
-an explorer folder and choose **New LegacyScript (.ls)** to create one there;
+an explorer folder and choose **New LegacyScript (.lua)** to create one there;
 right-click empty explorer space to create one at the Assets root. Filenames
-start at `NewScript.ls` and use numbered suffixes to avoid overwriting files.
+start at `NewScript.lua` and use numbered suffixes to avoid overwriting files.
 The current document is saved before switching. The tree refreshes automatically.
 
 Hover a script filename for its full path and available actions. Select/open a
@@ -438,3 +438,60 @@ by copying `extensions/sublime-legacyscript` into Sublime's Packages directory a
 The existing Animation player and cross-fades remain; the recently introduced
 Animator/AnimatorSheet state-machine system and its asset creation/editor UI have
 been removed. Old serialized Animator components are ignored when loading a scene.
+
+### Focus suspension, primitives and terrain tabs
+
+When neither the editor nor the external Game window has input focus, the main
+loop stops simulation, scripting, rendering and autosave work and blocks waiting
+for a window event. Audio output is suspended without resetting playback state.
+Focus recovery resets frame timing so no catch-up simulation runs. A focused
+external Game window continues normal gameplay. Input capture is released on focus
+loss. Background imports/OS services already in progress are not forcibly killed;
+this is main-loop suspension, not unsafe suspension of every process thread.
+
+New primitive shapes retain a Collider but no longer get a RigidBody automatically.
+Add RigidBody explicitly when physics-driven movement is desired. Character and
+vehicle presets still include their required physics components.
+Sphere Transform scale is independently editable on X/Y/Z in the Inspector and
+scale gizmo. Uniform spheres retain the exact sphere collider; non-uniform spheres
+use a bounded convex ellipsoid approximation for collision. Collider wireframes
+follow the ellipsoid dimensions. Existing objects are not automatically rescaled.
+
+Terrain tools docks into the Hierarchy dock node when it appears, sharing the tab
+bar rather than covering Hierarchy in a floating window. Click either tab to
+switch. Reset Layout also places Terrain tools beside Hierarchy. The panel can
+still be manually undocked; reopening it docks it with Hierarchy again.
+
+### Layer collision matrix
+
+Open **Layers** from the existing editor settings/menu entry. Add named layers,
+assign them to objects in the Inspector, then expand **Layer Collision Matrix**.
+The scrollable triangular table contains each layer pair once. Checked means
+physics collisions and trigger events are enabled; unchecked means the pair is
+ignored. The diagonal controls collisions within the same layer. The rule applies
+symmetrically, including terrain colliders and stationary trigger overlaps.
+
+Settings are saved in the project's `Settings/Layers.json`. Existing projects
+without a matrix default to all pairs enabled. Removing/reusing a layer resets its
+pair rules. Collision rules are edited outside Play mode. Raycast/overlap query
+masks remain separate: a disabled physics pair does not globally hide objects from
+picking, camera obstruction queries or scripted queries.
+
+### Manual verification checklist
+
+- Create cube/sphere/capsule/cone/plane; ensure no automatic RigidBody, then add one
+  manually and verify physics. Character/vehicle presets should remain functional.
+- Resize a sphere independently on all axes using Inspector and gizmo. Check its
+  visual shape, collider overlay and contacts. Uniform spheres should stay spherical.
+- Add two layers, assign a falling rigid body and floor, and disable their pair.
+  Verify pass-through; enable again and verify contact. Check same-layer diagonal,
+  triggers (including stationary ones), terrain colliders and save/reopen behavior.
+- Select terrain and verify Terrain tools and Hierarchy share one tab strip, both
+  in an existing layout and after Reset Layout.
+- Alt-Tab during Play: simulation/audio should pause and CPU/GPU usage should drop.
+  Return after several seconds: no time jump or stuck keys. Test with the external
+  Game window focused, then with both engine windows unfocused. Closing the engine
+  must still honor the normal save/discard prompt.
+- Bake a static terrain and mesh scene; check terrain occluders and chunk bounds in
+  the selected-camera debug overlay. Sculpt/move the terrain: bake must bypass
+  until rebaked. Terrain shadow casters should remain correct.

@@ -13,6 +13,7 @@ class AudioOutput {
     AudioOutput(const AudioOutput&) = delete;
     AudioOutput& operator=(const AudioOutput&) = delete;
     void open();
+    void suspend(bool paused);
     void clear();
     std::size_t queuedFrames() const;
     void submit(const std::vector<float>& samples);

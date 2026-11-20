@@ -107,3 +107,21 @@ Disabled/stale bakes and orthographic cameras bypass the occlusion overlay.
 The existing selected-camera preview continues to render with normal baked culling.
 Navigation and Occlusion Culling windows now start at a bounded usable height;
 resize them as needed, with content scrolling inside the windows on smaller screens.
+
+### Terrain support
+
+Static terrain heightfield triangles now participate as baked opaque occluders,
+using the actual sculpted surface (no side walls or convex hull). Terrain chunks
+can also be hidden behind other baked objects/terrains: their full transformed
+height bounds must pass the same conservative triangle-coverage test before any
+color geometry is uploaded. Shadow rendering does not use camera occlusion.
+The selected-camera visualization includes terrain chunk bounds.
+
+Mark terrain **Static**, then rebake in **Windows > Occlusion Culling**.
+Sculpting, moving, scaling, changing static eligibility or changing a terrain asset
+invalidates the bake. Surface-content hashes are cached per height revision.
+The existing safety limits still apply: two million scanned source triangles and
+2,048 retained occluder triangles, shared between meshes and terrain. Dense curved
+terrain may yield limited culling, rather than aggressive/incorrect removal.
+A terrain does not occlude itself; this is not terrain hill-to-hill self-occlusion.
+Previously saved bakes should be regenerated to include terrain signatures.

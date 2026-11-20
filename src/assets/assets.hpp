@@ -157,6 +157,13 @@ class AssetManager {
     }
     std::string readScript(const std::string& path) const {
         auto file = resolve(path);
+        if (extension(file) == ".ls" && !std::filesystem::exists(file)) {
+            auto migrated = std::filesystem::path(path);
+            migrated.replace_extension(".lua");
+            if (std::filesystem::is_regular_file(resolve(migrated.generic_string()))) {
+                file = resolve(migrated.generic_string());
+            }
+        }
         if (!script(file) || std::filesystem::file_size(file) > 64 * 1024) {
             throw std::runtime_error("Expected a LegacyScript asset, at most 64 KiB");
         }

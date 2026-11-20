@@ -171,7 +171,7 @@ Use getComponent(Type) for attached self, getComponent(object, Type) for an expl
 - `overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil`
 - `overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil`
 - `overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil`
-- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
+- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil`
 - `overload fun(componentType:ComponentType):any`
 
 ```lua
@@ -1298,6 +1298,22 @@ fade:start(1)
 fade:stop(0.5)
 ```
 
+### Vector3
+
+`Vector3(x,y,z) - Construct a vector table accepted by position, rotation, destination and obstacle vector setters.`
+
+- `param x? number`
+- `param y? number`
+- `param z? number`
+- `return Vec3`
+
+```lua
+local camera = Camera.new("Reference Camera")
+camera:setPosition(0, 2, 6)
+local result = Vector3(camera, local destination = Vector3(2, 0, 4)
+self:setPosition(destination))
+```
+
 ### print
 
 `print(...) - log tab-separated values`
@@ -1310,7 +1326,7 @@ print("Player position", self:getPosition().x)
 
 ### GameObject.getComponent
 
-`getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
+`getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil`
 
 - `getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
 
@@ -1321,7 +1337,7 @@ object:getComponent(Transform)
 
 ### GameObject.getComponentInParent
 
-`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
+`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil`
 
 - `getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent`
 
@@ -1332,7 +1348,7 @@ object:getComponentInParent(RigidBody)
 
 ### GameObject.getComponentInChildren
 
-`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
+`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil`
 
 - `getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants`
 
@@ -1343,7 +1359,7 @@ object:getComponentInChildren(Camera)
 
 ### GameObject.findComponentInParent
 
-`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
+`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil`
 
 - `findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent`
 
@@ -1354,7 +1370,7 @@ object:findComponentInParent(RigidBody)
 
 ### GameObject.findComponentInChildren
 
-`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|nil`
+`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil`
 
 - `findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren`
 
@@ -1365,7 +1381,7 @@ object:findComponentInChildren(Camera)
 
 ### GameObject.addComponent
 
-`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River`
+`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent`
 
 - `addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner`
 
@@ -3158,6 +3174,54 @@ local fade = fadeToColor(color.black)
 fade:stop(1)
 ```
 
+## NavMeshAgent
+
+### NavMeshAgent.setDestination
+
+`setDestination(self:NavMeshAgent, x:number|Vec3, y?:number, z?:number) Queue a path request; resumes movement`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:setDestination(Vector3(8, 0, 4))
+```
+
+### NavMeshAgent.resetPath
+
+`resetPath(self:NavMeshAgent) Clear destination request, route and velocity`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:resetPath()
+```
+
+## GameUI
+
+### GameUI.isLoaded
+
+`isLoaded():boolean Whether Assets/UI/main.rml is loaded in Play.`
+
+```lua
+if ui.isLoaded() then debug.log("HUD document ready") end
+```
+
+### GameUI.setText
+
+`setText(id:string, plainText:string):boolean Set escaped plain text of an element; false when not loaded/id missing.`
+
+```lua
+ui.setText("health", "100 / 100")
+```
+
+### GameUI.wasClicked
+
+`wasClicked(id:string):boolean Consume a queued click for the element id; repeated clicks coalesce until polled.`
+
+```lua
+function onUpdate(dt)
+    if ui.wasClicked("collect") then ui.setText("status", "Collected!") end
+end
+```
+
 ## Component fields and type tokens
 
 Component type names such as `Transform`, `Skybox`, `PointLight` and `AudioSource`
@@ -3201,7 +3265,6 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | --- | --- |
 | `mass` | `number` |
 | `useGravity` | `boolean` |
-| `floatOnRivers` | `boolean Default false; opt-in river buoyancy for dynamic bodies with gravity and primitive non-trigger colliders` |
 | `linearVelocity` | `Vec3` |
 | `angularVelocity` | `Vec3` |
 | `velocity` | `Vec3 Alias of linearVelocity` |
@@ -3346,6 +3409,8 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `back` | `Texture +Z` |
 | `cubemap` | `string Project-relative .cubemap asset` |
 | `hdr` | `Texture Radiance .hdr equirectangular panorama` |
+| `affectEnvironment` | `boolean Optional sky-colored ambient light; default false` |
+| `environmentIntensity` | `number 0..5, default 1` |
 
 ### CharacterController fields
 
@@ -3606,6 +3671,103 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `foam` | `number 0..1 Procedural edge foam` |
 | `subdivisions` | `integer Samples per curve span 2..32` |
 | `points` | `table List of 2..64 complete local vector tables; getter returns copies, assign the whole list to change` |
+| `shaderStyle` | `integer 0 Classic, 1 Clear, 2 Ocean, 3 Lake, 4 Rapids, 5 Tropical, 6 Marsh, 7 Industrial canal` |
+| `waveHeight` | `number Geometric displacement 0..3 metres` |
+| `waveLength` | `number 0.1..100 metres` |
+| `waveSpeed` | `number 0..10 multiplier` |
+
+### Vehicle fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `throttle` | `number -1..1, forward/reverse, runtime command` |
+| `steering` | `number -1..1, positive right, runtime command` |
+| `brake` | `number 0..1 service brake` |
+| `handbrake` | `boolean Rear brake/sliding` |
+| `speed` | `number Read-only signed forward m/s` |
+| `groundedWheels` | `integer Read-only 0..4` |
+| `isGrounded` | `boolean Read-only` |
+| `wheelCompression` | `number[] Read-only copy, FL/FR/RL/RR, 0..1` |
+| `wheelBase` | `number 0.2..20 local metres` |
+| `trackWidth` | `number 0.2..10 local metres` |
+| `mountHeight` | `number -10..10 local metres` |
+| `wheelRadius` | `number 0.05..3 local metres` |
+| `suspensionLength` | `number 0.05..3 local metres` |
+| `springStrength` | `number 100..500000 N/m per wheel` |
+| `suspensionDamping` | `number 0..50000 per wheel` |
+| `engineForce` | `number 0..200000 N total` |
+| `brakeForce` | `number 0..300000 N total` |
+| `tireGrip` | `number 0.05..5` |
+| `maxSteerAngle` | `number 0..70 degrees` |
+| `maxSpeed` | `number 1..150 m/s engine cutoff` |
+| `keepUpright` | `boolean Default true: hard world-up pitch/roll lock; false permits banking and flips` |
+
+### Water fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `mesh` | `string Optional .mesh asset; empty uses this MeshRenderer or default plane` |
+
+### BoneAttachment fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `source` | `GameObject / nil Animated model owner` |
+| `node` | `integer Skeleton node index (-1 unbound)` |
+| `offset` | `Vec3 Bone-local position offset (assign complete vector)` |
+| `rotation` | `Vec3 Euler-degree offset (assign complete vector)` |
+| `error` | `string Read-only runtime diagnostic` |
+
+### TPSCamera fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `target` | `GameObject / nil Target root; nil follows the Transform parent` |
+| `offset` | `Vec3 World-space look-at offset; assign a complete vector` |
+| `mouseLook` | `boolean Right mouse or locked cursor orbits during Play` |
+| `lockMouse` | `boolean Default false; request cursor lock in focused Play; false releases TPS-owned lock` |
+| `collision` | `boolean Sphere-sweep obstruction avoidance (requires colliders)` |
+| `distance` | `number Desired distance, within minDistance..maxDistance` |
+| `minDistance` | `number At least 0.05 metres` |
+| `maxDistance` | `number At most 1000 metres` |
+| `yaw` | `number Orbit yaw in degrees` |
+| `pitch` | `number Orbit pitch in degrees, within minPitch..maxPitch` |
+| `minPitch` | `number At least -89 degrees` |
+| `maxPitch` | `number At most 89 degrees` |
+| `sensitivity` | `number 0..10 degrees per mouse pixel` |
+| `zoomSpeed` | `number 0..20 metres per wheel unit` |
+| `smoothing` | `number 0..100 response, zero snaps` |
+| `shoulder` | `number -10..10 metres, local screen-right` |
+| `collisionRadius` | `number 0.02..5 metres; near-plane coverage can enlarge this` |
+| `resolvedDistance` | `number Read-only obstruction-adjusted distance` |
+
+### NavMeshAgent fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `speed` | `number Movement speed, 0..100 metres/second` |
+| `stoppingDistance` | `number 0.01..10 metres` |
+| `stopped` | `boolean Pause movement without clearing the route` |
+| `destination` | `Vec3 Assign a complete world-space destination, or call setDestination` |
+| `velocity` | `Vec3 Read-only actual last-frame velocity` |
+| `hasPath` | `boolean Read-only; true while following a complete reachable path` |
+| `pathPending` | `boolean Read-only; destination request awaits the next Play update` |
+| `remainingDistance` | `number Read-only remaining path distance` |
+| `status` | `string Read-only navigation status` |
+| `updateRotation` | `boolean Automatically face the navigation path; default true` |
+| `angularSpeed` | `number Degrees per second, 0..3600` |
+
+### NavMeshObstacle fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean` |
+| `size` | `Vec3 Local box dimensions, positive; assign a whole vector` |
+| `center` | `Vec3 Local box center; assign a whole vector` |
 
 ## Skybox1 to Skybox2 transition
 
@@ -3623,7 +3785,6 @@ function onStart()
     if skybox1 and skybox2 then fadeSkybox(skybox1, skybox2, 0.5) end
 end
 ```
-
 
 ## Vehicle component
 
@@ -3656,5 +3817,8 @@ available through component lookup/add/remove/find/export APIs; `target` is a
 GameObject reference, `offset` is assigned as a complete vector and
 `resolvedDistance` is read-only. Camera projection/activation remains on Camera.
 `Skybox.affectEnvironment` enables sampled sky-colored ambient light and
-`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.stabilityAssist`
-sets speed-dependent steering reduction (0..1; default 1).
+`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.keepUpright`
+locks chassis pitch/roll to prevent flipping (boolean; default true).
+
+
+See [In-game UI](game-ui.md) for RML/RCSS setup and the `ui` bridge example.
