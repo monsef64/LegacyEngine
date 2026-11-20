@@ -2800,6 +2800,8 @@ int engineMain(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--smoke-test") == 0) {
             smokeTest = true;
+        } else if (std::strcmp(argv[i], "-debug") == 0) {
+            // Console setup happens before logging is initialized in main.
         } else {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Unknown argument: %s", argv[i]);
             return 1;
@@ -2878,6 +2880,18 @@ int engineMain(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    bool debugConsole = false;
+    for (int i = 1; i < argc; ++i) {
+        debugConsole |= std::strcmp(argv[i], "-debug") == 0;
+    }
+    if (debugConsole &&
+        (GetConsoleWindow() || AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole())) {
+        std::freopen("CONOUT$", "w", stdout);
+        std::freopen("CONOUT$", "w", stderr);
+        std::freopen("CONIN$", "r", stdin);
+    }
+#endif
     EngineLog::initialize();
     SDL_Log("Starting LegacyEngine");
     int result = 1;

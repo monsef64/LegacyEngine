@@ -239,6 +239,11 @@ add_executable(LegacyEngine
   src/editor/transform_editor.cpp
   src/editor/script_editor.cpp
 )
+# GUI subsystem prevents a console flashing at startup. SDL_main supplies WinMain;
+# -debug explicitly attaches/allocates a console at runtime instead.
+if(WIN32)
+  set_target_properties(LegacyEngine PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
 # Embed the UI font so release binaries need no external asset directory.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/third_party/roboto/Roboto-Regular.ttf")
