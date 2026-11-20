@@ -17,6 +17,22 @@ set(RMLUI_FONT_ENGINE freetype CACHE STRING "" FORCE)
 FetchContent_Declare(rmlui URL https://github.com/mikke89/RmlUi/archive/58c751531f4c1a1eb2dc56f409b8e8a323a0c9ad.tar.gz)
 FetchContent_MakeAvailable(rmlui)
 
+# RmlUi 6.1's bundled robin_hood.h uses SIZE_MAX/UINT*_MAX, UINT64_C and
+# uint*_t without including <cstdint>. Recent MinGW libstdc++ headers no longer
+# supply these transitively, causing a misleading "Unsupported bitness" error.
+# Fix the header itself so core, backends and engine consumers all see the same
+# self-contained header, including translation units built without RmlUi's PCH.
+set(RML_HASH_HEADER "${rmlui_SOURCE_DIR}/Include/RmlUi/Core/Containers/robin_hood.h")
+file(READ "${RML_HASH_HEADER}" RML_HASH_SOURCE)
+if(NOT RML_HASH_SOURCE MATCHES "#include <cstdint>")
+  if(NOT RML_HASH_SOURCE MATCHES "#include <limits>")
+    message(FATAL_ERROR "RmlUi integer-header adaptation no longer matches the pinned header")
+  endif()
+  string(REPLACE "#include <limits>" "#include <cstdint>\n#include <limits>"
+    RML_HASH_SOURCE "${RML_HASH_SOURCE}")
+  file(WRITE "${RML_HASH_HEADER}" "${RML_HASH_SOURCE}")
+endif()
+
 # Upstream GL3 renders its final composition to framebuffer 0. Our Game view is
 # an offscreen framebuffer. Adapt only that final destination, retaining all
 # upstream filters, clipping, texture support and license notices.
