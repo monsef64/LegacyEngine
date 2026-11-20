@@ -416,3 +416,11 @@ third-person camera setup/Lua, optional sky-colored ambient light, steering
 stability, terrain surface edges, expanded Scene picking, middle-drag navigation,
 near-camera creation, field Reset value controls and uncapped defaults.
 Existing saved FPS caps/VSync preferences remain respected.
+
+
+See [Mesh LOD and baked occlusion](lod-and-occlusion.md) for the MeshRenderer
+**Generate LODs** action and **Windows > Occlusion Culling** bake workflow.
+
+
+[Terrain chunks and Navigation](navigation.md) documents smaller camera-culled
+terrain pieces, the Recast/Detour bake window and scriptable Navmesh Agents.

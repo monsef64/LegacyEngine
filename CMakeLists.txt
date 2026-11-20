@@ -61,6 +61,26 @@ if(LEGACY_LOW_END_DEFAULTS)
 endif()
 
 include(FetchContent)
+# Mesh simplification is invoked only by the user's Generate LODs action.
+set(MESHOPT_BUILD_DEMO OFF CACHE BOOL "" FORCE)
+set(MESHOPT_BUILD_GLTFPACK OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(meshoptimizer
+  URL https://github.com/zeux/meshoptimizer/archive/refs/tags/v0.22.tar.gz)
+FetchContent_MakeAvailable(meshoptimizer)
+set(RECASTNAVIGATION_DEMO OFF CACHE BOOL "" FORCE)
+set(RECASTNAVIGATION_TESTS OFF CACHE BOOL "" FORCE)
+set(RECASTNAVIGATION_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(recastnavigation
+  URL https://github.com/recastnavigation/recastnavigation/archive/refs/tags/v1.6.0.tar.gz)
+# Recast 1.6 declares a pre-3.5 minimum; keep its policy floor compatible
+# with CMake 4 without changing the fetched source or requiring an old CMake.
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 4.0 AND NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM)
+  set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+endif()
+FetchContent_MakeAvailable(recastnavigation)
+add_library(legacy_navigation STATIC src/navigation/navigation.cpp)
+target_include_directories(legacy_navigation PUBLIC src)
+target_link_libraries(legacy_navigation PUBLIC legacy_json PRIVATE Recast Detour)
 
 # --- SDL3 (window, input, OpenGL context) -----------------------------------
 #
@@ -147,7 +167,8 @@ FetchContent_MakeAvailable(zstd)
 
 add_library(legacy_models STATIC src/models/model_import.cpp)
 target_include_directories(legacy_models PUBLIC src)
-target_link_libraries(legacy_models PUBLIC assimp::assimp legacy_json)
+target_sources(legacy_models PRIVATE src/models/mesh_lod.cpp)
+target_link_libraries(legacy_models PUBLIC assimp::assimp legacy_json PRIVATE meshoptimizer)
 
 # --- GLAD (OpenGL function loader) ------------------------------------------
 #
@@ -256,7 +277,7 @@ file(READ "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fontawesome/fa-solid-900.ttf"
 string(REGEX REPLACE "(..)" "0x\\1," LEGACY_ICON_BYTES "${LEGACY_ICON_HEX}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma once\ninline const unsigned char editorIconData[] = {${LEGACY_ICON_BYTES}};\n")
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models)
+target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "animation/animation_component.hpp"
+#include "animation/animator.hpp"
 #include "animation/bone_attachment.hpp"
 #include "audio/audio_source.hpp"
 #include "core/ecs.hpp"
@@ -17,6 +18,8 @@
 #include "gameplay/tps_camera.hpp"
 #include "lighting/light.hpp"
 #include "materials/material.hpp"
+#include "navigation/navmesh_agent.hpp"
+#include "navigation/navmesh_obstacle.hpp"
 #include "particles/particle_system.hpp"
 #include "physics/vehicle.hpp"
 #include "rendering/mesh.hpp"

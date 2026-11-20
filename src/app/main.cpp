@@ -12,6 +12,7 @@
 //   * right-handed coordinates (the OpenGL convention)
 
 #include "animation/animation_system.hpp"
+#include "animation/animator_system.hpp"
 #include "animation/bone_attachment_system.hpp"
 #include "audio/audio_system.hpp"
 #include "core/components.hpp"
@@ -31,6 +32,8 @@
 #include "editor/level_objects.hpp"
 #include "editor/lightmapping_window.hpp"
 #include "editor/model_preview_window.hpp"
+#include "editor/navigation_window.hpp"
+#include "editor/occlusion_window.hpp"
 #include "editor/particle_playback.hpp"
 #include "editor/play_mode.hpp"
 #include "editor/playback_controls.hpp"
@@ -258,8 +261,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     ScriptComponents componentScripts;
     AudioSystem audio;
     AnimationSystem animations;
+    AnimatorSystem animators;
     AnimationWindow animationWindow;
     LightmappingWindow lightmappingWindow;
+    OcclusionWindow occlusionWindow;
+    NavigationWindow navigationWindow;
     ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
     auto lastSceneRender = std::chrono::steady_clock::time_point{};
@@ -315,6 +321,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     };
     Entity mouseOver, mousePressedObject;
     ImVec2 gameImageOrigin{}, gameImageSize{};
+    bool tpsMouseOwned = false;
     bool showFPS = false, showGameColliders = false, showProfiler = false;
     FrameProfiler profiler;
     activeProfiler = &profiler;
@@ -1054,6 +1061,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 ImGui::MenuItem("Animation", nullptr, &animationWindow.visible);
                 ImGui::MenuItem("Lighting", nullptr, &lightmappingWindow.visible);
+                ImGui::MenuItem("Occlusion Culling", nullptr, &occlusionWindow.visible);
+                ImGui::MenuItem("Navigation", nullptr, &navigationWindow.visible);
                 ImGui::Separator();
                 if (ImGui::MenuItem("Reset layout")) {
                     resetWorkspace = true;
@@ -1654,6 +1663,17 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 browser.assets, std::exchange(browser.previewModelRequest, {}), renderer);
         }
         modelPreviewWindow.draw(browser.assets, renderer, ImGui::GetIO().DeltaTime);
+        navigationWindow.draw(world,
+                              browser.assets,
+                              projectMeshes,
+                              levels.current(),
+                              editAllowed && !playMode.active() && !prefabLevel);
+        occlusionWindow.draw(world,
+                             renderer,
+                             browser.assets,
+                             projectMeshes,
+                             levels.current(),
+                             editAllowed && !playMode.active() && !prefabLevel);
         lightmappingWindow.draw(world,
                                 selectedEntity,
                                 browser.assets,
@@ -2296,6 +2316,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
             scripts.update(std::min(seconds, 0.25f));
             componentScripts.update(std::min(seconds, 0.25f));
+            animators.update(world, browser.assets, std::min(seconds, .25f));
             animations.update(world, browser.assets, std::min(seconds, .25f));
             const auto animationEvents = animations.events;
             for (const auto& event : animationEvents) {
@@ -2304,6 +2325,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         } else if (!playMode.active()) {
             animations.clear();
+            animators.clear();
         }
         profiler.checkpoint(ProfilePart::Scripts);
         LuaConsole::dispatchEvents();
@@ -2312,6 +2334,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         renderer.setAssetRoot(browser.assets.root);
         renderer.updateSkyboxFades(world, playMode.playing() ? std::min(seconds, .25f) : 0.0f);
         updateHierarchy(world);
+        if (playMode.playing()) {
+            navigationWindow.system.update(world, seconds);
+            updateHierarchy(world);
+        }
         profiler.checkpoint(ProfilePart::Hierarchy);
         physics.setAssetRoot(browser.assets.root);
         Terrains::update(world, browser.assets);
@@ -2346,6 +2372,25 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             updateHierarchy(world);
         }
         profiler.checkpoint(ProfilePart::Hierarchy);
+        bool wantsTPSLock = false;
+        if (playMode.playing() && input.enabled && input.mouseEnabled && !cameraLooking) {
+            const auto active = activeCamera(world);
+            if (const auto* c = world.tryGet<TPSCamera>(active)) {
+                const Entity target = c->target != Entity{} ? c->target : getParent(world, active);
+                wantsTPSLock =
+                    c->enabled && c->lockMouse && target != active && world.has<Transform>(target);
+            }
+        }
+        if (wantsTPSLock && !input.mouseLocked) {
+            tpsMouseOwned = input.lockCursor(true);
+        } else if (!wantsTPSLock && tpsMouseOwned) {
+            // Focus/event processing may already have handed capture to Scene.
+            // Release only the gameplay lock we owned, never the editor's lock.
+            if (input.mouseLocked && !input.sceneLocked) {
+                input.releaseMouse();
+            }
+            tpsMouseOwned = false;
+        }
         if (playMode.playing()) {
             updateFPSCameras(world, std::min(seconds, .25f), input);
             updateTPSCameras(world, physics, std::min(seconds, .25f), input);
@@ -2472,6 +2517,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                               sceneSurface.height,
                               camera.position());
                 renderer.drawEditorGrid(browser.settings.grid, viewProjection);
+                if (navigationWindow.showMesh && navigationWindow.system.valid) {
+                    renderer.drawNavigation(navigationWindow.system.debugMesh, viewProjection);
+                }
                 if (browser.settings.alwaysShowColliders) {
                     world.each<Transform, Collider>(
                         [&](Entity e, const Transform& t, const Collider& c) {

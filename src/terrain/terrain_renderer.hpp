@@ -30,7 +30,7 @@ class Renderer {
         Vec3 center;
         float radius = 0;
     };
-    std::map<std::pair<unsigned, unsigned>, Depth> depth_;
+    std::map<std::tuple<unsigned, unsigned, int>, Depth> depth_;
     static void releaseDepth(Depth& d) {
         if (d.buffer.vao) {
             glDeleteVertexArrays(1, &d.buffer.vao);
@@ -239,8 +239,8 @@ void main(){
     void drawDepth(World& world, const Mat4& vp, GLint mvpLocation, bool dynamicOnly) {
         const ViewFrustum frustum(vp);
         for (auto it = depth_.begin(); it != depth_.end();) {
-            if (!world.alive(Entity{it->first.first, it->first.second}) ||
-                !world.has<Terrain>(Entity{it->first.first, it->first.second})) {
+            if (!world.alive(Entity{std::get<0>(it->first), std::get<1>(it->first)}) ||
+                !world.has<Terrain>(Entity{std::get<0>(it->first), std::get<1>(it->first)})) {
                 releaseDepth(it->second);
                 it = depth_.erase(it);
             } else {
@@ -253,50 +253,54 @@ void main(){
                     return;
                 }
                 const auto& d = *terrain.data;
-                auto key = std::make_pair(e.index, e.generation);
-                auto it = depth_.find(key);
-                if (it == depth_.end()) {
-                    if (depth_.size() >= 32) {
-                        releaseDepth(depth_.begin()->second);
-                        depth_.erase(depth_.begin());
-                    }
-                    it = depth_.emplace(key, Depth{}).first;
-                }
-                auto& c = it->second;
-                if (c.identity != d.identity || c.revision != d.shapeRevision) {
-                    releaseDepth(c);
-                    auto mesh = collision(d);
-                    c.buffer.count = int(mesh.size());
-                    glGenVertexArrays(1, &c.buffer.vao);
-                    glGenBuffers(1, &c.buffer.vbo);
-                    glBindVertexArray(c.buffer.vao);
-                    glBindBuffer(GL_ARRAY_BUFFER, c.buffer.vbo);
-                    glBufferData(
-                        GL_ARRAY_BUFFER, mesh.size() * sizeof(Vec3), mesh.data(), GL_STATIC_DRAW);
-                    glEnableVertexAttribArray(0);
-                    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vec3), nullptr);
-                    float lo = 1e10f, hi = -1e10f;
-                    for (float h : d.heights) {
-                        lo = std::min(lo, h);
-                        hi = std::max(hi, h);
-                    }
-                    c.center = {d.size * .5f, (lo + hi) * .5f, d.size * .5f};
-                    Vec3 extent{d.size * .5f, (hi - lo) * .5f, d.size * .5f};
-                    c.radius = std::sqrt(dot(extent, extent));
-                    c.identity = d.identity;
-                    c.revision = d.shapeRevision;
-                }
-                auto center = t.position + rotateVector(t.rotation, c.center * t.scale);
-                auto scale =
-                    std::max({std::abs(t.scale.x), std::abs(t.scale.y), std::abs(t.scale.z)});
-                if (!frustum.visible(center, c.radius * scale)) {
-                    return;
-                }
-                auto mvp = multiply(vp, transformMatrix(t.position, t.rotation, t.scale));
+                const auto model = transformMatrix(t.position, t.rotation, t.scale);
+                const auto mvp = multiply(vp, model);
                 glUniformMatrix4fv(mvpLocation, 1, GL_FALSE, mvp.m);
                 glFrontFace(t.scale.x * t.scale.y * t.scale.z < 0 ? GL_CW : GL_CCW);
-                glBindVertexArray(c.buffer.vao);
-                glDrawArrays(GL_TRIANGLES, 0, c.buffer.count);
+                const int count = chunkCount(d);
+                for (int z = 0; z < count; ++z) {
+                    for (int x = 0; x < count; ++x) {
+                        const auto& bounds = chunkBounds(d, x, z);
+                        if (!frustum.visibleBox(bounds.center, bounds.extent, model)) {
+                            continue;
+                        }
+                        const int index = z * count + x;
+                        const auto key = std::make_tuple(e.index, e.generation, index);
+                        auto it = depth_.find(key);
+                        if (it == depth_.end()) {
+                            if (depth_.size() >= 1024) {
+                                releaseDepth(depth_.begin()->second);
+                                depth_.erase(depth_.begin());
+                            }
+                            it = depth_.emplace(key, Depth{}).first;
+                        }
+                        auto& c = it->second;
+                        if (c.identity != d.identity || c.revision != d.heightChunks[index]) {
+                            releaseDepth(c);
+                            const auto vertices = chunk(d, x, z, 1, false);
+                            std::vector<Vec3> positions;
+                            positions.reserve(vertices.size());
+                            for (const auto& vertex : vertices) {
+                                positions.push_back(vertex.position);
+                            }
+                            c.buffer.count = int(positions.size());
+                            glGenVertexArrays(1, &c.buffer.vao);
+                            glGenBuffers(1, &c.buffer.vbo);
+                            glBindVertexArray(c.buffer.vao);
+                            glBindBuffer(GL_ARRAY_BUFFER, c.buffer.vbo);
+                            glBufferData(GL_ARRAY_BUFFER,
+                                         positions.size() * sizeof(Vec3),
+                                         positions.data(),
+                                         GL_STATIC_DRAW);
+                            glEnableVertexAttribArray(0);
+                            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vec3), nullptr);
+                            c.identity = d.identity;
+                            c.revision = d.heightChunks[index];
+                        }
+                        glBindVertexArray(c.buffer.vao);
+                        glDrawArrays(GL_TRIANGLES, 0, c.buffer.count);
+                    }
+                }
             });
     }
     void shutdown() {
@@ -453,13 +457,13 @@ void main(){
                         model.m[2] * p.x + model.m[6] * p.y + model.m[10] * p.z + model.m[14]};
                     const float scale =
                         std::max({std::abs(t.scale.x), std::abs(t.scale.y), std::abs(t.scale.z)});
-                    if (!frustum.visible(center, bounds.radius * scale)) {
+                    if (!frustum.visibleBox(bounds.center, bounds.extent, model)) {
                         continue;
                     }
                     auto key = std::make_tuple(e.index, e.generation, index);
                     auto it = chunks_.find(key);
                     if (it == chunks_.end()) {
-                        if (chunks_.size() >= 256) {
+                        if (chunks_.size() >= 1024) {
                             auto oldest = chunks_.end();
                             for (auto p = chunks_.begin(); p != chunks_.end(); ++p) {
                                 if (p->second.used != frame_ &&

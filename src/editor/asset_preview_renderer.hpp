@@ -52,6 +52,7 @@ class AssetPreviewRenderer {
                     slot.data.error = "HDR preview unavailable";
                 }
             } else {
+                slot.data.flip = true; // Material uploads are bottom-up; ImGui images are top-down.
                 textures_.beginFrame();
                 slot.data.texture = textures_.get(assets, path, slot.data.error);
                 if (slot.data.texture) {

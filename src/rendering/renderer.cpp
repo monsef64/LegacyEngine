@@ -637,6 +637,20 @@ void Renderer::draw(World& world,
         }
         return material;
     };
+    occlusion.begin(world, modelAssetRevision, viewProjection, [&](const MeshRenderer& r) {
+        return opaqueOcclusionMaterial(r);
+    });
+    // Never let a pending model act as an invisible baked occluder.
+    if (occlusion.valid) {
+        world.eachReadOnly<Transform, MeshRenderer>(
+            [&](Entity e, const Transform& t, const MeshRenderer& r) {
+                if (Occlusion::eligible(world, e, t, r) &&
+                    (r.mesh.id >= meshes_.size() ||
+                     (!r.model.empty() && !modelMeshes_.count(r.model)))) {
+                    occlusion.valid = false;
+                }
+            });
+    }
     const ViewFrustum frustum(viewProjection);
     auto visibleMesh = [&](const Transform& transform, const MeshRenderer& renderer) {
         if (renderer.mesh.id >= meshes_.size()) {
@@ -655,7 +669,50 @@ void Renderer::draw(World& world,
     auto drawMesh = [&](const Transform& transform,
                         const MeshRenderer& renderer,
                         const MaterialProperties& material) {
-        const GpuMesh& mesh = meshes_[renderer.mesh.id];
+        MeshHandle selectedMesh = renderer.mesh;
+        // Per-view selection, never mutate the component: shadows/physics/bakes
+        // always retain the full-resolution mesh. Animated clones bypass LODs.
+        if (!renderer.model.empty() && renderer.lightmap.empty() &&
+            !(occlusion.valid && transform.isStatic)) {
+            const auto base = modelMeshes_.find(renderer.model);
+            if (base != modelMeshes_.end() && base->second.id == renderer.mesh.id) {
+                try {
+                    const auto& doc =
+                        cachedModelDocument(materialAssets_, renderer.model, &modelDocuments_);
+                    float sourceScale = modelImportScale(doc);
+                    if (doc.contains("settings")) {
+                        sourceScale *= modelImportScale(
+                            cachedModelDocument(materialAssets_,
+                                                doc.at("settings").get<std::string>(),
+                                                &modelDocuments_));
+                    }
+                    if (doc.contains("lods") && doc.at("lods").is_array() &&
+                        doc.at("lods").size() <= 8 &&
+                        doc.value("lodSourceScale", -1.f) == sourceScale) {
+                        const auto delta = transform.position - cameraPosition;
+                        const float scale = std::max({std::abs(transform.scale.x),
+                                                      std::abs(transform.scale.y),
+                                                      std::abs(transform.scale.z),
+                                                      .001f});
+                        const float distance = std::sqrt(dot(delta, delta)) / scale;
+                        float chosen = -1;
+                        for (const auto& level : doc.at("lods")) {
+                            const float threshold = level.at("distance").get<float>();
+                            const auto path = level.at("mesh").get<std::string>();
+                            if (std::isfinite(threshold) && threshold > 0 &&
+                                distance >= threshold && threshold > chosen &&
+                                path != renderer.model && modelAsset(path) && requestModel(path)) {
+                                selectedMesh = modelMeshes_.at(path);
+                                chosen = threshold;
+                            }
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    modelError = e.what();
+                }
+            }
+        }
+        const GpuMesh& mesh = meshes_[selectedMesh.id];
         const Mat4 model = transformMatrix(transform.position, transform.rotation, transform.scale);
         const Mat4 modelViewProjection = multiply(viewProjection, model);
 
@@ -744,6 +801,13 @@ void Renderer::draw(World& world,
             if (!isActive(world, e) || world.has<Water>(e) || world.has<Camera>(e) ||
                 !visibleMesh(t, r)) {
                 return;
+            }
+            if (occlusion.valid && Occlusion::eligible(world, e, t, r) &&
+                opaqueOcclusionMaterial(r)) {
+                const auto& gpu = meshes_[r.mesh.id];
+                if (occlusion.hidden(e, t, gpu.low, gpu.high, cameraPosition)) {
+                    return;
+                }
             }
             auto material = resolveMaterial(r);
             if (material.shader == 2) {

@@ -1,7 +1,9 @@
 #include "scripting/lua_scene.hpp"
 #include "animation/animation_clip.hpp"
+#include "animation/animator_sheet.hpp"
 #include "assets/cubemap.hpp"
 #include "core/hierarchy.hpp"
+#include "editor/rotation_editor.hpp"
 #include "effects/laser_io.hpp"
 #include "effects/light_shafts_io.hpp"
 #include "particles/particle_io.hpp"
@@ -54,7 +56,9 @@ const char* types[]{"Transform",      "RigidBody",
                     "CameraEffects",  "Fog",
                     "CloudSystem",    "River",
                     "Vehicle",        "Water",
-                    "BoneAttachment", "TPSCamera"};
+                    "BoneAttachment", "TPSCamera",
+                    "NavMeshAgent",   "NavMeshObstacle",
+                    "Animator"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -63,7 +67,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 28; ++i) {
+    for (int i = 0; i < 31; ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -119,6 +123,12 @@ bool has(const Handle& h, int type) {
         return h.world->has<Water>(h.entity);
     case 26:
         return h.world->has<BoneAttachment>(h.entity);
+    case 29:
+        return h.world->has<NavMeshObstacle>(h.entity);
+    case 30:
+        return h.world->has<Animator>(h.entity);
+    case 28:
+        return h.world->has<NavMeshAgent>(h.entity);
     case 27:
         return h.world->has<TPSCamera>(h.entity);
     case 21:
@@ -329,7 +339,9 @@ Vec3 vectorArgument(lua_State* L, int index) {
     if (lua_type(L, index) == LUA_TNUMBER) {
         return {number(L, index), number(L, index + 1), number(L, index + 2)};
     }
-    luaL_checktype(L, index, LUA_TTABLE);
+    if (!lua_istable(L, index) && !luaL_testudata(L, index, "Vector")) {
+        luaL_argerror(L, index, "Expected a Vector3/table or vector property");
+    }
     Vec3 v;
     lua_getfield(L, index, "x");
     if (lua_isnil(L, -1)) {
@@ -356,6 +368,16 @@ Vec3 vectorArgument(lua_State* L, int index) {
 }
 Quat rotationArgument(lua_State* L, int index) {
     const Vec3 v = vectorArgument(L, index);
+    if (luaL_testudata(L, index, "Vector")) {
+        const auto property = *static_cast<Vector*>(lua_touserdata(L, index));
+        const auto f = field(L, property.component, property.field);
+        if (f.kind == Kind::Quat) {
+            return Quat{v.x, v.y, v.z, *coordinate(f, 3)};
+        }
+        return composeRotation(
+            composeRotation(axisAngle({0, 1, 0}, radians(v.y)), axisAngle({1, 0, 0}, radians(v.x))),
+            axisAngle({0, 0, 1}, radians(v.z)));
+    }
     const bool table = lua_istable(L, index);
     if (table) {
         lua_getfield(L, index, "w");
@@ -468,7 +490,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 28; ++i) {
+    for (int i = 0; i < 31; ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -478,6 +500,23 @@ LuaScene::LuaScene(lua_State* L,
         }
         lua_setglobal(L, types[i]);
     }
+    lua_pushcclosure(
+        L,
+        [](lua_State* L) -> int {
+            const float x = lua_isnoneornil(L, 1) ? 0 : number(L, 1),
+                        y = lua_isnoneornil(L, 2) ? 0 : number(L, 2),
+                        z = lua_isnoneornil(L, 3) ? 0 : number(L, 3);
+            lua_createtable(L, 0, 3);
+            lua_pushnumber(L, x);
+            lua_setfield(L, -2, "x");
+            lua_pushnumber(L, y);
+            lua_setfield(L, -2, "y");
+            lua_pushnumber(L, z);
+            lua_setfield(L, -2, "z");
+            return 1;
+        },
+        0);
+    lua_setglobal(L, "Vector3");
     luaL_newmetatable(L, "AudioWaitToken");
     lua_pushliteral(L, "Audio event");
     lua_setfield(L, -2, "__metatable");
@@ -688,6 +727,15 @@ int LuaScene::api(lua_State* L) {
         case 25:
             self.world_.each<Water>([&](Entity e, Water&) { collect(e); });
             break;
+        case 29:
+            self.world_.each<NavMeshObstacle>([&](Entity e, NavMeshObstacle&) { collect(e); });
+            break;
+        case 30:
+            self.world_.each<Animator>([&](Entity e, Animator&) { collect(e); });
+            break;
+        case 28:
+            self.world_.each<NavMeshAgent>([&](Entity e, NavMeshAgent&) { collect(e); });
+            break;
         case 27:
             self.world_.each<TPSCamera>([&](Entity e, TPSCamera&) { collect(e); });
             break;
@@ -876,6 +924,18 @@ int LuaScene::api(lua_State* L) {
         case 25:
             self.world_.remove<Water>(h.entity);
             break;
+        case 29:
+            self.world_.remove<NavMeshObstacle>(h.entity);
+            break;
+        case 30:
+            if (auto* a = self.world_.tryGet<Animation>(h.entity)) {
+                a->request(AnimationAction::Stop);
+            }
+            self.world_.remove<Animator>(h.entity);
+            break;
+        case 28:
+            self.world_.remove<NavMeshAgent>(h.entity);
+            break;
         case 27:
             self.world_.remove<TPSCamera>(h.entity);
             break;
@@ -976,6 +1036,24 @@ int LuaScene::api(lua_State* L) {
                 self.world_.add(h.entity, Transform{});
             }
             self.world_.add(h.entity, Water{});
+            break;
+        case 29:
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            self.world_.add(h.entity, NavMeshObstacle{});
+            break;
+        case 30:
+            if (!self.world_.has<Animation>(h.entity)) {
+                self.world_.add(h.entity, Animation{});
+            }
+            self.world_.add(h.entity, Animator{});
+            break;
+        case 28:
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            self.world_.add(h.entity, NavMeshAgent{});
             break;
         case 27:
             if (self.world_.has<FPSCamera>(h.entity)) {
@@ -1300,14 +1378,21 @@ int LuaScene::componentIndex(lua_State* L) {
     for (const auto* method : sharedMethods) {
         shared |= !std::strcmp(key, method);
     }
+    if (c.type == 28 && !std::strcmp(key, "setRotation")) {
+        lua_pushnil(L);
+        return 1;
+    }
     if (shared) {
         c.object.scene->pushObject(c.object.entity);
         lua_replace(L, 1);
         return objectIndex(L);
     }
     // Component aliases resolve on the same owner, without storing raw pointers.
-    for (int type = 0; type < 28; ++type) {
-        std::string alias = type == 14 ? "fpsCamera" : type == 27 ? "tpsCamera" : types[type];
+    for (int type = 0; type < 31; ++type) {
+        std::string alias = type == 14   ? "fpsCamera"
+                            : type == 27 ? "tpsCamera"
+                            : type == 28 ? "navMeshAgent"
+                                         : types[type];
         alias[0] = static_cast<char>(std::tolower(static_cast<unsigned char>(alias[0])));
         if (!std::strcmp(key, alias.c_str())) {
             if (has(c.object, type)) {
@@ -1376,6 +1461,210 @@ int LuaScene::componentIndex(lua_State* L) {
             lua_pushboolean(L, j.at(key).get<bool>());
         } else {
             lua_pushnumber(L, j.at(key).get<double>());
+        }
+        return 1;
+    }
+    if (c.type == 29) {
+        const auto j =
+            Navigation::obstacleSettings(c.object.world->get<NavMeshObstacle>(c.object.entity));
+        if (!j.contains(key)) {
+            return luaL_error(L, "Unknown NavMeshObstacle property");
+        }
+        if (j.at(key).is_boolean()) {
+            lua_pushboolean(L, j.at(key).get<bool>());
+        } else {
+            pushVector(L,
+                       {j.at(key).at(0).get<float>(),
+                        j.at(key).at(1).get<float>(),
+                        j.at(key).at(2).get<float>()});
+        }
+        return 1;
+    }
+    if (c.type == 30) {
+        auto& a = c.object.world->get<Animator>(c.object.entity);
+        if (!std::strcmp(key, "enabled")) {
+            lua_pushboolean(L, a.enabled);
+            return 1;
+        }
+        if (!std::strcmp(key, "sheet")) {
+            lua_pushstring(L, a.sheet.c_str());
+            return 1;
+        }
+        if (!std::strcmp(key, "currentState")) {
+            lua_pushstring(L, a.currentState.c_str());
+            return 1;
+        }
+        if (!std::strcmp(key, "error")) {
+            lua_pushstring(L, a.error.c_str());
+            return 1;
+        }
+        const char* methods[]{"setFloat",
+                              "setBool",
+                              "setTrigger",
+                              "resetTrigger",
+                              "getFloat",
+                              "getBool",
+                              "play",
+                              "crossFade"};
+        for (const auto* method : methods) {
+            if (!std::strcmp(key, method)) {
+                if (a.parameterTypes.empty() && Animators::asset(a.sheet)) {
+                    try {
+                        const auto doc =
+                            readJsonFile(c.object.scene->assets_.resolve(a.sheet), 2 * 1024 * 1024);
+                        Animators::validate(doc);
+                        for (const auto& p : doc.at("parameters")) {
+                            const auto n = p.at("name").get<std::string>();
+                            a.parameterTypes[n] = p.at("type").get<std::string>();
+                            if (!a.parameters.count(n)) {
+                                a.parameters[n] = p.at("default");
+                            }
+                        }
+                    } catch (const std::exception& e) {
+                        return luaL_error(L, "%s", e.what());
+                    }
+                }
+                lua_pushstring(L, key);
+                lua_pushcclosure(
+                    L,
+                    [](lua_State* L) -> int {
+                        const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+                        if (!c.object.world->alive(c.object.entity) ||
+                            !c.object.world->has<Animator>(c.object.entity)) {
+                            return luaL_error(L, "Animator no longer exists");
+                        }
+                        auto& a = c.object.world->get<Animator>(c.object.entity);
+                        const std::string name = luaL_checkstring(L, 2);
+                        if (name.empty() || name.size() > 64) {
+                            return luaL_error(L, "Invalid animator name");
+                        }
+                        const std::string op = lua_tostring(L, lua_upvalueindex(1));
+                        if (op == "play" || op == "crossFade") {
+                            const float fade =
+                                lua_isnoneornil(L, 3) ? (op == "play" ? 0.f : .2f) : number(L, 3);
+                            if (fade < 0 || fade > 30) {
+                                return luaL_error(L, "Blend duration must be 0..30");
+                            }
+                            a.pendingState = name;
+                            a.pendingFade = fade;
+                            return 0;
+                        }
+                        if (op == "getFloat" || op == "getBool") {
+                            if (!a.parameters.count(name)) {
+                                return luaL_error(L, "Animator parameter not initialized");
+                            }
+                            const auto& value = a.parameters.at(name);
+                            if (op == "getFloat") {
+                                if (!value.is_number()) {
+                                    return luaL_error(L, "Expected float parameter");
+                                }
+                                lua_pushnumber(L, value.get<double>());
+                            } else {
+                                if (!value.is_boolean()) {
+                                    return luaL_error(L, "Expected bool parameter");
+                                }
+                                lua_pushboolean(L, value.get<bool>());
+                            }
+                            return 1;
+                        }
+                        if (!a.parameterTypes.empty() &&
+                            (!a.parameterTypes.count(name) ||
+                             (op == "setFloat"  ? a.parameterTypes[name] != "float"
+                              : op == "setBool" ? a.parameterTypes[name] != "bool"
+                                                : a.parameterTypes[name] != "trigger"))) {
+                            return luaL_error(
+                                L, "Unknown parameter or incorrect animator parameter type");
+                        }
+                        if (a.parameters.size() >= 64 && !a.parameters.count(name)) {
+                            return luaL_error(L, "Animator parameter limit");
+                        }
+                        if (op == "setFloat") {
+                            a.parameters[name] = number(L, 3);
+                        } else if (op == "setBool") {
+                            luaL_checktype(L, 3, LUA_TBOOLEAN);
+                            a.parameters[name] = bool(lua_toboolean(L, 3));
+                        } else {
+                            a.parameters[name] = op == "setTrigger";
+                        }
+                        return 0;
+                    },
+                    1);
+                return 1;
+            }
+        }
+        return luaL_error(L, "Unknown Animator property");
+    }
+    if (c.type == 28) {
+        auto& a = c.object.world->get<NavMeshAgent>(c.object.entity);
+        if (!std::strcmp(key, "setDestination") || !std::strcmp(key, "resetPath")) {
+            lua_pushstring(L, key);
+            lua_pushcclosure(
+                L,
+                [](lua_State* L) -> int {
+                    const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+                    if (!c.object.world->alive(c.object.entity) ||
+                        !c.object.world->has<NavMeshAgent>(c.object.entity)) {
+                        return luaL_error(L, "NavMeshAgent no longer exists");
+                    }
+                    auto& a = c.object.world->get<NavMeshAgent>(c.object.entity);
+                    if (!std::strcmp(lua_tostring(L, lua_upvalueindex(1)), "resetPath")) {
+                        a.destinationSet = false;
+                        a.requested = a.pathPending = a.hasPath = false;
+                        a.corners.clear();
+                        a.velocity = {};
+                        a.remainingDistance = 0;
+                        a.status = "Idle";
+                        return 0;
+                    }
+                    a.destination = vectorArgument(L, 2);
+                    a.destinationSet = true;
+                    a.requested = a.pathPending = true;
+                    a.stopped = false;
+                    a.status = "Pending";
+                    return 0;
+                },
+                1);
+            return 1;
+        }
+        if (!std::strcmp(key, "velocity") || !std::strcmp(key, "destination")) {
+            const auto v = !std::strcmp(key, "velocity") ? a.velocity : a.destination;
+            lua_createtable(L, 0, 3);
+            lua_pushnumber(L, v.x);
+            lua_setfield(L, -2, "x");
+            lua_pushnumber(L, v.y);
+            lua_setfield(L, -2, "y");
+            lua_pushnumber(L, v.z);
+            lua_setfield(L, -2, "z");
+            return 1;
+        }
+        if (!std::strcmp(key, "hasPath")) {
+            lua_pushboolean(L, a.hasPath);
+            return 1;
+        }
+        if (!std::strcmp(key, "pathPending")) {
+            lua_pushboolean(L, a.pathPending);
+            return 1;
+        }
+        if (!std::strcmp(key, "stopped")) {
+            lua_pushboolean(L, a.stopped);
+            return 1;
+        }
+        if (!std::strcmp(key, "remainingDistance")) {
+            lua_pushnumber(L, a.remainingDistance);
+            return 1;
+        }
+        if (!std::strcmp(key, "status")) {
+            lua_pushstring(L, a.status.c_str());
+            return 1;
+        }
+        const auto j = Navigation::agentSettings(a);
+        if (!j.contains(key)) {
+            return luaL_error(L, "Unknown NavMeshAgent property");
+        }
+        if (j.at(key).is_boolean()) {
+            lua_pushboolean(L, j.at(key).get<bool>());
+        } else {
+            lua_pushnumber(L, j.at(key).get<float>());
         }
         return 1;
     }
@@ -1945,6 +2234,86 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 29 || c.type == 30) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
+            return luaL_error(L, "Component no longer exists");
+        }
+        const char* key = luaL_checkstring(L, 2);
+        if (c.type == 29) {
+            auto& o = c.object.world->get<NavMeshObstacle>(c.object.entity);
+            auto j = Navigation::obstacleSettings(o);
+            if (!j.contains(key)) {
+                return luaL_error(L, "Unknown obstacle property");
+            }
+            if (j.at(key).is_boolean()) {
+                luaL_checktype(L, 3, LUA_TBOOLEAN);
+                j[key] = bool(lua_toboolean(L, 3));
+            } else {
+                j[key] = Environment::vec(vectorArgument(L, 3));
+            }
+            try {
+                o = Navigation::parseObstacle(j);
+            } catch (const std::exception& e) {
+                return luaL_error(L, "%s", e.what());
+            }
+            return 0;
+        }
+        auto& a = c.object.world->get<Animator>(c.object.entity);
+        if (!std::strcmp(key, "enabled")) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            a.enabled = bool(lua_toboolean(L, 3));
+            return 0;
+        }
+        if (!std::strcmp(key, "sheet")) {
+            const std::string path = luaL_checkstring(L, 3);
+            if (!path.empty() && !Animators::asset(path)) {
+                return luaL_error(L, "Expected .animatorsheet");
+            }
+            a.sheet = path;
+            return 0;
+        }
+        return luaL_error(L, "Unknown or read-only Animator property");
+    }
+    if (c.type == 28) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 28)) {
+            return luaL_error(L, "NavMeshAgent no longer exists");
+        }
+        auto& a = c.object.world->get<NavMeshAgent>(c.object.entity);
+        const char* key = luaL_checkstring(L, 2);
+        if (!std::strcmp(key, "destination")) {
+            a.destination = vectorArgument(L, 3);
+            a.destinationSet = true;
+            a.requested = a.pathPending = true;
+            a.status = "Pending";
+            return 0;
+        }
+        if (!std::strcmp(key, "stopped")) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            a.stopped = bool(lua_toboolean(L, 3));
+            return 0;
+        }
+        auto j = Navigation::agentSettings(a);
+        if (!j.contains(key)) {
+            return luaL_error(L, "Unknown or read-only NavMeshAgent property");
+        }
+        if (j.at(key).is_boolean()) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            j[key] = bool(lua_toboolean(L, 3));
+        } else {
+            j[key] = number(L, 3);
+        }
+        try {
+            const auto next = Navigation::parseAgent(j);
+            a.enabled = next.enabled;
+            a.speed = next.speed;
+            a.stoppingDistance = next.stoppingDistance;
+            a.updateRotation = next.updateRotation;
+            a.angularSpeed = next.angularSpeed;
+        } catch (const std::exception& e) {
+            return luaL_error(L, "%s", e.what());
+        }
+        return 0;
+    }
     if (c.type == 27) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, 27)) {
             return luaL_error(L, "TPSCamera no longer exists");
@@ -3555,7 +3924,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 28; ++type) {
+                for (; type < 31; ++type) {
                     if (field.type == types[type]) {
                         break;
                     }

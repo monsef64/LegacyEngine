@@ -4,6 +4,7 @@
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
+#include "editor/animator_sheet_editor.hpp"
 #include "editor/asset_picker.hpp"
 #include "editor/asset_preview_ui.hpp"
 #include "editor/component_clipboard.hpp"
@@ -15,6 +16,7 @@
 #include "effects/laser_io.hpp"
 #include "effects/light_shafts_io.hpp"
 #include "materials/material_io.hpp"
+#include "models/mesh_lod.hpp"
 #include "models/model_asset.hpp"
 #include "project/layers.hpp"
 #include "scene/scene_camera.hpp"
@@ -280,6 +282,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
     const char* display = !std::strcmp(name, "BoneAttachment")  ? "Bone Attachment"
                           : !std::strcmp(name, "CloudSystem")   ? "Clouds"
                           : !std::strcmp(name, "CameraEffects") ? "Camera Effects"
+                          : !std::strcmp(name, "NavMeshAgent")  ? "Navmesh Agent"
                           : !std::strcmp(name, "TPSCamera")     ? "TPS"
                           : !std::strcmp(name, "FPSCamera")     ? "FPS"
                                                                 : name;
@@ -321,7 +324,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                       !world.has<River>(entity) && !world.has<Fog>(entity) &&
                       !world.has<CameraEffects>(entity) && !world.has<Terrain>(entity) &&
                       !world.has<LightShafts>(entity) && !world.has<CharacterController>(entity) &&
-                      !world.has<FPSCamera>(entity) && !world.has<TPSCamera>(entity);
+                      !world.has<FPSCamera>(entity) && !world.has<TPSCamera>(entity) &&
+                      !world.has<NavMeshAgent>(entity) && !world.has<NavMeshObstacle>(entity);
         }
         if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
             allowed = !world.has<CharacterController>(entity) && !world.has<Vehicle>(entity);
@@ -398,6 +402,15 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Water>) {
             type = 26;
         }
+        if constexpr (std::is_same_v<T, NavMeshObstacle>) {
+            type = 30;
+        }
+        if constexpr (std::is_same_v<T, Animator>) {
+            type = 31;
+        }
+        if constexpr (std::is_same_v<T, NavMeshAgent>) {
+            type = 29;
+        }
         if constexpr (std::is_same_v<T, TPSCamera>) {
             type = 28;
         }
@@ -431,22 +444,39 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if (const auto* payload = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
             const auto source = *static_cast<const EditorComponentPayload*>(payload->Data);
             int target = -1;
-            const char* names[]{"Transform",     "RigidBody",
-                                "Collider",      "MeshRenderer",
-                                "ObjectName",    "LegacyScripts",
-                                "Camera",        "AudioSource",
-                                "AudioListener", "DirectionalLight",
-                                "PointLight",    "SpotLight",
-                                "Skybox",        "CharacterController",
-                                "FPSCamera",     "Raycast",
-                                "Animation",     "ParticleSystem",
-                                "Laser",         "LightShafts",
-                                "Terrain",       "CameraEffects",
-                                "Fog",           "CloudSystem",
-                                "River",         "Vehicle",
-                                "Water",         "BoneAttachment",
-                                "TPSCamera"};
-            for (int i = 0; i < 29; ++i) {
+            const char* names[]{"Transform",
+                                "RigidBody",
+                                "Collider",
+                                "MeshRenderer",
+                                "ObjectName",
+                                "LegacyScripts",
+                                "Camera",
+                                "AudioSource",
+                                "AudioListener",
+                                "DirectionalLight",
+                                "PointLight",
+                                "SpotLight",
+                                "Skybox",
+                                "CharacterController",
+                                "FPSCamera",
+                                "Raycast",
+                                "Animation",
+                                "ParticleSystem",
+                                "Laser",
+                                "LightShafts",
+                                "Terrain",
+                                "CameraEffects",
+                                "Fog",
+                                "CloudSystem",
+                                "River",
+                                "Vehicle",
+                                "Water",
+                                "BoneAttachment",
+                                "TPSCamera",
+                                "NavMeshAgent",
+                                "NavMeshObstacle",
+                                "Animator"};
+            for (int i = 0; i < 32; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -487,6 +517,11 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_base_of_v<LightSettings, T>) {
             detachLightBake(world, world.get<T>(entity));
         }
+        if constexpr (std::is_same_v<T, Animator>) {
+            if (auto* a = world.tryGet<Animation>(entity)) {
+                a->request(AnimationAction::Stop);
+            }
+        }
         world.remove<T>(entity);
         return false;
     }
@@ -495,21 +530,38 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
 inline void drawScriptExports(World& world,
                               std::vector<ScriptField>& fields,
                               const AssetManager* assets = nullptr) {
-    const char* componentTypes[]{"Transform",     "RigidBody",
-                                 "Collider",      "MeshRenderer",
-                                 "ObjectName",    "LuaScript",
-                                 "Camera",        "AudioSource",
-                                 "AudioListener", "DirectionalLight",
-                                 "PointLight",    "SpotLight",
-                                 "Skybox",        "CharacterController",
-                                 "FPSCamera",     "Raycast",
-                                 "Animation",     "ParticleSystem",
-                                 "Laser",         "LightShafts",
-                                 "Terrain",       "CameraEffects",
-                                 "Fog",           "CloudSystem",
-                                 "River",         "Vehicle",
-                                 "Water",         "BoneAttachment",
-                                 "TPSCamera"};
+    const char* componentTypes[]{"Transform",
+                                 "RigidBody",
+                                 "Collider",
+                                 "MeshRenderer",
+                                 "ObjectName",
+                                 "LuaScript",
+                                 "Camera",
+                                 "AudioSource",
+                                 "AudioListener",
+                                 "DirectionalLight",
+                                 "PointLight",
+                                 "SpotLight",
+                                 "Skybox",
+                                 "CharacterController",
+                                 "FPSCamera",
+                                 "Raycast",
+                                 "Animation",
+                                 "ParticleSystem",
+                                 "Laser",
+                                 "LightShafts",
+                                 "Terrain",
+                                 "CameraEffects",
+                                 "Fog",
+                                 "CloudSystem",
+                                 "River",
+                                 "Vehicle",
+                                 "Water",
+                                 "BoneAttachment",
+                                 "TPSCamera",
+                                 "NavMeshAgent",
+                                 "NavMeshObstacle",
+                                 "Animator"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -568,7 +620,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 29 &&
+                        if (target.type >= 0 && target.type < 32 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -739,7 +791,11 @@ inline void drawInspector(World& world,
     }
     placeEditorPanel(rect);
     if (beginEditorPanel("Inspector", fixedPanelFlags)) {
-        if (assets && modelAsset(selectedAsset)) {
+        if (assets && Animators::asset(selectedAsset)) {
+            ImGui::BeginDisabled(editingGizmo || runtime);
+            drawAnimatorSheetInspector(*assets, selectedAsset);
+            ImGui::EndDisabled();
+        } else if (assets && modelAsset(selectedAsset)) {
             ImGui::BeginDisabled(editingGizmo || runtime);
             drawModelImportInspector(world, *assets, selectedAsset);
             ImGui::EndDisabled();
@@ -782,13 +838,13 @@ inline void drawInspector(World& world,
                 ImGui::EndCombo();
             }
             ImGui::Separator();
-            auto ordered =
-                world.has<InspectorOrder>(selected)
-                    ? world.get<InspectorOrder>(selected).types
-                    : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14,
-                                       15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28};
-            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14,
-                           15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}) {
+            auto ordered = world.has<InspectorOrder>(selected)
+                               ? world.get<InspectorOrder>(selected).types
+                               : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,
+                                                  5,  13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+                                                  23, 24, 25, 26, 27, 28, 29, 30, 31};
+            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15, 16,
+                           17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -857,6 +913,27 @@ inline void drawInspector(World& world,
                             }
                         }
                         ImGui::EndDragDropTarget();
+                    }
+                    if (assets && !r->model.empty()) {
+                        static std::string lodStatus;
+                        ImGui::BeginDisabled(runtime);
+                        ImGui::TextDisabled("LOD generation is opt-in (shared model asset).");
+                        if (ImGui::Button("Generate LODs (50% / 20%)")) {
+                            try {
+                                generateMeshLODs(*assets, r->model);
+                                lodStatus = "LODs generated. Switch distances: 20m / 50m.";
+                            } catch (const std::exception& e) {
+                                lodStatus = e.what();
+                            }
+                        }
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip(
+                                "Preserves seams/borders. Single unskinned meshes only. Switches at 20m / 50m; original retained for shadows, physics and lightmaps.");
+                        }
+                        ImGui::EndDisabled();
+                        if (!lodStatus.empty()) {
+                            ImGui::TextWrapped("%s", lodStatus.c_str());
+                        }
                     }
                     const char* names[]{"Cube", "Sphere", "Capsule", "Cone", "Plane"};
                     int current = -1;
@@ -1182,7 +1259,8 @@ inline void drawInspector(World& world,
                     EditorValues::Checkbox("Use gravity", &rb->useGravity);
                     EditorValues::Checkbox("Float on rivers", &rb->floatOnRivers);
                     if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("Opt-in buoyancy and water damping. Requires a dynamic body, gravity and a non-trigger primitive collider. Only active during simulation.");
+                        ImGui::SetTooltip(
+                            "Opt-in buoyancy and water damping. Requires a dynamic body, gravity and a non-trigger primitive collider. Only active during simulation.");
                     }
                     EditorValues::Checkbox("Kinematic", &rb->isKinematic);
                     EditorValues::DragFloat(
@@ -1622,34 +1700,101 @@ inline void drawInspector(World& world,
                     }
                     ImGui::PopID();
                 };
+                if (auto* o = world.tryGet<NavMeshObstacle>(selected);
+                    componentID == 30 && o &&
+                    componentHeader<NavMeshObstacle>(world, selected, "NavMeshObstacle")) {
+                    auto edited = *o;
+                    EditorValues::Checkbox("Enabled", &edited.enabled);
+                    editVector("Size", edited.size, .05f, .01f, 10000);
+                    editVector("Center", edited.center);
+                    try {
+                        *o = Navigation::parseObstacle(Navigation::obstacleSettings(edited));
+                    } catch (const std::exception&) {
+                    }
+                    ImGui::TextWrapped(
+                        "Dynamic box avoidance on baked navmesh. Rotation uses a conservative world AABB. Excluded from static navigation bake. Up to 32 obstacles per detour query; spawn agents outside obstacles.");
+                }
+                if (auto* a = world.tryGet<Animator>(selected);
+                    componentID == 31 && a &&
+                    componentHeader<Animator>(world, selected, "Animator")) {
+                    EditorValues::Checkbox("Enabled", &a->enabled);
+                    assetPicker("AnimatorSheet", a->sheet, assets, [](const std::string& p) {
+                        return Animators::asset(p);
+                    });
+                    if (ImGui::BeginDragDropTarget()) {
+                        if (const auto* p = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                            std::string path = static_cast<const char*>(p->Data);
+                            if (Animators::asset(path)) {
+                                a->sheet = path;
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                    ImGui::Text("State: %s", a->currentState.c_str());
+                    if (!a->error.empty()) {
+                        ImGui::TextWrapped("%s", a->error.c_str());
+                    }
+                    ImGui::TextWrapped(
+                        "Create an AnimatorSheet from Assets > Create, select it to edit states/parameters/transitions, and assign it here. Animator drives the Animation component; do not issue competing clip commands.");
+                }
+                if (auto* a = world.tryGet<NavMeshAgent>(selected);
+                    componentID == 29 && a &&
+                    componentHeader<NavMeshAgent>(world, selected, "NavMeshAgent")) {
+                    EditorValues::Checkbox("Enabled", &a->enabled);
+                    EditorValues::SliderFloat("Speed", &a->speed, 0, 100);
+                    EditorValues::Checkbox("Rotate toward movement", &a->updateRotation);
+                    EditorValues::SliderFloat("Angular speed", &a->angularSpeed, 0, 3600);
+                    EditorValues::SliderFloat("Stopping distance", &a->stoppingDistance, .01f, 10);
+                    ImGui::TextWrapped(
+                        "Bake in Windows > Navigation. Transform origin is the agent's feet. Script: agent:setDestination(x,y,z). NavMeshObstacle boxes support bounded dynamic detours.");
+                    ImGui::Text("Status: %s", a->status.c_str());
+                    if (runtime) {
+                        ImGui::Checkbox("Stopped", &a->stopped);
+                        editVector("Destination", a->destination);
+                        if (ImGui::Button("Navigate")) {
+                            a->requested = a->pathPending = true;
+                            a->stopped = false;
+                            a->status = "Pending";
+                        }
+                        ImGui::Text("Remaining: %.2f m", a->remainingDistance);
+                    }
+                }
                 if (auto* c = world.tryGet<TPSCamera>(selected);
                     componentID == 28 && c &&
                     componentHeader<TPSCamera>(world, selected, "TPSCamera")) {
                     EditorValues::Checkbox("Enabled", &c->enabled);
                     const auto* name = world.tryGet<ObjectName>(c->target);
-                    if (ImGui::BeginCombo("Follow target",
-                                          name ? name->value.c_str()
-                                               : "Parent (or select target)")) {
-                        if (ImGui::Selectable("Parent", c->target == Entity{})) {
+                    ImGui::Button(name ? name->value.c_str()
+                                       : "Drop follow target (empty = parent)");
+                    if (ImGui::BeginDragDropTarget()) {
+                        if (const auto* drop = ImGui::AcceptDragDropPayload("LEVEL_OBJECT")) {
+                            const Entity target = *static_cast<const Entity*>(drop->Data);
+                            bool valid = target != selected && world.has<Transform>(target);
+                            Entity ancestor = target;
+                            for (unsigned depth = 0; world.alive(ancestor) && depth < 128;
+                                 ++depth) {
+                                if (ancestor == selected) {
+                                    valid = false;
+                                }
+                                ancestor = getParent(world, ancestor);
+                            }
+                            if (valid) {
+                                c->target = target;
+                                c->initialized = false;
+                            }
+                        }
+                        ImGui::EndDragDropTarget();
+                    }
+                    if (c->target != Entity{}) {
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("Clear target")) {
                             c->target = {};
                             c->initialized = false;
                         }
-                        for (auto e : world.entities()) {
-                            if (e != selected && world.has<Transform>(e)) {
-                                const auto* n = world.tryGet<ObjectName>(e);
-                                ImGui::PushID(int(e.index));
-                                if (ImGui::Selectable(n ? n->value.c_str() : "Object",
-                                                      c->target == e)) {
-                                    c->target = e;
-                                    c->initialized = false;
-                                }
-                                ImGui::PopID();
-                            }
-                        }
-                        ImGui::EndCombo();
                     }
                     editVector("Target offset", c->offset);
                     EditorValues::Checkbox("Mouse orbit", &c->mouseLook);
+                    EditorValues::Checkbox("Lock mouse in Play", &c->lockMouse);
                     EditorValues::Checkbox("Collision avoidance", &c->collision);
                     EditorValues::DragFloat(
                         "Min distance", &c->minDistance, .05f, .05f, c->maxDistance);
@@ -2063,6 +2208,24 @@ inline void drawInspector(World& world,
                         world.add(selected, Water{});
                     }
                     ImGui::EndMenu();
+                }
+                if (!world.has<Animator>(selected) && ImGui::MenuItem("Animator")) {
+                    if (!world.has<Animation>(selected)) {
+                        world.add(selected, Animation{});
+                    }
+                    world.add(selected, Animator{});
+                }
+                if (!world.has<NavMeshObstacle>(selected) && ImGui::MenuItem("NavMeshObstacle")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, NavMeshObstacle{});
+                }
+                if (!world.has<NavMeshAgent>(selected) && ImGui::MenuItem("Navmesh Agent")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, NavMeshAgent{});
                 }
                 if (!world.has<Laser>(selected) && ImGui::MenuItem("Laser")) {
                     if (!world.has<Transform>(selected)) {

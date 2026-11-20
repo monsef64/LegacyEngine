@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/animator_sheet.hpp"
 #include "assets/assets.hpp"
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
@@ -1123,6 +1124,14 @@ class AssetBrowser {
                         if (ImGui::MenuItem("Material (.mat)")) {
                             try {
                                 selected = createMaterial(assets, currentFolder);
+                                listingUntil_ = 0;
+                            } catch (const std::exception& e) {
+                                assets.error = e.what();
+                            }
+                        }
+                        if (ImGui::MenuItem("AnimatorSheet (.animatorsheet)")) {
+                            try {
+                                selected = Animators::create(assets, currentFolder);
                                 listingUntil_ = 0;
                             } catch (const std::exception& e) {
                                 assets.error = e.what();

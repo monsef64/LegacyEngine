@@ -7,6 +7,7 @@
 #include <vector>
 namespace Terrains {
 inline bool openTools = false;
+inline constexpr int chunkCells = 16;
 inline unsigned nextRevision() {
     static std::atomic<unsigned> value{1};
     return value.fetch_add(1);
@@ -43,17 +44,17 @@ struct Data {
                                  {"", {.5f, .5f, .5f}, 8},
                                  {"", {.85f, .85f, .8f}, 8}}};
     unsigned identity = nextRevision(), revision = 0, shapeRevision = 0;
-    std::vector<unsigned> chunks = std::vector<unsigned>(16, 0);
-    std::vector<unsigned> heightChunks = std::vector<unsigned>(16, 0);
+    std::vector<unsigned> chunks = std::vector<unsigned>(64, 0);
+    std::vector<unsigned> heightChunks = std::vector<unsigned>(64, 0);
     struct Bounds {
         unsigned revision = ~0u;
-        Vec3 center;
+        Vec3 center, extent;
         float radius = 0;
     };
-    mutable std::vector<Bounds> bounds = std::vector<Bounds>(16);
+    mutable std::vector<Bounds> bounds = std::vector<Bounds>(64);
 };
 inline int chunkCount(const Data& d) {
-    return (d.resolution - 1) / 32;
+    return (d.resolution - 1) / chunkCells;
 }
 inline void invalidate(Data& d) {
     d.revision = nextRevision();
@@ -92,17 +93,20 @@ inline const Data::Bounds& chunkBounds(const Data& d, int x, int z) {
     auto& b = d.bounds[index];
     if (b.revision != d.heightChunks[index]) {
         float lo = 1e10f, hi = -1e10f;
-        for (int rz = z * 32; rz <= z * 32 + 32; ++rz) {
-            for (int rx = x * 32; rx <= x * 32 + 32; ++rx) {
+        for (int rz = z * chunkCells; rz <= z * chunkCells + chunkCells; ++rz) {
+            for (int rx = x * chunkCells; rx <= x * chunkCells + chunkCells; ++rx) {
                 float h = d.heights[rz * d.resolution + rx];
                 lo = std::min(lo, h);
                 hi = std::max(hi, h);
             }
         }
         float cell = d.size / (d.resolution - 1);
-        b.center = {(x * 32 + 16) * cell, (lo + hi) * .5f, (z * 32 + 16) * cell};
-        Vec3 extent{16 * cell, (hi - lo) * .5f + 8 * cell, 16 * cell};
-        b.radius = std::sqrt(dot(extent, extent));
+        const float drop = std::max(2.f, 8 * cell);
+        b.center = {(x * chunkCells + chunkCells / 2) * cell,
+                    (lo + hi - drop) * .5f,
+                    (z * chunkCells + chunkCells / 2) * cell};
+        b.extent = {chunkCells * .5f * cell, (hi - lo + drop) * .5f, chunkCells * .5f * cell};
+        b.radius = std::sqrt(dot(b.extent, b.extent));
         b.revision = d.heightChunks[index];
     }
     return b;

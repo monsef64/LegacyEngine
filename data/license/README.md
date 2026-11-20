@@ -10,6 +10,8 @@ license remains in the repository/package root `LICENSE`.
 | SDL | release-3.4.20 (CMake default) | SDL3.txt |
 | Jolt Physics | v5.3.0 | Jolt.txt |
 | Assimp | v5.4.3 | assimp.txt |
+| meshoptimizer | v0.22 | meshoptimizer.txt |
+| Recast Navigation / Detour | v1.6.0 | RecastNavigation.txt |
 | Dear ImGui | v1.92.5-docking | DearImGui.txt |
 | ImGuizmo | 105e4fde45e4e74aae8973d98750820ef7aca7e2 | ImGuizmo.txt |
 | Lua | v5.4.8 | Lua.txt |

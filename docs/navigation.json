@@ -24,6 +24,14 @@
     "title": "TPS camera and environment lighting"
   },
   {
+    "file": "lod-and-occlusion.md",
+    "title": "Mesh LOD and Occlusion"
+  },
+  {
+    "file": "navigation.md",
+    "title": "Terrain chunks and Navigation"
+  },
+  {
     "file": "lighting.md",
     "title": "Dynamic lighting and shadows"
   },
