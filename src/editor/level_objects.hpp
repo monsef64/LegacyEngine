@@ -111,9 +111,7 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(FPSCamera{});
     component(TPSCamera{});
     component(NavMeshObstacle{});
-    if (const auto* a = sourceWorld.tryGet<Animator>(source)) {
-        world.add(copy, Animators::parse(Animators::settings(*a)));
-    }
+
     if (const auto* a = sourceWorld.tryGet<NavMeshAgent>(source)) {
         world.add(copy, Navigation::parseAgent(Navigation::agentSettings(*a)));
     }

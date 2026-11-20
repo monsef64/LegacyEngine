@@ -187,8 +187,6 @@ inline std::string sceneSignature(World& world) {
         component(e, NavMeshObstacle{}, [&](const NavMeshObstacle& o) {
             result += Navigation::obstacleSettings(o).dump();
         });
-        component(
-            e, Animator{}, [&](const Animator& a) { result += Animators::settings(a).dump(); });
         component(e, NavMeshAgent{}, [&](const NavMeshAgent& a) {
             result += Navigation::agentSettings(a).dump();
         });

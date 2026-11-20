@@ -121,8 +121,8 @@ vehicle. Keep the physics root at unit scale and model dimensions consistent.
 
 Terrain retains its sculpted heightfield, hills, materials and surface collision.
 Outer render skirts are removed so exposed boundaries are open, plane-like edges,
-not tall cube walls. Internal LOD seam skirts remain to hide cracks between chunks;
-they are not collision geometry. This does not flatten existing terrain.
+not tall cube walls. Internal seam skirts are also removed; chunks now use matching
+surface detail to avoid cracks. This does not flatten existing terrain.
 
 Scene clicks now also intersect visible mesh triangles and terrain surfaces,
 without requiring an extra Collider just to select them. Clicking visible child

@@ -6,7 +6,7 @@ struct Vertex {
     Vec3 position, normal;
     std::array<float, 4> weights;
 };
-inline std::vector<Vertex> chunk(const Data& d, int cx, int cz, int step, bool skirts = true) {
+inline std::vector<Vertex> chunk(const Data& d, int cx, int cz, int step) {
     std::vector<Vertex> out;
     auto vertex = [&](int x, int z) {
         return Vertex{point(d, x, z), normal(d, x, z), d.weights[z * d.resolution + x]};
@@ -23,38 +23,6 @@ inline std::vector<Vertex> chunk(const Data& d, int cx, int cz, int step, bool s
                  e = vertex(x + step, z + step);
             tri(a, c, b);
             tri(b, c, e);
-        }
-    }
-    if (skirts) {
-        float drop = std::max(2.f, d.size / (d.resolution - 1) * 8);
-        for (int edge = 0; edge < 4; ++edge) {
-            if ((edge == 0 && z0 == 0) || (edge == 1 && x0 + chunkCells == d.resolution - 1) ||
-                (edge == 2 && z0 + chunkCells == d.resolution - 1) || (edge == 3 && x0 == 0)) {
-                continue;
-            }
-            for (int i = 0; i < chunkCells; i += step) {
-                int x = x0 + (edge == 0   ? i
-                              : edge == 1 ? chunkCells
-                              : edge == 2 ? chunkCells - i
-                                          : 0),
-                    z = z0 + (edge == 0   ? 0
-                              : edge == 1 ? i
-                              : edge == 2 ? chunkCells
-                                          : chunkCells - i);
-                int nx = x0 + (edge == 0   ? i + step
-                               : edge == 1 ? chunkCells
-                               : edge == 2 ? chunkCells - i - step
-                                           : 0),
-                    nz = z0 + (edge == 0   ? 0
-                               : edge == 1 ? i + step
-                               : edge == 2 ? chunkCells
-                                           : chunkCells - i - step);
-                auto a = vertex(x, z), b = vertex(nx, nz), c = a, e = b;
-                c.position.y -= drop;
-                e.position.y -= drop;
-                tri(a, b, c);
-                tri(b, e, c);
-            }
         }
     }
     return out;

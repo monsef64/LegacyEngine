@@ -101,11 +101,11 @@ inline const Data::Bounds& chunkBounds(const Data& d, int x, int z) {
             }
         }
         float cell = d.size / (d.resolution - 1);
-        const float drop = std::max(2.f, 8 * cell);
+        // The terrain is a heightfield surface, with no downward walls.
         b.center = {(x * chunkCells + chunkCells / 2) * cell,
-                    (lo + hi - drop) * .5f,
+                    (lo + hi) * .5f,
                     (z * chunkCells + chunkCells / 2) * cell};
-        b.extent = {chunkCells * .5f * cell, (hi - lo + drop) * .5f, chunkCells * .5f * cell};
+        b.extent = {chunkCells * .5f * cell, (hi - lo) * .5f, chunkCells * .5f * cell};
         b.radius = std::sqrt(dot(b.extent, b.extent));
         b.revision = d.heightChunks[index];
     }

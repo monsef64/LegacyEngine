@@ -94,3 +94,16 @@ No automated tests are required for this workflow.
   and reload: stale data must bypass culling, not retain invisible occluders.
 - Verify transparent/animated/water/terrain/physics objects remain unaffected,
   original shadows remain, and Clear bake restores all render candidates.
+
+## Visualizing a selected camera
+
+Open **Windows > Occlusion Culling**, enable **Visualize selected camera**, and
+select a perspective Camera in the hierarchy. The Scene view shows that camera's
+frustum and a debug overlay: cyan usable baked triangles, red bounds for occluded
+static meshes, green bounds for retained static meshes in the camera frustum.
+The window reports the selected-camera culling counts separately from the last
+rendered view. The overlay does not change the camera, bake or game visibility.
+Disabled/stale bakes and orthographic cameras bypass the occlusion overlay.
+The existing selected-camera preview continues to render with normal baked culling.
+Navigation and Occlusion Culling windows now start at a bounded usable height;
+resize them as needed, with content scrolling inside the windows on smaller screens.

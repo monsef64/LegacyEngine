@@ -246,6 +246,7 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"TPSCamera", {{"settings", 'j'}, {"target", 'i'}}},
     {"NavMeshAgent", {{"settings", 'j'}}},
     {"NavMeshObstacle", {{"settings", 'j'}}},
+    // Reserved legacy slot: consumed on load only; no Animator runtime/editor remains.
     {"Animator", {{"settings", 'j'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {

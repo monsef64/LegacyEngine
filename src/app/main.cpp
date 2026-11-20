@@ -12,7 +12,6 @@
 //   * right-handed coordinates (the OpenGL convention)
 
 #include "animation/animation_system.hpp"
-#include "animation/animator_system.hpp"
 #include "animation/bone_attachment_system.hpp"
 #include "audio/audio_system.hpp"
 #include "core/components.hpp"
@@ -261,7 +260,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     ScriptComponents componentScripts;
     AudioSystem audio;
     AnimationSystem animations;
-    AnimatorSystem animators;
     AnimationWindow animationWindow;
     LightmappingWindow lightmappingWindow;
     OcclusionWindow occlusionWindow;
@@ -2316,7 +2314,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
             scripts.update(std::min(seconds, 0.25f));
             componentScripts.update(std::min(seconds, 0.25f));
-            animators.update(world, browser.assets, std::min(seconds, .25f));
             animations.update(world, browser.assets, std::min(seconds, .25f));
             const auto animationEvents = animations.events;
             for (const auto& event : animationEvents) {
@@ -2325,7 +2322,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         } else if (!playMode.active()) {
             animations.clear();
-            animators.clear();
         }
         profiler.checkpoint(ProfilePart::Scripts);
         LuaConsole::dispatchEvents();
@@ -2517,6 +2513,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                               sceneSurface.height,
                               camera.position());
                 renderer.drawEditorGrid(browser.settings.grid, viewProjection);
+                if (occlusionWindow.visible && occlusionWindow.visualizeSelectedCamera) {
+                    occlusionWindow.previewValid =
+                        renderer.drawOcclusionCamera(world,
+                                                     selectedEntity,
+                                                     viewProjection,
+                                                     occlusionWindow.previewCulled,
+                                                     occlusionWindow.previewTested);
+                }
                 if (navigationWindow.showMesh && navigationWindow.system.valid) {
                     renderer.drawNavigation(navigationWindow.system.debugMesh, viewProjection);
                 }

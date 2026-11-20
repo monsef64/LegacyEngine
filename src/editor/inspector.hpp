@@ -4,7 +4,6 @@
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
-#include "editor/animator_sheet_editor.hpp"
 #include "editor/asset_picker.hpp"
 #include "editor/asset_preview_ui.hpp"
 #include "editor/component_clipboard.hpp"
@@ -405,9 +404,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, NavMeshObstacle>) {
             type = 30;
         }
-        if constexpr (std::is_same_v<T, Animator>) {
-            type = 31;
-        }
+
         if constexpr (std::is_same_v<T, NavMeshAgent>) {
             type = 29;
         }
@@ -474,9 +471,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "BoneAttachment",
                                 "TPSCamera",
                                 "NavMeshAgent",
-                                "NavMeshObstacle",
-                                "Animator"};
-            for (int i = 0; i < 32; ++i) {
+                                "NavMeshObstacle"};
+            for (int i = 0; i < 31; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -517,11 +513,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_base_of_v<LightSettings, T>) {
             detachLightBake(world, world.get<T>(entity));
         }
-        if constexpr (std::is_same_v<T, Animator>) {
-            if (auto* a = world.tryGet<Animation>(entity)) {
-                a->request(AnimationAction::Stop);
-            }
-        }
+
         world.remove<T>(entity);
         return false;
     }
@@ -560,8 +552,7 @@ inline void drawScriptExports(World& world,
                                  "BoneAttachment",
                                  "TPSCamera",
                                  "NavMeshAgent",
-                                 "NavMeshObstacle",
-                                 "Animator"};
+                                 "NavMeshObstacle"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -620,7 +611,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 32 &&
+                        if (target.type >= 0 && target.type < 31 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -791,11 +782,7 @@ inline void drawInspector(World& world,
     }
     placeEditorPanel(rect);
     if (beginEditorPanel("Inspector", fixedPanelFlags)) {
-        if (assets && Animators::asset(selectedAsset)) {
-            ImGui::BeginDisabled(editingGizmo || runtime);
-            drawAnimatorSheetInspector(*assets, selectedAsset);
-            ImGui::EndDisabled();
-        } else if (assets && modelAsset(selectedAsset)) {
+        if (assets && modelAsset(selectedAsset)) {
             ImGui::BeginDisabled(editingGizmo || runtime);
             drawModelImportInspector(world, *assets, selectedAsset);
             ImGui::EndDisabled();
@@ -838,13 +825,13 @@ inline void drawInspector(World& world,
                 ImGui::EndCombo();
             }
             ImGui::Separator();
-            auto ordered = world.has<InspectorOrder>(selected)
-                               ? world.get<InspectorOrder>(selected).types
-                               : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,
-                                                  5,  13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                                                  23, 24, 25, 26, 27, 28, 29, 30, 31};
-            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15, 16,
-                           17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}) {
+            auto ordered =
+                world.has<InspectorOrder>(selected)
+                    ? world.get<InspectorOrder>(selected).types
+                    : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15,
+                                       16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30};
+            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15,
+                           16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
@@ -1714,29 +1701,7 @@ inline void drawInspector(World& world,
                     ImGui::TextWrapped(
                         "Dynamic box avoidance on baked navmesh. Rotation uses a conservative world AABB. Excluded from static navigation bake. Up to 32 obstacles per detour query; spawn agents outside obstacles.");
                 }
-                if (auto* a = world.tryGet<Animator>(selected);
-                    componentID == 31 && a &&
-                    componentHeader<Animator>(world, selected, "Animator")) {
-                    EditorValues::Checkbox("Enabled", &a->enabled);
-                    assetPicker("AnimatorSheet", a->sheet, assets, [](const std::string& p) {
-                        return Animators::asset(p);
-                    });
-                    if (ImGui::BeginDragDropTarget()) {
-                        if (const auto* p = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                            std::string path = static_cast<const char*>(p->Data);
-                            if (Animators::asset(path)) {
-                                a->sheet = path;
-                            }
-                        }
-                        ImGui::EndDragDropTarget();
-                    }
-                    ImGui::Text("State: %s", a->currentState.c_str());
-                    if (!a->error.empty()) {
-                        ImGui::TextWrapped("%s", a->error.c_str());
-                    }
-                    ImGui::TextWrapped(
-                        "Create an AnimatorSheet from Assets > Create, select it to edit states/parameters/transitions, and assign it here. Animator drives the Animation component; do not issue competing clip commands.");
-                }
+
                 if (auto* a = world.tryGet<NavMeshAgent>(selected);
                     componentID == 29 && a &&
                     componentHeader<NavMeshAgent>(world, selected, "NavMeshAgent")) {
@@ -2209,12 +2174,7 @@ inline void drawInspector(World& world,
                     }
                     ImGui::EndMenu();
                 }
-                if (!world.has<Animator>(selected) && ImGui::MenuItem("Animator")) {
-                    if (!world.has<Animation>(selected)) {
-                        world.add(selected, Animation{});
-                    }
-                    world.add(selected, Animator{});
-                }
+
                 if (!world.has<NavMeshObstacle>(selected) && ImGui::MenuItem("NavMeshObstacle")) {
                     if (!world.has<Transform>(selected)) {
                         world.add(selected, Transform{});

@@ -116,8 +116,7 @@ inline std::string encodeLegacy(World& world,
             (world.has<BoneAttachment>(e) ? 2147483648u : 0u) |
             (world.has<TPSCamera>(e) ? 4294967296ull : 0ull) |
             (world.has<NavMeshAgent>(e) ? 8589934592ull : 0ull) |
-            (world.has<NavMeshObstacle>(e) ? 17179869184ull : 0ull) |
-            (world.has<Animator>(e) ? 34359738368ull : 0ull);
+            (world.has<NavMeshObstacle>(e) ? 17179869184ull : 0ull);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -352,9 +351,7 @@ inline std::string encodeLegacy(World& world,
         if (const auto* o = world.tryGet<NavMeshObstacle>(e)) {
             out << std::quoted(Navigation::obstacleSettings(*o).dump()) << ' ';
         }
-        if (const auto* a = world.tryGet<Animator>(e)) {
-            out << std::quoted(Animators::settings(*a).dump()) << ' ';
-        }
+
         out << '\n';
     }
     auto text = out.str();
@@ -406,8 +403,13 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> std::quoted(field.name) >> std::quoted(field.type) >> std::quoted(field.text);
             field.number = number(in);
             in >> field.boolean >> target;
-            require(exportName(field.name) && exportType(field.type) && field.text.size() <= 4096 &&
-                    field.text.find('\0') == std::string::npos && target >= -1 && target < count);
+            require(exportName(field.name) &&
+                    (exportType(field.type) || field.type == "Animator") &&
+                    field.text.size() <= 4096 && field.text.find('\0') == std::string::npos &&
+                    target >= -1 && target < count);
+            if (field.type == "Animator") {
+                continue; // drop removed legacy component references
+            }
             if (exportAssetType(field.type)) {
                 require(!std::filesystem::path(field.text).is_absolute());
                 for (const auto& part : std::filesystem::path(field.text)) {
@@ -750,6 +752,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                         std::find(seen.begin(), seen.end(), id) == seen.end());
                 seen.push_back(id);
             }
+            types.erase(std::remove(types.begin(), types.end(), 31),
+                        types.end()); // removed Animator inspector slot
             result.world.add(e, InspectorOrder{types});
         }
         if (mask & 524288) {
@@ -871,7 +875,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             require(text.size() <= 16384);
-            result.world.add(e, Animators::parse(parseJson(text)));
+            // Animator was removed. Consume legacy settings without recreating the component.
+            (void)parseJson(text);
         }
         require(bool(in));
     }

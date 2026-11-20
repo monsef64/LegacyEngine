@@ -174,6 +174,9 @@ class Renderer {
                          const AudioSource& source,
                          const Mat4& viewProjection);
 
+    // Debug-only selected-camera culling overlay; never changes render visibility.
+    bool drawOcclusionCamera(
+        World& world, Entity camera, const Mat4& sceneVP, std::size_t& culled, std::size_t& tested);
     void drawNavigation(const MeshData& lines, const Mat4& vp) {
         drawWire(lines, Transform{}, vp, {.1f, .9f, .75f}, .8f);
     }
