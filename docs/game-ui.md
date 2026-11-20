@@ -82,7 +82,12 @@ on MinGW-w64. Examples/tests/Lua bindings are disabled. The engine uses its exis
 GL loader and SDL3 window; RmlUi does not create a graphics context. A small
 build-time adaptation directs upstream GL3's final composition to the offscreen
 Game framebuffer rather than framebuffer zero. Original upstream license headers
-are preserved in that generated backend source.
+are preserved in that generated backend source. The pinned RmlUi hash-map header
+also receives a missing `<cstdint>` include at configure time, so MinGW builds do
+not depend on transitive integer definitions or RmlUi's precompiled header. This
+fixes the misleading `robin_hood.h: Unsupported bitness` error and subsequent
+missing `uint64_t`/`UINT64_C` errors; no pointer-width override is needed. Re-run
+CMake configuration before rebuilding an existing build directory.
 
 Manual checks (no automated tests):
 
