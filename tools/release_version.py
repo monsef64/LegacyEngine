@@ -41,6 +41,10 @@ elif publish and event == "workflow_dispatch" and requested:
     tag = "v" + version
 else:
     version = validate(Path("VERSION").read_text().strip()) + "-dev." + sha[:12]
+    # Each successful main commit gets an immutable development prerelease.
+    # PRs and feature branches never receive a publishing tag.
+    if event == "push" and ref_type == "branch" and ref_name == "main":
+        tag = "v" + version
 
 if tag:
     # Prevent reruns/manual dispatches from attaching a different binary to a tag.

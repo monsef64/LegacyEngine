@@ -1,6 +1,6 @@
 name: Release
 
-# Push a SemVer tag, or dispatch with a version, to publish a Linux release.
+# Publish only after every platform/package succeeds; main pushes are prereleases.
 # Manual runs publish by default; uncheck Publish GitHub Release for build-only artifacts.
 on:
   push:
@@ -16,7 +16,8 @@ on:
       - 'docs/**'
       - 'README.md'
       - 'scripts/**'
-      - 'extensions/legacyscript/**'
+      - 'extensions/**'
+      - '.github/workflows/windows.yml'
       - '.github/workflows/release.yml'
   pull_request:
     paths:
@@ -29,7 +30,8 @@ on:
       - 'docs/**'
       - 'README.md'
       - 'scripts/**'
-      - 'extensions/legacyscript/**'
+      - 'extensions/**'
+      - '.github/workflows/windows.yml'
       - '.github/workflows/release.yml'
   workflow_dispatch:
     inputs:
@@ -73,8 +75,6 @@ jobs:
         run: python3 tools/release_version.py
 
   linux:
-    permissions:
-      contents: write # Create the tag/release and upload packages.
     needs: version
     env:
       ENGINE_VERSION: ${{ needs.version.outputs.version }}
@@ -184,7 +184,7 @@ jobs:
           "$RUNNER_TEMP/docs-tools/bin/python" -m zipfile -c ../legacyengine-docs.zip *.html style.css screenshot.png LICENSE
 
       - name: Upload offline HTML documentation
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: legacyengine-docs
           path: build/docs/
@@ -213,51 +213,16 @@ jobs:
           echo "PACKAGE=$package" >> "$GITHUB_ENV"
 
       # Not zipped: what the run offers for download is the .tar.gz itself.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         with:
+          name: linux-package
           path: ${{ env.PACKAGE }}.tar.gz
-          archive: false
           if-no-files-found: error
 
-      - name: Publish the release
-        if: needs.version.outputs.tag != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PRERELEASE: ${{ needs.version.outputs.prerelease }}
-        run: |
-          set -euo pipefail
-          # Recheck the tag after the build, including dispatch-created tags.
-          tag_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null || true)
-          if [ -n "$tag_sha" ]; then
-            # Resolve annotated tags as well as lightweight tags.
-            remote_commit=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq '.sha')
-            test "$remote_commit" = "$GITHUB_SHA" || { echo 'Tag points to another commit'; exit 1; }
-          fi
-          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            # The workflow was run again for the same tag: replace the file.
-            gh release upload "$RELEASE_TAG" "$PACKAGE.tar.gz" build/legacyengine-docs.zip --clobber
-          else
-            flags=()
-            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
-            gh release create "$RELEASE_TAG" "$PACKAGE.tar.gz" build/legacyengine-docs.zip \
-              --target "$GITHUB_SHA" --generate-notes --title "LegacyEngine $RELEASE_TAG" "${flags[@]}"
-          fi
-          release_url=$(gh release view "$RELEASE_TAG" --json url --jq '.url')
-          {
-            echo "## GitHub Release published"
-            echo "[$RELEASE_TAG]($release_url)"
-            echo ""
-            echo "Find it on: https://github.com/$GH_REPO/releases"
-            echo ""
-            echo "Linux archive and documentation are uploaded. The dependent VSIX job attaches the extension next."
-          } >> "$GITHUB_STEP_SUMMARY"
 
   vsix:
-    permissions:
-      contents: write # Attach the VSIX to the release.
     name: Build LegacyScript VSIX
-    needs: [version, linux]
+    needs: version
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     defaults:
@@ -277,16 +242,81 @@ jobs:
       - name: Generate API and package VSIX
         run: npm run generate && npm run package
       - name: Upload separate installable VSIX file
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: legacyscript-vsix
           path: extensions/legacyscript/legacyscript.vsix
-          archive: false
           if-no-files-found: error
-      - name: Attach VSIX to engine tag release
-        if: needs.version.outputs.tag != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ needs.version.outputs.tag }}
-        run: gh release upload "$RELEASE_TAG" legacyscript.vsix --clobber
+
+      - name: Package Sublime Text support
+        working-directory: .
+        run: |
+          python3 -m zipfile -c LegacyScript-SublimeText4.zip extensions/sublime-legacyscript
+      - uses: actions/upload-artifact@v4
+        with:
+          name: legacyscript-sublime
+          path: LegacyScript-SublimeText4.zip
+          if-no-files-found: error
+
+  windows:
+    name: Windows packages
+    needs: version
+    uses: ./.github/workflows/windows.yml
+    with:
+      engine_version: ${{ needs.version.outputs.version }}
+
+  publish:
+    name: Publish complete GitHub Release
+    needs: [version, linux, windows, vsix]
+    if: needs.version.outputs.tag != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ needs.version.outputs.tag }}
+      PRERELEASE: ${{ needs.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir release-assets
+          # Documentation is uploaded as a directory; recreate its standalone zip.
+          python3 -m zipfile -c release-assets/legacyengine-docs.zip release-artifacts/legacyengine-docs/*
+          find release-artifacts -type f \( -name '*.tar.gz' -o -name 'LegacyEngine-*.zip' -o -name '*.vsix' -o -name 'LegacyScript-SublimeText4.zip' \) -exec cp {} release-assets/ \;
+          test -s "release-assets/LegacyEngine-${{ needs.version.outputs.version }}-linux-x86_64.tar.gz"
+          test -s "release-assets/LegacyEngine-${{ needs.version.outputs.version }}-Windows-x64.zip"
+          test -s "release-assets/LegacyEngine-${{ needs.version.outputs.version }}-Windows7-x64-experimental.zip"
+          test -s release-assets/legacyscript.vsix
+          test -s release-assets/LegacyScript-SublimeText4.zip
+          (cd release-assets && sha256sum * > SHA256SUMS.txt)
+      - name: Publish after all builds succeeded
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Never attach another commit's binaries to an existing tag.
+          if gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" > /dev/null 2>&1; then
+            remote_commit=$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq '.sha')
+            test "$remote_commit" = "$GITHUB_SHA" || { echo 'Tag points to another commit'; exit 1; }
+          fi
+          if ! gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            flags=()
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease --latest=false); fi
+            # Keep it off the public Releases page until every upload completes.
+            gh release create "$RELEASE_TAG" --draft --target "$GITHUB_SHA" \
+              --generate-notes --title "LegacyEngine $RELEASE_TAG" "${flags[@]}"
+          fi
+          gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease --latest=false); fi
+          gh release edit "$RELEASE_TAG" --draft=false "${flags[@]}"
+          release_url=$(gh release view "$RELEASE_TAG" --json url --jq '.url')
+          echo "## Complete release published: [$RELEASE_TAG]($release_url)" >> "$GITHUB_STEP_SUMMARY"
