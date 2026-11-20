@@ -4,7 +4,7 @@
 #include "project/json_io.hpp"
 
 struct TPSCamera {
-    bool enabled = true, mouseLook = true, collision = true;
+    bool enabled = true, mouseLook = true, collision = true, lockMouse = false;
     Entity target;
     Vec3 offset{0, 1.5f, 0};
     float distance = 5, minDistance = .5f, maxDistance = 15;
@@ -18,6 +18,7 @@ namespace TPSCameras {
 inline Json settings(const TPSCamera& c) {
     return {{"enabled", c.enabled},
             {"mouseLook", c.mouseLook},
+            {"lockMouse", c.lockMouse},
             {"collision", c.collision},
             {"offset", {c.offset.x, c.offset.y, c.offset.z}},
             {"distance", c.distance},
@@ -37,6 +38,7 @@ inline TPSCamera parse(const Json& j) {
     TPSCamera c;
     c.enabled = j.value("enabled", true);
     c.mouseLook = j.value("mouseLook", true);
+    c.lockMouse = j.value("lockMouse", false);
     c.collision = j.value("collision", true);
     if (j.contains("offset")) {
         auto v = j.at("offset");

@@ -7,16 +7,16 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'
 ---@class GameObject
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
----@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
----@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
----@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
----@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera
+---@field getComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onAnimationFinish fun()|nil
 ---@field onAnimationStart fun()|nil
@@ -94,7 +94,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -939,6 +939,7 @@ BoneAttachment = nil
 ---@field target GameObject|nil Target root; nil follows the Transform parent
 ---@field offset Vec3 World-space look-at offset; assign a complete vector
 ---@field mouseLook boolean Right mouse or locked cursor orbits during Play
+---@field lockMouse boolean Default false; request cursor lock in focused Play; false releases TPS-owned lock
 ---@field collision boolean Sphere-sweep obstruction avoidance (requires colliders)
 ---@field distance number Desired distance, within minDistance..maxDistance
 ---@field minDistance number At least 0.05 metres
@@ -961,3 +962,50 @@ TPSCamera = nil
 
 ---@class Vehicle
 ---@field stabilityAssist number 0..1 speed-dependent safe steering, default 1
+
+---@class NavMeshAgent
+---@field enabled boolean
+---@field speed number Movement speed, 0..100 metres/second
+---@field stoppingDistance number 0.01..10 metres
+---@field stopped boolean Pause movement without clearing the route
+---@field destination Vec3 Assign a complete world-space destination, or call setDestination
+---@field velocity Vec3 Read-only actual last-frame velocity
+---@field hasPath boolean Read-only; true while following a complete reachable path
+---@field pathPending boolean Read-only; destination request awaits the next Play update
+---@field remainingDistance number Read-only remaining path distance
+---@field status string Read-only navigation status
+---@field setDestination fun(self:NavMeshAgent, x:number|Vec3, y?:number, z?:number) Queue a path request; resumes movement
+---@field resetPath fun(self:NavMeshAgent) Clear destination request, route and velocity
+NavMeshAgent = nil
+
+---Construct a vector accepted by position/rotation/destination setters.
+---@param x? number
+---@param y? number
+---@param z? number
+---@return Vec3
+function Vector3(x,y,z) end
+
+---@class NavMeshAgent
+---@field updateRotation boolean Automatically face the navigation path; default true
+---@field angularSpeed number Degrees per second, 0..3600
+
+---@class NavMeshObstacle
+---@field enabled boolean
+---@field size Vec3 Local box dimensions, positive; assign a whole vector
+---@field center Vec3 Local box center; assign a whole vector
+NavMeshObstacle = nil
+
+---@class Animator
+---@field enabled boolean
+---@field sheet string Project-relative .animatorsheet asset
+---@field currentState string Read-only
+---@field error string Read-only
+---@field setFloat fun(self:Animator, name:string, value:number)
+---@field setBool fun(self:Animator, name:string, value:boolean)
+---@field setTrigger fun(self:Animator, name:string)
+---@field resetTrigger fun(self:Animator, name:string)
+---@field getFloat fun(self:Animator, name:string):number
+---@field getBool fun(self:Animator, name:string):boolean
+---@field play fun(self:Animator, state:string)
+---@field crossFade fun(self:Animator, state:string, seconds?:number)
+Animator = nil

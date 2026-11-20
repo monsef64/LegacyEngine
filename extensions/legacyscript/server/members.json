@@ -10,12 +10,12 @@
   "GameObject": {
     "name": "string",
     "parent": "GameObject|nil",
-    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
-    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
-    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
-    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
-    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|nil",
-    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera",
+    "getComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil",
+    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil",
+    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil",
+    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil",
+    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|nil",
+    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent",
     "removeComponent": "fun(componentType:ComponentType)",
     "onAnimationFinish": "fun()|nil",
     "onAnimationStart": "fun()|nil",
@@ -566,6 +566,7 @@
     "target": "GameObject|nil Target root; nil follows the Transform parent",
     "offset": "Vec3 World-space look-at offset; assign a complete vector",
     "mouseLook": "boolean Right mouse or locked cursor orbits during Play",
+    "lockMouse": "boolean Default false; request cursor lock in focused Play; false releases TPS-owned lock",
     "collision": "boolean Sphere-sweep obstruction avoidance (requires colliders)",
     "distance": "number Desired distance, within minDistance..maxDistance",
     "minDistance": "number At least 0.05 metres",
@@ -580,5 +581,40 @@
     "shoulder": "number -10..10 metres, local screen-right",
     "collisionRadius": "number 0.02..5 metres; near-plane coverage can enlarge this",
     "resolvedDistance": "number Read-only obstruction-adjusted distance"
+  },
+  "NavMeshAgent": {
+    "enabled": "boolean",
+    "speed": "number Movement speed, 0..100 metres/second",
+    "stoppingDistance": "number 0.01..10 metres",
+    "stopped": "boolean Pause movement without clearing the route",
+    "destination": "Vec3 Assign a complete world-space destination, or call setDestination",
+    "velocity": "Vec3 Read-only actual last-frame velocity",
+    "hasPath": "boolean Read-only; true while following a complete reachable path",
+    "pathPending": "boolean Read-only; destination request awaits the next Play update",
+    "remainingDistance": "number Read-only remaining path distance",
+    "status": "string Read-only navigation status",
+    "setDestination": "fun(self:NavMeshAgent, x:number|Vec3, y?:number, z?:number) Queue a path request; resumes movement",
+    "resetPath": "fun(self:NavMeshAgent) Clear destination request, route and velocity",
+    "updateRotation": "boolean Automatically face the navigation path; default true",
+    "angularSpeed": "number Degrees per second, 0..3600"
+  },
+  "NavMeshObstacle": {
+    "enabled": "boolean",
+    "size": "Vec3 Local box dimensions, positive; assign a whole vector",
+    "center": "Vec3 Local box center; assign a whole vector"
+  },
+  "Animator": {
+    "enabled": "boolean",
+    "sheet": "string Project-relative .animatorsheet asset",
+    "currentState": "string Read-only",
+    "error": "string Read-only",
+    "setFloat": "fun(self:Animator, name:string, value:number)",
+    "setBool": "fun(self:Animator, name:string, value:boolean)",
+    "setTrigger": "fun(self:Animator, name:string)",
+    "resetTrigger": "fun(self:Animator, name:string)",
+    "getFloat": "fun(self:Animator, name:string):number",
+    "getBool": "fun(self:Animator, name:string):boolean",
+    "play": "fun(self:Animator, state:string)",
+    "crossFade": "fun(self:Animator, state:string, seconds?:number)"
   }
 }

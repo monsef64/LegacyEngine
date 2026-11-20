@@ -16,9 +16,9 @@ inline std::vector<Vertex> chunk(const Data& d, int cx, int cz, int step, bool s
         out.push_back(b);
         out.push_back(c);
     };
-    const int x0 = cx * 32, z0 = cz * 32;
-    for (int z = z0; z < z0 + 32; z += step) {
-        for (int x = x0; x < x0 + 32; x += step) {
+    const int x0 = cx * chunkCells, z0 = cz * chunkCells;
+    for (int z = z0; z < z0 + chunkCells; z += step) {
+        for (int x = x0; x < x0 + chunkCells; x += step) {
             auto a = vertex(x, z), b = vertex(x + step, z), c = vertex(x, z + step),
                  e = vertex(x + step, z + step);
             tri(a, c, b);
@@ -28,27 +28,27 @@ inline std::vector<Vertex> chunk(const Data& d, int cx, int cz, int step, bool s
     if (skirts) {
         float drop = std::max(2.f, d.size / (d.resolution - 1) * 8);
         for (int edge = 0; edge < 4; ++edge) {
-            if ((edge == 0 && z0 == 0) || (edge == 1 && x0 + 32 == d.resolution - 1) ||
-                (edge == 2 && z0 + 32 == d.resolution - 1) || (edge == 3 && x0 == 0)) {
+            if ((edge == 0 && z0 == 0) || (edge == 1 && x0 + chunkCells == d.resolution - 1) ||
+                (edge == 2 && z0 + chunkCells == d.resolution - 1) || (edge == 3 && x0 == 0)) {
                 continue;
             }
-            for (int i = 0; i < 32; i += step) {
+            for (int i = 0; i < chunkCells; i += step) {
                 int x = x0 + (edge == 0   ? i
-                              : edge == 1 ? 32
-                              : edge == 2 ? 32 - i
+                              : edge == 1 ? chunkCells
+                              : edge == 2 ? chunkCells - i
                                           : 0),
                     z = z0 + (edge == 0   ? 0
                               : edge == 1 ? i
-                              : edge == 2 ? 32
-                                          : 32 - i);
+                              : edge == 2 ? chunkCells
+                                          : chunkCells - i);
                 int nx = x0 + (edge == 0   ? i + step
-                               : edge == 1 ? 32
-                               : edge == 2 ? 32 - i - step
+                               : edge == 1 ? chunkCells
+                               : edge == 2 ? chunkCells - i - step
                                            : 0),
                     nz = z0 + (edge == 0   ? 0
                                : edge == 1 ? i + step
-                               : edge == 2 ? 32
-                                           : 32 - i - step);
+                               : edge == 2 ? chunkCells
+                                           : chunkCells - i - step);
                 auto a = vertex(x, z), b = vertex(nx, nz), c = a, e = b;
                 c.position.y -= drop;
                 e.position.y -= drop;

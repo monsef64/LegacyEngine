@@ -227,3 +227,13 @@ Manual verification (no automated tests required):
 
 Windows runtime behavior and FPS improvements require manual desktop validation;
 no specific FPS gain is promised by the filesystem cache.
+
+
+Mesh LOD authoring and conservative static-occlusion baking are described in
+[Mesh LOD and baked occlusion](lod-and-occlusion.md). The build fetches
+meshoptimizer v0.22 for opt-in simplification; its MIT notice is packaged under
+`data/license/meshoptimizer.txt`.
+
+
+[Terrain chunks and Navigation](navigation.md) documents smaller camera-culled
+terrain pieces, the Recast/Detour bake window and scriptable Navmesh Agents.

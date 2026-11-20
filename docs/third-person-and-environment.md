@@ -4,7 +4,7 @@
 
 Use **Create > Cameras > TPS**, or **Add Component > Cameras > TPS** on a separate
 camera object. It requires Transform and Camera and cannot be added alongside
-FPSCamera. Choose the player/vehicle root in **Follow target**, or parent the
+FPSCamera. Drag the player/vehicle root from Hierarchy onto **Follow target**, or parent the
 camera under that root and leave the target empty. Set its Camera **Active** if
 another Game camera is already active. Newly created cameras activate only when
 there is no existing active camera, matching the other camera presets.
@@ -17,7 +17,8 @@ target. Scene editing continues to use the editor camera, not TPS controls.
 | Setting | Purpose |
 | --- | --- |
 | Enabled | Enable the TPS pose driver |
-| Follow target | Target GameObject; empty means Transform parent |
+| Follow target | Hierarchy drag-and-drop target; Clear target returns to Transform parent |
+| Lock mouse in Play | Optional cursor lock; scripting: `lockMouse`, default false |
 | Target offset | World-space offset, default `(0, 1.5, 0)` |
 | Distance / min / max | Desired distance and zoom limits |
 | Yaw / pitch | Orbit angles in degrees, independent of target rotation |
@@ -63,6 +64,7 @@ function onStart()
     tps.shoulder = 0.4
     tps.smoothing = 10
     tps.collision = true
+    tps.lockMouse = true -- set false to release the TPS-owned cursor lock
     self:getComponent(Camera).active = true
 end
 ```
@@ -174,3 +176,11 @@ visual appearance or driving behavior. On the desktop build:
    create small objects with the editor orbit target very far away. Check default
    uncapped behavior and existing saved caps/VSync. Reset individual fields, undo
    them, and verify sibling fields/components are unchanged.
+
+
+`TPSCamera.lockMouse` is saved with the camera and can be changed by scripts at
+runtime. Only the active Game camera requests this lock, while Play is running
+and Game has input focus. Disabling the driver, switching cameras, pausing,
+stopping or losing application focus releases its owned lock. Restoring Game
+focus can reacquire it while `lockMouse=true`. This does not change Scene freecam
+or a cursor lock requested independently by a script before TPS takes ownership.

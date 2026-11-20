@@ -19,6 +19,7 @@
 #include "rendering/gpu_skinning.hpp"
 #include "rendering/material_textures.hpp"
 #include "rendering/mesh.hpp"
+#include "rendering/occlusion_bake.hpp"
 #include "rendering/skybox_renderer.hpp"
 #include "scene/editor_grid.hpp"
 #include "terrain/foliage_renderer.hpp"
@@ -31,6 +32,20 @@
 class Renderer {
   public:
     std::string materialError, modelError;
+    Occlusion::Bake occlusion;
+    bool opaqueOcclusionMaterial(const MeshRenderer& r) {
+        if (r.materialOverrides) {
+            return false;
+        }
+        if (r.material.empty()) {
+            return true;
+        }
+        try {
+            return materialCache_.get(materialAssets_, r.material).shader != 2;
+        } catch (const std::exception&) {
+            return false;
+        }
+    }
     const std::string& foliageError() const {
         return foliage_.error;
     }
@@ -49,6 +64,7 @@ class Renderer {
     void setAssetRoot(const std::filesystem::path& root) {
         if (materialAssets_.root != root) {
             clearModelCache();
+            occlusion.clear();
             materialCache_.clear();
             materialTextures_.clear();
             skyboxRenderer_.clear();
@@ -157,6 +173,10 @@ class Renderer {
     void drawAudioSource(const Transform& transform,
                          const AudioSource& source,
                          const Mat4& viewProjection);
+
+    void drawNavigation(const MeshData& lines, const Mat4& vp) {
+        drawWire(lines, Transform{}, vp, {.1f, .9f, .75f}, .8f);
+    }
 
   private:
     SkyboxRenderer skyboxRenderer_, skyboxFadeRenderer_;

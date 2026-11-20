@@ -45,7 +45,7 @@ copy(ROOT / 'third_party/simdjson/LICENSE', 'Apache-2.0.txt')
 for folder, filename, target in [
     ('sdl3', 'LICENSE.txt', 'SDL3.txt'), ('jolt', 'LICENSE', 'Jolt.txt'),
     ('imgui', 'LICENSE.txt', 'DearImGui.txt'), ('imguizmo', 'LICENSE', 'ImGuizmo.txt'),
-    ('assimp', 'LICENSE', 'assimp.txt')]:
+    ('assimp', 'LICENSE', 'assimp.txt'), ('meshoptimizer', 'LICENSE.md', 'meshoptimizer.txt'), ('recastnavigation', 'License.txt', 'RecastNavigation.txt')]:
     copy(args.build / '_deps' / (folder + '-src') / filename, target)
 comments(args.build / '_deps/lua-src/lua.h', 'Lua.txt')
 for dependency, subtree in [('assimp', 'contrib'), ('sdl3', 'src')]:
