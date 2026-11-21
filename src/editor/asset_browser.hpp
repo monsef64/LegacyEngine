@@ -175,6 +175,10 @@ class AssetBrowser {
     }
     // Rename a file or directory and keep descendant project references intact.
     void renameSelected(World& world, const std::string& name, bool fullPath = false) {
+        if (embeddedAsset(selected)) {
+            throw std::runtime_error(
+                "Rename the owning model; embedded members are not standalone files");
+        }
         std::filesystem::path leaf(name);
         if (!fullPath && !selected.empty() &&
             !std::filesystem::is_directory(assets.resolve(selected))) {
@@ -207,8 +211,10 @@ class AssetBrowser {
             }
         }
         auto remap = [&](std::string& path) {
-            if (path == selected) {
-                path = relative;
+            if (path == selected ||
+                (embeddedAsset(path) && assetContainerPath(path).generic_string() == selected)) {
+                path =
+                    relative + (embeddedAsset(path) ? path.substr(path.find('#')) : std::string{});
                 return true;
             }
             if (directory && path.size() > selected.size() &&
@@ -253,7 +259,7 @@ class AssetBrowser {
                 }
             }
         });
-        world.each<GUI>([&](Entity, GUI& g) {
+        world.each<UI>([&](Entity, UI& g) {
             remap(g.rml);
             remap(g.rcss);
         });
@@ -375,6 +381,17 @@ class AssetBrowser {
                             }
                         }
                     }
+                    if (document.contains("embeddedAssets")) {
+                        for (auto& member : document["embeddedAssets"]) {
+                            for (const char* key : {"settings", "model"}) {
+                                if (member.contains(key)) {
+                                    auto value = member[key].get<std::string>();
+                                    changed |= remap(value);
+                                    member[key] = value;
+                                }
+                            }
+                        }
+                    }
                     if (changed) {
                         writeJsonFile(assets.resolve(file), document);
                     }
@@ -423,7 +440,7 @@ class AssetBrowser {
         if (selected.empty()) {
             return;
         }
-        clipboardPath_ = selected;
+        clipboardPath_ = assetContainerPath(selected).generic_string();
         clipboardRoot_ = assets.root;
         clipboardCut_ = cut;
     }
@@ -460,7 +477,10 @@ class AssetBrowser {
                     Json names = Json::object();
                     for (auto it = value.begin(); it != value.end(); ++it) {
                         auto path = it.key();
-                        if (path == old || (directory && path.rfind(old + "/", 0) == 0)) {
+                        if (path == old ||
+                            (embeddedAsset(path) &&
+                             assetContainerPath(path).generic_string() == old) ||
+                            (directory && path.rfind(old + "/", 0) == 0)) {
                             path = copied + path.substr(old.size());
                         }
                         names[path] = it.value();
@@ -481,8 +501,10 @@ class AssetBrowser {
                         return;
                     }
                     auto p = value.get<std::string>();
-                    if (p == old || (directory && p.size() > old.size() &&
-                                     p.compare(0, old.size(), old) == 0 && p[old.size()] == '/')) {
+                    if (p == old ||
+                        (embeddedAsset(p) && assetContainerPath(p).generic_string() == old) ||
+                        (directory && p.size() > old.size() && p.compare(0, old.size(), old) == 0 &&
+                         p[old.size()] == '/')) {
                         value = copied + p.substr(old.size());
                     }
                 }
@@ -562,7 +584,8 @@ class AssetBrowser {
         }
         if (ImGui::GetTime() >= selectionCheckAt_) {
             selectionCheckAt_ = ImGui::GetTime() + 1.0;
-            if (!selected.empty() && !std::filesystem::exists(assets.resolve(selected))) {
+            if (!selected.empty() &&
+                !std::filesystem::exists(assetContainerPath(assets.resolve(selected)))) {
                 selected.clear();
             }
         }
@@ -727,15 +750,15 @@ class AssetBrowser {
                 // Root model names sort before their namespaced child files.
                 // Cache only the small manifest, not the decoded geometry.
                 for (const auto& file : files) {
-                    if (!modelAsset(file) || childOwners.count(file)) {
+                    if (!modelAsset(file) || embeddedAsset(file) || childOwners.count(file)) {
                         continue;
                     }
                     auto& group = modelGroups_[file];
                     try {
-                        const auto stamp =
-                            refreshListing || group.revision != modelAssetRevision
-                                ? std::filesystem::last_write_time(assets.resolve(file))
-                                : group.stamp;
+                        const auto stamp = refreshListing || group.revision != modelAssetRevision
+                                               ? std::filesystem::last_write_time(
+                                                     assetContainerPath(assets.resolve(file)))
+                                               : group.stamp;
                         if (group.revision != modelAssetRevision || group.stamp != stamp) {
                             group = {};
                             group.stamp = stamp;
@@ -775,8 +798,12 @@ class AssetBrowser {
                     if (group != modelGroups_.end() &&
                         (expandedModels_.count(file) || search.IsActive())) {
                         for (const auto& child : group->second.children) {
-                            if (childOwners[child] == file && listingDirectories_.count(child) &&
-                                !listingDirectories_.at(child)) {
+                            if (childOwners[child] == file &&
+                                (embeddedAsset(child) || (listingDirectories_.count(child) &&
+                                                          !listingDirectories_.at(child)))) {
+                                if (embeddedAsset(child)) {
+                                    listingDirectories_[child] = false;
+                                }
                                 grouped.push_back(child);
                             }
                         }
@@ -967,7 +994,7 @@ class AssetBrowser {
                             if (ImGui::MenuItem(folderItem ? "Open folder location"
                                                            : "Open asset location")) {
                                 try {
-                                    openLocation(assets.resolve(file));
+                                    openLocation(assetContainerPath(assets.resolve(file)));
                                 } catch (const std::exception& e) {
                                     assets.error = e.what();
                                 }
@@ -984,7 +1011,7 @@ class AssetBrowser {
                             if (ImGui::MenuItem(folderItem ? "Open folder location"
                                                            : "Open asset location")) {
                                 try {
-                                    openLocation(assets.resolve(file));
+                                    openLocation(assetContainerPath(assets.resolve(file)));
                                 } catch (const std::exception& e) {
                                     assets.error = e.what();
                                 }
@@ -1004,12 +1031,13 @@ class AssetBrowser {
                             ImGui::TextUnformatted(file.c_str());
                             ImGui::EndDragDropSource();
                         }
-                        if (editable && ImGui::BeginPopupContextItem("Asset actions")) {
+                        if (editable && !embeddedAsset(file) &&
+                            ImGui::BeginPopupContextItem("Asset actions")) {
                             selected = file;
                             if (ImGui::MenuItem(folderItem ? "Open folder location"
                                                            : "Open asset location")) {
                                 try {
-                                    openLocation(assets.resolve(file));
+                                    openLocation(assetContainerPath(assets.resolve(file)));
                                 } catch (const std::exception& e) {
                                     assets.error = e.what();
                                 }
@@ -1171,7 +1199,7 @@ class AssetBrowser {
                     pasteFolder_ = currentFolder;
                     pasteRequested_ = true;
                 }
-                if (!editable) {
+                if (!editable || embeddedAsset(selected)) {
                     pasteRequested_ = renameRequested_ = deleteRequested_ = false;
                 }
                 if (pasteRequested_) {
@@ -1204,7 +1232,8 @@ class AssetBrowser {
                         if (modelAsset(selected)) {
                             try {
                                 const auto doc = modelDocument(assets, selected);
-                                if (doc.contains("subAssets") && doc["subAssets"].is_array() &&
+                                if (!doc.contains("embeddedAssets") && doc.contains("subAssets") &&
+                                    doc["subAssets"].is_array() &&
                                     doc["subAssets"].size() <= 10000) {
                                     std::set<std::string> included;
                                     for (const auto& value : doc["subAssets"]) {

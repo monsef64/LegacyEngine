@@ -10,21 +10,14 @@
 #include <map>
 
 std::string modelImportExtensions() {
-    static const auto result = [] {
-        Assimp::Importer importer;
-        aiString extensions;
-        importer.GetExtensionList(extensions);
-        std::string value = extensions.C_Str();
-        for (std::size_t p = 0; (p = value.find("*.", p)) != std::string::npos;) {
-            value.erase(p, 2);
-        }
-        return value;
-    }();
-    return result;
+    // Do not advertise internal Assimp dependencies (MD2 supplies MDL normals).
+    return "obj;gltf;glb;mdl";
 }
+
 bool importableModel(const std::filesystem::path& path) {
     const auto extension = AssetManager::extension(path);
-    return extension == ".obj" || extension == ".gltf" || extension == ".glb";
+    return extension == ".obj" || extension == ".gltf" || extension == ".glb" ||
+           extension == ".mdl";
 }
 std::string importModel(AssetManager& assets,
                         const std::filesystem::path& source,
@@ -32,13 +25,27 @@ std::string importModel(AssetManager& assets,
                         bool publishRevision) {
     if (!importableModel(source.string())) {
         throw std::runtime_error(
-            "Supported model formats: OBJ, glTF and GLB (including skeletal glTF animations)");
+            "Supported model formats: OBJ, glTF/GLB and Half-Life 1 GoldSrc MDL (IDST v10)");
     }
     if (!std::filesystem::is_regular_file(source) ||
         std::filesystem::file_size(source) > 256 * 1024 * 1024) {
         throw std::runtime_error("Model source must be a file smaller than 256 MiB");
     }
+    // MDL is shared by unrelated formats. Accept only a main GoldSrc studio
+    // model, never a Quake/Source model or a standalone sequence-group file.
+    if (AssetManager::extension(source) == ".mdl") {
+        std::ifstream in(source, std::ios::binary);
+        unsigned char header[8]{};
+        in.read(reinterpret_cast<char*>(header), sizeof(header));
+        if (!in || header[0] != 'I' || header[1] != 'D' || header[2] != 'S' || header[3] != 'T' ||
+            header[4] != 10 || header[5] || header[6] || header[7]) {
+            throw std::runtime_error(
+                "Expected a Half-Life 1 GoldSrc MDL (IDST version 10). Import the main model, not an external sequence group or Source-engine MDL.");
+        }
+    }
     Assimp::Importer importer;
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_ANIMATIONS, true);
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_TRANSFORM_COORD_SYSTEM, true);
     importer.SetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, true);
     const auto* scene = importer.ReadFile(
         source.string(),
@@ -143,7 +150,14 @@ std::string importModel(AssetManager& assets,
     // Keep generated files alongside the model, grouped by its manifest in the
     // browser rather than exposing a generated directory as a separate asset.
     std::vector<std::string> generated;
-    Json subAssetNames = Json::object();
+    Json subAssetNames = Json::object(), embeddedAssets = Json::object();
+    std::vector<std::string> embeddedReferences;
+    auto allocateEmbedded = [&](const std::string& leaf) {
+        const auto reference = path + "#" + leaf;
+        embeddedReferences.push_back(reference);
+        subAssetNames[reference] = std::filesystem::path(leaf).stem().string();
+        return reference;
+    };
     auto allocateChild = [&](const std::string& leaf) {
         const auto name = std::filesystem::path(leaf).filename();
         const auto base = std::filesystem::path(path).stem().string() + "__" + name.stem().string();
@@ -290,21 +304,18 @@ std::string importModel(AssetManager& assets,
             if (parts.size() >= 1024) {
                 throw std::runtime_error("Model exceeds 1024 mesh parts");
             }
-            const auto meshPath = allocateChild("Mesh_" + std::to_string(instance) + ".mesh");
+            const auto meshPath = allocateEmbedded("Mesh_" + std::to_string(instance) + ".mesh");
             if (mesh->mName.length) {
                 subAssetNames[meshPath] = mesh->mName.C_Str();
             }
-            writeJsonFile(assets.resolve(meshPath),
-                          {{"format", "LegacyEngineMesh"},
-                           {"version", 1},
-                           {"settings", path},
-                           {"vertices", std::move(vertices)},
-                           {"weights", weights},
-                           {"bones", bones},
-                           {"node", meshNodes[instance].second}});
-            if (std::filesystem::file_size(assets.resolve(meshPath)) > 256 * 1024 * 1024) {
-                throw std::runtime_error("Baked mesh too large");
-            }
+            embeddedAssets[embeddedAssetName(meshPath)] =
+                Json{{"format", "LegacyEngineMesh"},
+                     {"version", 1},
+                     {"settings", path},
+                     {"vertices", std::move(vertices)},
+                     {"weights", weights},
+                     {"bones", bones},
+                     {"node", meshNodes[instance].second}};
             auto found = materials.find(mesh->mMaterialIndex);
             if (found == materials.end()) {
                 MaterialProperties material;
@@ -341,26 +352,86 @@ std::string importModel(AssetManager& assets,
             throw std::runtime_error("Model contains no triangle geometry");
         }
         for (unsigned i = 0; i < animations.size(); ++i) {
-            const auto animationPath = allocateChild("Animation_" + std::to_string(i) + ".leanim");
+            const auto animationPath =
+                allocateEmbedded("Animation_" + std::to_string(i) + ".leanim");
             subAssetNames[animationPath] = animations[i]["name"];
-            writeJsonFile(assets.resolve(animationPath),
-                          {{"format", "LegacyEngineAnimation"},
-                           {"version", 1},
-                           {"duration", animations[i]["duration"]},
-                           {"tracks", Json::array()},
-                           {"model", path},
-                           {"modelAnimation", i}});
+            embeddedAssets[embeddedAssetName(animationPath)] =
+                Json{{"format", "LegacyEngineAnimation"},
+                     {"version", 1},
+                     {"duration", animations[i]["duration"]},
+                     {"tracks", Json::array()},
+                     {"model", path},
+                     {"modelAnimation", i}};
         }
-        writeJsonFile(assets.resolve(path),
-                      {{"format", "LegacyEngineMesh"},
-                       {"version", 2},
-                       {"importScale", 1},
-                       {"subAssets", generated},
-                       {"subAssetNames", subAssetNames},
-                       {"parts", std::move(parts)},
-                       {"warnings", warnings},
-                       {"nodes", nodes},
-                       {"animations", animations}});
+        // Publish one self-contained container; staging files never become assets.
+        std::map<std::string, std::string> packedPaths;
+        for (const auto& file : generated) {
+            const auto reference =
+                allocateEmbedded(std::filesystem::path(file).filename().string());
+            packedPaths[file] = reference;
+            if (AssetManager::extension(file) == ".mat") {
+                embeddedAssets[embeddedAssetName(reference)] =
+                    readJsonFile(assets.resolve(file), 64 * 1024);
+            } else {
+                std::ifstream input(assets.resolve(file), std::ios::binary);
+                const auto size = std::filesystem::file_size(assets.resolve(file));
+                if (size > 32 * 1024 * 1024) {
+                    throw std::runtime_error("Packed texture exceeds 32 MiB");
+                }
+                std::string hex;
+                hex.reserve(size * 2);
+                constexpr char digits[] = "0123456789abcdef";
+                char byte;
+                while (input.get(byte)) {
+                    const auto value = static_cast<unsigned char>(byte);
+                    hex += digits[value >> 4];
+                    hex += digits[value & 15];
+                }
+                if (!input.eof() || hex.size() != size * 2) {
+                    throw std::runtime_error("Cannot pack model texture");
+                }
+                embeddedAssets[embeddedAssetName(reference)] =
+                    Json{{"format", "LegacyEngineImage"}, {"hex", std::move(hex)}};
+            }
+            if (subAssetNames.contains(file)) {
+                subAssetNames[reference] = subAssetNames[file];
+                subAssetNames.erase(file);
+            }
+        }
+        auto remapPacked = [&](auto&& self, Json& value) -> void {
+            if (value.is_string()) {
+                auto found = packedPaths.find(value.get_ref<const std::string&>());
+                if (found != packedPaths.end()) {
+                    value = found->second;
+                }
+            } else if (value.is_array() || value.is_object()) {
+                for (auto& child : value) {
+                    self(self, child);
+                }
+            }
+        };
+        remapPacked(remapPacked, parts);
+        remapPacked(remapPacked, embeddedAssets);
+        auto subAssets = std::vector<std::string>{};
+        subAssets.insert(subAssets.end(), embeddedReferences.begin(), embeddedReferences.end());
+        Json packed{{"format", "LegacyEngineMesh"},
+                    {"version", 2},
+                    {"importScale", 1},
+                    {"subAssets", subAssets},
+                    {"embeddedAssets", std::move(embeddedAssets)},
+                    {"subAssetNames", subAssetNames},
+                    {"parts", std::move(parts)},
+                    {"warnings", warnings},
+                    {"nodes", nodes},
+                    {"animations", animations}};
+        if (packed.dump().size() > 256 * 1024 * 1024) {
+            throw std::runtime_error("Packed model exceeds 256 MiB");
+        }
+        writeJsonFile(assets.resolve(path), packed);
+        for (const auto& file : generated) {
+            std::error_code ignored;
+            std::filesystem::remove(assets.resolve(file), ignored);
+        }
         if (publishRevision) {
             ++modelAssetRevision;
         }

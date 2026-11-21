@@ -50,13 +50,13 @@ supports `loadLevel`, `loadLevelAsync`, `unloadLevel`, `restartLevel`,
 Toggle VSync in **Project > Project Settings > Rendering**. Engine GLSL lives in
 `data/shaders/`; keep the packaged `data/` directory beside the executable.
 
-Model source imports support OBJ and glTF/GLB (including skeletal glTF animations).
+Model source imports support OBJ, glTF/GLB, and Half-Life 1 GoldSrc MDL (IDST v10), including skeletal animations.
 See [Jolt migration and manual checks](docs/manual/jolt-and-model-imports.md) for physics details.
 
 ### In-game UI
 
-The GUI component displays assigned RML/RCSS assets with RmlUi/OpenGL, separate
-from the ImGui editor. Scripts access a specific GUI component; no UI folder
+The UI component displays assigned RML/RCSS assets with RmlUi/OpenGL, separate
+from the ImGui editor. Scripts access a specific UI component; no UI folder
 is auto-loaded.
 See the [setup/API guide](docs/game-ui.md) and [interactive HUD example](data/examples/rmlui/README.md).
 
@@ -65,3 +65,7 @@ See the [setup/API guide](docs/game-ui.md) and [interactive HUD example](data/ex
 **GNU General Public License, version 2 only** (`GPL-2.0-only`). See [LICENSE](LICENSE).
 Third-party dependencies and assets retain their respective licenses and notices,
 collected under [`data/license/`](data/license/README.md) and included in releases.
+
+Runtime interfaces offer the RML/RCSS **UI** component and the separate **GUI**
+ImGui scripting namespace (`GUI.onDraw`). See [in-game interfaces](docs/game-ui.md)
+and the examples in `data/examples/rmlui` and `data/examples/imgui`.

@@ -82,11 +82,11 @@ class CookieAtlas {
             if (l.type != 2 || l.settings.cookie.empty()) {
                 continue;
             }
-            const GLuint source = cache.get(assets, l.settings.cookie, error);
+            const GLuint source = cache.get(assets, l.settings.cookie, error, true);
             if (!source) {
                 continue;
             }
-            const auto generation = cache.generation(l.settings.cookie);
+            const auto generation = cache.generation(l.settings.cookie, true);
             if (layers_[i].path == l.settings.cookie && layers_[i].generation == generation) {
                 enabled[i] = true;
                 continue;

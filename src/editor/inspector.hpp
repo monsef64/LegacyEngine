@@ -26,6 +26,66 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <map>
+
+// Keep file I/O and declaration parsing out of the per-frame Inspector path.
+// Cache declarations, never field values: Inspector edits and undo remain authoritative.
+inline void syncInspectorScriptExports(const AssetManager& assets,
+                                       const std::string& path,
+                                       std::vector<ScriptField>& fields) {
+    struct Entry {
+        std::chrono::steady_clock::time_point checked{};
+        std::filesystem::file_time_type stamp{};
+        std::vector<ScriptField> declarations;
+        std::string error;
+        bool loaded = false;
+    };
+    static std::map<std::string, Entry> cache;
+    const auto file = assets.resolve(path);
+    const auto key = file.generic_string();
+    if (!cache.count(key) && cache.size() >= 128) {
+        cache.clear();
+    }
+    auto& entry = cache[key];
+    const auto now = std::chrono::steady_clock::now();
+    if (!entry.loaded || now - entry.checked >= std::chrono::milliseconds(500)) {
+        entry.checked = now;
+        try {
+            const auto stamp = std::filesystem::last_write_time(file);
+            if (!entry.loaded || stamp != entry.stamp || !entry.error.empty()) {
+                std::vector<ScriptField> declarations;
+                syncScriptExports(assets.readScript(path), declarations);
+                entry.declarations = std::move(declarations);
+                entry.stamp = stamp;
+                entry.error.clear();
+            }
+        } catch (const std::exception& error) {
+            entry.error = error.what();
+        }
+        entry.loaded = true;
+    }
+    if (!entry.error.empty()) {
+        throw std::runtime_error(entry.error);
+    }
+    bool matches = fields.size() == entry.declarations.size();
+    for (std::size_t i = 0; matches && i < fields.size(); ++i) {
+        matches = fields[i].name == entry.declarations[i].name &&
+                  fields[i].type == entry.declarations[i].type;
+    }
+    if (matches) {
+        return;
+    }
+    auto next = entry.declarations;
+    for (auto& field : next) {
+        for (const auto& old : fields) {
+            if (field.name == old.name && field.type == old.type) {
+                field = old;
+                break;
+            }
+        }
+    }
+    fields = std::move(next);
+}
 
 inline void drawWaterSettings(River& r) {
     EditorValues::Combo("Water shader",
@@ -401,7 +461,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Water>) {
             type = 26;
         }
-        if constexpr (std::is_same_v<T, GUI>) {
+        if constexpr (std::is_same_v<T, UI>) {
             type = 32;
         }
         if constexpr (std::is_same_v<T, NavMeshObstacle>) {
@@ -476,7 +536,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "NavMeshAgent",
                                 "NavMeshObstacle",
                                 "RemovedAnimator",
-                                "GUI"};
+                                "UI"};
             for (int i = 0; i < 33; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
@@ -559,7 +619,7 @@ inline void drawScriptExports(World& world,
                                  "NavMeshAgent",
                                  "NavMeshObstacle",
                                  "RemovedAnimator",
-                                 "GUI"};
+                                 "UI"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -644,7 +704,13 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
     ImGui::TextWrapped("Material: %s", path.c_str());
     ImGui::Separator();
     try {
-        auto edited = loadMaterial(assets, path);
+        static MaterialAssetCache cache;
+        static std::filesystem::path cacheRoot;
+        if (cacheRoot != assets.root) {
+            cache.clear();
+            cacheRoot = assets.root;
+        }
+        auto edited = cache.get(assets, path);
         bool changed = false;
         changed |= EditorValues::Combo(
             "Shader",
@@ -683,6 +749,7 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
             "Shared asset: edits are saved immediately and affect all objects using this material.");
         if (changed && validMaterial(edited)) {
             saveMaterial(assets, path, edited);
+            cache.clear(); // reflect the saved edit on the very next frame
         }
     } catch (const std::exception& error) {
         ImGui::TextWrapped("%s", error.what());
@@ -703,7 +770,8 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
         bool refresh = current != key || revision != modelAssetRevision;
         if (refresh || now - checked > std::chrono::milliseconds(500)) {
             checked = now;
-            const auto stamp = std::filesystem::last_write_time(assets.resolve(path));
+            const auto stamp =
+                std::filesystem::last_write_time(assetContainerPath(assets.resolve(path)));
             refresh |= stamp != modified;
             modified = stamp;
         }
@@ -766,13 +834,110 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
             ImGui::TextWrapped("%s", warnings.c_str());
         }
         ImGui::TextWrapped(
-            "Skeletal clips can be previewed by clicking the model in Assets. Materials live in its data folder.");
+            "Skeletal clips can be previewed by clicking the model in Assets. Expand the model in Assets to access its materials and clips.");
         if (!error.empty()) {
             ImGui::TextWrapped("%s", error.c_str());
         }
     } catch (const std::exception& error) {
         ImGui::TextWrapped("%s", error.what());
     }
+}
+
+#include "editor/multi_edit.hpp"
+
+inline void drawMultiObjectInspector(World& world, Entity primary, bool disabled, bool runtime) {
+    ImGui::Text("%zu GameObjects selected", hierarchySelection.size());
+    ImGui::TextWrapped(
+        "Changes below apply to all selected objects. Transform values are local; only edited axes change.");
+    ImGui::BeginDisabled(disabled);
+    bool active = !world.has<ObjectActivity>(primary) || world.get<ObjectActivity>(primary).enabled;
+    if (EditorValues::Checkbox("Active", &active)) {
+        for (auto e : hierarchySelection) {
+            if (world.alive(e)) {
+                setObjectActive(world, e, active);
+            }
+        }
+    }
+    if (auto* transform = world.tryGet<Transform>(primary)) {
+        bool isStatic = transform->isStatic;
+        if (EditorValues::Checkbox("Static", &isStatic)) {
+            for (auto e : hierarchySelection) {
+                if (auto* t = world.tryGet<Transform>(e)) {
+                    t->isStatic = isStatic;
+                }
+            }
+        }
+        const auto original = localTransform(world, primary);
+        auto position = original.position, scale = original.scale;
+        auto rotation = rotationToEuler(original.rotation);
+        const auto oldRotation = rotation;
+        const bool moved = editVector("Position", position);
+        const bool turned = editVector("Rotation", rotation, .5f, -360, 360);
+        const bool scaled = editVector("Scale", scale, .01f, -10000, 10000, {1, 1, 1});
+        if (moved || turned || scaled) {
+            auto axes = [](Vec3& dst, Vec3 before, Vec3 after) {
+                if (before.x != after.x) {
+                    dst.x = after.x;
+                }
+                if (before.y != after.y) {
+                    dst.y = after.y;
+                }
+                if (before.z != after.z) {
+                    dst.z = after.z;
+                }
+            };
+            // Capture every local pose before changing parents. Apply parents first
+            // so selecting a parent and child cannot corrupt the child's other axes.
+            std::vector<std::pair<Entity, Transform>> poses;
+            for (auto e : hierarchySelection) {
+                if (world.has<Transform>(e)) {
+                    poses.emplace_back(e, localTransform(world, e));
+                }
+            }
+            auto depth = [&](Entity e) {
+                unsigned result = 0;
+                for (auto parent = getParent(world, e); world.alive(parent) && result < 128;
+                     parent = getParent(world, parent)) {
+                    ++result;
+                }
+                return result;
+            };
+            std::stable_sort(poses.begin(), poses.end(), [&](const auto& a, const auto& b) {
+                return depth(a.first) < depth(b.first);
+            });
+            for (auto& [e, local] : poses) {
+                updateHierarchy(world);
+                if (moved) {
+                    axes(local.position, original.position, position);
+                }
+                if (scaled) {
+                    axes(local.scale, original.scale, scale);
+                }
+                if (turned) {
+                    auto angles = rotationToEuler(local.rotation);
+                    axes(angles, oldRotation, rotation);
+                    local.rotation = rotationFromEuler(angles);
+                }
+                setLocalTransform(world, e, local);
+            }
+        }
+    }
+    int layer = LayerSettings::effective(world, primary);
+    if (ImGui::BeginCombo("Layer", LayerSettings::names[layer].c_str())) {
+        for (int i = 0; i < 32; ++i) {
+            if (!LayerSettings::names[i].empty() &&
+                ImGui::Selectable(LayerSettings::names[i].c_str(), layer == i)) {
+                for (auto e : hierarchySelection) {
+                    if (world.alive(e)) {
+                        world.add(e, ObjectLayer{i});
+                    }
+                }
+            }
+        }
+        ImGui::EndCombo();
+    }
+    MultiEdit::draw(world, primary, runtime);
+    ImGui::EndDisabled();
 }
 
 inline void drawInspector(World& world,
@@ -799,6 +964,10 @@ inline void drawInspector(World& world,
             ImGui::EndDisabled();
         } else if (!world.alive(selected)) {
             ImGui::TextDisabled("Select a GameObject in Hierarchy or Scene.");
+        } else if (hierarchySelection.size() > 1 &&
+                   std::find(hierarchySelection.begin(), hierarchySelection.end(), selected) !=
+                       hierarchySelection.end()) {
+            drawMultiObjectInspector(world, selected, editingGizmo, runtime);
         } else {
             ImGui::PushID(static_cast<int>(selected.index));
             ImGui::BeginDisabled(editingGizmo);
@@ -845,8 +1014,8 @@ inline void drawInspector(World& world,
             }
             for (int componentID : ordered) {
                 if (componentID == 32) {
-                    if (auto* g = world.tryGet<GUI>(selected);
-                        g && componentHeader<GUI>(world, selected, "GUI")) {
+                    if (auto* g = world.tryGet<UI>(selected);
+                        g && componentHeader<UI>(world, selected, "UI")) {
                         EditorValues::Checkbox("Enabled", &g->enabled);
                         assetPicker("RML asset", g->rml, assets, [](const std::string& file) {
                             return AssetManager::extension(file) == ".rml";
@@ -855,7 +1024,7 @@ inline void drawInspector(World& world,
                             return AssetManager::extension(file) == ".rcss";
                         });
                         ImGui::TextWrapped(
-                            "Assign both assets to show this GUI in Game during Play. Paths may be anywhere in Assets. Scripts: self:getComponent(GUI), or export a GUI reference.");
+                            "Assign both assets to show this UI in Game during Play. Paths may be anywhere in Assets. Scripts: self:getComponent(UI), or export a UI reference.");
                     }
                 }
 
@@ -1924,7 +2093,7 @@ inline void drawInspector(World& world,
                         }
                         if (assets && !path.empty()) {
                             try {
-                                syncScriptExports(assets->readScript(path), fields);
+                                syncInspectorScriptExports(*assets, path, fields);
                             } catch (const std::exception& error) {
                                 ImGui::TextWrapped("%s", error.what());
                             }
@@ -2121,8 +2290,8 @@ inline void drawInspector(World& world,
                     }
                     world.add(selected, BoneAttachment{});
                 }
-                if (!world.has<GUI>(selected) && ImGui::MenuItem("GUI")) {
-                    world.add(selected, GUI{});
+                if (!world.has<UI>(selected) && ImGui::MenuItem("UI")) {
+                    world.add(selected, UI{});
                 }
                 if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("Camera Effects")) {
                     world.add(selected, CameraEffects{});

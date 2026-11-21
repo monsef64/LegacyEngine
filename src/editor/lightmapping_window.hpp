@@ -223,9 +223,25 @@ class LightmappingWindow {
         ImGui::SliderInt("Soft shadow samples", &settings_.samples, 4, 128);
         ImGui::TextWrapped(
             "Baked direct lighting only. Set light Source radius / Sun angular softness to soften shadows. Zero gives hard shadows. Atlases use lossless PNG compression.");
-        if (ImGui::Button("Bake level") && !objects.empty() && !lights.empty() &&
-            !assets.root.empty()) {
+        if (ImGui::Button("Bake level")) {
             try {
+                // Never silently ignore a click: explain the exact missing prerequisite.
+                // Object Static and light Mode are distinct authored settings.
+                if (assets.root.empty()) {
+                    throw std::runtime_error("Cannot bake: open or save a project first.");
+                }
+                if (objects.empty()) {
+                    throw std::runtime_error(
+                        "Cannot bake: no eligible receivers. Enable Static on an active mesh or terrain GameObject. Animated objects and dynamic rigid bodies cannot be baked.");
+                }
+                if (lights.empty()) {
+                    throw std::runtime_error(
+                        "Cannot bake: no static light sources. Select a light and set its light component Mode to Static, enable it, and use positive intensity. The GameObject Static checkbox alone does not make a light source static.");
+                }
+                if (lights.size() > 128) {
+                    throw std::runtime_error(
+                        "Cannot bake: at most 128 static light sources are supported.");
+                }
                 auto progress = std::make_shared<Lightmapping::Progress>();
                 const auto signature = sceneSignature(world);
                 auto request = WorkerPool::shared().submit([objects = std::move(objects),
@@ -295,7 +311,8 @@ class LightmappingWindow {
             }
         }
         if (objects.empty() || lights.empty()) {
-            ImGui::TextWrapped("Mark at least one mesh and light Static to bake.");
+            ImGui::TextWrapped(
+                "Baking requires an active mesh/terrain GameObject with Static checked, and an enabled light whose light component Mode is Static. The GameObject Static checkbox and light Mode are separate settings.");
         }
         if (!status_.empty()) {
             ImGui::TextWrapped("%s", status_.c_str());

@@ -396,7 +396,8 @@ void Renderer::draw(World& world,
                     int y,
                     bool editorView,
                     const CameraEffects* effects,
-                    std::uint64_t cameraKey) {
+                    std::uint64_t cameraKey,
+                    Entity visibilityCamera) {
     CameraEffects composed = effects ? *effects : CameraEffects{};
     if (!composingEffects_) {
         bool found = false;
@@ -434,8 +435,17 @@ void Renderer::draw(World& world,
             try {
                 cameraEffects_.render(
                     composed, width, height, x, y, viewProjection, cameraPosition, cameraKey, [&] {
-                        draw(
-                            world, viewProjection, width, height, cameraPosition, 0, 0, editorView);
+                        draw(world,
+                             viewProjection,
+                             width,
+                             height,
+                             cameraPosition,
+                             0,
+                             0,
+                             editorView,
+                             nullptr,
+                             0,
+                             visibilityCamera);
                     });
             } catch (...) {
                 composingEffects_ = false;
@@ -635,7 +645,14 @@ void Renderer::draw(World& world,
         }
         return material;
     };
-    occlusion.begin(world, modelAssetRevision, viewProjection, [&](const MeshRenderer& r) {
+    const auto* visibilityPose = world.tryGet<Transform>(visibilityCamera);
+    const auto* visibilityLens = world.tryGet<Camera>(visibilityCamera);
+    const bool visibilityPreview = visibilityPose && visibilityLens && validCamera(*visibilityLens);
+    const Mat4 cullVP =
+        visibilityPreview ? cameraMatrix(*visibilityPose, *visibilityLens) : viewProjection;
+    const Vec3 cullEye =
+        visibilityPreview ? cameraEye(*visibilityPose, *visibilityLens) : cameraPosition;
+    occlusion.begin(world, modelAssetRevision, cullVP, [&](const MeshRenderer& r) {
         return opaqueOcclusionMaterial(r);
     });
     // Never let a pending model act as an invisible baked occluder.
@@ -649,6 +666,69 @@ void Renderer::draw(World& world,
                 }
             });
     }
+    const ViewFrustum selectedFrustum(cullVP);
+    RenderVisibility::Bounds visibleBounds =
+        [&](Entity e, const Transform& t, Vec3 low, Vec3 high) {
+            if (!selectedFrustum.visibleBox((low + high) * .5f,
+                                            (high - low) * .5f,
+                                            transformMatrix(t.position, t.rotation, t.scale))) {
+                return false;
+            }
+            return !occlusion.hidden(e, t, low, high, cullEye);
+        };
+    std::unordered_set<std::uint64_t> hiddenEntities;
+    if (visibilityPreview) {
+        world.eachReadOnly<Transform>([&](Entity e, const Transform& t) {
+            // Chunk/instance renderers use the same selected-camera bounds predicate
+            // individually. Global sky/fog and light sources are not geometry.
+            if (world.has<Terrain>(e) || world.has<ParticleSystem>(e)) {
+                return;
+            }
+            Vec3 low{-.5f, -.5f, -.5f}, high{.5f, .5f, .5f};
+            bool geometry = false;
+            Transform pose = t;
+            if (const auto* r = world.tryGet<MeshRenderer>(e)) {
+                geometry = meshBounds(r->mesh, low, high);
+            }
+            if (const auto* c = world.tryGet<CloudSystem>(e)) {
+                low = c->size * -.5f;
+                high = c->size * .5f;
+                geometry = true;
+            }
+            if (const auto* r = world.tryGet<River>(e)) {
+                float radius = r->width;
+                for (auto point : r->points) {
+                    radius = std::max(radius, std::sqrt(dot(point, point)) + r->width);
+                }
+                low = {-radius, -radius, -radius};
+                high = {radius, radius, radius};
+                geometry = true;
+            }
+            if (const auto* l = world.tryGet<Laser>(e)) {
+                pose = Transform{};
+                const float radius = std::max(l->glowWidth, l->impactSize);
+                low = {std::min(t.position.x, l->end.x) - radius,
+                       std::min(t.position.y, l->end.y) - radius,
+                       std::min(t.position.z, l->end.z) - radius};
+                high = {std::max(t.position.x, l->end.x) + radius,
+                        std::max(t.position.y, l->end.y) + radius,
+                        std::max(t.position.z, l->end.z) + radius};
+                geometry = true;
+            }
+            if (const auto* shaft = world.tryGet<LightShafts>(e)) {
+                float radius = shaft->height + std::max(shaft->width, shaft->endWidth);
+                low = {-radius, -radius, -radius};
+                high = {radius, radius, radius};
+                geometry = true;
+            }
+            if (geometry && !visibleBounds(e, pose, low, high)) {
+                hiddenEntities.insert(RenderVisibility::key(e));
+            }
+        });
+    }
+    RenderVisibility::Scope visibilityScope(visibilityPreview ? &world : nullptr,
+                                            visibilityPreview ? &hiddenEntities : nullptr,
+                                            visibilityPreview ? &visibleBounds : nullptr);
     terrainRenderer_.draw(
         world, materialAssets_, viewProjection, cameraPosition, litProgram_, lights_, &occlusion);
     glUseProgram(litProgram_);
@@ -748,13 +828,13 @@ void Renderer::draw(World& world,
             const auto lightmap =
                 transform.isStatic &&
                         lightmapValidation_.valid(materialAssets_, renderer, staticState)
-                    ? materialTextures_.get(materialAssets_, renderer.lightmap, materialError)
+                    ? materialTextures_.get(materialAssets_, renderer.lightmap, materialError, true)
                     : 0;
             const auto indirectPath =
                 lightmap ? lightmapValidation_.indirect(materialAssets_, renderer, staticState)
                          : std::string{};
             const auto indirect =
-                materialTextures_.get(materialAssets_, indirectPath, materialError);
+                materialTextures_.get(materialAssets_, indirectPath, materialError, true);
             glActiveTexture(GL_TEXTURE5);
             glBindTexture(GL_TEXTURE_2D, indirect);
             glActiveTexture(GL_TEXTURE4);
@@ -803,7 +883,7 @@ void Renderer::draw(World& world,
                 !visibleMesh(t, r)) {
                 return;
             }
-            if (occlusion.valid && Occlusion::eligible(world, e, t, r) &&
+            if (!visibilityPreview && occlusion.valid && Occlusion::eligible(world, e, t, r) &&
                 opaqueOcclusionMaterial(r)) {
                 const auto& gpu = meshes_[r.mesh.id];
                 if (occlusion.hidden(e, t, gpu.low, gpu.high, cameraPosition)) {

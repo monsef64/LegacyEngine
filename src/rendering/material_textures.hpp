@@ -22,6 +22,7 @@ class MaterialTextureCache {
         bool unchanged = false;
     };
     std::map<std::string, std::future<Decoded>> pending_;
+    int quality_ = -1;
     unsigned uploads_ = 0;
     bool waiting_ = false;
     std::size_t bytes_ = 0;
@@ -40,9 +41,12 @@ class MaterialTextureCache {
         uploads_ = 0;
         waiting_ = false;
     }
-    std::uint64_t generation(const std::string& path) const {
-        const auto it = entries_.find(path);
+    std::uint64_t generation(const std::string& path, bool fullResolution = false) const {
+        const auto it = entries_.find(path + (fullResolution ? "|full" : "|scaled"));
         return it == entries_.end() ? 0 : it->second.generation;
     }
-    unsigned get(const AssetManager& assets, const std::string& path, std::string& error);
+    unsigned get(const AssetManager& assets,
+                 const std::string& path,
+                 std::string& error,
+                 bool fullResolution = false);
 };

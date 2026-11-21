@@ -1,9 +1,11 @@
-# Importing static 3D models
+# Importing static and animated 3D models
 
-Use **Assets > Import > Files / Models** and choose a format filter: glTF/GLB,
-FBX, OBJ, Collada, STL/PLY, or **all enabled Assimp formats** (excluding Blender). The full filter is
-generated from the bundled Assimp 5.4.3 importers. Support varies by file version
-and encoding. Animation playback and skinning are not implemented.
+Use **Assets > Import > Files / Models** for OBJ, glTF/GLB, or Half-Life 1
+GoldSrc MDL (IDST version 10). OBJ imports geometry/materials; skeletal glTF and
+GoldSrc MDL imports also preserve supported bones and animation clips. Blender,
+Quake MDL and Source-engine MDL are not supported. Keep companion files next to
+the source during import, including external glTF buffers/textures and GoldSrc
+texture/sequence-group MDL files. The importer uses the BSD-licensed Assimp dependency.
 
 ## Directories and destination folders
 
@@ -23,20 +25,28 @@ external files (such as a glTF .bin) must exist beside the source during import.
 
 ## Meshes and materials
 
-New imports create a `.lemesh` model bundle and a sibling `_data` folder containing
-separate mesh assets, engine `.mat` files and copied/embedded textures. Node
-transforms are baked into vertices while mesh parts/material assignments are
-preserved. Normals and the first UV channel are imported; absent normals are
-generated. Point/line-only models are rejected. Limits are 500,000 triangles total,
-1024 mesh parts and 256 MiB per source/baked geometry file.
+New imports create one `.mesh` container with virtual mesh, material, texture and
+animation subassets. Expand the model's arrow in the Asset Browser to access them;
+no generated folder or sibling material/texture files remain after a successful
+single-model conversion. Older `.lemesh`/`.mesh` separate-file layouts still load.
+Container references use `Model.mesh#Member.ext`; move/copy/rename the owner rather
+than trying to move a virtual member separately.
+
+Mesh parts and material assignments are preserved. Normals and the first UV
+channel are imported; absent normals are generated. Point/line-only models are
+rejected. Limits include 500,000 triangles total, 1024 mesh parts, 256 MiB per source
+and 256 MiB of packed JSON, with a 32 MiB encoded-image budget per texture.
 
 Basic diffuse colors, diffuse textures and normal maps are converted. Compressed
 PNG/JPEG-compatible embedded textures are copied; uncompressed embedded textures
 are written as TGA. Unsupported or missing textures are listed as import warnings
 and fall back to material color. This is **not full PBR conversion**: metallic,
 roughness, opacity/blending, special shaders, layered/procedural textures and other
-source-specific material features are not reproduced. Edit generated `.mat` assets
-in Inspector. Models remain static; source cameras/lights are not instantiated.
+source-specific material features are not reproduced. Edit virtual `.mat` subassets
+in Inspector. Source cameras/lights are not instantiated. Imported clips use the
+Animation component and existing cross-fades; no Animator/AnimatorSheet or additive
+blending is introduced. GoldSrc game-specific sequence events, bodygroup switching,
+blend controllers, attachments and hitboxes are not converted to gameplay behavior.
 
 Drop a bundle into Scene, double-click it, or use **Instantiate in level**. This
 creates an **empty root GameObject named after the model** with one child per mesh,
@@ -67,8 +77,7 @@ clusters vertices at lower values; 15 preserves original triangles. Simplificati
 can remove small details. Rendered geometry is unchanged.
 
 Blender `.blend` import is disabled in Assimp and rejected by the asset importer,
-including directory imports that contain Blender files. Export to glTF, FBX,
-or OBJ first. Cached, fixed-size model icons frame the full geometry independent
+including directory imports that contain Blender files. Export to glTF/GLB or OBJ first. Cached, fixed-size model icons frame the full geometry independent
 of import scale. Hover previews appear after 1.5 seconds.
 
 Assimp's bundled notice is in `data/license/assimp.txt`. Model files themselves

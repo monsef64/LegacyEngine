@@ -1,5 +1,5 @@
 const lua = require('luaparse');
-const types = new Set(('GUI GameObject Transform RigidBody Collider MeshRenderer ObjectName LuaScript Camera AudioSource AudioListener DirectionalLight PointLight SpotLight Skybox CharacterController FPSCamera Raycast Animation ParticleSystem Laser LightShafts Asset AudioClip Texture number boolean string').split(' '));
+const types = new Set(('UI GameObject Transform RigidBody Collider MeshRenderer ObjectName LuaScript Camera AudioSource AudioListener DirectionalLight PointLight SpotLight Skybox CharacterController FPSCamera Raycast Animation ParticleSystem Laser LightShafts Asset AudioClip Texture number boolean string').split(' '));
 const reserved = new Set('self onStart onUpdate onFixedUpdate onDestroy onTriggerEnter onTriggerStay onTriggerExit onCollisionEnter onCollisionStay onCollisionExit'.split(' '));
 
 // Preserve UTF-16 offsets and line breaks when removing engine-only declarations.

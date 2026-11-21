@@ -24,8 +24,10 @@
 #include "rendering/mesh.hpp"
 #include "rendering/skybox.hpp"
 #include "terrain/terrain.hpp"
-#include "ui/gui.hpp"
+#include "ui/ui.hpp"
+#include <functional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 // Human-readable label used by the level object list.
@@ -148,7 +150,39 @@ struct Parent {
     Entity entity;
     Transform previous;
 };
+// Render-only, stack-scoped visibility. Never serialized or used by simulation.
+namespace RenderVisibility {
+using Bounds = std::function<bool(Entity, const Transform&, Vec3, Vec3)>;
+inline thread_local const World* world = nullptr;
+inline thread_local const std::unordered_set<std::uint64_t>* hidden = nullptr;
+inline thread_local const Bounds* bounds = nullptr;
+inline std::uint64_t key(Entity e) {
+    return (std::uint64_t(e.generation) << 32) | e.index;
+}
+inline bool visible(const World& w, Entity e, const Transform& t, Vec3 low, Vec3 high) {
+    return world != &w || !bounds || (*bounds)(e, t, low, high);
+}
+struct Scope {
+    const World* oldWorld = world;
+    const std::unordered_set<std::uint64_t>* oldHidden = hidden;
+    const Bounds* oldBounds = bounds;
+    Scope(const World* w, const std::unordered_set<std::uint64_t>* h, const Bounds* b) {
+        world = w;
+        hidden = h;
+        bounds = b;
+    }
+    ~Scope() {
+        world = oldWorld;
+        hidden = oldHidden;
+        bounds = oldBounds;
+    }
+};
+} // namespace RenderVisibility
 inline bool isActive(const World& world, Entity entity) {
+    if (RenderVisibility::world == &world && RenderVisibility::hidden &&
+        RenderVisibility::hidden->count(RenderVisibility::key(entity))) {
+        return false;
+    }
     for (unsigned depth = 0; depth < 128 && world.alive(entity); ++depth) {
         if (const auto* state = world.tryGet<ObjectActivity>(entity); state && !state->enabled) {
             return false;

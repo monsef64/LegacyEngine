@@ -1,5 +1,7 @@
 #pragma once
 #include "core/profiler.hpp"
+#include "platform/process_usage.hpp"
+#include <glad/gl.h>
 #include <imgui.h>
 inline void drawProfiler(FrameProfiler& profiler, bool& visible) {
     if (!visible) {
@@ -8,6 +10,38 @@ inline void drawProfiler(FrameProfiler& profiler, bool& visible) {
     ImGui::SetNextWindowSize(ImVec2(690, 530), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Profiler", &visible)) {
         ImGui::Checkbox("Pause sampling", &profiler.paused);
+        static ProcessUsage usage;
+        static GLint vramTotal = 0, vramFree = 0;
+        static auto gpuChecked = std::chrono::steady_clock::time_point{};
+        if (!profiler.paused) {
+            usage.sample();
+            const auto now = std::chrono::steady_clock::now();
+            if (now - gpuChecked >= std::chrono::seconds(1)) {
+                gpuChecked = now;
+                if (SDL_GL_ExtensionSupported("GL_NVX_gpu_memory_info")) {
+                    glGetIntegerv(0x9048, &vramTotal); // TOTAL_AVAILABLE_MEMORY_NVX, KiB
+                    glGetIntegerv(0x9049, &vramFree);  // CURRENT_AVAILABLE_VIDMEM_NVX, KiB
+                }
+            }
+        }
+        if (usage.cpuAvailable) {
+            ImGui::Text("Process CPU: %.1f%% (all logical cores)", usage.cpuPercent);
+        } else {
+            ImGui::TextDisabled("Process CPU: awaiting sample");
+        }
+        if (usage.memoryAvailable) {
+            ImGui::Text("Process RAM (resident): %.1f MiB",
+                        double(usage.residentBytes) / (1024 * 1024));
+        } else {
+            ImGui::TextDisabled("Process RAM: unavailable on this platform");
+        }
+        if (vramTotal > 0) {
+            ImGui::Text("GPU memory used: %.1f / %.1f MiB (device-wide)",
+                        double(vramTotal - vramFree) / 1024,
+                        double(vramTotal) / 1024);
+        } else {
+            ImGui::TextDisabled("GPU memory usage: driver does not expose GL_NVX_gpu_memory_info");
+        }
         const auto frame = profiler.stats();
         ImGui::SameLine();
         ImGui::Text("%zu / %zu frames", profiler.count, profiler.capacity);

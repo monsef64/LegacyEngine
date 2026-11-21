@@ -1,5 +1,6 @@
 #include "scripting/lua_console.hpp"
 #include "scripting/lua_scene.hpp"
+#include "ui/script_gui.hpp"
 #include <algorithm>
 extern "C" {
 #include <lauxlib.h>
@@ -55,9 +56,18 @@ void LuaConsole::dispatchEvents() {
         }
     }
 }
+void LuaConsole::drawGUI() {
+    const auto recipients = subscribers;
+    for (auto* console : recipients) {
+        if (std::find(subscribers.begin(), subscribers.end(), console) != subscribers.end()) {
+            console->receiveEvent("__runtime_gui", {});
+        }
+    }
+}
 void LuaConsole::installEvents() {
     removeEventListeners();
     subscribers.push_back(this);
+    ScriptGUI::install(state_);
     for (int op = 0; op < 3; ++op) {
         lua_pushinteger(state_, op);
         lua_pushcclosure(state_, eventAPI, 1);
@@ -149,6 +159,9 @@ int LuaConsole::eventAPI(lua_State* L) {
     return 1;
 }
 void LuaConsole::receiveEvent(const std::string& name, const std::vector<EventValue>& values) {
+    if (name == "__runtime_gui" && !ScriptGUI::inFrame()) {
+        return;
+    }
     if (scene_ && !scene_->receivesEvents()) {
         return;
     }
@@ -170,9 +183,15 @@ void LuaConsole::receiveEvent(const std::string& name, const std::vector<EventVa
         for (const auto& value : values) {
             pushValue(state_, value);
         }
+        if (name == "__runtime_gui") {
+            ScriptGUI::beginScope(reinterpret_cast<std::uintptr_t>(this), reference);
+        }
         beginBudget();
         const int result = lua_pcall(state_, int(values.size()), 0, base + 1);
         endBudget();
+        if (name == "__runtime_gui") {
+            ScriptGUI::endScope();
+        }
         if (result != LUA_OK) {
             const char* error = lua_tostring(state_, -1);
             append(Kind::Error, name + ": " + (error ? error : "Unknown callback error"));

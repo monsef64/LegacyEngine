@@ -1,6 +1,6 @@
 #pragma once
 #include "models/model_asset.hpp"
-// Supported extensions come from the importers enabled in the bundled Assimp.
+// Engine source-format allowlist; internal Assimp dependencies are not advertised.
 std::string modelImportExtensions();
 bool importableModel(const std::filesystem::path& path);
 std::string importModel(AssetManager& assets,

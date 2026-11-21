@@ -140,7 +140,7 @@ GameUI* GameUI::current() {
     return instance;
 }
 std::string GameUI::clickEvent(Entity owner, const std::string& id) {
-    return "GUI:" + std::to_string(guiKey(owner)) + ":" + id;
+    return "UI:" + std::to_string(guiKey(owner)) + ":" + id;
 }
 bool GameUI::loaded(Entity owner) const {
     const auto it = impl_->documents.find(guiKey(owner));
@@ -160,7 +160,7 @@ void GameUI::sync(World& world,
         return;
     }
     std::set<std::uint64_t> wanted;
-    world.eachReadOnly<GUI>([&](Entity e, const GUI& g) {
+    world.eachReadOnly<UI>([&](Entity e, const UI& g) {
         if (!g.enabled || !isActive(world, e) || g.rml.empty() || g.rcss.empty()) {
             return;
         }
@@ -183,13 +183,13 @@ void GameUI::sync(World& world,
             assets.root = assetRoot;
             if (AssetManager::extension(g.rml) != ".rml" ||
                 AssetManager::extension(g.rcss) != ".rcss") {
-                throw std::runtime_error("GUI requires .rml and .rcss assets");
+                throw std::runtime_error("UI requires .rml and .rcss assets");
             }
             const auto rml = assets.resolve(g.rml), rcss = assets.resolve(g.rcss);
             if (!std::filesystem::is_regular_file(rml) || !std::filesystem::is_regular_file(rcss) ||
                 std::filesystem::file_size(rml) > 4 * 1024 * 1024 ||
                 std::filesystem::file_size(rcss) > 4 * 1024 * 1024) {
-                throw std::runtime_error("GUI asset missing or larger than 4 MiB");
+                throw std::runtime_error("UI asset missing or larger than 4 MiB");
             }
             if (!ui.initialized) {
                 ui.renderer = std::make_unique<GameRenderer>();
@@ -218,11 +218,11 @@ void GameUI::sync(World& world,
             Rml::Factory::ClearTemplateCache();
             auto style = Rml::Factory::InstanceStyleSheetFile(rcss.generic_string());
             if (!style) {
-                throw std::runtime_error("GUI RCSS could not load");
+                throw std::runtime_error("UI RCSS could not load");
             }
             d.document = ui.context->LoadDocument(rml.generic_string());
             if (!d.document) {
-                throw std::runtime_error("GUI RML could not load");
+                throw std::runtime_error("UI RML could not load");
             }
             if (auto* existing = d.document->GetStyleSheetContainer()) {
                 style = existing->CombineStyleSheetContainer(*style);
@@ -232,7 +232,7 @@ void GameUI::sync(World& world,
             d.document->Show();
         } catch (const std::exception& error) {
             ui.unload(d);
-            SDL_Log("GUI %u (%s): %s", e.index, g.rml.c_str(), error.what());
+            SDL_Log("UI %u (%s): %s", e.index, g.rml.c_str(), error.what());
         }
     });
     for (auto it = ui.documents.begin(); it != ui.documents.end();) {

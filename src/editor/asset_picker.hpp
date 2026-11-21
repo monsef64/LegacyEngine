@@ -3,8 +3,61 @@
 #include "editor/asset_preview_ui.hpp"
 #include "editor/script_explorer.hpp"
 #include "editor/value_context.hpp"
+#include "models/model_asset.hpp"
 #include <cfloat>
 #include <functional>
+
+// Cache virtual model-member inventory while pickers are open. Physical files
+// remain the source of truth for file operations/export; virtual entries are refs.
+inline const std::vector<std::string>& assetPickerFiles(const AssetManager& assets) {
+    static std::filesystem::path root;
+    static unsigned revision = ~0u;
+    static auto checked = std::chrono::steady_clock::time_point{};
+    static std::vector<std::string> choices;
+    struct Inventory {
+        std::filesystem::file_time_type stamp{};
+        unsigned revision = ~0u;
+        std::vector<std::string> members;
+    };
+    static std::map<std::string, Inventory> inventories;
+    const auto now = std::chrono::steady_clock::now();
+    if (root != assets.root || revision != modelAssetRevision ||
+        now - checked > std::chrono::seconds(1)) {
+        if (root != assets.root) {
+            inventories.clear();
+        }
+        root = assets.root;
+        revision = modelAssetRevision;
+        checked = now;
+        choices = assets.files();
+        const auto files = choices;
+        for (const auto& file : files) {
+            if (modelAsset(file)) {
+                try {
+                    auto& inventory = inventories[file];
+                    const auto stamp = std::filesystem::last_write_time(assets.resolve(file));
+                    if (inventory.stamp != stamp || inventory.revision != modelAssetRevision) {
+                        inventory.members.clear();
+                        const auto document = modelDocument(assets, file);
+                        if (document.contains("embeddedAssets")) {
+                            for (auto it = document["embeddedAssets"].begin();
+                                 it != document["embeddedAssets"].end();
+                                 ++it) {
+                                inventory.members.push_back(file + "#" + it.key());
+                            }
+                        }
+                        inventory.stamp = stamp;
+                        inventory.revision = modelAssetRevision;
+                    }
+                    choices.insert(
+                        choices.end(), inventory.members.begin(), inventory.members.end());
+                } catch (const std::exception&) { /* Corrupt assets stay visible for repair. */
+                }
+            }
+        }
+    }
+    return choices;
+}
 
 // All component/window asset requests share the same filtered, preview-enabled UI.
 // Renderer callbacks are optional so header-only/headless clients need no GL context.
@@ -49,8 +102,11 @@ inline bool assetPicker(const char* label,
         bool open = true;
         if (ImGui::Begin("Select asset###MatchingAssetSelector", &open)) {
             search.Draw("Search", -1);
-            int layout=grid?1:0;ImGui::SetNextItemWidth(100);
-            if(ImGui::Combo("View",&layout,"List\0Grid\0"))grid=layout==1;
+            int layout = grid ? 1 : 0;
+            ImGui::SetNextItemWidth(100);
+            if (ImGui::Combo("View", &layout, "List\0Grid\0")) {
+                grid = layout == 1;
+            }
             ImGui::SameLine();
             ImGui::SetNextItemWidth(150);
             ImGui::SliderFloat("Preview size", &iconSize, 40, 112, "%.0f");
@@ -62,7 +118,7 @@ inline bool assetPicker(const char* label,
             }
             std::vector<std::string> matching;
             if (assets) {
-                for (const auto& path : assets->files()) {
+                for (const auto& path : assetPickerFiles(*assets)) {
                     if (supported(path) && search.PassFilter(path.c_str())) {
                         matching.push_back(path);
                     }

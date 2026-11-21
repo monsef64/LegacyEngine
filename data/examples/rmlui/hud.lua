@@ -1,7 +1,7 @@
--- Add GUI to this object and assign main.rml + hud.rcss (any Assets subfolder).
--- Optional: export a GUI reference and drag a different object's GUI onto HUD.
+-- Add UI to this object and assign main.rml + hud.rcss (any Assets subfolder).
+-- Optional: export a UI reference and drag a different object's UI onto HUD.
 -- Attach this script to one object only. Keep the Game cursor unlocked.
-@export HUD GUI
+@export HUD UI
 local gui
 local health, supplies = 100, 0
 
@@ -12,9 +12,9 @@ local function refresh(message)
 end
 
 function onStart()
-    gui = HUD or self:getComponent(GUI)
+    gui = HUD or self:getComponent(UI)
     if not gui then
-        debug.error("Assign HUD in Inspector, or add GUI to this object")
+        debug.error("Assign HUD in Inspector, or add UI to this object")
         return
     end
     -- Register once, not every update. Callbacks run through the budgeted

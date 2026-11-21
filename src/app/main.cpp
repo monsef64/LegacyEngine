@@ -3,6 +3,7 @@
 #include "effects/laser_update.hpp"
 #include "engine_version.hpp"
 #include "ui/game_ui.hpp"
+#include "ui/script_gui.hpp"
 #include <cctype>
 #include <imgui_internal.h>
 // LegacyEngine - Scene editing and runtime orchestration.
@@ -268,6 +269,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
     GameUI gameUI;
+    ScriptGUI scriptGUI;
     gameUI.clicked = [](Entity owner, const std::string& id) {
         LuaConsole::postEvent(GameUI::clickEvent(owner, id));
     };
@@ -386,6 +388,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         scripts.console().setAssetRoot(browser.assets.root);
         inputSettings.load(browser.assets, input);
         renderingSettings.load(browser.assets);
+        TextureQuality::lifecycle(playMode.active());
         layerSettings.load(browser.assets);
         if (levels.root() != browser.assets.root) {
             levels.setRoot(browser.assets.root);
@@ -398,6 +401,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             scripts.shutdown();
             input.releaseMouse();
             LuaConsole::clearEvents();
+            scriptGUI.shutdown();
             gameUI.sync(world, false, browser.assets.root, window);
             world.restore(transition->level->world);
             resetHierarchyExpansion();
@@ -451,10 +455,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         playMode.playing() && !cameraLooking &&
                         (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || input.mouseLocked) &&
-                        !inputSettings.visible && !gameUI.capturesKeyboard();
+                        !inputSettings.visible && !gameUI.capturesKeyboard() &&
+                        !scriptGUI.capturesKeyboard();
         input.mouseEnabled = externalFocus || gameHovered || sceneHovered || input.mouseLocked;
         input.beginFrame();
         try {
+            if (!playMode.active()) {
+                scriptGUI.shutdown();
+            }
             gameUI.sync(world, playMode.active(), browser.assets.root, input.window);
         } catch (const std::exception& error) {
             terminalErrors.report("Game UI", error.what());
@@ -470,12 +478,19 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         gameWindow ? float(uiH) : gameImageSize.y,
                         gameSurface.width,
                         gameSurface.height);
+        scriptGUI.viewport(gameWindow ? 0.f : gameImageOrigin.x - uiOrigin.x,
+                           gameWindow ? 0.f : gameImageOrigin.y - uiOrigin.y,
+                           gameWindow ? float(uiW) : gameImageSize.x,
+                           gameWindow ? float(uiH) : gameImageSize.y,
+                           gameSurface.width,
+                           gameSurface.height);
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (gameWindow && event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
                 event.window.windowID == SDL_GetWindowID(gameWindow)) {
                 input.releaseMouse();
                 input.window = window;
+                scriptGUI.shutdown();
                 gameUI.sync(world, false, browser.assets.root, window);
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
@@ -492,7 +507,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     }
                     continue;
                 }
-                if (!gameUI.event(event, gameWindow, externalFocus, input.mouseLocked) ||
+                if (!(scriptGUI.event(event, gameWindow, externalFocus, input.mouseLocked) |
+                      gameUI.event(event, gameWindow, externalFocus, input.mouseLocked)) ||
                     event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
                     input.event(event);
                 }
@@ -553,7 +569,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (!navigationMouse) {
                 ImGui_ImplSDL3_ProcessEvent(&event);
             }
-            if (!gameUI.event(event, window, gameFocused && playMode.active(), input.mouseLocked) ||
+            if (!(scriptGUI.event(
+                      event, window, gameFocused && playMode.active(), input.mouseLocked) |
+                  gameUI.event(
+                      event, window, gameFocused && playMode.active(), input.mouseLocked)) ||
                 event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
                 input.event(event);
             }
@@ -1380,6 +1399,23 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                                           : "Undo VSync setting");
                     });
                 }
+                ImGui::BeginDisabled(playMode.active());
+                int textureQuality = renderingSettings.textureQuality;
+                if (ImGui::Combo(
+                        "Texture quality",
+                        &textureQuality,
+                        "Full resolution\0Half resolution\0Quarter resolution\0Eighth resolution\0")) {
+                    const int before = renderingSettings.textureQuality;
+                    history.perform(
+                        world, selectedEntity, [&, before, textureQuality](bool forward) {
+                            renderingSettings.textureQuality = forward ? textureQuality : before;
+                            TextureQuality::project = renderingSettings.textureQuality;
+                            renderingSettings.save(browser.assets);
+                        });
+                }
+                ImGui::EndDisabled();
+                ImGui::TextWrapped(
+                    "Material and terrain textures only. Baked lightmaps, shadow maps, cookies and UI textures retain their authored resolution. Changes stream asynchronously.");
                 const auto shadowsBefore = renderingSettings.shadows;
                 bool shadowChanged = ImGui::Combo("Shadow mapping",
                                                   &renderingSettings.shadows.mode,
@@ -1656,6 +1692,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             editHistory = std::move(history);
             history = EditorHistory(world, selectedEntity);
             if (playMode.play(world)) {
+                TextureQuality::lifecycle(true);
                 Particles::reset(world);
                 lightmappingWindow.cancelBake(); // do not compete with gameplay for CPU time
                 focusGame = true;
@@ -1709,12 +1746,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (gameWindow) {
                 input.releaseMouse();
                 input.window = window;
+                scriptGUI.shutdown();
                 gameUI.sync(world, false, browser.assets.root, window);
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
             }
             mouseOver = {};
             mousePressedObject = {};
+            scriptGUI.shutdown();
+            TextureQuality::lifecycle(false);
             playMode.stop(world);
             input.releaseMouse();
             physics.reset();
@@ -2444,7 +2484,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         playMode.playing() && !cameraLooking &&
                         (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || gameFocused || input.mouseLocked) &&
-                        !inputSettings.visible && !gameUI.capturesKeyboard();
+                        !inputSettings.visible && !gameUI.capturesKeyboard() &&
+                        !scriptGUI.capturesKeyboard();
         input.synchronizeKeyboard();
         // The time that has passed since the previous frame.
         const Uint64 ticks = SDL_GetTicksNS();
@@ -2613,8 +2654,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 v = .5f;
                 inside = true;
             }
-            if (inside && !gameUI.capturesMouse() && u >= 0 && u <= 1 && v >= 0 && v <= 1 &&
-                cameraEntity != Entity{}) {
+            if (inside && !gameUI.capturesMouse() && !scriptGUI.capturesMouse() && u >= 0 &&
+                u <= 1 && v >= 0 && v <= 1 && cameraEntity != Entity{}) {
                 const auto& c = world.get<Camera>(cameraEntity);
                 const auto& t = world.get<Transform>(cameraEntity);
                 if (u >= c.viewportX && u <= c.viewportX + c.viewportWidth && v >= c.viewportY &&
@@ -2687,64 +2728,74 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 glBindFramebuffer(GL_FRAMEBUFFER, sceneSurface.framebuffer);
                 const float aspect = static_cast<float>(sceneSurface.width) / sceneSurface.height;
                 const Mat4 viewProjection = camera.viewProjection(aspect);
+                const bool visibilityPreview =
+                    occlusionWindow.visible && occlusionWindow.visualizeSelectedCamera &&
+                    world.has<Camera>(selectedEntity) && world.has<Transform>(selectedEntity) &&
+                    validCamera(world.get<Camera>(selectedEntity));
                 renderer.draw(world,
                               viewProjection,
                               sceneSurface.width,
                               sceneSurface.height,
-                              camera.position());
-                renderer.drawEditorGrid(browser.settings.grid, viewProjection);
-                if (occlusionWindow.visible && occlusionWindow.visualizeSelectedCamera) {
-                    occlusionWindow.previewValid =
-                        renderer.drawOcclusionCamera(world,
-                                                     selectedEntity,
-                                                     viewProjection,
-                                                     occlusionWindow.previewCulled,
-                                                     occlusionWindow.previewTested);
+                              camera.position(),
+                              0,
+                              0,
+                              true,
+                              nullptr,
+                              0,
+                              visibilityPreview ? selectedEntity : Entity{});
+                if (visibilityPreview) {
+                    occlusionWindow.previewValid = true;
+                    occlusionWindow.previewCulled = renderer.occlusion.culled;
+                    occlusionWindow.previewTested = renderer.occlusion.tested;
                 }
-                if (navigationWindow.showMesh && navigationWindow.system.valid) {
-                    renderer.drawNavigation(navigationWindow.system.debugMesh, viewProjection);
-                }
-                if (browser.settings.alwaysShowColliders) {
-                    world.each<Transform, Collider>(
-                        [&](Entity e, const Transform& t, const Collider& c) {
-                            if (e != selectedEntity) {
-                                renderer.drawCollider(
-                                    t, effectiveCollider(world, e, c), viewProjection, .25f);
+                if (!visibilityPreview) {
+                    renderer.drawEditorGrid(browser.settings.grid, viewProjection);
+                    if (navigationWindow.showMesh && navigationWindow.system.valid) {
+                        renderer.drawNavigation(navigationWindow.system.debugMesh, viewProjection);
+                    }
+                    if (browser.settings.alwaysShowColliders) {
+                        world.each<Transform, Collider>(
+                            [&](Entity e, const Transform& t, const Collider& c) {
+                                if (e != selectedEntity) {
+                                    renderer.drawCollider(
+                                        t, effectiveCollider(world, e, c), viewProjection, .25f);
+                                }
+                            });
+                    }
+                    if (world.alive(selectedEntity)) {
+                        const auto* transform = world.tryGet<Transform>(selectedEntity);
+                        const auto* collider = world.tryGet<Collider>(selectedEntity);
+                        if (transform) {
+                            if (const auto* vehicle = world.tryGet<Vehicle>(selectedEntity)) {
+                                renderer.drawVehicle(*transform, *vehicle, viewProjection);
                             }
-                        });
-                }
-                if (world.alive(selectedEntity)) {
-                    const auto* transform = world.tryGet<Transform>(selectedEntity);
-                    const auto* collider = world.tryGet<Collider>(selectedEntity);
-                    if (transform) {
-                        if (const auto* vehicle = world.tryGet<Vehicle>(selectedEntity)) {
-                            renderer.drawVehicle(*transform, *vehicle, viewProjection);
                         }
-                    }
-                    if (transform && collider) {
-                        renderer.drawCollider(*transform,
-                                              effectiveCollider(world, selectedEntity, *collider),
-                                              viewProjection);
-                    }
-                    if (transform) {
-                        if (const auto* query = world.tryGet<Raycast>(selectedEntity)) {
-                            renderer.drawRaycast(*transform,
-                                                 *query,
-                                                 viewProjection,
-                                                 browser.settings.raycastThickness);
+                        if (transform && collider) {
+                            renderer.drawCollider(
+                                *transform,
+                                effectiveCollider(world, selectedEntity, *collider),
+                                viewProjection);
                         }
-                    }
-                    const auto* audioSource = world.tryGet<AudioSource>(selectedEntity);
-                    if (transform && audioSource) {
-                        renderer.drawAudioSource(*transform, *audioSource, viewProjection);
-                    }
-                    if (transform) {
-                        if (const auto* selectedCamera = world.tryGet<Camera>(selectedEntity)) {
-                            renderer.drawCamera(*transform, *selectedCamera, viewProjection);
+                        if (transform) {
+                            if (const auto* query = world.tryGet<Raycast>(selectedEntity)) {
+                                renderer.drawRaycast(*transform,
+                                                     *query,
+                                                     viewProjection,
+                                                     browser.settings.raycastThickness);
+                            }
                         }
+                        const auto* audioSource = world.tryGet<AudioSource>(selectedEntity);
+                        if (transform && audioSource) {
+                            renderer.drawAudioSource(*transform, *audioSource, viewProjection);
+                        }
+                        if (transform) {
+                            if (const auto* selectedCamera = world.tryGet<Camera>(selectedEntity)) {
+                                renderer.drawCamera(*transform, *selectedCamera, viewProjection);
+                            }
+                        }
+                    } else {
+                        selectedEntity = {};
                     }
-                } else {
-                    selectedEntity = {};
                 }
             }
             profiler.checkpoint(ProfilePart::Scene);
@@ -2816,6 +2867,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (gameVisible && playMode.active()) {
                 glBindFramebuffer(GL_FRAMEBUFFER, gameSurface.framebuffer);
                 gameUI.render(gameSurface.width, gameSurface.height, playMode.playing());
+                scriptGUI.render(input.window,
+                                 gameSurface.width,
+                                 gameSurface.height,
+                                 playMode.playing(),
+                                 browser.assets.root);
             }
             if (gameWindow && gameVisible) {
                 auto context = SDL_GL_GetCurrentContext();
@@ -2919,12 +2975,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (gameWindow) {
                     input.releaseMouse();
                     input.window = window;
+                    scriptGUI.shutdown();
                     gameUI.sync(world, false, browser.assets.root, window);
                     SDL_DestroyWindow(gameWindow);
                     gameWindow = nullptr;
                 }
                 mouseOver = {};
                 mousePressedObject = {};
+                scriptGUI.shutdown();
+                TextureQuality::lifecycle(false);
                 playMode.stop(world);
                 input.releaseMouse();
                 physics.reset();
@@ -3025,6 +3084,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     if (gameWindow) {
         input.releaseMouse();
         input.window = window;
+        scriptGUI.shutdown();
         gameUI.sync(world, false, browser.assets.root, window);
         SDL_DestroyWindow(gameWindow);
     }

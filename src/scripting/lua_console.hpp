@@ -54,6 +54,7 @@ class LuaConsole {
     using EventValue = std::variant<std::monostate, bool, double, std::string>;
     static bool postEvent(std::string name, std::vector<EventValue> values = {});
     static void dispatchEvents();
+    static void drawGUI();
     static void clearEvents();
     void clear() {
         lines_.clear();

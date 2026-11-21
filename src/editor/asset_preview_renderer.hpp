@@ -307,7 +307,8 @@ class AssetPreviewRenderer {
             bool rebuild = changed || (slot.streaming && textureAsset(path));
             if (changed || now - slot.checked > std::chrono::milliseconds(500)) {
                 slot.checked = now;
-                const auto stamp = std::filesystem::last_write_time(assets.resolve(path));
+                const auto stamp =
+                    std::filesystem::last_write_time(assetContainerPath(assets.resolve(path)));
                 rebuild |= stamp != slot.modified;
                 slot.modified = stamp;
             }

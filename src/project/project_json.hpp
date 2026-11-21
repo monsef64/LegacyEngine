@@ -248,7 +248,7 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"NavMeshObstacle", {{"settings", 'j'}}},
     // Reserved legacy slot: consumed on load only; no Animator runtime/editor remains.
     {"Animator", {{"settings", 'j'}}},
-    {"GUI", {{"enabled", 'b'}, {"rml", 's'}, {"rcss", 's'}}}};
+    {"UI", {{"enabled", 'b'}, {"rml", 's'}, {"rcss", 's'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     Json result = Json::object();
@@ -366,7 +366,7 @@ inline Json fromLegacy(const std::string& text) {
     in >> magic >> version;
     Json doc = read(in, {{"script", 's'}, {"assets", 's'}});
     doc["format"] = "LegacyEngine";
-    doc["version"] = 25;
+    doc["version"] = 26;
     doc["editorCamera"] = read(in,
                                {{"target", 'f', 3},
                                 {"yaw", 'f'},
@@ -416,7 +416,7 @@ inline std::string toLegacy(const Json& doc) {
          doc.at("version") != 15 && doc.at("version") != 16 && doc.at("version") != 17 &&
          doc.at("version") != 18 && doc.at("version") != 19 && doc.at("version") != 20 &&
          doc.at("version") != 21 && doc.at("version") != 22 && doc.at("version") != 23 &&
-         doc.at("version") != 24 && doc.at("version") != 25) ||
+         doc.at("version") != 24 && doc.at("version") != 25 && doc.at("version") != 26) ||
         !doc.at("objects").is_array() || doc.at("objects").size() > 10000) {
         throw std::runtime_error("Invalid JSON project format");
     }
@@ -432,7 +432,15 @@ inline std::string toLegacy(const Json& doc) {
            {"fieldOfView", 'f'}});
     out << doc.at("objects").size() << ' ';
     for (const auto& object : doc.at("objects")) {
-        const auto& data = object.at("components");
+        auto data = object.at("components");
+        // Older scenes called the RML/RCSS component GUI. New saves use UI.
+        if (data.contains("GUI")) {
+            if (data.contains("UI")) {
+                throw std::runtime_error("Duplicate GUI/UI component");
+            }
+            data["UI"] = data.at("GUI");
+            data.erase("GUI");
+        }
         if (!data.is_object()) {
             throw std::runtime_error("Invalid components");
         }
