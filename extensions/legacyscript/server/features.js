@@ -1,8 +1,13 @@
 const api = require('./api.json');
 const members = require('./members.json');
 const keywords = 'and break do else elseif end false for function goto if in local nil not or repeat return then true until while'.split(' ');
-const objectMembers = { ...members.GUI, ...members.Transform, ...members.Animation, ...members.ParticleSystem, ...members.Laser, ...members.LightShafts, ...members.GameObject, ...members.MeshRenderer, ...members.CameraObject, ...members.AudioSource, ...members.AudioListener, ...members.DirectionalLight, ...members.PointLight, ...members.Skybox, ...members.SpotLight, ...members.CharacterController, ...members.FPSCamera, ...members.RigidBody, ...members.Collider, ...members.Raycast };
+const objectMembers = { ...members.UI, ...members.Transform, ...members.Animation, ...members.ParticleSystem, ...members.Laser, ...members.LightShafts, ...members.GameObject, ...members.MeshRenderer, ...members.CameraObject, ...members.AudioSource, ...members.AudioListener, ...members.DirectionalLight, ...members.PointLight, ...members.Skybox, ...members.SpotLight, ...members.CharacterController, ...members.FPSCamera, ...members.RigidBody, ...members.Collider, ...members.Raycast };
 function memberTable(receiver) {
+  if (receiver === 'WindowFlags') return members.GUIWindowFlags;
+  if (receiver === 'TableFlags') return members.GUITableFlags;
+  if (receiver === 'StyleVar') return members.GUIStyleVars;
+  if (receiver === 'Col') return members.GUIColors;
+  if (receiver === 'GUI') return members.GUI;
   if (receiver === 'GameObject') return members.GameObjectConstructor;
   if (receiver === 'color') return members.ColorPalette;
   if (receiver === 'Raycast') return members.RaycastType;

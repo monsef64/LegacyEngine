@@ -1,4 +1,5 @@
 #pragma once
+#include "assets/subasset.hpp"
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include <algorithm>
@@ -38,13 +39,16 @@ class AssetManager {
                 throw std::runtime_error("Asset path escapes Assets");
             }
         }
-        auto candidate = std::filesystem::weakly_canonical(root / p);
+        const bool embedded = embeddedAsset(relative);
+        const auto member = embedded ? embeddedAssetName(relative) : std::string{};
+        auto candidate = std::filesystem::weakly_canonical(root / assetContainerPath(p));
         auto canonicalRoot = std::filesystem::weakly_canonical(root);
         auto r = candidate.lexically_relative(canonicalRoot);
         if (r.empty() || *r.begin() == "..") {
             throw std::runtime_error("Asset path escapes Assets");
         }
-        return candidate;
+        return embedded ? std::filesystem::path(candidate.generic_string() + "#" + member)
+                        : candidate;
     }
     std::string createFolder(const std::string& parent = {}) const {
         const auto base = resolve(parent);

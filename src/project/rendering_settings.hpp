@@ -2,10 +2,12 @@
 #include "assets/assets.hpp"
 #include "lighting/shadow_settings.hpp"
 #include "project/json_io.hpp"
+#include "rendering/texture_quality.hpp"
 #include <SDL3/SDL.h>
 struct RenderingSettings {
     bool visible = false, vsync = false;
     ShadowSettings shadows;
+    int textureQuality = 0;
     std::string error;
     std::filesystem::path root;
     static std::filesystem::path file(const AssetManager& assets) {
@@ -28,16 +30,28 @@ struct RenderingSettings {
         root = assets.root;
         vsync = false;
         shadows = {};
+        textureQuality = 0;
+        TextureQuality::project = 0;
         error.clear();
         try {
             auto path = file(assets);
             if (std::filesystem::exists(path)) {
                 auto json = readJsonFile(path, 4096);
                 if ((json.at("version") != 1 && json.at("version") != 2 &&
-                     json.at("version") != 3) ||
+                     json.at("version") != 3 && json.at("version") != 4) ||
                     !json.at("vsync").is_boolean()) {
                     throw std::runtime_error("Invalid rendering settings");
                 }
+                if (json.at("version") >= 4) {
+                    if (!json.at("textureQuality").is_number_integer()) {
+                        throw std::runtime_error("Invalid texture quality");
+                    }
+                    textureQuality = json.at("textureQuality").get<int>();
+                    if (textureQuality < 0 || textureQuality > 3) {
+                        throw std::runtime_error("Invalid texture quality");
+                    }
+                }
+                TextureQuality::project = textureQuality;
                 vsync = json.at("vsync").get<bool>();
                 if (json.at("version") >= 2) {
                     if (!json.at("shadowMode").is_number_integer() ||
@@ -49,7 +63,7 @@ struct RenderingSettings {
                     if (!loaded.valid()) {
                         throw std::runtime_error("Invalid shadow mode or resolution");
                     }
-                    if (json.at("version") == 3) {
+                    if (json.at("version") >= 3) {
                         if (!json.at("softShadows").is_boolean()) {
                             throw std::runtime_error("Invalid shadow filtering");
                         }
@@ -66,7 +80,8 @@ struct RenderingSettings {
     }
     void save(const AssetManager& assets) const {
         writeJsonFile(file(assets),
-                      Json{{"version", 3},
+                      Json{{"version", 4},
+                           {"textureQuality", textureQuality},
                            {"softShadows", shadows.soft},
                            {"vsync", vsync},
                            {"shadowMode", shadows.mode},

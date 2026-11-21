@@ -285,7 +285,8 @@ class FoliageRenderer {
                         if (proto.asset.empty()) {
                             continue;
                         }
-                        std::string key = trees ? proto.asset : (proto.billboard ? "@billboard" : "@grass");
+                        std::string key =
+                            trees ? proto.asset : (proto.billboard ? "@billboard" : "@grass");
                         if (failures_.count(key)) {
                             continue;
                         }
@@ -301,7 +302,8 @@ class FoliageRenderer {
                                     load(assets, proto.asset, "", parts, 0, vertices);
                                 } else {
                                     MeshData mesh;
-                                    for (int plane = 0; plane < (proto.billboard ? 1 : 2); ++plane) {
+                                    for (int plane = 0; plane < (proto.billboard ? 1 : 2);
+                                         ++plane) {
                                         Vec3 a = plane ? Vec3{0, 0, -.5f} : Vec3{-.5f, 0, 0},
                                              b = plane ? Vec3{0, 0, .5f} : Vec3{.5f, 0, 0},
                                              c = b + Vec3{0, 1, 0}, dd = a + Vec3{0, 1, 0},
@@ -344,6 +346,12 @@ class FoliageRenderer {
                             float r = radius * p.scale;
                             if (dot(delta, delta) > (proto.distance + r) * (proto.distance + r) ||
                                 !frustum.visible(center, r)) {
+                                continue;
+                            }
+                            Transform instance;
+                            instance.position = center;
+                            if (!RenderVisibility::visible(
+                                    world, e, instance, {-r, -r, -r}, {r, r, r})) {
                                 continue;
                             }
                             visible.push_back({local, p.scale, p.yaw});

@@ -208,6 +208,16 @@ class ParticleRenderer {
                 if (s.localSpace) {
                     position = t.position + rotateVector(t.rotation, position * t.scale);
                 }
+                Transform particlePose;
+                particlePose.position = position;
+                const float radius = std::abs((p.size + (s.endSize - p.size) * f) * scale);
+                if (!RenderVisibility::visible(world,
+                                               e,
+                                               particlePose,
+                                               {-radius, -radius, -radius},
+                                               {radius, radius, radius})) {
+                    continue;
+                }
                 instances_.push_back({position,
                                       (p.size + (s.endSize - p.size) * f) * scale,
                                       p.rotation,

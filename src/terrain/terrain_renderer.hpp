@@ -381,6 +381,22 @@ void main(){
             }
             const auto& d = *terrain.data;
             const auto model = transformMatrix(t.position, t.rotation, t.scale);
+            // Reject fully offscreen terrains before material resolution, texture jobs,
+            // lightmap validation, or per-layer GL state updates. Keep full detail.
+            const int count = chunkCount(d);
+            bool inView = false;
+            for (int z = 0; z < count && !inView; ++z) {
+                for (int x = 0; x < count; ++x) {
+                    const auto& bounds = chunkBounds(d, x, z);
+                    if (frustum.visibleBox(bounds.center, bounds.extent, model)) {
+                        inView = true;
+                        break;
+                    }
+                }
+            }
+            if (!inView) {
+                return;
+            }
             const auto normals = normalMatrix(t.rotation, t.scale);
             glUniformMatrix4fv(location("uModel"), 1, GL_FALSE, model.m);
             glUniformMatrix3fv(location("uNormal"), 1, GL_FALSE, normals.m);
@@ -389,8 +405,9 @@ void main(){
             MeshRenderer baked;
             baked.lightmap = d.lightmap;
             baked.lightmapGrid = 1;
-            auto atlas =
-                lightmaps_.valid(assets, baked, "") ? textures_.get(assets, d.lightmap, error) : 0;
+            auto atlas = lightmaps_.valid(assets, baked, "")
+                             ? textures_.get(assets, d.lightmap, error, true)
+                             : 0;
             glActiveTexture(GL_TEXTURE4);
             glBindTexture(GL_TEXTURE_2D, atlas);
             if (atlas) {
@@ -403,8 +420,7 @@ void main(){
                 (std::filesystem::path(d.lightmap).parent_path() / "bake.json").generic_string();
             for (std::size_t i = 0; i < lights.size(); ++i) {
                 const auto& l = lights[i].settings;
-                glUniform1i(glGetUniformLocation(
-                                program_, ("uLightBaked[" + std::to_string(i) + "]").c_str()),
+                glUniform1i(location(("uLightBaked[" + std::to_string(i) + "]").c_str()),
                             atlas && l.mode == 1 && l.bake == manifest);
             }
             GLint has[4]{}, hasNormal[4]{};
@@ -447,7 +463,6 @@ void main(){
             glUniform4iv(location("uHasTexture"), 1, has);
             glUniform4iv(location("uHasNormal"), 1, hasNormal);
             glUniform4fv(location("uNormalStrengths"), 1, strengths);
-            const int count = chunkCount(d);
             for (int z = 0; z < count; ++z) {
                 for (int x = 0; x < count; ++x) {
                     const int index = z * count + x;
@@ -455,7 +470,14 @@ void main(){
                     if (!frustum.visibleBox(bounds.center, bounds.extent, model)) {
                         continue;
                     }
-                    if (occlusion && occlusion->valid &&
+                    if (!RenderVisibility::visible(world,
+                                                   e,
+                                                   t,
+                                                   bounds.center - bounds.extent,
+                                                   bounds.center + bounds.extent)) {
+                        continue;
+                    }
+                    if (RenderVisibility::world != &world && occlusion && occlusion->valid &&
                         Occlusion::eligible(world, e, t, MeshRenderer{}) &&
                         occlusion->hidden(e,
                                           t,

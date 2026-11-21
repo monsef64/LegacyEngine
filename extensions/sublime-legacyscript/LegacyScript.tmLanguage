@@ -93,7 +93,7 @@
 		</dict>
 		<dict>
 			<key>match</key>
-			<string>\b(GUI|GameObject|Camera|Transform|RigidBody|Collider|MeshRenderer|LuaScript|ParticleSystem)\b</string>
+			<string>\b(UI|GameObject|Camera|Transform|RigidBody|Collider|MeshRenderer|LuaScript|ParticleSystem)\b</string>
 			<key>name</key>
 			<string>support.class.legacyscript</string>
 		</dict>

@@ -135,7 +135,7 @@ FetchContent_Declare(jolt
   SOURCE_SUBDIR Build)
 FetchContent_MakeAvailable(jolt)
 
-# --- Assimp: static OBJ and glTF-only model import --------------------------
+# --- Assimp: static OBJ, glTF and Half-Life MDL model import --------------------------
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
@@ -145,13 +145,17 @@ set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
 get_cmake_property(legacy_cache_variables CACHE_VARIABLES)
 foreach(variable IN LISTS legacy_cache_variables)
-  if(variable MATCHES "^ASSIMP_BUILD_.*_IMPORTER$" AND NOT variable MATCHES "^ASSIMP_BUILD_(OBJ|GLTF)_IMPORTER$")
+  if(variable MATCHES "^ASSIMP_BUILD_.*_IMPORTER$" AND NOT variable MATCHES "^ASSIMP_BUILD_(OBJ|GLTF|MDL|MD2)_IMPORTER$")
     set(${variable} OFF CACHE BOOL "" FORCE)
   endif()
 endforeach()
 set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_MDL_IMPORTER ON CACHE BOOL "" FORCE)
+# Assimp 5.4 MDL references the shared normal lookup implemented by MD2.
+# MD2 remains excluded by the engine source-format allowlist.
+set(ASSIMP_BUILD_MD2_IMPORTER ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_BLEND_IMPORTER OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(assimp
   URL https://github.com/assimp/assimp/archive/refs/tags/v5.4.3.tar.gz)
@@ -223,9 +227,9 @@ add_library(legacy_audio STATIC src/audio/audio_clip.cpp src/audio/audio_output.
 target_include_directories(legacy_audio PUBLIC src)
 target_link_libraries(legacy_audio PUBLIC legacy_miniaudio)
 
-add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_scene.cpp src/scripting/lua_input.cpp src/scripting/lua_levels.cpp src/scripting/lua_events.cpp)
+add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_scene.cpp src/scripting/lua_input.cpp src/scripting/lua_levels.cpp src/scripting/lua_events.cpp src/ui/script_gui.cpp)
 target_include_directories(lua_console PUBLIC src)
-target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3)
+target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3 legacy_imgui)
 
 add_library(legacy_thumbnails STATIC src/assets/texture_preview.cpp)
 target_include_directories(legacy_thumbnails PUBLIC src PRIVATE third_party/stb)
@@ -281,7 +285,7 @@ target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_imgui img
 
 include(cmake/RmlUi.cmake)
 target_link_libraries(LegacyEngine PRIVATE legacy_game_ui)
-target_link_libraries(lua_console PUBLIC legacy_game_ui)
+target_link_libraries(lua_console PUBLIC legacy_game_ui legacy_material_textures)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)

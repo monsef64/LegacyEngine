@@ -1,6 +1,8 @@
 #include "rendering/material_textures.hpp"
 #include "core/worker_pool.hpp"
 #include "materials/material.hpp"
+#include "project/json_io.hpp"
+#include "rendering/texture_quality.hpp"
 #include <SDL3/SDL.h>
 #include <glad/gl.h>
 #include <memory>
@@ -21,24 +23,31 @@ void MaterialTextureCache::clear() {
     failures_.clear();
     bytes_ = 0;
 }
-unsigned
-MaterialTextureCache::get(const AssetManager& assets, const std::string& path, std::string& error) {
+unsigned MaterialTextureCache::get(const AssetManager& assets,
+                                   const std::string& path,
+                                   std::string& error,
+                                   bool fullResolution) {
+    if (quality_ != TextureQuality::current()) {
+        clear();
+        quality_ = TextureQuality::current();
+    }
     if (path.empty()) {
         return 0;
     }
-    auto found = entries_.find(path);
+    const std::string cacheKey = path + (fullResolution ? "|full" : "|scaled");
+    auto found = entries_.find(cacheKey);
     auto resident = [&] { return found == entries_.end() ? 0u : found->second.texture; };
     const auto now = std::chrono::steady_clock::now();
     if (found != entries_.end()) {
         found->second.used = frame_;
     }
-    const auto failure = failures_.find(path);
+    const auto failure = failures_.find(cacheKey);
     if (failure != failures_.end() && now - failure->second.first < std::chrono::seconds(1)) {
         error = failure->second.second;
         return resident();
     }
     try {
-        auto pending = pending_.find(path);
+        auto pending = pending_.find(cacheKey);
         if (pending != pending_.end()) {
             if (pending->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready ||
                 uploads_ >= 1) {
@@ -104,9 +113,9 @@ MaterialTextureCache::get(const AssetManager& assets, const std::string& path, s
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
             bytes_ += cost;
-            entries_[path] = entry;
+            entries_[cacheKey] = entry;
             ++uploads_;
-            failures_.erase(path);
+            failures_.erase(cacheKey);
             return entry.texture;
         }
         if (found != entries_.end() && now - found->second.checked < std::chrono::seconds(1)) {
@@ -119,27 +128,28 @@ MaterialTextureCache::get(const AssetManager& assets, const std::string& path, s
         const bool hasOld = found != entries_.end();
         const auto stamp = hasOld ? found->second.stamp : std::filesystem::file_time_type{};
         const auto oldSize = hasOld ? found->second.size : 0;
-        auto request = WorkerPool::shared().submit([assets, path, hasOld, stamp, oldSize] {
+        const int mipReduction = fullResolution ? 0 : quality_;
+        auto request = WorkerPool::shared().submit([assets,
+                                                    path,
+                                                    hasOld,
+                                                    stamp,
+                                                    oldSize,
+                                                    mipReduction] {
             if (!materialTexturePath(path)) {
                 throw std::runtime_error("Unsupported material texture");
             }
             const auto file = assets.resolve(path);
             Decoded result;
-            result.stamp = std::filesystem::last_write_time(file);
-            result.size = std::filesystem::file_size(file);
+            result.stamp = std::filesystem::last_write_time(assetContainerPath(file));
+            result.size = std::filesystem::file_size(assetContainerPath(file));
             if (hasOld && result.stamp == stamp && result.size == oldSize) {
                 result.unchanged = true;
                 return result;
             }
-            if (!result.size || result.size > 32 * 1024 * 1024) {
+            if (!result.size || (!embeddedAsset(path) && result.size > 32 * 1024 * 1024)) {
                 throw std::runtime_error("Material texture exceeds 32 MiB or is empty");
             }
-            std::ifstream in(file, std::ios::binary);
-            std::vector<unsigned char> encoded(static_cast<std::size_t>(result.size));
-            in.read(reinterpret_cast<char*>(encoded.data()), std::streamsize(encoded.size()));
-            if (!in || in.peek() != std::char_traits<char>::eof()) {
-                throw std::runtime_error("Cannot read material texture");
-            }
+            auto encoded = readAssetBytes(file, 32 * 1024 * 1024);
             int channels = 0;
             if (!stbi_info_from_memory(encoded.data(),
                                        int(encoded.size()),
@@ -168,20 +178,49 @@ MaterialTextureCache::get(const AssetManager& assets, const std::string& path, s
                                  pixels.get() + (result.height - y - 1) * row);
             }
             result.pixels.assign(pixels.get(), pixels.get() + row * result.height);
-            if (std::filesystem::last_write_time(file) != result.stamp ||
-                std::filesystem::file_size(file) != result.size) {
+            // Box-filter on the worker, reducing both upload cost and residency.
+            for (int mip = 0; mip < mipReduction && (result.width > 1 || result.height > 1);
+                 ++mip) {
+                const int w = std::max(1, result.width / 2), h = std::max(1, result.height / 2);
+                std::vector<unsigned char> reduced(std::size_t(w) * h * 4);
+                for (int y = 0; y < h; ++y) {
+                    for (int x = 0; x < w; ++x) {
+                        for (int c = 0; c < 4; ++c) {
+                            unsigned sum = 0, samples = 0;
+                            // Include odd trailing rows/columns in the final destination texel.
+                            const int endX = (x + 1) * result.width / w,
+                                      endY = (y + 1) * result.height / h;
+                            for (int sy = y * result.height / h; sy < endY; ++sy) {
+                                for (int sx = x * result.width / w; sx < endX; ++sx) {
+                                    sum +=
+                                        result
+                                            .pixels[(std::size_t(sy) * result.width + sx) * 4 + c];
+                                    ++samples;
+                                }
+                            }
+                            reduced[(std::size_t(y) * w + x) * 4 + c] =
+                                static_cast<unsigned char>((sum + samples / 2) / samples);
+                        }
+                    }
+                }
+                result.pixels = std::move(reduced);
+                result.width = w;
+                result.height = h;
+            }
+            if (std::filesystem::last_write_time(assetContainerPath(file)) != result.stamp ||
+                std::filesystem::file_size(assetContainerPath(file)) != result.size) {
                 throw std::runtime_error("Texture changed while streaming; retrying");
             }
             return result;
         });
         waiting_ = true;
         if (request) {
-            pending_.emplace(path, std::move(*request));
+            pending_.emplace(cacheKey, std::move(*request));
         }
         return resident();
     } catch (const std::exception& e) {
         // Remove deleted/corrupt resources once, not alternating stale IDs/fallback.
-        found = entries_.find(path);
+        found = entries_.find(cacheKey);
         if (found != entries_.end()) {
             if (found->second.texture) {
                 glDeleteTextures(1, &found->second.texture);
@@ -193,7 +232,7 @@ MaterialTextureCache::get(const AssetManager& assets, const std::string& path, s
         if (failures_.size() > 256) {
             failures_.clear();
         }
-        failures_[path] = {now, error};
+        failures_[cacheKey] = {now, error};
         return 0;
     }
 }

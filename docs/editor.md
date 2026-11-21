@@ -193,7 +193,12 @@ on selected roots, without processing selected descendants twice. Drop on anothe
 object to parent the group, or on blank Hierarchy space / the level root to unparent
 while preserving world poses. Cyclic group reparenting is rejected. Arrows beside
 parents fold/unfold their children; search temporarily reveals matching descendants.
-Multi-selection does not apply Inspector field edits or gizmo transforms to the group.
+With multiple objects selected, Inspector exposes shared **Active**, **Static**, **Layer**,
+and local **Position / Rotation / Scale** controls. Values initially show the primary
+object; editing an axis assigns that axis to every selected object without overwriting
+their other axes. Parent/child selections retain local-space semantics. Select one
+object for component-specific properties. Gizmo transforms still affect only the primary.
+Batch Inspector edits participate in normal undo and Play-mode rollback.
 
 Scene transform and playback toolbars do not scroll. Asset navigation uses an
 up-arrow button (hover for “Up one folder”). Create menus include Character
@@ -541,3 +546,87 @@ Manual verification (no automated tests):
   visible parts: Inspector should show the exact mesh child. Toggle **Select model
   roots**, then compare plain click with Ctrl-click. Move a selected child,
   undo/redo, and verify the parent and siblings remain unchanged.
+
+### Process and GPU usage
+
+Debug > Profiler displays process resident RAM and CPU utilization normalized across
+all logical cores (100% means all cores), sampled twice per second while open.
+GPU memory usage is device-wide, not an attribution to LegacyEngine, and is shown
+only when the OpenGL driver supports `GL_NVX_gpu_memory_info`. Unsupported drivers
+show unavailable rather than an estimated number. Pause sampling freezes these values.
+
+### Manual performance and batch-edit checks
+
+- Select objects with different positions, including a selected parent and child.
+  Change only X; confirm Y/Z remain unchanged and local coordinates are preserved.
+- Batch-toggle Active / Static, assign a layer, and undo/redo. Repeat in Play,
+  then Stop and verify the authored scene is restored.
+- Edit an attached script externally: exported fields should refresh within about
+  half a second without resetting already assigned Inspector values.
+- Change a shared material through Inspector and confirm immediate persistence;
+  switch projects to confirm cached values do not leak between projects.
+- Open Profiler, exercise the scene, pause sampling, and verify metrics freeze.
+  Confirm unsupported GPU drivers show an unavailable label.
+- Move the camera away from terrain; confirm no missing chunks when returning.
+  Terrain detail and silhouettes should be unchanged (no new automatic LOD).
+
+### When Bake level does not start
+
+The Lighting window now reports missing prerequisites when **Bake level** is clicked,
+rather than silently ignoring the click. A receiver must be an active, static mesh
+or terrain without animation/dynamic rigid-body ownership. A source must be an
+active, enabled light with positive intensity and **Mode: Static in the light
+component**. Checking only the light GameObject's Static box is not sufficient.
+Open/save a project first. At most 128 static light sources are supported.
+
+Manually verify no-receiver, no-static-light, and valid-scene cases. In a valid
+scene the progress display should appear; after completion verify assignments,
+shadows, save/reopen persistence, and undo. This startup feedback change does not
+establish that every reported bake-start failure has the same cause.
+
+### Half-Life 1 MDL import
+
+Import the main GoldSrc studio `.mdl` file (IDST version 10). The importer uses
+the existing BSD-licensed Assimp dependency, not Half-Life Asset Manager code.
+Meshes, bones, animation clips, and embedded palette textures flow through the
+normal model pipeline. Keep external texture (`*T.mdl`) and numbered sequence-group
+files beside the source model during import. Import the main file, not its companions.
+Quake MDL and Source-engine MDL files are rejected explicitly.
+
+This is a model/animation conversion, not a Half-Life runtime: game-specific
+sequence events, blend controllers, bodygroup switching, attachments, and hitbox
+semantics are not exposed as engine gameplay behavior. Check model orientation,
+scale, default bodygroups, texture alpha, skeleton deformation, and all clips
+manually, including models with external companion files. Converted resources
+are stored in the same packed model container as other new model imports.
+
+## Texture quality and packed model containers
+
+Project Settings > Rendering selects **Full / Half / Quarter / Eighth** texture
+resolution. This reduces uploaded material image dimensions (including normal maps)
+before mipmap generation; it does not modify source files. Light cookies and scripted
+GUI images remain full resolution. `getTextureQuality()` returns 0..3;
+`setTextureQuality(quality)` overrides it during Play only, including from `onStart`.
+Stop restores the project value; the runtime override is never serialized.
+
+New model imports store meshes, animation clips, materials and encoded textures in
+one `.mesh` container, not a generated asset folder. Expand its arrow in either
+Asset Browser layout to select or drag individual subassets. References such as
+`Character.mesh#Animation_0.leanim` identify virtual members, not filesystem files.
+Materials remain editable through the Inspector; saving updates the container.
+Move/copy/rename the owning model to keep its members together. Older separate-file
+models remain supported. Packed models are bounded to 256 MiB of decoded JSON;
+each encoded texture is bounded to 32 MiB. Texture rendering retains its existing
+image dimension limits, so packing does not bypass renderer resource budgets.
+
+The multiple-object Inspector exposes fields on components shared by the whole
+selection. Mixed fields are marked; editing a vector axis preserves other axes on
+each object. Each field is validated for all selected objects before application.
+Component runtime state and unrelated fields are not copied from the primary object.
+Specialized script attachment, terrain brush and river point editors remain
+single-object tools. Batch changes use the normal Undo/Redo and Play rollback.
+
+In the Occlusion Culling window, the selected-camera visibility preview excludes
+objects outside that camera's frustum and, when valid baked data exists, baked
+occluded objects. It does not change authored Active flags. Preview overlays are
+hidden so editor helpers do not obscure the retained visible geometry.

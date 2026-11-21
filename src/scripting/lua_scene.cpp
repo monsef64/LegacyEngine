@@ -9,6 +9,7 @@
 #include "physics/queries.hpp"
 #include "prefabs/prefab.hpp"
 #include "project/layers.hpp"
+#include "rendering/texture_quality.hpp"
 #include "scene/scene_camera.hpp"
 #include "scene/skybox_transition.hpp"
 #include "scripting/script_exports.hpp"
@@ -73,7 +74,7 @@ const char* types[]{"Transform",
                     "TPSCamera",
                     "NavMeshAgent",
                     "NavMeshObstacle",
-                    "GUI"};
+                    "UI"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -139,7 +140,7 @@ bool has(const Handle& h, int type) {
     case 26:
         return h.world->has<BoneAttachment>(h.entity);
     case 30:
-        return h.world->has<GUI>(h.entity);
+        return h.world->has<UI>(h.entity);
     case 29:
         return h.world->has<NavMeshObstacle>(h.entity);
     case 28:
@@ -484,6 +485,25 @@ LuaScene::LuaScene(lua_State* L,
         lua_setfield(L, -2, colorNames[i]);
     }
     lua_setglobal(L, "color");
+    lua_pushcfunction(L, [](lua_State* state) -> int {
+        if (!TextureQuality::playing) {
+            return luaL_error(state, "setTextureQuality is Play-only");
+        }
+        const auto quality = luaL_checkinteger(state, 1);
+        if (quality < 0 || quality > 3) {
+            return luaL_error(
+                state, "Texture quality must be 0 (full), 1 (half), 2 (quarter), or 3 (eighth)");
+        }
+        TextureQuality::runtime = int(quality);
+        return 0;
+    });
+    lua_setglobal(L, "setTextureQuality");
+    lua_pushcfunction(L, [](lua_State* state) -> int {
+        lua_pushinteger(state, TextureQuality::current());
+        return 1;
+    });
+    lua_setglobal(L, "getTextureQuality");
+
     const char* metas[]{"GameObject", "Component", "Vector"};
     const lua_CFunction reads[]{objectIndex, componentIndex, vectorIndex};
     const lua_CFunction writes[]{objectNewIndex, componentNewIndex, vectorNewIndex};
@@ -743,7 +763,7 @@ int LuaScene::api(lua_State* L) {
             self.world_.each<Water>([&](Entity e, Water&) { collect(e); });
             break;
         case 30:
-            self.world_.each<GUI>([&](Entity e, GUI&) { collect(e); });
+            self.world_.each<UI>([&](Entity e, UI&) { collect(e); });
             break;
         case 29:
             self.world_.each<NavMeshObstacle>([&](Entity e, NavMeshObstacle&) { collect(e); });
@@ -940,7 +960,7 @@ int LuaScene::api(lua_State* L) {
             self.world_.remove<Water>(h.entity);
             break;
         case 30:
-            self.world_.remove<GUI>(h.entity);
+            self.world_.remove<UI>(h.entity);
             break;
         case 29:
             self.world_.remove<NavMeshObstacle>(h.entity);
@@ -1053,7 +1073,7 @@ int LuaScene::api(lua_State* L) {
             if (!self.world_.has<Transform>(h.entity)) {
                 self.world_.add(h.entity, Transform{});
             }
-            self.world_.add(h.entity, GUI{});
+            self.world_.add(h.entity, UI{});
             break;
         case 29:
             if (!self.world_.has<Transform>(h.entity)) {
@@ -1359,7 +1379,7 @@ int LuaScene::componentIndex(lua_State* L) {
         return luaL_error(L, "Component no longer exists");
     }
     if (c.type == 30) {
-        const auto& g = c.object.world->get<GUI>(c.object.entity);
+        const auto& g = c.object.world->get<UI>(c.object.entity);
         if (!std::strcmp(key, "enabled")) {
             lua_pushboolean(L, g.enabled);
             return 1;
@@ -2155,9 +2175,9 @@ int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
     if (c.type == 30) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
-            return luaL_error(L, "GUI no longer exists");
+            return luaL_error(L, "UI no longer exists");
         }
-        auto& g = c.object.world->get<GUI>(c.object.entity);
+        auto& g = c.object.world->get<UI>(c.object.entity);
         const char* key = luaL_checkstring(L, 2);
         if (!std::strcmp(key, "enabled")) {
             luaL_checktype(L, 3, LUA_TBOOLEAN);
@@ -2165,7 +2185,7 @@ int LuaScene::componentNewIndex(lua_State* L) {
             return 0;
         }
         if (std::strcmp(key, "rml") && std::strcmp(key, "rcss")) {
-            return luaL_error(L, "Unknown or read-only GUI property");
+            return luaL_error(L, "Unknown or read-only UI property");
         }
         const char* path = luaL_checkstring(L, 3);
         if (!exportAssetPath(path) ||
@@ -4100,12 +4120,12 @@ int LuaScene::fadeColorControl(lua_State* L) {
 int LuaScene::guiMethod(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
     if (!c.object.world->alive(c.object.entity) || !has(c.object, 30)) {
-        return luaL_error(L, "GUI no longer exists");
+        return luaL_error(L, "UI no longer exists");
     }
     const int op = int(lua_tointeger(L, lua_upvalueindex(2)));
     const int arg = luaL_testudata(L, 1, "Component") ? 2 : 1;
     auto* ui = GameUI::current();
-    const auto& g = c.object.world->get<GUI>(c.object.entity);
+    const auto& g = c.object.world->get<UI>(c.object.entity);
     const bool available = ui && g.enabled && isActive(*c.object.world, c.object.entity) &&
                            ui->loaded(c.object.entity);
     if (op == 0) {
@@ -4115,7 +4135,7 @@ int LuaScene::guiMethod(lua_State* L) {
     size_t length = 0;
     const char* id = luaL_checklstring(L, arg, &length);
     if (!length || length > 64 || std::strlen(id) != length) {
-        return luaL_error(L, "GUI element id must be 1..64 bytes");
+        return luaL_error(L, "UI element id must be 1..64 bytes");
     }
     if (op == 1) {
         const char* text = luaL_checkstring(L, arg + 1);
@@ -4140,7 +4160,7 @@ int LuaScene::guiMethod(lua_State* L) {
             auto* runtime = GameUI::current();
             if (!bound.object.world->alive(bound.object.entity) || !has(bound.object, 30) ||
                 !isActive(*bound.object.world, bound.object.entity) ||
-                !bound.object.world->get<GUI>(bound.object.entity).enabled || !runtime ||
+                !bound.object.world->get<UI>(bound.object.entity).enabled || !runtime ||
                 !runtime->loaded(bound.object.entity)) {
                 return 0;
             }

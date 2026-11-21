@@ -1,7 +1,391 @@
 [
   {
+    "name": "GUI.image",
+    "signature": "GUI.image(path:string,width?:number,height?:number):boolean - Full-resolution project image; returns loaded."
+  },
+  {
+    "name": "GUI.imageButton",
+    "signature": "GUI.imageButton(id:string,path:string,width?:number,height?:number):boolean - Returns clicked."
+  },
+  {
+    "name": "GUI.beginTable",
+    "signature": "GUI.beginTable(id:string,columns:integer,flags?:integer,height?:number):boolean - 1..64 columns; only end when true. ScrollY needs height."
+  },
+  {
+    "name": "GUI.endTable",
+    "signature": "GUI.endTable() - Table scope operation; set up columns before rows."
+  },
+  {
+    "name": "GUI.tableNextRow",
+    "signature": "GUI.tableNextRow() - Table scope operation; set up columns before rows."
+  },
+  {
+    "name": "GUI.tableHeadersRow",
+    "signature": "GUI.tableHeadersRow() - Table scope operation; set up columns before rows."
+  },
+  {
+    "name": "GUI.tableNextColumn",
+    "signature": "GUI.tableNextColumn():boolean - Advance to next column."
+  },
+  {
+    "name": "GUI.tableSetColumnIndex",
+    "signature": "GUI.tableSetColumnIndex(index:integer):boolean - Zero-based table column index."
+  },
+  {
+    "name": "GUI.tableSetupColumn",
+    "signature": "GUI.tableSetupColumn(label:string,width?:number) - Fixed width when positive, otherwise stretch."
+  },
+  {
+    "name": "GUI.tableGetColumnIndex",
+    "signature": "GUI.tableGetColumnIndex():integer - Current zero-based index or column count."
+  },
+  {
+    "name": "GUI.tableGetColumnCount",
+    "signature": "GUI.tableGetColumnCount():integer - Current zero-based index or column count."
+  },
+  {
+    "name": "GUI.beginMenu",
+    "signature": "GUI.beginMenu(label:string,enabled?:boolean):boolean - Only end when true."
+  },
+  {
+    "name": "GUI.endMenu",
+    "signature": "GUI.endMenu() - End successful beginMenu."
+  },
+  {
+    "name": "GUI.beginMenuBar",
+    "signature": "GUI.beginMenuBar():boolean - Requires GUI.WindowFlags.MenuBar on beginWindow. Only end when true."
+  },
+  {
+    "name": "GUI.endMenuBar",
+    "signature": "GUI.endMenuBar() - End successful beginMenuBar."
+  },
+  {
+    "name": "GUI.menuItem",
+    "signature": "GUI.menuItem(label:string,selected?:boolean,enabled?:boolean):boolean - Returns clicked."
+  },
+  {
+    "name": "GUI.openPopup",
+    "signature": "GUI.openPopup(id:string) - Open a named popup."
+  },
+  {
+    "name": "GUI.beginPopup",
+    "signature": "GUI.beginPopup(id:string):boolean - Only endPopup when true."
+  },
+  {
+    "name": "GUI.beginPopupModal",
+    "signature": "GUI.beginPopupModal(id:string):boolean - Only endPopup when true."
+  },
+  {
+    "name": "GUI.endPopup",
+    "signature": "GUI.endPopup() - Popup scope operation."
+  },
+  {
+    "name": "GUI.closeCurrentPopup",
+    "signature": "GUI.closeCurrentPopup() - Popup scope operation."
+  },
+  {
+    "name": "GUI.beginCombo",
+    "signature": "GUI.beginCombo(label:string,preview:string):boolean - Only endCombo when true."
+  },
+  {
+    "name": "GUI.endCombo",
+    "signature": "GUI.endCombo() - End successful beginCombo."
+  },
+  {
+    "name": "GUI.combo",
+    "signature": "GUI.combo(label:string,index:integer,items:table):integer,boolean - 1-based selected index and changed; 1..256 items."
+  },
+  {
+    "name": "GUI.radioButton",
+    "signature": "GUI.radioButton(label:string,selected:boolean):boolean - Returns clicked."
+  },
+  {
+    "name": "GUI.pushStyleColor",
+    "signature": "GUI.pushStyleColor(name:string,r:number,g:number,b:number,a?:number) - Use GUI.Col constants; pair with popStyleColor."
+  },
+  {
+    "name": "GUI.popStyleColor",
+    "signature": "GUI.popStyleColor(count?:integer) - Strict reverse-order scoped pop; default 1."
+  },
+  {
+    "name": "GUI.popStyleVar",
+    "signature": "GUI.popStyleVar(count?:integer) - Strict reverse-order scoped pop; default 1."
+  },
+  {
+    "name": "GUI.pushStyleVar",
+    "signature": "GUI.pushStyleVar(name:string,x:number,y?:number) - Use GUI.StyleVar constants. Values 0..1000."
+  },
+  {
+    "name": "GUI.pushFontSize",
+    "signature": "GUI.pushFontSize(size:number) - 8..96 pixels; pair with popFont."
+  },
+  {
+    "name": "GUI.popFont",
+    "signature": "GUI.popFont() - End font size scope."
+  },
+  {
+    "name": "GUI.beginDragDropSource",
+    "signature": "GUI.beginDragDropSource():boolean - Only end when true. Script payloads isolated from editor payloads."
+  },
+  {
+    "name": "GUI.beginDragDropTarget",
+    "signature": "GUI.beginDragDropTarget():boolean - Only end when true. Script payloads isolated from editor payloads."
+  },
+  {
+    "name": "GUI.endDragDropSource",
+    "signature": "GUI.endDragDropSource() - End successful drag/drop scope."
+  },
+  {
+    "name": "GUI.endDragDropTarget",
+    "signature": "GUI.endDragDropTarget() - End successful drag/drop scope."
+  },
+  {
+    "name": "GUI.setDragDropPayload",
+    "signature": "GUI.setDragDropPayload(kind:string,value:string) - Source only. Type max 28 bytes; value max 4096."
+  },
+  {
+    "name": "GUI.acceptDragDropPayload",
+    "signature": "GUI.acceptDragDropPayload(kind:string):string? - Target only. Returns delivered matching script payload or nil."
+  },
+  {
+    "name": "GUI.getMousePos",
+    "signature": "GUI.getMousePos():number,number - Returns Game-surface mouse x,y."
+  },
+  {
+    "name": "GUI.isMouseDown",
+    "signature": "GUI.isMouseDown(button:integer):boolean - Mouse button 0..4."
+  },
+  {
+    "name": "GUI.isMouseClicked",
+    "signature": "GUI.isMouseClicked(button:integer):boolean - Mouse button 0..4."
+  },
+  {
+    "name": "GUI.isMouseReleased",
+    "signature": "GUI.isMouseReleased(button:integer):boolean - Mouse button 0..4."
+  },
+  {
+    "name": "GUI.isKeyDown",
+    "signature": "GUI.isKeyDown(key:string):boolean - Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows."
+  },
+  {
+    "name": "GUI.isKeyReleased",
+    "signature": "GUI.isKeyReleased(key:string):boolean - Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows."
+  },
+  {
+    "name": "GUI.isKeyPressed",
+    "signature": "GUI.isKeyPressed(key:string,repeatKey?:boolean):boolean - Named key, optional repeat."
+  },
+  {
+    "name": "GUI.drawLine",
+    "signature": "GUI.drawLine(x:number,y:number,x2:number,y2:number,r:number,g:number,b:number,a?:number,width?:number) - Screen-pixel coordinates; colors 0..1."
+  },
+  {
+    "name": "GUI.drawRect",
+    "signature": "GUI.drawRect(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) - Screen-pixel coordinates; colors 0..1."
+  },
+  {
+    "name": "GUI.drawRectFilled",
+    "signature": "GUI.drawRectFilled(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) - Screen-pixel coordinates; colors 0..1."
+  },
+  {
+    "name": "GUI.drawCircle",
+    "signature": "GUI.drawCircle(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) - Screen-pixel coordinates; radius 0..100000."
+  },
+  {
+    "name": "GUI.drawCircleFilled",
+    "signature": "GUI.drawCircleFilled(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) - Screen-pixel coordinates; radius 0..100000."
+  },
+  {
+    "name": "GUI.drawText",
+    "signature": "GUI.drawText(x:number,y:number,value:string,r:number,g:number,b:number,a?:number) - Screen-pixel coordinates."
+  },
+  {
+    "name": "GUI.drawTriangleFilled",
+    "signature": "GUI.drawTriangleFilled(x:number,y:number,x2:number,y2:number,x3:number,y3:number,r:number,g:number,b:number,a?:number) - Screen-pixel coordinates."
+  },
+  {
+    "name": "getTextureQuality",
+    "signature": "getTextureQuality():integer - Effective texture quality: 0 full, 1 half, 2 quarter, 3 eighth."
+  },
+  {
+    "name": "setTextureQuality",
+    "signature": "setTextureQuality(quality:integer) - Play-only override 0..3; Stop restores project default."
+  },
+  {
     "name": "GUI",
-    "signature": "GUI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(GUI) or @export hud GUI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
+    "signature": "GUI - ImGui runtime interface namespace, not a component. Register GUI.onDraw(callback) once in onStart. Draw widgets only in this callback; no wait/task. Windows are scoped per subscription and rendered into Game, including the separate Game window. UI is the RML/RCSS component."
+  },
+  {
+    "name": "GUI.onDraw",
+    "signature": "GUI.onDraw(callback:fun()):integer - Register once in onStart; returns off(token) handle."
+  },
+  {
+    "name": "GUI.beginWindow",
+    "signature": "GUI.beginWindow(title:string,flags?:integer):boolean - Always call endWindow even when false."
+  },
+  {
+    "name": "GUI.endWindow",
+    "signature": "GUI.endWindow() - End the current window."
+  },
+  {
+    "name": "GUI.text",
+    "signature": "GUI.text(value:string) - Plain text, never a printf format."
+  },
+  {
+    "name": "GUI.textWrapped",
+    "signature": "GUI.textWrapped(value:string) - Wrapped plain text."
+  },
+  {
+    "name": "GUI.button",
+    "signature": "GUI.button(label:string):boolean - True on activation."
+  },
+  {
+    "name": "GUI.smallButton",
+    "signature": "GUI.smallButton(label:string):boolean - Compact button."
+  },
+  {
+    "name": "GUI.checkbox",
+    "signature": "GUI.checkbox(label:string,value:boolean):boolean,boolean - Returns new value, changed."
+  },
+  {
+    "name": "GUI.sliderFloat",
+    "signature": "GUI.sliderFloat(label:string,value:number,min:number,max:number):number,boolean - Returns value, changed."
+  },
+  {
+    "name": "GUI.sliderInt",
+    "signature": "GUI.sliderInt(label:string,value:integer,min:integer,max:integer):integer,boolean - Returns value, changed."
+  },
+  {
+    "name": "GUI.dragFloat",
+    "signature": "GUI.dragFloat(label:string,value:number,speed?:number):number,boolean - Returns value, changed; speed defaults 0.1."
+  },
+  {
+    "name": "GUI.inputFloat",
+    "signature": "GUI.inputFloat(label:string,value:number):number,boolean - Returns value, changed."
+  },
+  {
+    "name": "GUI.inputInt",
+    "signature": "GUI.inputInt(label:string,value:integer):integer,boolean - Returns value, changed."
+  },
+  {
+    "name": "GUI.inputText",
+    "signature": "GUI.inputText(label:string,value:string):string,boolean - Returns text, changed; max 4095 bytes."
+  },
+  {
+    "name": "GUI.colorEdit3",
+    "signature": "GUI.colorEdit3(label:string,r:number,g:number,b:number):number,number,number,boolean - Returns r,g,b,changed."
+  },
+  {
+    "name": "GUI.colorEdit4",
+    "signature": "GUI.colorEdit4(label:string,r:number,g:number,b:number,a:number):number,number,number,number,boolean - Returns r,g,b,a,changed."
+  },
+  {
+    "name": "GUI.separator",
+    "signature": "GUI.separator() - Horizontal separator."
+  },
+  {
+    "name": "GUI.sameLine",
+    "signature": "GUI.sameLine(offset?:number,spacing?:number) - Continue on the same line."
+  },
+  {
+    "name": "GUI.spacing",
+    "signature": "GUI.spacing() - Add vertical space."
+  },
+  {
+    "name": "GUI.newLine",
+    "signature": "GUI.newLine() - Start a line."
+  },
+  {
+    "name": "GUI.progressBar",
+    "signature": "GUI.progressBar(fraction:number) - Clamps fraction to 0..1."
+  },
+  {
+    "name": "GUI.selectable",
+    "signature": "GUI.selectable(label:string,selected?:boolean):boolean - True when clicked."
+  },
+  {
+    "name": "GUI.collapsingHeader",
+    "signature": "GUI.collapsingHeader(label:string):boolean - True while expanded; no matching end."
+  },
+  {
+    "name": "GUI.beginChild",
+    "signature": "GUI.beginChild(id:string,width?:number,height?:number):boolean - Always pair with endChild."
+  },
+  {
+    "name": "GUI.endChild",
+    "signature": "GUI.endChild() - End child region."
+  },
+  {
+    "name": "GUI.beginGroup",
+    "signature": "GUI.beginGroup() - Begin a layout group."
+  },
+  {
+    "name": "GUI.endGroup",
+    "signature": "GUI.endGroup() - End a layout group."
+  },
+  {
+    "name": "GUI.beginDisabled",
+    "signature": "GUI.beginDisabled(disabled?:boolean) - Default true; pair with endDisabled."
+  },
+  {
+    "name": "GUI.endDisabled",
+    "signature": "GUI.endDisabled() - End disabled scope."
+  },
+  {
+    "name": "GUI.pushID",
+    "signature": "GUI.pushID(id:string) - Scope repeated widget labels; pair with popID."
+  },
+  {
+    "name": "GUI.popID",
+    "signature": "GUI.popID() - Pop a widget ID."
+  },
+  {
+    "name": "GUI.setNextWindowPos",
+    "signature": "GUI.setNextWindowPos(x:number,y:number) - Game-surface pixels; call before beginWindow."
+  },
+  {
+    "name": "GUI.setNextWindowSize",
+    "signature": "GUI.setNextWindowSize(width:number,height:number) - Game-surface pixels; call before beginWindow."
+  },
+  {
+    "name": "GUI.setCursorPos",
+    "signature": "GUI.setCursorPos(x:number,y:number) - Window-local content position."
+  },
+  {
+    "name": "GUI.getWindowSize",
+    "signature": "GUI.getWindowSize():number,number - Returns width,height."
+  },
+  {
+    "name": "GUI.getContentRegionAvail",
+    "signature": "GUI.getContentRegionAvail():number,number - Returns available width,height."
+  },
+  {
+    "name": "GUI.setNextItemWidth",
+    "signature": "GUI.setNextItemWidth(width:number) - Width of next input."
+  },
+  {
+    "name": "GUI.isItemHovered",
+    "signature": "GUI.isItemHovered():boolean - Whether last widget is hovered."
+  },
+  {
+    "name": "GUI.isItemActive",
+    "signature": "GUI.isItemActive():boolean - Whether last widget is active."
+  },
+  {
+    "name": "GUI.setTooltip",
+    "signature": "GUI.setTooltip(value:string) - Plain-text tooltip."
+  },
+  {
+    "name": "GUI.bulletText",
+    "signature": "GUI.bulletText(value:string) - Bulleted plain text."
+  },
+  {
+    "name": "GUI.getDisplaySize",
+    "signature": "GUI.getDisplaySize():number,number - Returns Game-surface pixel width,height."
+  },
+  {
+    "name": "UI",
+    "signature": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or @export hud UI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
   },
   {
     "name": "Vector3",

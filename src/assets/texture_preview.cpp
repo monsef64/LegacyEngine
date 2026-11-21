@@ -45,11 +45,12 @@ TextureThumbnail loadTextureThumbnail(const AssetManager& assets,
         throw std::runtime_error("Unsupported thumbnail format");
     }
     const auto source = assets.resolve(path);
-    const auto bytes = std::filesystem::file_size(source);
-    if (bytes > 32 * 1024 * 1024) {
+    const auto bytes = std::filesystem::file_size(assetContainerPath(source));
+    if (!embeddedAsset(path) && bytes > 32 * 1024 * 1024) {
         throw std::runtime_error("Texture exceeds thumbnail input limit");
     }
-    const auto stamp = std::filesystem::last_write_time(source).time_since_epoch().count();
+    const auto stamp =
+        std::filesystem::last_write_time(assetContainerPath(source)).time_since_epoch().count();
     auto cache = thumbnailCachePath(assets, path);
     TextureThumbnail result;
     {
@@ -82,16 +83,8 @@ TextureThumbnail loadTextureThumbnail(const AssetManager& assets,
     }
     int width = 0, height = 0, channels = 0;
     // Bounded encoded read also handles Unicode filenames on Windows.
-    std::ifstream file(source, std::ios::binary);
-    if (!file) {
-        throw std::runtime_error("Cannot read texture");
-    }
-    std::vector<unsigned char> encoded(static_cast<std::size_t>(bytes));
-    file.read(reinterpret_cast<char*>(encoded.data()), static_cast<std::streamsize>(bytes));
-    if (!file || file.peek() != std::char_traits<char>::eof()) {
-        throw std::runtime_error("Texture changed during preview read");
-    }
-    if (encoded.size() != bytes ||
+    auto encoded = readAssetBytes(source, 32 * 1024 * 1024);
+    if ((!embeddedAsset(path) && encoded.size() != bytes) ||
         !stbi_info_from_memory(encoded.data(), int(encoded.size()), &width, &height, &channels) ||
         width <= 0 || height <= 0 || std::uint64_t(width) * height > 16 * 1024 * 1024) {
         throw std::runtime_error("Invalid or oversized texture");
@@ -192,10 +185,10 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
         }
         e.checked = now;
         try {
-            const auto file = assets.resolve(path);
+            const auto file = assetContainerPath(assets.resolve(path));
             bool dependencyCurrent = true;
             if (!e.dependency.empty()) {
-                const auto dependency = assets.resolve(e.dependency);
+                const auto dependency = assetContainerPath(assets.resolve(e.dependency));
                 const bool exists = std::filesystem::is_regular_file(dependency);
                 dependencyCurrent =
                     exists == e.dependencyExists &&
@@ -239,7 +232,7 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
     entry.touched = frame_;
     entry.checked = now;
     try {
-        const auto file = assets.resolve(path);
+        const auto file = assetContainerPath(assets.resolve(path));
         entry.modified = std::filesystem::last_write_time(file);
         entry.bytes = std::filesystem::file_size(file);
         bool cacheHit = false;
@@ -248,7 +241,7 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
             const auto material = loadMaterial(assets, path);
             entry.dependency = material.texture;
             if (!entry.dependency.empty()) {
-                const auto dependency = assets.resolve(entry.dependency);
+                const auto dependency = assetContainerPath(assets.resolve(entry.dependency));
                 entry.dependencyExists = std::filesystem::is_regular_file(dependency);
                 if (entry.dependencyExists) {
                     entry.dependencyModified = std::filesystem::last_write_time(dependency);

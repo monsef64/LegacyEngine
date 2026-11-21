@@ -104,7 +104,7 @@ class MaterialAssetCache {
         if (entry.valid && now - entry.checked < std::chrono::milliseconds(250)) {
             return entry.properties;
         }
-        const auto file = assets.resolve(path);
+        const auto file = assetContainerPath(assets.resolve(path));
         const auto stamp = std::filesystem::last_write_time(file);
         const auto bytes = std::filesystem::file_size(file);
         entry.checked = now;

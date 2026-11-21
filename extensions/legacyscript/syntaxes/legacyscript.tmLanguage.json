@@ -55,7 +55,7 @@
     },
     {
       "name": "support.class.legacyscript",
-      "match": "\\b(GUI|GameObject|Camera|Transform|RigidBody|Collider|MeshRenderer|LuaScript|ParticleSystem)\\b"
+      "match": "\\b(UI|GameObject|Camera|Transform|RigidBody|Collider|MeshRenderer|LuaScript|ParticleSystem)\\b"
     },
     {
       "name": "constant.numeric.lua",

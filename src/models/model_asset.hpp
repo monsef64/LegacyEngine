@@ -42,6 +42,15 @@ inline Json modelDocument(const AssetManager& assets, const std::string& path) {
 inline const Json& cachedModelDocument(const AssetManager& assets,
                                        const std::string& path,
                                        std::map<std::string, Json>* cache) {
+    if (embeddedAsset(path)) {
+        const auto& root =
+            cachedModelDocument(assets, assetContainerPath(path).generic_string(), cache);
+        const auto& child = root.at("embeddedAssets").at(embeddedAssetName(path));
+        if (child.at("format") != "LegacyEngineMesh" || child.at("version") != 1) {
+            throw std::runtime_error("Invalid embedded mesh");
+        }
+        return child;
+    }
     auto it = cache->find(path);
     if (it == cache->end()) {
         it = cache->emplace(path, modelDocument(assets, path)).first;

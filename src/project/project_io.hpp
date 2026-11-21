@@ -117,7 +117,7 @@ inline std::string encodeLegacy(World& world,
             (world.has<TPSCamera>(e) ? 4294967296ull : 0ull) |
             (world.has<NavMeshAgent>(e) ? 8589934592ull : 0ull) |
             (world.has<NavMeshObstacle>(e) ? 17179869184ull : 0ull) |
-            (world.has<GUI>(e) ? 68719476736ull : 0ull);
+            (world.has<UI>(e) ? 68719476736ull : 0ull);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -353,7 +353,7 @@ inline std::string encodeLegacy(World& world,
             out << std::quoted(Navigation::obstacleSettings(*o).dump()) << ' ';
         }
 
-        if (const auto* g = world.tryGet<GUI>(e)) {
+        if (const auto* g = world.tryGet<UI>(e)) {
             require(exportAssetPath(g->rml) && exportAssetPath(g->rcss));
             out << g->enabled << ' ' << std::quoted(g->rml) << ' ' << std::quoted(g->rcss) << ' ';
         }
@@ -408,6 +408,9 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> std::quoted(field.name) >> std::quoted(field.type) >> std::quoted(field.text);
             field.number = number(in);
             in >> field.boolean >> target;
+            if (field.type == "GUI") {
+                field.type = "UI"; // legacy RML component reference
+            }
             require(exportName(field.name) &&
                     (exportType(field.type) || field.type == "Animator") &&
                     field.text.size() <= 4096 && field.text.find('\0') == std::string::npos &&
@@ -887,7 +890,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             (void)parseJson(text);
         }
         if (mask & 68719476736ull) {
-            GUI g;
+            UI g;
             in >> g.enabled >> std::quoted(g.rml) >> std::quoted(g.rcss);
             require(exportAssetPath(g.rml) && exportAssetPath(g.rcss));
             result.world.add(e, g);

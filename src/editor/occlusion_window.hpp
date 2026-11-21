@@ -93,11 +93,11 @@ class OcclusionWindow {
         ImGui::Checkbox("Visualize selected camera", &visualizeSelectedCamera);
         if (visualizeSelectedCamera) {
             ImGui::TextWrapped(
-                "Select a Camera in the hierarchy. Scene overlay: red bounds = occluded, green = retained in the camera frustum; cyan triangles = usable baked occluders. The Camera preview uses normal baked culling.");
+                "Select a Camera in the hierarchy. Scene visibility preview hides geometry outside this camera frustum and behind baked opaque occluders, while you orbit freely in Scene. Terrain chunks, foliage and particles use individual bounds. Editor overlays are hidden during preview; authored activity is unchanged.");
             ImGui::Text("Selected camera: %zu culled / %zu tested", previewCulled, previewTested);
             if (!previewValid) {
                 ImGui::TextWrapped(
-                    "Select a perspective camera and enable a valid bake to visualize culling.");
+                    "Select a valid Camera. Frustum filtering works without a bake; hiding behind occluders requires an enabled, matching perspective bake.");
             }
         }
         ImGui::Text("Baked triangles: %zu / 2048", bake.triangles.size());

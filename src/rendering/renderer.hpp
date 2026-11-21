@@ -144,7 +144,8 @@ class Renderer {
               int y = 0,
               bool editorView = true,
               const CameraEffects* effects = nullptr,
-              std::uint64_t cameraKey = 0);
+              std::uint64_t cameraKey = 0,
+              Entity visibilityCamera = {});
 
     bool meshBounds(MeshHandle handle, Vec3& low, Vec3& high) const {
         if (handle.id >= meshes_.size() || !meshes_[handle.id].vertexCount) {

@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-// Runtime documents belong to GUI components; no conventional auto-load path.
+// Runtime documents belong to UI components; no conventional auto-load path.
 class GameUI {
   public:
     GameUI();
