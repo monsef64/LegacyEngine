@@ -80,6 +80,10 @@
     "title": "Scripting Reference"
   },
   {
+    "file": "game-services.md",
+    "title": "Screen, Game, Saving and File"
+  },
+  {
     "file": "audio-input.md",
     "title": "Audio and input"
   },

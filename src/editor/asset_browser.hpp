@@ -24,6 +24,8 @@
 
 class AssetBrowser {
     UntitledProjectAssets staging_;
+    ProjectDialog extractPicker_;
+    std::string extractingTexture_;
     struct ModelGroup {
         std::filesystem::file_time_type stamp{};
         unsigned revision = ~0u;
@@ -591,6 +593,52 @@ class AssetBrowser {
               ScriptEditor& scripts,
               bool editable,
               EditorHistory* history = nullptr) {
+        if (auto chosen = extractPicker_.poll()) {
+            try {
+                if (!chosen->error.empty()) {
+                    throw std::runtime_error(chosen->error);
+                }
+                if (!chosen->path.empty()) {
+                    const auto destination = std::filesystem::weakly_canonical(chosen->path);
+                    const auto folder =
+                        destination
+                            .lexically_relative(std::filesystem::weakly_canonical(assets.root))
+                            .generic_string();
+                    const auto checked = assets.resolve(folder == "." ? "" : folder);
+                    if (!std::filesystem::is_directory(checked)) {
+                        throw std::runtime_error("Choose a folder inside Assets");
+                    }
+                    const auto bytes =
+                        readAssetBytes(assets.resolve(extractingTexture_), 32 * 1024 * 1024);
+                    const auto leaf = std::filesystem::path(embeddedAssetName(extractingTexture_));
+                    auto target = checked / leaf;
+                    for (unsigned n = 2;
+                         std::filesystem::exists(target) || std::filesystem::is_symlink(target);
+                         ++n) {
+                        target = checked / (leaf.stem().string() + " (" + std::to_string(n) + ")" +
+                                            leaf.extension().string());
+                    }
+                    std::ofstream output(target, std::ios::binary);
+                    output.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+                    output.close();
+                    if (!output) {
+                        std::filesystem::remove(target);
+                        throw std::runtime_error("Cannot extract packed texture");
+                    }
+                    selected =
+                        target.lexically_relative(std::filesystem::weakly_canonical(assets.root))
+                            .generic_string();
+                    listingUntil_ = 0;
+                    if (assetPreviewImported) {
+                        assetPreviewImported(assets);
+                    }
+                }
+            } catch (const std::exception& e) {
+                assets.error = e.what();
+            }
+            extractingTexture_.clear();
+        }
+
         pollImports();
         preview.update();
         if (thumbnailRevision_ != modelAssetRevision) {
@@ -1055,6 +1103,17 @@ class AssetBrowser {
                             fileIcon(file);
                             ImGui::TextUnformatted(file.c_str());
                             ImGui::EndDragDropSource();
+                        }
+                        if (editable && embeddedAsset(file) && textureAsset(file) &&
+                            ImGui::BeginPopupContextItem("Packed texture actions")) {
+                            if (ImGui::MenuItem("Copy texture to Assets folder...",
+                                                nullptr,
+                                                false,
+                                                !extractPicker_.pending())) {
+                                extractingTexture_ = file;
+                                extractPicker_.chooseExportPath(window, true, nullptr, 0);
+                            }
+                            ImGui::EndPopup();
                         }
                         if (editable && !embeddedAsset(file) &&
                             ImGui::BeginPopupContextItem("Asset actions")) {

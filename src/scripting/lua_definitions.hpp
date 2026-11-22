@@ -7,7 +7,16 @@ struct LuaDefinition {
     const char* signature;
 };
 inline constexpr LuaDefinition luaDefinitions
-    []{{"GUI.image",
+    []{{"Screen", "Screen.width/height/currentResolution (read-only), brightness (0..1), fullScreen; getResolutions(), getResolution(w,h), setResolution(w,h), takeScreenshot(relativePngPath)."},
+       {"Game", "Game.companyName/getDataPath/isEditor/isFocused/userDataPath/engineVersion (read-only), targetFrameRate (-1 or 1..1000), blockGameKilling; openURL(httpUrl), quit()."},
+       {"Saving", "Saving.saveString/Int/Float/Bool/Table/Vector3(key,value); loadString/Int/Float/Bool/Table/Vector3(key,default). Persisted per game. Also available as global aliases."},
+       {"File", "File.open(relativePath,mode), read(handle,format), write(handle,text), close(handle), flush(handle), seek(handle,whence,offset), lines(handleOrPath), rename(old,new), remove(path). Sandboxed under Game.userDataPath."},
+       {"OnResolutionChanged", "OnResolutionChanged(resolution) - resolution has width, height, refreshRate. Also on(eventName, callback)."},
+       {"OnFocusLost", "OnFocusLost() - native game window lost focus."},
+       {"OnFocus", "OnFocus() - native game window gained focus."},
+       {"OnUrlOpened", "OnUrlOpened(url) - OS accepted an HTTP/HTTPS launch request."},
+       {"OnGamePreQuit", "OnGamePreQuit() - start tasks or hold Game.blockGameKilling; graceful quit waits at most ten seconds."},
+       {"GUI.image",
         "GUI.image(path:string,width?:number,height?:number):boolean - Full-resolution project image; returns loaded."},
        {"GUI.imageButton",
         "GUI.imageButton(id:string,path:string,width?:number,height?:number):boolean - Returns clicked."},

@@ -19,6 +19,7 @@
 #include "rendering/scene_surface.hpp"
 #include "rendering/shader_data.hpp"
 #include "scene/scene_camera.hpp"
+#include "scripting/game_services.hpp"
 #include "scripting/script_components.hpp"
 #include "ui/game_ui.hpp"
 #include "ui/script_gui.hpp"
@@ -128,6 +129,12 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             navigation.load(nav);
         }
     };
+    GameServices::configure(window,
+                            false,
+                            package.metadata.value("company", std::string{}),
+                            package.metadata.at("name").get<std::string>(),
+                            package.root);
+    GameServices::update(window, true);
     bindScripts();
     LuaConsole::postEvent("onLevelLoaded", {levels.current()});
     // Window icon on Linux uses the exported PNG. Windows shell/executable icons
@@ -161,8 +168,14 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             }
         };
     while (running) {
+        const auto frameStarted = SDL_GetTicksNS();
+        GameServices::update(window, true);
+        if (GameServices::quitReady()) {
+            break;
+        }
         const bool focused = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
-        if (!focused) {
+        if (!focused && !GameServices::pendingQuit()) {
+            LuaConsole::dispatchEvents();
             input.releaseMouse();
             input.clear();
             audio.suspend(true);
@@ -170,7 +183,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             SDL_Event wake;
             if (SDL_WaitEvent(&wake)) {
                 if (wake.type == SDL_EVENT_QUIT || wake.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-                    running = false;
+                    GameServices::requestQuit();
                 } else {
                     SDL_PushEvent(&wake);
                 }
@@ -178,7 +191,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             // Drain non-close events so a background input event cannot spin forever.
             while (SDL_PollEvent(&wake)) {
                 if (wake.type == SDL_EVENT_QUIT || wake.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-                    running = false;
+                    GameServices::requestQuit();
                 }
             }
             last = SDL_GetTicksNS();
@@ -196,6 +209,10 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         SDL_GetWindowSizeInPixels(window, &width, &height);
         SDL_GetWindowSize(window, &logicalW, &logicalH);
         if (width <= 0 || height <= 0) {
+            if (GameServices::pendingQuit()) {
+                scripts.update(dt);
+                LuaConsole::dispatchEvents();
+            }
             SDL_Delay(20);
             continue;
         }
@@ -209,7 +226,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-                running = false;
+                GameServices::requestQuit();
             }
             if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_F11 &&
                 !event.key.repeat) {
@@ -379,12 +396,14 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         glBindFramebuffer(GL_FRAMEBUFFER, surface.framebuffer);
         ui.render(width, height, true);
         gui.render(window, width, height, true, assets.root);
+        GameServices::finishFrame(surface.framebuffer, width, height);
         glDisable(GL_SCISSOR_TEST);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, surface.framebuffer);
         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
         glBlitFramebuffer(
             0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
         SDL_GL_SwapWindow(window);
+        GameServices::paceFrame(frameStarted);
     }
     levels.suspended = true;
     scripts.stop();

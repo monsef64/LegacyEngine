@@ -9,11 +9,12 @@
 // OpenGL 3.3 box-projected decals: reconstruct opaque receiver positions from
 // one depth copy per camera. No collision mesh, reflection or extra scene pass.
 class DecalRenderer {
-    unsigned program_ = 0, vao_ = 0, depth_ = 0, fbo_ = 0;
+    unsigned program_ = 0, vao_ = 0, depth_ = 0;
     int width_ = 0, height_ = 0;
     MaterialTextureCache textures_;
     std::filesystem::path root_;
     bool failed_ = false;
+    std::string lastTextureError_;
     static unsigned shader(unsigned type, const char* source) {
         auto s = glCreateShader(type);
         glShaderSource(s, 1, &source, nullptr);
@@ -21,8 +22,10 @@ class DecalRenderer {
         int ok = 0;
         glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
         if (!ok) {
+            char log[2048]{};
+            glGetShaderInfoLog(s, sizeof(log), nullptr, log);
             glDeleteShader(s);
-            throw std::runtime_error("Decal shader compilation failed");
+            throw std::runtime_error(std::string("Decal shader compilation failed: ") + log);
         }
         return s;
     }
@@ -54,7 +57,6 @@ void main(){
             }
             glGenVertexArrays(1, &vao_);
             glGenTextures(1, &depth_);
-            glGenFramebuffers(1, &fbo_);
         } catch (...) {
             glDeleteShader(vs);
             if (fs) {
@@ -79,10 +81,7 @@ void main(){
         if (depth_) {
             glDeleteTextures(1, &depth_);
         }
-        if (fbo_) {
-            glDeleteFramebuffers(1, &fbo_);
-        }
-        vao_ = program_ = depth_ = fbo_ = 0;
+        vao_ = program_ = depth_ = 0;
         width_ = height_ = 0;
         failed_ = false;
     }
@@ -187,43 +186,30 @@ void main(){
         };
         try {
             glDisable(GL_SCISSOR_TEST);
+            glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, depth_);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
             if (width_ != viewport[2] || height_ != viewport[3]) {
                 width_ = viewport[2];
                 height_ = viewport[3];
                 glTexImage2D(GL_TEXTURE_2D,
                              0,
-                             GL_DEPTH24_STENCIL8,
+                             GL_DEPTH_COMPONENT24,
                              width_,
                              height_,
                              0,
-                             GL_DEPTH_STENCIL,
-                             GL_UNSIGNED_INT_24_8,
+                             GL_DEPTH_COMPONENT,
+                             GL_UNSIGNED_INT,
                              nullptr);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             }
-            glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
-            glFramebufferTexture2D(
-                GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, depth_, 0);
-            glDrawBuffer(GL_NONE);
-            glReadBuffer(GL_NONE);
-            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-                throw std::runtime_error("Decal depth framebuffer is incomplete");
-            }
+            // Copy depth into a sampleable texture. Unlike a depth blit this also
+            // supports editor targets whose attachment format differs from ours.
             glBindFramebuffer(GL_READ_FRAMEBUFFER, draw);
-            glBlitFramebuffer(viewport[0],
-                              viewport[1],
-                              viewport[0] + width_,
-                              viewport[1] + height_,
-                              0,
-                              0,
-                              width_,
-                              height_,
-                              GL_DEPTH_BUFFER_BIT,
-                              GL_NEAREST);
+            glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewport[0], viewport[1], width_, height_);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
             glDisable(GL_DEPTH_TEST);
             glDisable(GL_CULL_FACE);
@@ -252,6 +238,13 @@ void main(){
                 std::string error;
                 auto texture = textures_.get(assets, d.texture, error);
                 if (!texture) {
+                    if (!error.empty() && error != lastTextureError_) {
+                        SDL_LogError(SDL_LOG_CATEGORY_RENDER,
+                                     "Decal texture %s: %s",
+                                     d.texture.c_str(),
+                                     error.c_str());
+                        lastTextureError_ = error;
+                    }
                     continue;
                 }
                 glUniformMatrix4fv(
