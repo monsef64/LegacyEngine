@@ -106,9 +106,10 @@ Multiple skyboxes use the first enabled active one, as the background already do
 
 ## Vehicle steering stability
 
-Vehicle suspension now supports free pitch/roll and uses `antiRollStrength` to
-couple grounded wheels on each axle. There is no hard upright rotation lock or
-airborne world-up correction. See [Vehicles](vehicles.md#suspension-and-anti-roll-support).
+Vehicle suspension supports free pitch/roll with independent spring/damper wheel
+contacts. Anti-roll strength has been removed. There is no hard upright rotation
+lock or airborne world-up correction; center-of-mass offsets remain available.
+See [Vehicles](vehicles.md#suspension-and-center-of-mass).
 
 ## Terrain and Scene selection
 

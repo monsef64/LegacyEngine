@@ -1,5 +1,9 @@
 # Vehicle, baking and editor follow-up: manual checks
 
+> Update: anti-roll strength has since been removed. References below to testing
+> that control are historical; use `prefab-lighting-and-editor-followup.md` for
+> current suspension/removal checks. Center-of-mass settings remain supported.
+
 No automated tests are added or run for this change.
 
 - Load an old vehicle containing keepUpright. Confirm the option is gone from the

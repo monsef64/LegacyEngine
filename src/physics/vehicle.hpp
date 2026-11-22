@@ -15,7 +15,6 @@
     X(suspensionLength, .45f, .05f, 3.f)                                                           \
     X(springStrength, 35000.f, 100.f, 500000.f)                                                    \
     X(suspensionDamping, 4500.f, 0.f, 50000.f)                                                     \
-    X(antiRollStrength, 12000.f, 0.f, 200000.f)                                                    \
     X(engineForce, 8000.f, 0.f, 200000.f)                                                          \
     X(brakeForce, 12000.f, 0.f, 300000.f)                                                          \
     X(tireGrip, 1.5f, .05f, 5.f)                                                                   \

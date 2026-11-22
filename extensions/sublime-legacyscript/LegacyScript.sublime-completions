@@ -653,7 +653,7 @@
       "trigger": "Vehicle",
       "contents": "Vehicle",
       "annotation": "LegacyEngine",
-      "details": "Vehicle - four-wheel raycast chassis, local -Z forward. enabled; throttle (-1..1), steering (-1..1), brake (0..1), handbrake (boolean). Read-only speed (signed m/s), groundedWheels, isGrounded, wheelCompression (copy, FL/FR/RL/RR). Settings: centerOfMassX, centerOfMassY, centerOfMassZ (local chassis offset metres, default 0; negative Y lowers COM), wheelBase, trackWidth, mountHeight, wheelRadius, suspensionLength, springStrength, suspensionDamping, antiRollStrength, engineForce, brakeForce, tireGrip, maxSteerAngle (degrees), maxSpeed (m/s). Requires dynamic primitive chassis; adding supplies missing dependencies only."
+      "details": "Vehicle - four-wheel raycast chassis, local -Z forward. enabled; throttle (-1..1), steering (-1..1), brake (0..1), handbrake (boolean). Read-only speed (signed m/s), groundedWheels, isGrounded, wheelCompression (copy, FL/FR/RL/RR). Settings: centerOfMassX, centerOfMassY, centerOfMassZ (local chassis offset metres, default 0; negative Y lowers COM), wheelBase, trackWidth, mountHeight, wheelRadius, suspensionLength, springStrength, suspensionDamping, engineForce, brakeForce, tireGrip, maxSteerAngle (degrees), maxSpeed (m/s). Requires dynamic primitive chassis; adding supplies missing dependencies only."
     },
     {
       "trigger": "throttle",
@@ -1926,12 +1926,6 @@
       "contents": "centerOfMassZ",
       "annotation": "LegacyEngine",
       "details": "Vehicle.centerOfMassZ: -10..10 local metres, default 0. Chassis center-of-mass offset along local Z."
-    },
-    {
-      "trigger": "antiRollStrength",
-      "contents": "antiRollStrength",
-      "annotation": "LegacyEngine",
-      "details": "Vehicle.antiRollStrength: 0..200000 N/m, default 12000. Ground-contact axle load transfer; zero disables. Does not lock chassis rotation."
     },
     {
       "trigger": "setMaterialAlpha",
@@ -4968,12 +4962,6 @@
       "contents": "centerOfMassZ",
       "annotation": "Vehicle",
       "details": "number Local chassis COM offset Z in metres, -10..10, default 0"
-    },
-    {
-      "trigger": "antiRollStrength",
-      "contents": "antiRollStrength",
-      "annotation": "Vehicle",
-      "details": "number 0..200000 N/m, default 12000; grounded axle support, no rotation lock"
     },
     {
       "trigger": "suspensionDamping",
