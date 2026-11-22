@@ -281,6 +281,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     bool sceneHovered = false, resetWorkspace = false;
     Entity editSelection;
     TransformEditor editor;
+    editor.modelBounds =
+        [&renderer](const AssetManager& assets, const std::string& path, Vec3& low, Vec3& high) {
+            return renderer.modelBounds(assets, path, low, high, 0, true);
+        };
     editor.meshBounds = [&renderer](MeshHandle mesh, Vec3& low, Vec3& high) {
         return renderer.meshBounds(mesh, low, high);
     };

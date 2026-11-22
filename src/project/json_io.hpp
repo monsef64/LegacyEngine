@@ -4,6 +4,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <vector>
 using Json = nlohmann::json;
 // SIMD-accelerated parsing; serialization and the editable DOM retain Json.
@@ -12,10 +13,14 @@ Json readCompressedMesh(std::istream& stream, std::size_t limit, bool zstandard 
 void writeCompressedMesh(std::ostream& stream,
                          const Json& document,
                          const char* magic = "LEMZ0002");
+// Shared immutable container snapshot avoids decompressing/parsing the complete
+// model for each embedded material, image, animation and mesh request.
+std::shared_ptr<const Json> readModelContainer(const std::filesystem::path& path);
+void invalidateModelContainer();
 inline Json readJsonFile(const std::filesystem::path& path, std::size_t limit) {
     if (embeddedAsset(path.generic_string())) {
-        const auto root = readJsonFile(assetContainerPath(path), 256 * 1024 * 1024);
-        const auto& child = root.at("embeddedAssets").at(embeddedAssetName(path.generic_string()));
+        const auto root = readModelContainer(assetContainerPath(path));
+        const auto& child = root->at("embeddedAssets").at(embeddedAssetName(path.generic_string()));
         if (child.dump().size() > limit) {
             throw std::runtime_error("Embedded JSON exceeds size limit");
         }
@@ -80,6 +85,7 @@ inline std::vector<unsigned char> readAssetBytes(const std::filesystem::path& pa
     return bytes;
 }
 inline void writeJsonFile(const std::filesystem::path& path, const Json& document) {
+    invalidateModelContainer();
     if (embeddedAsset(path.generic_string())) {
         const auto container = assetContainerPath(path);
         auto root = readJsonFile(container, 256 * 1024 * 1024);
@@ -101,7 +107,8 @@ inline void writeJsonFile(const std::filesystem::path& path, const Json& documen
         std::ofstream out(temp, std::ios::binary);
         if (path.extension() == ".terrain") {
             writeCompressedMesh(out, document, "TERZ0001");
-        } else if ((path.extension() == ".mesh" || path.extension() == ".lemesh")) {
+        } else if ((path.extension() == ".mesh" || path.extension() == ".model" ||
+                    path.extension() == ".lemesh")) {
             writeCompressedMesh(out, document);
         } else {
             out << document.dump(2) << '\n';

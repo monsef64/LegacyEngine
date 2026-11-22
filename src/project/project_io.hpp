@@ -143,6 +143,7 @@ inline std::string encodeLegacy(World& world,
             require(m->model.empty() ||
                     (materialPathValid(m->model) &&
                      (std::filesystem::path(m->model).extension() == ".mesh" ||
+                      std::filesystem::path(m->model).extension() == ".model" ||
                       std::filesystem::path(m->model).extension() == ".lemesh")));
             require(mesh >= 0 || !m->model.empty());
             if (!m->model.empty()) {
@@ -172,6 +173,7 @@ inline std::string encodeLegacy(World& world,
             require(c->model.empty() ||
                     (materialPathValid(c->model) &&
                      (std::filesystem::path(c->model).extension() == ".mesh" ||
+                      std::filesystem::path(c->model).extension() == ".model" ||
                       std::filesystem::path(c->model).extension() == ".lemesh")));
         }
         if (auto* b = world.tryGet<RigidBody>(e)) {
@@ -499,6 +501,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                 require(m.model.empty() ||
                         (materialPathValid(m.model) &&
                          (std::filesystem::path(m.model).extension() == ".mesh" ||
+                          std::filesystem::path(m.model).extension() == ".model" ||
                           std::filesystem::path(m.model).extension() == ".lemesh")));
             }
             if (version >= 21) {
@@ -531,6 +534,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                 require(c.model.empty() ||
                         (materialPathValid(c.model) &&
                          (std::filesystem::path(c.model).extension() == ".mesh" ||
+                          std::filesystem::path(c.model).extension() == ".model" ||
                           std::filesystem::path(c.model).extension() == ".lemesh")));
             }
             if (version >= 19) {

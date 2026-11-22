@@ -2,6 +2,7 @@
 #include "assets/assets.hpp"
 #include <array>
 #include <chrono>
+#include <future>
 #include <map>
 
 struct TextureThumbnail {
@@ -15,8 +16,16 @@ TextureThumbnail loadTextureThumbnail(const AssetManager& assets,
                                       const std::string& path,
                                       bool* cacheHit = nullptr,
                                       bool allowDecode = true);
+struct DecodedThumbnail {
+    TextureThumbnail image;
+    std::string dependency;
+    bool dependencyExists = false;
+    std::filesystem::file_time_type dependencyModified{};
+    std::uintmax_t dependencyBytes = 0;
+};
 class TexturePreviewCache {
     struct Entry {
+        std::future<DecodedThumbnail> pending;
         unsigned texture = 0;
         std::uint64_t touched = 0;
         std::filesystem::file_time_type modified{};
@@ -30,7 +39,8 @@ class TexturePreviewCache {
     std::map<std::string, Entry> entries_;
     std::filesystem::path root_;
     std::uint64_t frame_ = 0;
-    int budget_ = 0, decodeBudget_ = 0;
+    int budget_ = 0;
+    void finish(Entry& entry);
 
   public:
     ~TexturePreviewCache() {

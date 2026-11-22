@@ -44,6 +44,7 @@ class TransformEditor {
         face_ = -1;
     }
     std::function<bool(MeshHandle, Vec3&, Vec3&)> meshBounds;
+    std::function<bool(const AssetManager&, const std::string&, Vec3&, Vec3&)> modelBounds;
     void drawToolbar();
     void draw(World& world,
               Entity entity,

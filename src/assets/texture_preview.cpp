@@ -1,4 +1,5 @@
 #include "assets/texture_preview.hpp"
+#include "core/worker_pool.hpp"
 #include "materials/material_io.hpp"
 #include <SDL3/SDL.h>
 #include <glad/gl.h>
@@ -151,6 +152,136 @@ TextureThumbnail loadTextureThumbnail(const AssetManager& assets,
     }
     return result;
 }
+namespace {
+DecodedThumbnail decodeThumbnail(const AssetManager& assets, const std::string& path) {
+    DecodedThumbnail result;
+    auto& image = result.image;
+    if (materialAsset(path)) {
+        const auto material = loadMaterial(assets, path);
+        result.dependency = material.texture;
+        if (!result.dependency.empty()) {
+            const auto dependency = assetContainerPath(assets.resolve(result.dependency));
+            result.dependencyExists = std::filesystem::is_regular_file(dependency);
+            if (result.dependencyExists) {
+                result.dependencyModified = std::filesystem::last_write_time(dependency);
+                result.dependencyBytes = std::filesystem::file_size(dependency);
+            }
+        }
+        std::filesystem::path cache;
+        std::string signature;
+        try {
+            cache = thumbnailCachePath(assets, path);
+            cache += ".material-v1";
+            if (std::filesystem::is_symlink(cache)) {
+                cache.clear();
+            }
+            const auto source = assetContainerPath(assets.resolve(path));
+            signature = "LEMaterialThumbnail1 " +
+                        std::to_string(std::filesystem::file_size(source)) + " " +
+                        std::to_string(
+                            std::filesystem::last_write_time(source).time_since_epoch().count()) +
+                        " " + std::to_string(result.dependencyExists) + " " +
+                        std::to_string(result.dependencyBytes) + " " +
+                        std::to_string(result.dependencyModified.time_since_epoch().count());
+            if (!cache.empty()) {
+                std::ifstream input(cache, std::ios::binary);
+                std::string header;
+                if (std::getline(input, header) && header == signature) {
+                    input.read(reinterpret_cast<char*>(image.pixels.data()), image.pixels.size());
+                    if (input && input.peek() == std::char_traits<char>::eof()) {
+                        return result;
+                    }
+                    image = {};
+                }
+            }
+        } catch (...) {
+            cache.clear();
+        }
+        TextureThumbnail albedo;
+        bool textured = false;
+        if (!material.texture.empty() && result.dependencyExists) {
+            albedo = loadTextureThumbnail(assets, material.texture);
+            textured = true;
+        }
+        for (int y = 0; y < TextureThumbnail::size; ++y) {
+            for (int x = 0; x < TextureThumbnail::size; ++x) {
+                float nx = (x + .5f) / TextureThumbnail::size * 2 - 1,
+                      ny = 1 - (y + .5f) / TextureThumbnail::size * 2;
+                float r = nx * nx + ny * ny;
+                auto i = (y * TextureThumbnail::size + x) * 4;
+                float background = ((x / 8 + y / 8) % 2) ? .16f : .12f;
+                Vec3 color{background, background, background};
+                if (r < .9f) {
+                    float nz = std::sqrt(1 - r / .9f);
+                    float light = .18f + .82f * std::max(0.f, (-nx + ny + nz) * .577f);
+                    float spec =
+                        material.specular * std::pow(std::max(0.f, (-nx + ny + nz) * .577f), 24.f);
+                    Vec3 tex{1, 1, 1};
+                    if (textured) {
+                        tex = {albedo.pixels[i] / 255.f,
+                               albedo.pixels[i + 1] / 255.f,
+                               albedo.pixels[i + 2] / 255.f};
+                    }
+                    color = {material.color.x * tex.x * light + spec,
+                             material.color.y * tex.y * light + spec,
+                             material.color.z * tex.z * light + spec};
+                }
+                image.pixels[i] = static_cast<unsigned char>(std::clamp(color.x, 0.f, 1.f) * 255);
+                image.pixels[i + 1] =
+                    static_cast<unsigned char>(std::clamp(color.y, 0.f, 1.f) * 255);
+                image.pixels[i + 2] =
+                    static_cast<unsigned char>(std::clamp(color.z, 0.f, 1.f) * 255);
+                image.pixels[i + 3] = 255;
+            }
+        }
+        if (!cache.empty()) {
+            auto temp = cache;
+            temp += ".tmp-" +
+                    std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+            try {
+                std::filesystem::create_directories(cache.parent_path());
+                std::ofstream output(temp, std::ios::binary);
+                output << signature << '\n';
+                output.write(reinterpret_cast<const char*>(image.pixels.data()),
+                             image.pixels.size());
+                output.close();
+                std::error_code ec;
+                if (output) {
+                    std::filesystem::rename(temp, cache, ec);
+                    if (ec) {
+                        std::filesystem::remove(cache, ec);
+                        ec.clear();
+                        std::filesystem::rename(temp, cache, ec);
+                    }
+                }
+            } catch (...) { /* Cache writes are optional. */
+            }
+            std::error_code ec;
+            std::filesystem::remove(temp, ec);
+        }
+    } else {
+        image = loadTextureThumbnail(assets, path);
+    }
+    return result;
+}
+void uploadThumbnail(unsigned& texture, const TextureThumbnail& image) {
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D,
+                 0,
+                 GL_RGBA8,
+                 TextureThumbnail::size,
+                 TextureThumbnail::size,
+                 0,
+                 GL_RGBA,
+                 GL_UNSIGNED_BYTE,
+                 image.pixels.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+}
+} // namespace
 void TexturePreviewCache::clear() {
     if (SDL_GL_GetCurrentContext()) {
         for (auto& pair : entries_) {
@@ -162,6 +293,26 @@ void TexturePreviewCache::clear() {
     entries_.clear();
     root_.clear();
 }
+void TexturePreviewCache::finish(Entry& e) {
+    if (!e.pending.valid()) {
+        return;
+    }
+    if (e.pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready || budget_ <= 0) {
+        return;
+    }
+    --budget_;
+    try {
+        const auto result = e.pending.get();
+        e.dependency = result.dependency;
+        e.dependencyExists = result.dependencyExists;
+        e.dependencyModified = result.dependencyModified;
+        e.dependencyBytes = result.dependencyBytes;
+        uploadThumbnail(e.texture, result.image);
+    } catch (...) {
+        e.failed = true;
+    }
+    e.checked = {}; // Revalidate source metadata after the asynchronous job.
+}
 void TexturePreviewCache::beginFrame(const AssetManager& assets) {
     if (root_ != assets.root) {
         clear();
@@ -169,7 +320,10 @@ void TexturePreviewCache::beginFrame(const AssetManager& assets) {
     }
     ++frame_;
     budget_ = 4;
-    decodeBudget_ = 1;
+    // Drain completed offscreen requests too, so scrolling cannot stall admission.
+    for (auto& pair : entries_) {
+        finish(pair.second);
+    }
 }
 unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::string& path) {
     if ((!textureAsset(path) && !materialAsset(path)) || !SDL_GL_GetCurrentContext()) {
@@ -180,6 +334,10 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
     if (found != entries_.end()) {
         auto& e = found->second;
         e.touched = frame_;
+        finish(e);
+        if (e.pending.valid()) {
+            return e.texture;
+        }
         if (now - e.checked < std::chrono::seconds(1)) {
             return e.texture;
         }
@@ -214,8 +372,14 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
         }
         entries_.erase(found);
     }
-    if (budget_ <= 0 || (materialAsset(path) && decodeBudget_ <= 0)) {
+    if (budget_ <= 0) {
         return 0;
+    }
+    // At most one CPU decode per cache in flight; visible assets request lazily.
+    for (const auto& pair : entries_) {
+        if (pair.second.pending.valid()) {
+            return 0;
+        }
     }
     --budget_;
     if (entries_.size() >= 256) {
@@ -235,84 +399,15 @@ unsigned TexturePreviewCache::texture(const AssetManager& assets, const std::str
         const auto file = assetContainerPath(assets.resolve(path));
         entry.modified = std::filesystem::last_write_time(file);
         entry.bytes = std::filesystem::file_size(file);
-        bool cacheHit = false;
-        TextureThumbnail image;
-        if (materialAsset(path)) {
-            const auto material = loadMaterial(assets, path);
-            entry.dependency = material.texture;
-            if (!entry.dependency.empty()) {
-                const auto dependency = assetContainerPath(assets.resolve(entry.dependency));
-                entry.dependencyExists = std::filesystem::is_regular_file(dependency);
-                if (entry.dependencyExists) {
-                    entry.dependencyModified = std::filesystem::last_write_time(dependency);
-                    entry.dependencyBytes = std::filesystem::file_size(dependency);
-                }
-            }
-            TextureThumbnail albedo;
-            bool textured = false;
-            if (!material.texture.empty() && entry.dependencyExists) {
-                albedo = loadTextureThumbnail(assets, material.texture);
-                textured = true;
-            }
-            for (int y = 0; y < TextureThumbnail::size; ++y) {
-                for (int x = 0; x < TextureThumbnail::size; ++x) {
-                    float nx = (x + .5f) / TextureThumbnail::size * 2 - 1,
-                          ny = 1 - (y + .5f) / TextureThumbnail::size * 2;
-                    float r = nx * nx + ny * ny;
-                    auto i = (y * TextureThumbnail::size + x) * 4;
-                    float background = ((x / 8 + y / 8) % 2) ? .16f : .12f;
-                    Vec3 color{background, background, background};
-                    if (r < .9f) {
-                        float nz = std::sqrt(1 - r / .9f);
-                        float light = .18f + .82f * std::max(0.f, (-nx + ny + nz) * .577f);
-                        float spec = material.specular *
-                                     std::pow(std::max(0.f, (-nx + ny + nz) * .577f), 24.f);
-                        Vec3 tex{1, 1, 1};
-                        if (textured) {
-                            tex = {albedo.pixels[i] / 255.f,
-                                   albedo.pixels[i + 1] / 255.f,
-                                   albedo.pixels[i + 2] / 255.f};
-                        }
-                        color = {material.color.x * tex.x * light + spec,
-                                 material.color.y * tex.y * light + spec,
-                                 material.color.z * tex.z * light + spec};
-                    }
-                    image.pixels[i] =
-                        static_cast<unsigned char>(std::clamp(color.x, 0.f, 1.f) * 255);
-                    image.pixels[i + 1] =
-                        static_cast<unsigned char>(std::clamp(color.y, 0.f, 1.f) * 255);
-                    image.pixels[i + 2] =
-                        static_cast<unsigned char>(std::clamp(color.z, 0.f, 1.f) * 255);
-                    image.pixels[i + 3] = 255;
-                }
-            }
+        auto job =
+            WorkerPool::shared().submit([assets, path] { return decodeThumbnail(assets, path); });
+        if (job) {
+            entry.pending = std::move(*job);
         } else {
-            image = loadTextureThumbnail(assets, path, &cacheHit, decodeBudget_ > 0);
+            entries_.erase(path); // Saturated queues retry on a later frame.
         }
-        if (!cacheHit) {
-            --decodeBudget_;
-        }
-        glGenTextures(1, &entry.texture);
-        glBindTexture(GL_TEXTURE_2D, entry.texture);
-        glTexImage2D(GL_TEXTURE_2D,
-                     0,
-                     GL_RGBA8,
-                     TextureThumbnail::size,
-                     TextureThumbnail::size,
-                     0,
-                     GL_RGBA,
-                     GL_UNSIGNED_BYTE,
-                     image.pixels.data());
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        return 0;
     } catch (...) {
-        if (decodeBudget_ <= 0) {
-            entries_.erase(path);
-            return 0;
-        }
-        --decodeBudget_;
         entry.failed = true;
     }
     return entry.texture;

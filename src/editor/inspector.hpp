@@ -1273,7 +1273,13 @@ inline void drawInspector(World& world,
                                 ImGui::EndPopup();
                             }
                             if (!r->material.empty()) {
-                                auto edited = loadMaterial(*assets, r->material);
+                                static MaterialAssetCache componentMaterials;
+                                static std::filesystem::path componentMaterialRoot;
+                                if (componentMaterialRoot != assets->root) {
+                                    componentMaterials.clear();
+                                    componentMaterialRoot = assets->root;
+                                }
+                                auto edited = componentMaterials.get(*assets, r->material);
                                 if (runtime) {
                                     edited = applyMaterialOverrides(
                                         edited, r->materialValues, r->materialOverrides);
@@ -1339,6 +1345,7 @@ inline void drawInspector(World& world,
                                                 r->materialOverrides = 255;
                                             } else {
                                                 saveMaterial(*assets, r->material, edited);
+                                                componentMaterials.clear();
                                             }
                                             materialError.clear();
                                         } catch (const std::exception& e) {

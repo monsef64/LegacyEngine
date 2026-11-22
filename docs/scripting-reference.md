@@ -5385,6 +5385,9 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `wheelRadius` | `number 0.05..3 local metres` |
 | `suspensionLength` | `number 0.05..3 local metres` |
 | `springStrength` | `number 100..500000 N/m per wheel` |
+| `centerOfMassX` | `number Local chassis COM offset X in metres, -10..10, default 0` |
+| `centerOfMassY` | `number Local chassis COM offset Y in metres, -10..10, default 0; negative lowers COM` |
+| `centerOfMassZ` | `number Local chassis COM offset Z in metres, -10..10, default 0` |
 | `antiRollStrength` | `number 0..200000 N/m, default 12000; grounded axle support, no rotation lock` |
 | `suspensionDamping` | `number 0..50000 per wheel` |
 | `engineForce` | `number 0..200000 N total` |

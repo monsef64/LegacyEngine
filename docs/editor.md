@@ -668,3 +668,15 @@ is included in scene/prefab serialization, undo and Stop rollback.
 The shader reconstructs sky rays at the fullscreen triangle vertices rather than
 doing inverse-matrix transforms for every fragment. Performance gains depend on
 scene, image size, hardware and resolution; they have not been benchmarked here.
+
+### Vehicle center of mass
+
+Vehicle settings include `centerOfMassX`, `centerOfMassY`, and `centerOfMassZ`
+(default zero, −10 to 10 local metres, scaled with the chassis Transform).
+Negative Y lowers the center of mass. The physical collision surface stays in
+place: this changes Jolt's mass frame rather than shifting the collider or
+locking rotation. Changing an offset rebuilds the chassis body on the next
+physics synchronization. Settings persist with the Vehicle, support multi-edit
+and Lua, and default to zero in older projects. `antiRollStrength` remains the
+suspension axle load-transfer setting; zero disables it. Center-of-mass offsets
+and anti-roll strength are separate tuning controls, not a hard upright lock.

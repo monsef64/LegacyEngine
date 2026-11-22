@@ -369,9 +369,16 @@ Vec3 TransformEditor::selectionCenter(World& world, Entity selected, const Asset
             auto it = modelBounds_.find(mesh->model);
             if (it == modelBounds_.end()) {
                 try {
-                    const auto data = loadModelAsset(*assets, mesh->model);
-                    for (const auto& vertex : data.vertices) {
-                        include(vertex.position, bounds.low, bounds.high, bounds.valid);
+                    if (modelBounds) {
+                        bounds.valid = modelBounds(*assets, mesh->model, bounds.low, bounds.high);
+                        if (!bounds.valid) {
+                            continue; // Retry after streamed geometry is ready.
+                        }
+                    } else {
+                        const auto data = loadModelAsset(*assets, mesh->model);
+                        for (const auto& vertex : data.vertices) {
+                            include(vertex.position, bounds.low, bounds.high, bounds.valid);
+                        }
                     }
                 } catch (const std::exception&) {
                 } // Invalid models still allow origin/child editing.

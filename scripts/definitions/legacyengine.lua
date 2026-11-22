@@ -911,6 +911,9 @@ River = nil
 ---@field wheelRadius number 0.05..3 local metres
 ---@field suspensionLength number 0.05..3 local metres
 ---@field springStrength number 100..500000 N/m per wheel
+---@field centerOfMassX number Local chassis COM offset X in metres, -10..10, default 0
+---@field centerOfMassY number Local chassis COM offset Y in metres, -10..10, default 0; negative lowers COM
+---@field centerOfMassZ number Local chassis COM offset Z in metres, -10..10, default 0
 ---@field antiRollStrength number 0..200000 N/m, default 12000; grounded axle support, no rotation lock
 ---@field suspensionDamping number 0..50000 per wheel
 ---@field engineForce number 0..200000 N total

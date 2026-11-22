@@ -9,6 +9,7 @@
 #include <assimp/scene.h>
 #include <functional>
 #include <map>
+#include <set>
 
 namespace {
 // GoldSrc models were authored against case-insensitive filesystems. Assimp
@@ -268,9 +269,19 @@ std::string importModel(AssetManager& assets,
     }
     const auto prefix = std::filesystem::path(folder);
     const auto stem = source.stem().string();
-    auto path = (prefix / (stem + ".mesh")).generic_string();
+    bool richModel = scene->mNumAnimations || scene->mNumTextures || meshNodes.size() > 1;
+    for (unsigned i = 0; i < scene->mNumMeshes; ++i) {
+        richModel |= scene->mMeshes[i]->HasBones();
+    }
+    for (unsigned i = 0; i < scene->mNumMaterials; ++i) {
+        for (int type = aiTextureType_DIFFUSE; type <= aiTextureType_UNKNOWN; ++type) {
+            richModel |= scene->mMaterials[i]->GetTextureCount(aiTextureType(type)) != 0;
+        }
+    }
+    const std::string extension = richModel ? ".model" : ".mesh";
+    auto path = (prefix / (stem + extension)).generic_string();
     for (unsigned i = 2; std::filesystem::exists(assets.resolve(path)); ++i) {
-        path = (prefix / (stem + " (" + std::to_string(i) + ").mesh")).generic_string();
+        path = (prefix / (stem + " (" + std::to_string(i) + ")" + extension)).generic_string();
     }
     // Keep generated files alongside the model, grouped by its manifest in the
     // browser rather than exposing a generated directory as a separate asset.
@@ -476,9 +487,28 @@ std::string importModel(AssetManager& assets,
         if (parts.empty()) {
             throw std::runtime_error("Model contains no triangle geometry");
         }
+        std::set<std::string> animationMembers;
         for (unsigned i = 0; i < animations.size(); ++i) {
-            const auto animationPath =
-                allocateEmbedded("Animation_" + std::to_string(i) + ".leanim");
+            // Keep source labels intact. Sanitize only the virtual filename, whose
+            // separators and '#' are reserved by the embedded-reference syntax.
+            auto name = animations[i]["name"].get<std::string>();
+            if (name.empty()) {
+                name = "Animation";
+            }
+            for (auto& c : name) {
+                if (static_cast<unsigned char>(c) < 32 ||
+                    std::string("/\\#:<>\"|?*").find(c) != std::string::npos) {
+                    c = '_';
+                }
+            }
+            if (name.size() > 180) {
+                name.resize(180);
+            }
+            auto member = name + ".leanim";
+            for (unsigned suffix = 2; !animationMembers.insert(member).second; ++suffix) {
+                member = name + " (" + std::to_string(suffix) + ").leanim";
+            }
+            const auto animationPath = allocateEmbedded(member);
             subAssetNames[animationPath] = animations[i]["name"];
             embeddedAssets[embeddedAssetName(animationPath)] =
                 Json{{"format", "LegacyEngineAnimation"},
