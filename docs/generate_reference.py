@@ -333,8 +333,9 @@ available through component lookup/add/remove/find/export APIs; `target` is a
 GameObject reference, `offset` is assigned as a complete vector and
 `resolvedDistance` is read-only. Camera projection/activation remains on Camera.
 `Skybox.affectEnvironment` enables sampled sky-colored ambient light and
-`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.antiRollStrength`
-couples grounded axle suspension loads without locking chassis pitch/roll.
+`Skybox.environmentIntensity` sets 0..5 intensity. Vehicle suspension uses
+independent spring/damper contacts. Anti-roll strength has been removed;
+`centerOfMassX/Y/Z` remain available without locking chassis pitch/roll.
 
 
 See [In-game UI](game-ui.md) for RML/RCSS setup and the `UI` component example.

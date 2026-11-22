@@ -1098,29 +1098,6 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                     api.AddImpulse(tire.ground, jvec(impulse * -1.f), jvec(tire.point));
                 }
             };
-            // Anti-roll couples each axle's suspension loads, not chassis rotation.
-            // Only paired contacts exchange load; no airborne world-up torque/lock.
-            // Equal/opposite dynamic-ground impulses still flow through the tires.
-            for (int axle = 0; axle < 2; ++axle) {
-                TireContact *left = nullptr, *right = nullptr;
-                for (auto& tire : tires) {
-                    if (tire.wheel == axle * 2) {
-                        left = &tire;
-                    }
-                    if (tire.wheel == axle * 2 + 1) {
-                        right = &tire;
-                    }
-                }
-                if (left && right) {
-                    const float transfer =
-                        std::clamp(v.antiRollStrength * rest *
-                                       (v.compression[axle * 2] - v.compression[axle * 2 + 1]),
-                                   -left->load,
-                                   right->load);
-                    left->load += transfer;
-                    right->load -= transfer;
-                }
-            }
             // Apply all suspension impulses before solving traction, then iterate
             // accumulated, effective-mass tire constraints. A single mass/4 force
             // pass leaves residual yaw/slip and lets later wheels undo earlier ones.

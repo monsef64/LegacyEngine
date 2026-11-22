@@ -157,7 +157,8 @@ class Renderer {
               bool editorView = true,
               const CameraEffects* effects = nullptr,
               std::uint64_t cameraKey = 0,
-              Entity visibilityCamera = {});
+              Entity visibilityCamera = {},
+              bool prefabPreview = false);
 
     bool meshBounds(MeshHandle handle, Vec3& low, Vec3& high) const {
         if (handle.id >= meshes_.size() || !meshes_[handle.id].vertexCount) {
@@ -236,7 +237,10 @@ class Renderer {
     int indirectLocation_ = -1, hasIndirectLocation_ = -1;
     int lightmapLocation_ = -1, lightmapGridLocation_ = -1, lightBakedLocations_[16]{};
     unsigned int shadowTexture_ = 0, shadowFramebuffer_ = 0;
-    void prepareLighting(World& world, const Mat4& viewProjection, Vec3 cameraPosition);
+    void prepareLighting(World& world,
+                         const Mat4& viewProjection,
+                         Vec3 cameraPosition,
+                         bool prefabPreview);
     MeshHandle audioModel_;
     unsigned int colliderVertexArray_ = 0;
     unsigned int colliderVertexBuffer_ = 0;

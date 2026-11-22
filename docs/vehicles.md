@@ -201,20 +201,16 @@ Linux compilation does not validate native desktop behavior or driving feel;
 these interactive checks remain pending.
 
 
-### Suspension and anti-roll support
+### Suspension and center of mass
 
-The hard **Keep upright** mode has been removed. Chassis pitch and roll are no
-longer locked or forcibly reset after a physics step. Old saved `keepUpright` and
-`stabilityAssist` settings are ignored when loading and omitted on the next save.
+The hard **Keep upright** mode and **anti-roll strength** have been removed.
+Old saved `keepUpright`, `stabilityAssist` and `antiRollStrength` keys are ignored
+on load and omitted on the next save. Four independent wheel spring/damper
+contacts support the chassis; there is no axle load-transfer assist, rotation
+lock or airborne world-up correction.
 
-Four wheel spring/damper contacts support the chassis. `antiRollStrength` (default
-12000 N/m, range 0..200000) transfers suspension load between grounded wheels on
-each axle. The transfer is bounded so neither contact pulls the chassis toward
-the road, and dynamic ground receives opposite impulses. Set it to zero to disable
-axle coupling. It does not apply world-up torque in the air, so slopes, jumps,
-collisions, banking and flips retain full rigid-body rotation.
-
-Tune springStrength, suspensionDamping, wheel spacing, suspension travel and body
-mass together. Anti-roll is support, not a guarantee against rollover. Manual
-checks: rest on a slope, cross uneven ground, corner at speed, hit a curb, jump,
-and land on dynamic platforms. Verify Undo, save/reopen and Play/Stop rollback.
+Tune `springStrength`, `suspensionDamping`, wheel spacing, suspension travel and
+body mass together. The `centerOfMassX/Y/Z` local offsets remain available;
+negative Y lowers the center of mass without moving collision geometry. Slopes,
+jumps, banking and flips retain full rigid-body rotation. Verify Undo,
+save/reopen and Play/Stop rollback when tuning these settings.

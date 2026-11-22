@@ -952,6 +952,18 @@ class AnimationWindow {
                 } else {
                     drawCurves(sheetHeight);
                 }
+                const float modeWidth =
+                    ImGui::CalcTextSize("Dope Sheet").x + ImGui::CalcTextSize("Curves").x +
+                    ImGui::GetStyle().FramePadding.x * 4 + ImGui::GetStyle().ItemSpacing.x;
+                ImGui::TextDisabled(
+                    "%zu tracks | frame %d", rows.size(), int(std::round(time_ * samples_)));
+                const float right = ImGui::GetWindowContentRegionMax().x - modeWidth;
+                if (right > ImGui::GetCursorPosX() + ImGui::GetItemRectSize().x +
+                                ImGui::GetStyle().ItemSpacing.x) {
+                    ImGui::SameLine(right);
+                } else {
+                    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), right));
+                }
                 if (ImGui::Button("Dope Sheet")) {
                     curves_ = false;
                 }
@@ -959,9 +971,6 @@ class AnimationWindow {
                 if (ImGui::Button("Curves")) {
                     curves_ = true;
                 }
-                ImGui::SameLine();
-                ImGui::TextDisabled(
-                    "%zu tracks | frame %d", rows.size(), int(std::round(time_ * samples_)));
                 {
                     DisabledScope disabled(!canCopyKeys());
                     if (ImGui::Button("Copy key")) {

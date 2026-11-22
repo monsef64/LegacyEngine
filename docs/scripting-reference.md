@@ -5388,7 +5388,6 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `centerOfMassX` | `number Local chassis COM offset X in metres, -10..10, default 0` |
 | `centerOfMassY` | `number Local chassis COM offset Y in metres, -10..10, default 0; negative lowers COM` |
 | `centerOfMassZ` | `number Local chassis COM offset Z in metres, -10..10, default 0` |
-| `antiRollStrength` | `number 0..200000 N/m, default 12000; grounded axle support, no rotation lock` |
 | `suspensionDamping` | `number 0..50000 per wheel` |
 | `engineForce` | `number 0..200000 N total` |
 | `brakeForce` | `number 0..300000 N total` |
@@ -5655,8 +5654,9 @@ available through component lookup/add/remove/find/export APIs; `target` is a
 GameObject reference, `offset` is assigned as a complete vector and
 `resolvedDistance` is read-only. Camera projection/activation remains on Camera.
 `Skybox.affectEnvironment` enables sampled sky-colored ambient light and
-`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.antiRollStrength`
-couples grounded axle suspension loads without locking chassis pitch/roll.
+`Skybox.environmentIntensity` sets 0..5 intensity. Vehicle suspension uses
+independent spring/damper contacts. Anti-roll strength has been removed;
+`centerOfMassX/Y/Z` remain available without locking chassis pitch/roll.
 
 
 See [In-game UI](game-ui.md) for RML/RCSS setup and the `UI` component example.

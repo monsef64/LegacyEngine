@@ -398,7 +398,8 @@ void Renderer::draw(World& world,
                     bool editorView,
                     const CameraEffects* effects,
                     std::uint64_t cameraKey,
-                    Entity visibilityCamera) {
+                    Entity visibilityCamera,
+                    bool prefabPreview) {
     CameraEffects composed = effects ? *effects : CameraEffects{};
     if (!composingEffects_) {
         bool found = false;
@@ -446,7 +447,8 @@ void Renderer::draw(World& world,
                              editorView,
                              nullptr,
                              0,
-                             visibilityCamera);
+                             visibilityCamera,
+                             prefabPreview);
                     });
             } catch (...) {
                 composingEffects_ = false;
@@ -566,7 +568,7 @@ void Renderer::draw(World& world,
 
     {
         ProfileScope scope(ProfilePart::Lights);
-        prepareLighting(world, viewProjection, cameraPosition);
+        prepareLighting(world, viewProjection, cameraPosition, prefabPreview && editorView);
     }
     glViewport(x, y, width, height);
     const Skybox* activeSky = nullptr;
@@ -600,6 +602,11 @@ void Renderer::draw(World& world,
     if (skyFade) {
         skyAmbient = ambientFor(&skyFade->from, skyboxRenderer_) * (1 - skyFade->weight()) +
                      ambientFor(&skyFade->to, skyboxFadeRenderer_) * skyFade->weight();
+    }
+    if (prefabPreview && editorView) {
+        skyAmbient = {std::max(skyAmbient.x, .20f),
+                      std::max(skyAmbient.y, .20f),
+                      std::max(skyAmbient.z, .22f)};
     }
     glUseProgram(litProgram_);
     glUniform3f(
@@ -1199,9 +1206,29 @@ void Renderer::drawWire(const MeshData& wire,
     glBindVertexArray(0);
 }
 
-void Renderer::prepareLighting(World& world, const Mat4& viewProjection, Vec3 cameraPosition) {
+void Renderer::prepareLighting(World& world,
+                               const Mat4& viewProjection,
+                               Vec3 cameraPosition,
+                               bool prefabPreview) {
     auto& lights = lights_;
     Lighting::gather(world, viewProjection, cameraPosition, lights, shadowSettings_.mode == 0);
+    if (prefabPreview) {
+        // Render-only studio rig: no ECS entities, hierarchy entries, undo records,
+        // prefab serialization, baked lighting or gameplay state are modified.
+        if (lights.size() > Lighting::maxLights - 2) {
+            lights.resize(Lighting::maxLights - 2);
+        }
+        Lighting::Light key, fill;
+        key.settings.shadows = fill.settings.shadows = false;
+        key.settings.intensity = 1.2f;
+        key.settings.color = {1.f, .95f, .88f};
+        key.direction = normalize(Vec3{-.5f, -1.f, -.6f});
+        fill.settings.intensity = .65f;
+        fill.settings.color = {.78f, .86f, 1.f};
+        fill.direction = normalize(Vec3{.7f, -.35f, .5f});
+        lights.push_back(key);
+        lights.push_back(fill);
+    }
     std::array<Lighting::Cascades, Lighting::maxLights> cascades{};
     Vec3 shadowOrigin{}, shadowForward{0, 0, -1};
     for (std::size_t i = 0; i < lights.size(); ++i) {

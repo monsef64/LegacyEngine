@@ -1542,7 +1542,7 @@ inline void drawInspector(World& world,
                         EditorValues::Checkbox("Enabled", &edited.enabled);
 
                         ImGui::TextWrapped(
-                            "Four-wheel suspension supports the chassis. Anti-roll strength couples grounded wheels on each axle while allowing slope banking, jumps and flips.");
+                            "Four-wheel spring/damper suspension supports the chassis. Center-of-mass offsets tune balance without locking pitch or roll; slopes, jumps and flips remain free.");
 #define VEHICLE_UI(name, value, lo, hi)                                                            \
     EditorValues::DragFloat(                                                                       \
         #name, &edited.name, .05f, lo, hi, "%.2f", ImGuiSliderFlags_AlwaysClamp);

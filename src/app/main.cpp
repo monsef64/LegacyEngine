@@ -2766,7 +2766,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                               true,
                               nullptr,
                               0,
-                              visibilityPreview ? selectedEntity : Entity{});
+                              visibilityPreview ? selectedEntity : Entity{},
+                              bool(prefabLevel));
                 if (visibilityPreview) {
                     occlusionWindow.previewValid = true;
                     occlusionWindow.previewCulled = renderer.occlusion.culled;

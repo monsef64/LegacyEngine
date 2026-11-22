@@ -677,6 +677,15 @@ Negative Y lowers the center of mass. The physical collision surface stays in
 place: this changes Jolt's mass frame rather than shifting the collider or
 locking rotation. Changing an offset rebuilds the chassis body on the next
 physics synchronization. Settings persist with the Vehicle, support multi-edit
-and Lua, and default to zero in older projects. `antiRollStrength` remains the
-suspension axle load-transfer setting; zero disables it. Center-of-mass offsets
-and anti-roll strength are separate tuning controls, not a hard upright lock.
+and Lua, and default to zero in older projects. Anti-roll strength has been
+removed; old saved keys are ignored. Wheel spring/damper suspension and
+center-of-mass tuning remain available without a hard upright lock.
+
+### Prefab studio lighting and animation view modes
+
+Isolated prefab editing uses a render-only warm key light, cool fill light and
+minimum ambient illumination in the Scene view. These are not ECS entities and
+cannot enter the hierarchy, undo history, prefab asset, linked level instances
+or a bake. Exiting prefab mode restores normal Scene lighting. Game views and
+asset-preview lighting are unchanged. The Animation window's Dope Sheet and
+Curves buttons are aligned to the right of its track/frame status row.
