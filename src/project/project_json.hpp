@@ -249,7 +249,8 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"NavMeshObstacle", {{"settings", 'j'}}},
     // Reserved legacy slot: consumed on load only; no Animator runtime/editor remains.
     {"Animator", {{"settings", 'j'}}},
-    {"UI", {{"enabled", 'b'}, {"rml", 's'}, {"rcss", 's'}}}};
+    {"UI", {{"enabled", 'b'}, {"rml", 's'}, {"rcss", 's'}}},
+    {"Decal", {{"settings", 'j'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     Json result = Json::object();
@@ -429,7 +430,7 @@ inline std::string toLegacy(const Json& doc) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 36\n";
+    out << std::setprecision(17) << "LegacyEngineProject 37\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),

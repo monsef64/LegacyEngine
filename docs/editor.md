@@ -700,3 +700,17 @@ Imported supported assets proactively warm their icon and hover-preview caches i
 the default cache location, even before opening their browser folder. Inventory
 and CPU work run in workers; GPU previews are serviced incrementally on focused
 editor frames. Large imports may need several frames to finish warming.
+
+
+### Decals and preview responsiveness
+
+Use **Add Component > Decal** for box-projected image marks on opaque receivers;
+see [Decals](decals.md) for placement, scripting and limitations. Game exports use
+their independently chosen game icon.
+
+Preview warm-up waits for idle input, spaces out generation and renders one hover
+image for both cache resolutions. GPU readback uses pixel-pack buffers and fences
+polled without waiting; cache serialization and writes run on workers with bounded
+backpressure. These changes remove synchronous GPU readback/disk writes from the
+normal preview save path. Very large prefab/model decoding and GPU uploads can
+still have costs; desktop performance needs manual verification on target hardware.

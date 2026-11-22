@@ -24,6 +24,10 @@
     "title": "Standalone game export"
   },
   {
+    "file": "decals.md",
+    "title": "Decals"
+  },
+  {
     "file": "third-person-and-environment.md",
     "title": "TPS camera and environment lighting"
   },

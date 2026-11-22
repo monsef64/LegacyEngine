@@ -1,6 +1,6 @@
 # Mark only standalone player templates, never editor executables. Reapply this
 # after stripping distribution copies because strip may remove the file overlay.
-set(marker "LEGACY_PLAYER_TEMPLATE_000000001")
+set(marker "LEGACY_PLAYER_TEMPLATE_000000002")
 file(SIZE "${PLAYER}" size)
 set(tail "")
 if(size GREATER_EQUAL 32)

@@ -21,7 +21,8 @@
 #endif
 namespace GameExport {
 namespace {
-constexpr std::size_t chunkSize = 16 * 1024 * 1024;
+constexpr std::size_t maxChunkSize = 64 * 1024 * 1024;
+constexpr std::size_t manifestLimit = 16 * 1024 * 1024;
 constexpr std::uint64_t maxTotal = 2ull * 1024 * 1024 * 1024;
 struct Footer {
     unsigned char key[32], id[16];
@@ -90,7 +91,7 @@ void seal(const std::filesystem::path& path,
 }
 std::vector<unsigned char>
 open(const std::filesystem::path& path, const Footer& key, const std::string& label) {
-    auto encrypted = readBytes(path, chunkSize + 40);
+    auto encrypted = readBytes(path, maxChunkSize + 40);
     if (encrypted.size() < 40) {
         throw std::runtime_error("Truncated encrypted game chunk");
     }
@@ -300,9 +301,11 @@ void validate(const Settings& s) {
          lower[3] >= '1' && lower[3] <= '9')) {
         throw std::runtime_error("Reserved executable name");
     }
-    if (s.company.empty() || s.description.empty() || s.copyright.empty() ||
-        s.company.size() > 256 || s.description.size() > 1024 || s.copyright.size() > 1024) {
-        throw std::runtime_error("Company, Description and Copyright are required (bounded text)");
+    if (s.company.size() > 256 || s.description.size() > 1024 || s.copyright.size() > 1024) {
+        throw std::runtime_error("Company, Description and Copyright exceed text limits");
+    }
+    if (s.chunkMiB < 1 || s.chunkMiB > 64) {
+        throw std::runtime_error("Chunk size must be 1..64 MiB");
     }
     unsigned a = 0, b = 0, c = 0;
     char tail = 0;
@@ -321,7 +324,7 @@ void validate(const Settings& s) {
         char marker[32]{};
         player.seekg(-32, std::ios::end);
         player.read(marker, sizeof(marker));
-        if (!player || std::memcmp(marker, "LEGACY_PLAYER_TEMPLATE_000000001", 32) != 0) {
+        if (!player || std::memcmp(marker, "LEGACY_PLAYER_TEMPLATE_000000002", 32) != 0) {
             throw std::runtime_error(
                 "Expected a built LegacyPlayer template, not an editor or previously exported game");
         }
@@ -358,6 +361,7 @@ void build(const Settings& s,
            const std::string& scene,
            const std::filesystem::path& engineData) {
     validate(s);
+    const std::size_t chunkSize = std::size_t(s.chunkMiB) * 1024 * 1024;
     const auto destination = std::filesystem::absolute(s.output).lexically_normal();
     if (std::filesystem::exists(destination) || std::filesystem::is_symlink(destination)) {
         throw std::runtime_error(
@@ -365,11 +369,26 @@ void build(const Settings& s,
     }
     const auto source = std::filesystem::weakly_canonical(assets.root),
                output = std::filesystem::weakly_canonical(destination);
-    const auto inside = output.lexically_relative(source),
-               ancestor = source.lexically_relative(output);
-    if (inside.empty() || *inside.begin() != ".." || ancestor.empty() ||
-        *ancestor.begin() != "..") {
-        throw std::runtime_error("Export must be outside the source asset tree");
+    auto contains = [](const std::filesystem::path& parent, const std::filesystem::path& child) {
+        auto a = parent.begin(), b = child.begin();
+        for (; a != parent.end(); ++a, ++b) {
+            if (b == child.end()) {
+                return false;
+            }
+#ifdef _WIN32
+            // Windows path comparisons must tolerate drive/folder letter casing.
+            if (CompareStringOrdinal(a->c_str(), -1, b->c_str(), -1, TRUE) != CSTR_EQUAL)
+                return false;
+#else
+            if (*a != *b)
+                return false;
+#endif
+        }
+        return true;
+    };
+    if (contains(source, output) || contains(output, source)) {
+        throw std::runtime_error(
+            "Choose an export folder outside Assets (for example Project/Builds/Game)");
     }
     Footer footer{};
     randomBytes(footer.key, 32);
@@ -449,6 +468,7 @@ void build(const Settings& s,
         }
         files.push_back({s.icon, "Icon" + AssetManager::extension(s.icon), {}, false});
         Json manifest{{"format", "LegacyGame1"},
+                      {"chunkBytes", chunkSize},
                       {"name", s.name},
                       {"company", s.company},
                       {"startLevel", s.startLevel},
@@ -523,7 +543,7 @@ void build(const Settings& s,
         manifest["chunks"] = chunks;
         manifest["total"] = total;
         const auto json = manifest.dump();
-        if (json.size() > chunkSize) {
+        if (json.size() > manifestLimit) {
             throw std::runtime_error("Export manifest exceeds size limit");
         }
         seal(data / "manifest.bin",
@@ -592,10 +612,14 @@ void mount(const std::filesystem::path& executable, Mounted& mounted) {
         throw std::runtime_error("Invalid game data directory");
     }
     const auto plain = open(data / "manifest.bin", footer, "manifest");
-    const auto meta = parseJson(std::string(plain.begin(), plain.end()), chunkSize);
+    const auto meta = parseJson(std::string(plain.begin(), plain.end()), manifestLimit);
     if (meta.at("format") != "LegacyGame1" || !meta.at("files").is_array() ||
         meta.at("files").size() > 20000) {
         throw std::runtime_error("Invalid game manifest");
+    }
+    const auto chunkSize = meta.value("chunkBytes", std::uint64_t(16 * 1024 * 1024));
+    if (chunkSize < 1024 * 1024 || chunkSize > maxChunkSize || chunkSize % (1024 * 1024)) {
+        throw std::runtime_error("Invalid chunk size");
     }
     const auto chunks = meta.at("chunks").get<std::uint64_t>(),
                total = meta.at("total").get<std::uint64_t>();

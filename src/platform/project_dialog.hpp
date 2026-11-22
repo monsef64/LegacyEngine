@@ -91,6 +91,24 @@ class ProjectDialog {
         }
         SDL_ShowOpenFolderDialog(callback, new Request{state_, false, true}, window, nullptr, true);
     }
+    void chooseExportPath(SDL_Window* window,
+                          bool folder,
+                          const SDL_DialogFileFilter* filters,
+                          int count) {
+        {
+            std::lock_guard<std::mutex> lock(state_->mutex);
+            if (state_->busy) {
+                return;
+            }
+            state_->busy = true;
+        }
+        auto* request = new Request{state_, false};
+        if (folder) {
+            SDL_ShowOpenFolderDialog(callback, request, window, nullptr, false);
+        } else {
+            SDL_ShowOpenFileDialog(callback, request, window, filters, count, nullptr, false);
+        }
+    }
     std::optional<Result> poll() {
         std::lock_guard<std::mutex> lock(state_->mutex);
         if (!state_->result) {

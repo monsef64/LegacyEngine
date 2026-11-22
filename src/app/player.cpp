@@ -17,6 +17,7 @@
 #include "project/rendering_settings.hpp"
 #include "rendering/renderer.hpp"
 #include "rendering/scene_surface.hpp"
+#include "rendering/shader_data.hpp"
 #include "scene/scene_camera.hpp"
 #include "scripting/script_components.hpp"
 #include "ui/game_ui.hpp"
@@ -405,6 +406,7 @@ int main(int, char**) {
     try {
         GameExport::mount(executablePath(), package);
         std::filesystem::current_path(package.root / "Engine");
+        engineDataRoot = package.root / "Engine" / "data";
         if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
             throw std::runtime_error(SDL_GetError());
         }

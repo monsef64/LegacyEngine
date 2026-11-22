@@ -121,6 +121,7 @@ inline std::string sceneSignature(World& world) {
                 fields(entry.fields);
             }
         });
+        component(e, Decal{}, [&](const Decal& d) { result += Decals::settings(d).dump(); });
         component(
             e, LightShafts{}, [&](const LightShafts& s) { result += Shafts::settings(s).dump(); });
         component(e, CloudSystem{}, [&](const CloudSystem& c) {

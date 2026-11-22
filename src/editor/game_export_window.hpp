@@ -1,5 +1,6 @@
 #pragma once
 #include "levels/level_system.hpp"
+#include "platform/project_dialog.hpp"
 #include "project/game_export.hpp"
 #include "project/project_io.hpp"
 #include <SDL3/SDL.h>
@@ -12,6 +13,8 @@ class GameExportWindow {
     char icon_[4097]{}, output_[4097]{}, player_[4097]{};
     std::string scene_, error_, status_;
     std::future<std::string> job_;
+    ProjectDialog picker_;
+    int picking_ = 0, chunkMiB_ = 16;
 
   public:
     bool visible = false;
@@ -25,6 +28,21 @@ class GameExportWindow {
               const ProjectIO::Meshes& meshes,
               const LevelSystem& levels,
               bool allowed) {
+        if (auto result = picker_.poll()) {
+            if (!result->error.empty()) {
+                error_ = result->error;
+            }
+            if (!result->path.empty()) {
+                auto path = result->path;
+                if (picking_ == 2) {
+                    path = (std::filesystem::path(path) /
+                            (std::string(name_).empty() ? "Game" : name_))
+                               .string();
+                }
+                char* target = picking_ == 1 ? icon_ : picking_ == 2 ? output_ : player_;
+                std::snprintf(target, 4097, "%s", path.c_str());
+            }
+        }
         if (job_.valid() && job_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             try {
                 status_ = job_.get();
@@ -39,20 +57,12 @@ class GameExportWindow {
         }
         ImGui::SetNextWindowSize(ImVec2(650, 610), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Export Game", &visible)) {
-            ImGui::TextUnformatted("Standalone game export");
-#ifdef _WIN32
-            ImGui::TextDisabled("Native target: Windows x64 (MinGW-w64); icon: .ico");
-#else
-            ImGui::TextDisabled("Native target: Linux x86_64; icon: .png");
-#endif
-            ImGui::TextWrapped(
-                "Export Windows builds on Windows and Linux builds on Linux. Build/install LegacyPlayer beside the editor first. All fields below are required.");
-            ImGui::BeginDisabled(busy() || !allowed);
+            ImGui::BeginDisabled(busy() || !allowed || picker_.pending());
             ImGui::InputText("Game Name", name_, sizeof(name_));
-            ImGui::InputText("Company", company_, sizeof(company_));
+            ImGui::InputText("Company (optional)", company_, sizeof(company_));
             ImGui::InputText("Version", version_, sizeof(version_));
-            ImGui::InputText("Description", description_, sizeof(description_));
-            ImGui::InputText("Copyright", copyright_, sizeof(copyright_));
+            ImGui::InputText("Description (optional)", description_, sizeof(description_));
+            ImGui::InputText("Copyright (optional)", copyright_, sizeof(copyright_));
             if (ImGui::BeginCombo("Start scene",
                                   scene_.empty() ? "Current Scene" : scene_.c_str())) {
                 if (ImGui::Selectable("Current Scene", scene_.empty())) {
@@ -65,8 +75,27 @@ class GameExportWindow {
                 }
                 ImGui::EndCombo();
             }
+            auto browse = [&](int kind, const char* label) {
+                ImGui::SameLine();
+                if (ImGui::Button(label)) {
+                    picking_ = kind;
+#ifdef _WIN32
+                    static const SDL_DialogFileFilter iconFilter[]{{"Icon", "ico"}};
+                    static const SDL_DialogFileFilter playerFilter[]{{"Player", "exe"}};
+#else
+                    static const SDL_DialogFileFilter iconFilter[]{{"Icon", "png"}};
+                    static const SDL_DialogFileFilter playerFilter[]{{"Player", "*"}};
+#endif
+                    picker_.chooseExportPath(SDL_GL_GetCurrentWindow(),
+                                             kind == 2,
+                                             kind == 1 ? iconFilter : playerFilter,
+                                             1);
+                }
+            };
             ImGui::InputText("Icon file (absolute path)", icon_, sizeof(icon_));
+            browse(1, "Browse##Icon");
             ImGui::InputText("New output folder", output_, sizeof(output_));
+            browse(2, "Browse##Output");
             if (!*player_) {
 #ifdef _WIN32
                 const auto file = std::filesystem::path(SDL_GetBasePath()) / "LegacyPlayer.exe";
@@ -76,10 +105,8 @@ class GameExportWindow {
                 std::snprintf(player_, sizeof(player_), "%s", file.string().c_str());
             }
             ImGui::InputText("Native player template", player_, sizeof(player_));
-            ImGui::TextWrapped(
-                "Output: GameName.exe (Windows) / GameName (Linux), plus GameName_Data with authenticated encrypted 16 MiB chunks. Required Windows DLLs are copied beside the EXE.");
-            ImGui::TextWrapped(
-                "Encryption deters casual browsing, not extraction: the player contains its decryption key and materializes private temporary runtime files. These are removed on normal shutdown; crashes may leave them behind.");
+            browse(3, "Browse##Player");
+            ImGui::SliderInt("Chunk size (MiB)", &chunkMiB_, 1, 64);
             if (ImGui::Button("Export Game")) {
                 try {
                     GameExport::Settings settings{name_,
@@ -90,6 +117,7 @@ class GameExportWindow {
                                                   icon_,
                                                   output_,
                                                   player_};
+                    settings.chunkMiB = unsigned(chunkMiB_);
                     settings.startLevel = scene_.empty() ? levels.current() : scene_;
                     GameExport::validate(settings);
                     std::string scene;
@@ -127,10 +155,6 @@ class GameExportWindow {
             }
             if (!error_.empty()) {
                 ImGui::TextWrapped("%s", error_.c_str());
-            }
-            if (busy()) {
-                ImGui::TextDisabled(
-                    "Keep the editor open until export finishes. Existing output is never overwritten.");
             }
         }
         ImGui::End();
