@@ -689,3 +689,14 @@ cannot enter the hierarchy, undo history, prefab asset, linked level instances
 or a bake. Exiting prefab mode restores normal Scene lighting. Game views and
 asset-preview lighting are unchanged. The Animation window's Dope Sheet and
 Curves buttons are aligned to the right of its track/frame status row.
+
+## Standalone game export
+
+**File > Export Game** opens native Windows/Linux packaging with metadata, start
+scene and icon assignment. See [exporting a standalone game](exporting.md) for
+layout, build requirements and encryption limitations.
+
+Imported supported assets proactively warm their icon and hover-preview caches in
+the default cache location, even before opening their browser folder. Inventory
+and CPU work run in workers; GPU previews are serviced incrementally on focused
+editor frames. Large imports may need several frames to finish warming.

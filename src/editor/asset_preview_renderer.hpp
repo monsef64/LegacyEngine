@@ -3,6 +3,7 @@
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
+#include "core/worker_pool.hpp"
 #include "editor/asset_preview_ui.hpp"
 #include "editor/rotation_editor.hpp"
 #include "models/model_asset.hpp"
@@ -12,12 +13,14 @@
 #include "scene/camera.hpp"
 #include "terrain/terrain_io.hpp"
 #include <array>
+#include <deque>
 #include <fstream>
 
 // Independent Inspector, tooltip and picker-detail slots prevent image aliasing.
 class AssetPreviewRenderer {
     struct Slot {
         SceneSurface surface;
+        std::future<AssetPreviewData> audioJob;
         unsigned cachedTexture = 0;
         bool saved = false;
         ~Slot() {
@@ -48,12 +51,91 @@ class AssetPreviewRenderer {
     int iconFrame_ = -1, iconBudget_ = 1, iconDrawBudget_ = 1;
     std::chrono::steady_clock::time_point nextIcon_{};
 
-    // Persist only self-contained v2 containers. Legacy external dependencies
-    // need a separate dependency manifest before persistent caching.
+    struct Inventory {
+        std::uint64_t signature = 14695981039346656037ull;
+        std::vector<std::string> paths;
+    };
+    std::filesystem::path inventoryRoot_;
+    std::future<Inventory> inventoryJob_;
+    std::uint64_t signature_ = 0;
+    std::chrono::steady_clock::time_point nextInventory_{};
+    struct Warm {
+        std::string path;
+        bool icon;
+        std::chrono::steady_clock::time_point started{};
+    };
+    std::deque<Warm> warm_;
+    bool rescan_ = true;
+    static Inventory inventory(AssetManager assets, std::uint64_t previous) {
+        Inventory result;
+        if (!std::filesystem::exists(assets.root)) {
+            return result;
+        }
+        std::vector<std::string> files;
+        for (auto it = std::filesystem::recursive_directory_iterator(assets.root);
+             it != std::filesystem::recursive_directory_iterator();
+             ++it) {
+            if (it->is_symlink()) {
+                if (it->is_directory()) {
+                    it.disable_recursion_pending();
+                }
+                continue;
+            }
+            if (it->is_directory()) {
+                if (it->path().filename() == ".cache") {
+                    it.disable_recursion_pending();
+                }
+                continue;
+            }
+            if (it->is_regular_file()) {
+                if (files.size() >= 10000) {
+                    throw std::runtime_error("Preview inventory exceeds 10000 assets");
+                }
+                files.push_back(it->path().lexically_relative(assets.root).generic_string());
+            }
+        }
+        std::sort(files.begin(), files.end());
+        auto hash = [&](const std::string& value) {
+            for (unsigned char c : value) {
+                result.signature ^= c;
+                result.signature *= 1099511628211ull;
+            }
+            result.signature ^= 255;
+            result.signature *= 1099511628211ull;
+        };
+        for (const auto& file : files) {
+            const auto physical = assets.resolve(file);
+            hash(file);
+            hash(std::to_string(std::filesystem::file_size(physical)));
+            hash(std::to_string(
+                std::filesystem::last_write_time(physical).time_since_epoch().count()));
+        }
+        if (result.signature == previous) {
+            return result;
+        }
+        for (const auto& file : files) {
+            const auto physical = assets.resolve(file);
+            result.paths.push_back(file);
+            if (modelAsset(file)) {
+                try {
+                    const auto doc = readModelContainer(physical);
+                    if (doc->contains("embeddedAssets")) {
+                        for (auto it = doc->at("embeddedAssets").begin();
+                             it != doc->at("embeddedAssets").end() && result.paths.size() < 20000;
+                             ++it) {
+                            result.paths.push_back(file + "#" + it.key());
+                        }
+                    }
+                } catch (...) { /* Corrupt files get a cached error descriptor. */
+                }
+            }
+        }
+        return result;
+    }
     std::filesystem::path
     modelPreviewPath(const AssetManager& assets, const std::string& path, bool icon) {
         auto file = thumbnailCachePath(assets, path);
-        file += icon ? ".model-icon-v1" : ".model-detail-v1";
+        file += icon ? ".icon-v3" : ".hover-v3";
         if (std::filesystem::is_symlink(file)) {
             throw std::runtime_error("Invalid preview cache");
         }
@@ -61,47 +143,66 @@ class AssetPreviewRenderer {
     }
     bool
     loadModelPreview(Slot& slot, const AssetManager& assets, const std::string& path, bool icon) {
-        if (!modelAsset(path)) {
-            return false;
-        }
         try {
-            auto source = assetContainerPath(assets.resolve(path));
-            std::ifstream in(modelPreviewPath(assets, path, icon), std::ios::binary);
-            std::uintmax_t bytes = 0;
-            std::int64_t stamp = 0;
-            std::string magic;
-            int width = 0, height = 0;
-            in >> magic >> bytes >> stamp >> width >> height;
-            if (!in || magic != "LEPreview1" || in.get() != '\n' ||
-                bytes != std::filesystem::file_size(source) ||
-                stamp != std::filesystem::last_write_time(source).time_since_epoch().count() ||
-                width != (icon ? 128 : 384) || height != (icon ? 128 : 288)) {
+            const auto source = assetContainerPath(assets.resolve(path));
+            const auto file = modelPreviewPath(assets, path, icon);
+            if (!std::filesystem::exists(file) ||
+                std::filesystem::file_size(file) > 512 * 512 * 4 + 65536) {
                 return false;
             }
-            std::vector<unsigned char> pixels(std::size_t(width) * height * 4);
-            in.read(reinterpret_cast<char*>(pixels.data()), pixels.size());
-            if (!in || in.peek() != std::char_traits<char>::eof()) {
+            std::ifstream input(file, std::ios::binary);
+            std::string header;
+            if (!std::getline(input, header) || header.size() > 65536) {
                 return false;
             }
-            glGenTextures(1, &slot.cachedTexture);
-            glBindTexture(GL_TEXTURE_2D, slot.cachedTexture);
-            glTexImage2D(GL_TEXTURE_2D,
-                         0,
-                         GL_RGBA8,
-                         width,
-                         height,
-                         0,
-                         GL_RGBA,
-                         GL_UNSIGNED_BYTE,
-                         pixels.data());
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            slot.data = {};
-            slot.data.texture = slot.cachedTexture;
-            slot.data.width = width;
-            slot.data.height = height;
-            slot.data.flip = true;
+            const auto meta = parseJson(header, 65536);
+            if (meta.value("version", 0) != 3 ||
+                meta.at("project").get<std::uint64_t>() != signature_ ||
+                meta.at("bytes").get<std::uintmax_t>() != std::filesystem::file_size(source) ||
+                meta.at("stamp").get<std::int64_t>() !=
+                    std::filesystem::last_write_time(source).time_since_epoch().count()) {
+                return false;
+            }
+            AssetPreviewData data;
+            data.width = meta.at("width");
+            data.height = meta.at("height");
+            data.flip = meta.at("flip");
+            data.text = meta.value("text", std::string{});
+            data.error = meta.value("error", std::string{});
+            data.seconds = meta.value("seconds", 0.f);
+            data.waveform = meta.value("waveform", std::vector<float>{});
+            if (data.width < 1 || data.height < 1 || data.width > 512 || data.height > 512 ||
+                data.text.size() > 8192 || data.error.size() > 8192 || data.waveform.size() > 256 ||
+                !std::isfinite(data.seconds)) {
+                return false;
+            }
+            if (meta.at("image").get<bool>()) {
+                std::vector<unsigned char> pixels(std::size_t(data.width) * data.height * 4);
+                input.read(reinterpret_cast<char*>(pixels.data()), pixels.size());
+                if (!input || input.peek() != std::char_traits<char>::eof()) {
+                    return false;
+                }
+                GLint binding = 0;
+                glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+                glGenTextures(1, &slot.cachedTexture);
+                glBindTexture(GL_TEXTURE_2D, slot.cachedTexture);
+                glTexImage2D(GL_TEXTURE_2D,
+                             0,
+                             GL_RGBA8,
+                             data.width,
+                             data.height,
+                             0,
+                             GL_RGBA,
+                             GL_UNSIGNED_BYTE,
+                             pixels.data());
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glBindTexture(GL_TEXTURE_2D, binding);
+                data.texture = slot.cachedTexture;
+            }
+            slot.data = std::move(data);
             slot.world.reset();
+            slot.waitingBounds = slot.streaming = false;
             slot.saved = true;
             return true;
         } catch (...) {
@@ -110,35 +211,91 @@ class AssetPreviewRenderer {
     }
     void
     saveModelPreview(Slot& slot, const AssetManager& assets, const std::string& path, bool icon) {
-        if (!modelAsset(path)) {
-            return;
-        }
-        // Small bounded readback, once after asynchronous mesh/texture loading settles.
+        std::filesystem::path temp;
         try {
-            auto file = modelPreviewPath(assets, path, icon);
-            auto source = assetContainerPath(assets.resolve(path));
-            const auto document = readModelContainer(source);
-            if (document->value("version", 1) != 2 || !document->contains("embeddedAssets")) {
-                return;
+            const auto source = assetContainerPath(assets.resolve(path));
+            const auto file = modelPreviewPath(assets, path, icon);
+            std::vector<unsigned char> pixels;
+            const float scale =
+                std::min(1.f, 512.f / std::max({1, slot.data.width, slot.data.height}));
+            int width = icon ? 128 : std::max(1, int(slot.data.width * scale)),
+                height = icon ? 128 : std::max(1, int(slot.data.height * scale));
+            if (slot.data.texture) {
+                pixels.resize(std::size_t(width) * height * 4);
+                struct Restore {
+                    GLint read, draw, binding, renderbuffer;
+                    bool scissor;
+                    Restore() {
+                        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
+                        glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
+                        glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+                        glGetIntegerv(GL_RENDERBUFFER_BINDING, &renderbuffer);
+                        scissor = glIsEnabled(GL_SCISSOR_TEST);
+                        glDisable(GL_SCISSOR_TEST);
+                    }
+                    ~Restore() {
+                        glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
+                        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+                        glBindTexture(GL_TEXTURE_2D, binding);
+                        glBindRenderbuffer(GL_RENDERBUFFER, renderbuffer);
+                        if (scissor) {
+                            glEnable(GL_SCISSOR_TEST);
+                        } else {
+                            glDisable(GL_SCISSOR_TEST);
+                        }
+                    }
+                } restore;
+                GLint read = 0, draw = 0, viewport[4];
+                glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read);
+                glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw);
+                glGetIntegerv(GL_VIEWPORT, viewport);
+                unsigned framebuffer = 0;
+                glGenFramebuffers(1, &framebuffer);
+                SceneSurface scaled;
+                scaled.resize(width, height);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, framebuffer);
+                glFramebufferTexture2D(
+                    GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, slot.data.texture, 0);
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, scaled.framebuffer);
+                GLint binding = 0, sw = 0, sh = 0;
+                glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding);
+                glBindTexture(GL_TEXTURE_2D, slot.data.texture);
+                glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &sw);
+                glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &sh);
+                glBindTexture(GL_TEXTURE_2D, binding);
+                glBlitFramebuffer(
+                    0, 0, sw, sh, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, scaled.framebuffer);
+                pixels.resize(std::size_t(width) * height * 4);
+                glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
+                glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+                glDeleteFramebuffers(1, &framebuffer);
             }
-            std::vector<unsigned char> pixels(std::size_t(slot.data.width) * slot.data.height * 4);
-            GLint binding = 0;
-            glGetIntegerv(GL_TEXTURE_BINDING_2D, &binding);
-            glBindTexture(GL_TEXTURE_2D, slot.surface.texture);
-            glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-            glBindTexture(GL_TEXTURE_2D, binding);
+            Json meta{
+                {"version", 3},
+                {"project", signature_},
+                {"bytes", std::filesystem::file_size(source)},
+                {"stamp", std::filesystem::last_write_time(source).time_since_epoch().count()},
+                {"width", width},
+                {"height", height},
+                {"flip", slot.data.flip},
+                {"image", !pixels.empty()},
+                {"text", slot.data.text.substr(0, 8192)},
+                {"error", slot.data.error.substr(0, 8192)},
+                {"seconds", slot.data.seconds},
+                {"waveform", slot.data.waveform}};
             std::filesystem::create_directories(file.parent_path());
-            auto temp = file;
+            temp = file;
             temp += ".tmp-" +
                     std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-            std::ofstream out(temp, std::ios::binary);
-            out << "LEPreview1 " << std::filesystem::file_size(source) << ' '
-                << std::filesystem::last_write_time(source).time_since_epoch().count() << ' '
-                << slot.data.width << ' ' << slot.data.height << '\n';
-            out.write(reinterpret_cast<char*>(pixels.data()), pixels.size());
-            out.close();
+            std::ofstream output(temp, std::ios::binary);
+            output << meta.dump() << '\n';
+            output.write(reinterpret_cast<const char*>(pixels.data()), pixels.size());
+            output.close();
             std::error_code ec;
-            if (out) {
+            if (output) {
                 std::filesystem::rename(temp, file, ec);
                 if (ec) {
                     std::filesystem::remove(file, ec);
@@ -147,16 +304,28 @@ class AssetPreviewRenderer {
                 }
             }
             std::filesystem::remove(temp, ec);
-        } catch (...) { /* Read-only projects may still display previews. */
+        } catch (...) {
+            if (!temp.empty()) {
+                std::error_code ec;
+                std::filesystem::remove(temp, ec);
+            }
         }
     }
 
-    void build(Slot& slot, const AssetManager& assets, const std::string& path) {
+    void build(Slot& slot, const AssetManager& assets, const std::string& path, bool icon) {
         slot.data = {};
         slot.waitingBounds = false;
         slot.world = std::make_unique<World>();
         auto& world = *slot.world;
         if (textureAsset(path)) {
+            if (icon) {
+                pickerThumbnails_.beginFrame(assets);
+                slot.data.texture = pickerThumbnails_.texture(assets, path);
+                slot.data.width = slot.data.height = 128;
+                slot.waitingBounds = !slot.data.texture;
+                slot.world.reset();
+                return;
+            }
             if (AssetManager::extension(path) == ".hdr") {
                 thumbnails_.beginFrame(assets);
                 slot.data.texture = thumbnails_.texture(assets, path);
@@ -182,15 +351,28 @@ class AssetPreviewRenderer {
             return;
         }
         if (audioAsset(path)) {
-            const auto samples = decodeAudioClip(assets, path);
-            slot.data.seconds = float(samples.size()) / 96000;
-            slot.data.waveform.resize(256);
-            for (std::size_t i = 0; i < samples.size(); ++i) {
-                slot.data.waveform[std::min<std::size_t>(
-                    255, i * 256 / std::max<std::size_t>(1, samples.size()))] =
-                    std::max(slot.data.waveform[std::min<std::size_t>(
-                                 255, i * 256 / std::max<std::size_t>(1, samples.size()))],
-                             std::abs(samples[i]));
+            if (slot.audioJob.valid() &&
+                slot.audioJob.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                slot.data = slot.audioJob.get();
+            } else {
+                if (!slot.audioJob.valid()) {
+                    auto job = WorkerPool::shared().submit([assets, path] {
+                        AssetPreviewData result;
+                        const auto samples = decodeAudioClip(assets, path);
+                        result.seconds = float(samples.size()) / 96000;
+                        result.waveform.resize(256);
+                        for (std::size_t i = 0; i < samples.size(); ++i) {
+                            auto& value = result.waveform[std::min<std::size_t>(
+                                255, i * 256 / std::max<std::size_t>(1, samples.size()))];
+                            value = std::max(value, std::abs(samples[i]));
+                        }
+                        return result;
+                    });
+                    if (job) {
+                        slot.audioJob = std::move(*job);
+                    }
+                }
+                slot.waitingBounds = true;
             }
             slot.world.reset();
             return;
@@ -375,6 +557,10 @@ class AssetPreviewRenderer {
     }
 
     const AssetPreviewData& get(const AssetManager& assets, const std::string& path, int index) {
+        static const AssetPreviewData pending;
+        if (inventoryRoot_ != assets.root || !signature_) {
+            return pending;
+        }
         if (iconFrame_ != ImGui::GetFrameCount()) {
             iconFrame_ = ImGui::GetFrameCount();
             iconBudget_ = 1;
@@ -437,12 +623,15 @@ class AssetPreviewRenderer {
                 slot.key = key;
                 slot.revision = modelAssetRevision;
                 slot.saved = false;
+                if (changed) {
+                    slot.audioJob = {};
+                }
                 if (slot.cachedTexture) {
                     glDeleteTextures(1, &slot.cachedTexture);
                 }
                 slot.cachedTexture = 0;
                 if (!loadModelPreview(slot, assets, path, index == 2)) {
-                    build(slot, assets, path);
+                    build(slot, assets, path, index == 2);
                 }
                 if (index == 2) {
                     slot.data.width = slot.data.height = 128;
@@ -494,7 +683,7 @@ class AssetPreviewRenderer {
                 }
             }
             slot.streaming = textures_.streaming() || renderer_.streaming();
-            if (slot.world && !slot.streaming && !slot.waitingBounds && !slot.saved) {
+            if (!slot.streaming && !slot.waitingBounds && !slot.saved) {
                 saveModelPreview(slot, assets, path, index == 2);
                 slot.saved = true;
             }
@@ -505,13 +694,79 @@ class AssetPreviewRenderer {
             slot.streaming = false;
             slot.data = {};
             slot.data.error = error.what();
+            saveModelPreview(slot, assets, path, index == 2);
+            slot.saved = true;
         }
         return slot.data;
     }
 
   public:
+    // Called only on focused editor frames with an active GL/ImGui context.
+    void service(const AssetManager& assets, bool allowWarm = true) {
+        const auto now = std::chrono::steady_clock::now();
+        if (inventoryRoot_ != assets.root) {
+            inventoryRoot_ = assets.root;
+            inventoryJob_ = {};
+            signature_ = 0;
+            warm_.clear();
+            rescan_ = true;
+            nextInventory_ = {};
+        }
+        if (inventoryJob_.valid() &&
+            inventoryJob_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            try {
+                auto batch = inventoryJob_.get();
+                if (signature_ != batch.signature || rescan_) {
+                    signature_ = batch.signature;
+                    warm_.clear();
+                    for (auto& slot : slots_) {
+                        slot.key.clear();
+                    }
+                    for (auto& pair : icons_) {
+                        pair.second->key.clear();
+                    }
+                    for (const auto& file : batch.paths) {
+                        warm_.push_back({file, true});
+                        warm_.push_back({file, false});
+                    }
+                }
+                rescan_ = false;
+            } catch (...) { /* Retry transient import writes on the next inventory pass. */
+            }
+            nextInventory_ = now + std::chrono::seconds(5);
+        }
+        if (!inventoryJob_.valid() && (rescan_ || now >= nextInventory_)) {
+            const auto previous = rescan_ ? 0 : signature_;
+            auto job = WorkerPool::shared().submit(
+                [assets, previous] { return inventory(assets, previous); });
+            if (job) {
+                inventoryJob_ = std::move(*job);
+            }
+        }
+        if (!allowWarm || !signature_ || warm_.empty()) {
+            return;
+        }
+        auto& work = warm_.front();
+        if (work.started == std::chrono::steady_clock::time_point{}) {
+            work.started = now;
+        }
+        get(assets, work.path, work.icon ? 2 : 3);
+        if (work.icon && !icons_.count(work.path)) {
+            return;
+        }
+        const auto& slot = work.icon ? *icons_.at(work.path) : slots_[2];
+        if (slot.saved || now - work.started > std::chrono::seconds(30)) {
+            warm_.pop_front();
+        }
+    }
     AssetPreviewRenderer(Renderer& renderer, ProjectIO::Meshes meshes)
         : renderer_(renderer), meshes_(meshes) {
+        assetPreviewImported = [this](const AssetManager& assets) {
+            if (inventoryRoot_ == assets.root) {
+                rescan_ = true;
+                nextInventory_ = {};
+            }
+        };
         assetThumbnail = [this](const AssetManager& assets, const std::string& path) {
             AssetPreviewData image;
             if (textureAsset(path)) {
@@ -539,5 +794,6 @@ class AssetPreviewRenderer {
     ~AssetPreviewRenderer() {
         assetPreview = {};
         assetThumbnail = {};
+        assetPreviewImported = {};
     }
 };

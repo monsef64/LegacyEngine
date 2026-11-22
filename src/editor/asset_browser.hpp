@@ -14,7 +14,9 @@
 #include "platform/open_location.hpp"
 #include "platform/project_dialog.hpp"
 #include "platform/system_trash.hpp"
+#include "prefabs/prefab.hpp"
 #include "project/project_assets.hpp"
+#include "terrain/terrain_io.hpp"
 #include <deque>
 #include <future>
 #include <imgui_internal.h>
@@ -109,6 +111,9 @@ class AssetBrowser {
                             result.error + "\n";
                     }
                     assets.error = importErrors_;
+                    if (assetPreviewImported) {
+                        assetPreviewImported(assets);
+                    }
                     // GPU thumbnail invalidation is deferred to draw() via modelAssetRevision.
                     // Import servicing must also work while rendering is suspended.
                 }
@@ -226,6 +231,9 @@ class AssetBrowser {
             }
             return false;
         };
+        if (!directory && AssetManager::script(selected)) {
+            assets.validateScriptName(relative, selected);
+        }
         std::filesystem::rename(assets.resolve(selected), assets.resolve(relative));
         world.each<MeshRenderer>([&](Entity, MeshRenderer& mesh) {
             remap(mesh.model);
@@ -876,12 +884,21 @@ class AssetBrowser {
                         unsigned thumbnail = folderItem || !ImGui::IsItemVisible()
                                                  ? 0
                                                  : thumbnails.texture(assets, file);
-                        if (!folderItem && modelAsset(file) && ImGui::IsItemVisible() &&
-                            assetPreview) {
-                            thumbnail = assetPreview(assets, file, 2).texture;
+                        bool thumbnailFlip = modelAsset(file);
+                        if (!folderItem && ImGui::IsItemVisible() && assetPreview &&
+                            (modelAsset(file) || materialAsset(file) || Prefabs::asset(file) ||
+                             cubemapAsset(file) || Terrains::asset(file))) {
+                            const auto& image = assetPreview(assets, file, 2);
+                            thumbnail = image.texture;
+                            thumbnailFlip = image.flip;
                         }
                         if (!grid_) {
-                            fileBadge(file, iconPosition, folderItem, thumbnail, iconSize_);
+                            fileBadge(file,
+                                      iconPosition,
+                                      folderItem,
+                                      thumbnail,
+                                      iconSize_,
+                                      thumbnailFlip);
                         }
                         const bool itemHovered = ImGui::IsMouseHoveringRect(itemMin, itemMax);
                         if (itemHovered && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) &&
@@ -919,7 +936,8 @@ class AssetBrowser {
                                           ImVec2((a.x + b.x - iconSize_) * .5f, a.y + 4),
                                           folderItem,
                                           thumbnail,
-                                          iconSize_);
+                                          iconSize_,
+                                          thumbnailFlip);
                             }
                             const auto text = ImGui::CalcTextSize(display.c_str());
                             draw->AddText(
@@ -1517,7 +1535,28 @@ class AssetBrowser {
             const auto prefix = std::filesystem::path(currentFolder);
             std::string name = (prefix / (base + extension)).generic_string();
             int n = 2;
-            while (std::filesystem::exists(assets.resolve(name))) {
+            auto unavailable = [&] {
+                if (std::filesystem::exists(assets.resolve(name))) {
+                    return true;
+                }
+                if (extension == ".lua") {
+                    try {
+                        assets.validateScriptName(name);
+                    } catch (const std::runtime_error& error) {
+                        if (std::string(error.what())
+                                .rfind("Script component name already exists", 0) != 0) {
+                            throw;
+                        }
+                        return true;
+                    }
+                }
+                return false;
+            };
+            while (unavailable()) {
+                if (n > 10000) {
+                    throw std::runtime_error(
+                        "Cannot allocate a unique script name; check asset permissions and duplicate names");
+                }
                 name = (prefix / (base + " (" + std::to_string(n++) + ")" + extension))
                            .generic_string();
             }

@@ -500,3 +500,67 @@ subscriber, including script errors. Script payloads cannot spoof editor asset o
 object drags. Images use project-relative paths, load asynchronously, and return
 false until ready. Custom draw coordinates are Game-surface pixels, not Scene
 coordinates. Drawing outside a window uses the background draw list.
+
+## Named script components
+
+Each attached `.ls` or `.lua` script is addressed by its filename **without the
+extension**. Names are case-insensitive and unique across the entire project's
+Assets tree, including subfolders and both extensions: `Health.lua` conflicts
+with `health.ls`. Creation, import and rename reject collisions. Older projects
+with collisions must rename the conflicting assets and update attachments before
+using them; ambiguous scripts do not silently select an arbitrary file.
+
+Retrieve an enabled, active attachment through `object:getScript("Health")` or
+`object:getComponent("Health")`. Built-in component names take precedence with
+`getComponent`; use `getScript` to disambiguate. Missing attachments return `nil`.
+Resolve other scripts in `onStart` or later, not at file scope: top-level code
+loads sequentially, while initial `onStart` callbacks run after all new script
+attachments have loaded their globals.
+
+```lua
+-- Health.ls (attached to the target GameObject)
+health = 100
+function damage(amount)
+    health = math.max(0, health - amount)
+    return health
+end
+```
+
+```lua
+-- Another script on the same object (use an exported GameObject for other owners)
+function onStart()
+    local healthScript = self:getScript("Health")
+    if healthScript then
+        healthScript.health = 80
+        local remaining = healthScript:damage(10)
+        debug.log("Remaining health", remaining)
+    end
+end
+```
+
+Only public **global** scalar fields/functions are exposed; Lua `local` variables
+remain private. Read/write/call transfer nil, boolean, finite numbers and strings
+up to 4096 bytes, with at most eight arguments/results. Tables, functions and engine
+handles cannot cross the isolated-state bridge. Leading-underscore names and
+reserved lifecycle/runtime members are inaccessible. Calls are synchronous,
+bounded to depth four and 256 named calls per frame; cyclic/reentrant calls into
+another currently executing script are rejected. A retained proxy checks its owner
+and enabled attachment on every access; stale/disabled access raises a Lua error.
+Runtime values are not serialized back into project files; Stop restores edit state.
+
+### Animation function events
+
+In the Animation window expand **Script function events**. At the timeline time,
+enter the Script component name, Function, and optional Child path (empty means
+the animated GameObject itself), then add the event and save the clip. The named
+function takes no arguments. A suitable callback in `Health.ls` is:
+
+```lua
+function animationHit()
+    damage(5)
+end
+```
+
+Events fire when playback crosses their time, including loop crossings, not while
+scrubbing the editor timeline. The target must have an active, enabled script
+attachment. Clips serialize their events alongside component/transform tracks.

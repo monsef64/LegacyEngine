@@ -7,6 +7,7 @@ license remains in the repository/package root `LICENSE`.
 
 | Component | Source/version used by this checkout | Notice |
 | --- | --- | --- |
+| Monocypher | 4.0.2, used under BSD-2-Clause | Monocypher.txt |
 | SDL | release-3.4.20 (CMake default) | SDL3.txt |
 | Jolt Physics | v5.3.0 | Jolt.txt |
 | Assimp | v5.4.3 | assimp.txt |

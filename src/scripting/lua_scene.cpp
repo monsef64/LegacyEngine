@@ -12,6 +12,7 @@
 #include "rendering/texture_quality.hpp"
 #include "scene/scene_camera.hpp"
 #include "scene/skybox_transition.hpp"
+#include "scripting/lua_console.hpp"
 #include "scripting/script_exports.hpp"
 #include "ui/game_ui.hpp"
 #include "ui/script_gui.hpp"
@@ -838,6 +839,19 @@ int LuaScene::api(lua_State* L) {
         self.destroy(h.entity);
         return 0;
     }
+    if (op == 13) {
+        return LuaConsole::pushNamedScript(L, self.world_, h.entity, luaL_checkstring(L, 2));
+    }
+    if (op == 2 && lua_type(L, 2) == LUA_TSTRING) {
+        const char* name = lua_tostring(L, 2);
+        bool builtin = std::strcmp(name, "BoxCollider") == 0;
+        for (const auto* typeName : types) {
+            builtin |= std::strcmp(name, typeName) == 0;
+        }
+        if (!builtin) {
+            return LuaConsole::pushNamedScript(L, self.world_, h.entity, name);
+        }
+    }
     const int type = componentType(L, 2);
     if (op >= 9 && op <= 12) {
         if (has(h, type)) {
@@ -1240,7 +1254,8 @@ int LuaScene::objectIndex(lua_State* L) {
         const char* name;
         int operation;
     };
-    const Method objectMethods[]{{"setActive", 210},
+    const Method objectMethods[]{{"getScript", 13},
+                                 {"setActive", 210},
                                  {"isActive", 211},
                                  {"setPosition", 200},
                                  {"getPosition", 201},

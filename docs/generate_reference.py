@@ -162,6 +162,8 @@ def inventory():
 
 def example(entry):
     owner, name = entry['owner'], entry['name']
+    if name == 'getScript':
+        return 'local health = self:getScript("Health")\nif health then debug.log(health.health) end'
     if name == 'getTextureQuality':
         return 'debug.log(tostring(getTextureQuality()))'
     if name == 'setTextureQuality':
@@ -358,6 +360,12 @@ def render_reference():
              'before level examples. Find/get functions can return nil; check before dereferencing.', '',
              'See [LegacyScript guide](scripting.md), [input/audio details](audio-input.md),',
              '[prefab workflow](prefabs.md), [level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).', '',
+             '## Named script components', '',
+             'Use `object:getScript("Health")` or `object:getComponent("Health")` to resolve an enabled',
+             'attachment by its unique case-insensitive filename stem. Proxies expose global scalar',
+             'fields and synchronous functions, not Lua locals or tables. See',
+             '[named script components](scripting.md#named-script-components) for examples, bridge limits',
+             'and animation function events.', '',
              '## Events and runtime rules', '',
              '- `onStart()` runs once when an attached runtime starts; `onUpdate(dt)` runs per playing frame.',
              '- `onFixedUpdate(dt)` runs before fixed physics steps; `onDestroy()` runs on teardown.',

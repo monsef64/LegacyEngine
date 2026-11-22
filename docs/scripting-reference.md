@@ -21,6 +21,14 @@ before level examples. Find/get functions can return nil; check before dereferen
 See [LegacyScript guide](scripting.md), [input/audio details](audio-input.md),
 [prefab workflow](prefabs.md), [level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).
 
+## Named script components
+
+Use `object:getScript("Health")` or `object:getComponent("Health")` to resolve an enabled
+attachment by its unique case-insensitive filename stem. Proxies expose global scalar
+fields and synchronous functions, not Lua locals or tables. See
+[named script components](scripting.md#named-script-components) for examples, bridge limits
+and animation function events.
+
 ## Events and runtime rules
 
 - `onStart()` runs once when an attached runtime starts; `onUpdate(dt)` runs per playing frame.
@@ -1358,9 +1366,18 @@ print("Player position", self:getPosition().x)
 
 ## GameObject
 
+### GameObject.getScript
+
+`getScript(name:string):NamedScriptComponent|nil`
+
+```lua
+local health = self:getScript("Health")
+if health then debug.log(health.health) end
+```
+
 ### GameObject.getComponent
 
-`getComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil`
+`getComponent(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil`
 
 - `getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
 

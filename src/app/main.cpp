@@ -1,3 +1,4 @@
+#include "editor/game_export_window.hpp"
 #include "editor/recent_projects.hpp"
 #include "editor/scene_picking.hpp"
 #include "effects/laser_update.hpp"
@@ -263,6 +264,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     AudioSystem audio;
     AnimationSystem animations;
     AnimationWindow animationWindow;
+    GameExportWindow gameExport;
     LightmappingWindow lightmappingWindow;
     OcclusionWindow occlusionWindow;
     NavigationWindow navigationWindow;
@@ -356,7 +358,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (event.type != SDL_EVENT_DROP_FILE) {
             return false;
         }
-        if (!playMode.active() && !projectDialog.pending() && !levels.busy() && event.drop.data) {
+        if (!playMode.active() && !gameExport.busy() && !projectDialog.pending() &&
+            !levels.busy() && event.drop.data) {
             // SDL drop payloads are transient: importFile owns a copy before the next event pump.
             browser.importFile(event.drop.data);
         }
@@ -859,6 +862,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
         }
         ImGui::NewFrame();
+        assetPreviews.service(browser.assets, !playMode.active() && !browser.importing());
         ImGuizmo::BeginFrame();
         static RecentProjects recentProjects;
         static bool confirmOpen = false, confirmExit = false;
@@ -866,8 +870,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         static int continueAfterSave = 0;
         std::string selectedRecent;
         bool openProject = false, saveProject = false, saveAsProject = false;
-        const bool projectEnabled = !browser.importing() && !prefabLevel && !levels.busy() &&
-                                    !playMode.active() && !editor.dragging() &&
+        const bool projectEnabled = !gameExport.busy() && !browser.importing() && !prefabLevel &&
+                                    !levels.busy() && !playMode.active() && !editor.dragging() &&
                                     !projectDialog.pending() && !browser.dialog.pending();
         profiler.checkpoint(ProfilePart::Events);
         if (ImGui::BeginMainMenuBar()) {
@@ -902,6 +906,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     } catch (const std::exception& e) {
                         levels.error = e.what();
                     }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Export Game...", nullptr, false, projectEnabled)) {
+                    gameExport.visible = true;
                 }
                 ImGui::Separator();
                 if (ImGui::MenuItem("Quit")) {
@@ -1125,6 +1133,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 SDL_MESSAGEBOX_ERROR, "Project error", projectError.c_str(), window);
             projectError.clear();
         }
+        gameExport.draw(world,
+                        browser.assets,
+                        embeddedLegacySource,
+                        camera,
+                        projectMeshes,
+                        levels,
+                        projectEnabled);
         drawWorkspace(layout.toolbar, resetWorkspace);
         ImGui::BeginDisabled(projectDialog.pending() || browser.dialog.pending());
         const int created = drawCreateMenu();
@@ -2559,8 +2574,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             animations.update(world, browser.assets, std::min(seconds, .25f));
             const auto animationEvents = animations.events;
             for (const auto& event : animationEvents) {
-                scripts.console().objectEvent(event.owner, event.name);
-                componentScripts.objectEvent(event.owner, event.name);
+                if (!event.script.empty()) {
+                    if (!componentScripts.callNamed(event.owner, event.script, event.name)) {
+                        scripts.console().message("Animation script component unavailable: " +
+                                                  event.script);
+                    }
+                } else {
+                    scripts.console().objectEvent(event.owner, event.name.c_str());
+                    componentScripts.objectEvent(event.owner, event.name.c_str());
+                }
             }
         } else if (!playMode.active()) {
             animations.clear();

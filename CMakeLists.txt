@@ -254,6 +254,14 @@ add_library(legacy_material_textures STATIC src/rendering/material_textures.cpp 
 target_include_directories(legacy_material_textures PUBLIC src PRIVATE third_party/stb)
 target_link_libraries(legacy_material_textures PUBLIC legacy_thumbnails)
 
+# Authenticated game data packages (Monocypher 4.0.2, BSD-2-Clause).
+add_library(legacy_game_export STATIC src/project/game_export.cpp third_party/monocypher/monocypher.c)
+target_include_directories(legacy_game_export PUBLIC src PRIVATE third_party/monocypher)
+target_link_libraries(legacy_game_export PUBLIC legacy_json)
+if(WIN32)
+  target_link_libraries(legacy_game_export PRIVATE bcrypt)
+endif()
+
 # --- LegacyEngine -----------------------------------------------------------
 
 add_executable(LegacyEngine
@@ -284,7 +292,18 @@ target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gen
 target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation)
 
 include(cmake/RmlUi.cmake)
-target_link_libraries(LegacyEngine PRIVATE legacy_game_ui)
+target_link_libraries(LegacyEngine PRIVATE legacy_game_ui legacy_game_export)
+
+# Native standalone player template, configured and renamed by File > Export.
+add_executable(LegacyPlayer src/app/player.cpp src/rendering/mesh.cpp src/physics/physics.cpp src/rendering/renderer.cpp)
+target_include_directories(LegacyPlayer PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_link_libraries(LegacyPlayer PRIVATE SDL3::SDL3 Jolt glad legacy_imgui lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation legacy_game_ui legacy_game_export)
+add_custom_command(TARGET LegacyPlayer POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -DPLAYER=$<TARGET_FILE:LegacyPlayer> -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/player_template.cmake")
+if(WIN32)
+  set_target_properties(LegacyPlayer PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
 target_link_libraries(lua_console PUBLIC legacy_game_ui legacy_material_textures)
 
 if(MSVC)
@@ -586,6 +605,7 @@ endif()
 add_custom_target(engine_data ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "${CMAKE_CURRENT_BINARY_DIR}/data")
 add_dependencies(LegacyEngine engine_data)
+add_dependencies(LegacyPlayer engine_data)
 if(BUILD_TESTING)
   add_dependencies(lighting_render_tests engine_data)
 endif()
@@ -604,7 +624,7 @@ if(BUILD_TESTING)
 endif()
 
 # Multi-config generators place executables in a configuration subdirectory.
-foreach(runtime_target LegacyEngine lighting_render_tests level_tests)
+foreach(runtime_target LegacyEngine LegacyPlayer lighting_render_tests level_tests)
   if(TARGET ${runtime_target})
     add_custom_command(TARGET ${runtime_target} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/data" "$<TARGET_FILE_DIR:${runtime_target}>/data")

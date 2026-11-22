@@ -20,6 +20,10 @@
     "title": "Editor workflow"
   },
   {
+    "file": "exporting.md",
+    "title": "Standalone game export"
+  },
+  {
     "file": "third-person-and-environment.md",
     "title": "TPS camera and environment lighting"
   },

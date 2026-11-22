@@ -43,6 +43,7 @@ void LuaConsole::clearEvents() {
     queue.clear();
 }
 void LuaConsole::dispatchEvents() {
+    namedCalls_ = 0;
     // New events wait until the next pump; recursive emits cannot monopolize a frame.
     const auto count = queue.size();
     for (std::size_t i = 0; i < count && !queue.empty(); ++i) {
