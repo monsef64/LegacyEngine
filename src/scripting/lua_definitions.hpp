@@ -158,6 +158,8 @@ inline constexpr LuaDefinition luaDefinitions
        {"GUI.bulletText", "GUI.bulletText(value:string) - Bulleted plain text."},
        {"GUI.getDisplaySize",
         "GUI.getDisplaySize():number,number - Returns Game-surface pixel width,height."},
+       {"Decal",
+        "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder. Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."},
        {"UI",
         "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or @export hud UI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."},
        {"Vector3",

@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 36\n";
+    out << std::setprecision(9) << "LegacyEngineProject 37\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -117,7 +117,8 @@ inline std::string encodeLegacy(World& world,
             (world.has<TPSCamera>(e) ? 4294967296ull : 0ull) |
             (world.has<NavMeshAgent>(e) ? 8589934592ull : 0ull) |
             (world.has<NavMeshObstacle>(e) ? 17179869184ull : 0ull) |
-            (world.has<UI>(e) ? 68719476736ull : 0ull);
+            (world.has<UI>(e) ? 68719476736ull : 0ull) |
+            (world.has<Decal>(e) ? 137438953472ull : 0ull);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -359,6 +360,11 @@ inline std::string encodeLegacy(World& world,
             require(exportAssetPath(g->rml) && exportAssetPath(g->rcss));
             out << g->enabled << ' ' << std::quoted(g->rml) << ' ' << std::quoted(g->rcss) << ' ';
         }
+        if (const auto* d = world.tryGet<Decal>(e)) {
+            (void)Decals::parse(Decals::settings(*d));
+            require(world.has<Transform>(e));
+            out << std::quoted(Decals::settings(*d).dump()) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -376,7 +382,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 36));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 37));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -461,7 +467,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                          : version < 33 ? 8589934591ull
                          : version < 34 ? 17179869183ull
                          : version < 35 ? 68719476735ull
-                                        : 137438953471ull) &&
+                         : version < 37 ? 137438953471ull
+                                        : 274877906943ull) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -738,7 +745,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= (version >= 35   ? 33u
+            require(types.size() <= (version >= 37   ? 34u
+                                     : version >= 35 ? 33u
                                      : version >= 34 ? 32u
                                      : version >= 33 ? 30u
                                      : version >= 32 ? 29u
@@ -754,7 +762,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::vector<int> seen;
             for (int id : types) {
                 require(id >= 0 &&
-                        id < (version >= 35   ? 33
+                        id < (version >= 37   ? 34
+                              : version >= 35 ? 33
                               : version >= 34 ? 32
                               : version >= 33 ? 30
                               : version >= 32 ? 29
@@ -901,6 +910,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> g.enabled >> std::quoted(g.rml) >> std::quoted(g.rcss);
             require(exportAssetPath(g.rml) && exportAssetPath(g.rcss));
             result.world.add(e, g);
+        }
+        if (mask & 137438953472ull) {
+            std::string data;
+            in >> std::quoted(data);
+            require(data.size() <= 16384 && (mask & 2));
+            result.world.add(e, Decals::parse(parseJson(data)));
         }
         require(bool(in));
     }

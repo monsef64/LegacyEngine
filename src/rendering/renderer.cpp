@@ -211,6 +211,7 @@ void Renderer::shutdown() {
     cameraEffects_.shutdown();
     editorLines_.shutdown();
     lasers_.shutdown();
+    decals_.shutdown();
     foliage_.shutdown();
     environment_.shutdown();
     shafts_.shutdown();
@@ -911,6 +912,7 @@ void Renderer::draw(World& world,
     // Explicit insertion order preserves equal-depth behavior without stable_sort's temporary
     // buffer.
     foliage_.draw(world, materialAssets_, viewProjection, cameraPosition, skyAmbient);
+    decals_.draw(world, materialAssets_, viewProjection);
     std::sort(transparent.begin(), transparent.end(), [](const auto& a, const auto& b) {
         return a.distance == b.distance ? a.order < b.order : a.distance > b.distance;
     });

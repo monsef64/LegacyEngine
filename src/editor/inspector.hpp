@@ -382,9 +382,10 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                       !world.has<Vehicle>(entity) && !world.has<CloudSystem>(entity) &&
                       !world.has<River>(entity) && !world.has<Fog>(entity) &&
                       !world.has<CameraEffects>(entity) && !world.has<Terrain>(entity) &&
-                      !world.has<LightShafts>(entity) && !world.has<CharacterController>(entity) &&
-                      !world.has<FPSCamera>(entity) && !world.has<TPSCamera>(entity) &&
-                      !world.has<NavMeshAgent>(entity) && !world.has<NavMeshObstacle>(entity);
+                      !world.has<Decal>(entity) && !world.has<LightShafts>(entity) &&
+                      !world.has<CharacterController>(entity) && !world.has<FPSCamera>(entity) &&
+                      !world.has<TPSCamera>(entity) && !world.has<NavMeshAgent>(entity) &&
+                      !world.has<NavMeshObstacle>(entity);
         }
         if constexpr (std::is_same_v<T, Collider> || std::is_same_v<T, RigidBody>) {
             allowed = !world.has<CharacterController>(entity) && !world.has<Vehicle>(entity);
@@ -461,6 +462,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Water>) {
             type = 26;
         }
+        if constexpr (std::is_same_v<T, Decal>) {
+            type = 33;
+        }
         if constexpr (std::is_same_v<T, UI>) {
             type = 32;
         }
@@ -536,8 +540,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "NavMeshAgent",
                                 "NavMeshObstacle",
                                 "RemovedAnimator",
-                                "UI"};
-            for (int i = 0; i < 33; ++i) {
+                                "UI",
+                                "Decal"};
+            for (int i = 0; i < 34; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -619,7 +624,8 @@ inline void drawScriptExports(World& world,
                                  "NavMeshAgent",
                                  "NavMeshObstacle",
                                  "RemovedAnimator",
-                                 "UI"};
+                                 "UI",
+                                 "Decal"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -678,7 +684,7 @@ inline void drawScriptExports(World& world,
                     }
                     if (auto* p = ImGui::AcceptDragDropPayload("EDITOR_COMPONENT")) {
                         auto target = *static_cast<const EditorComponentPayload*>(p->Data);
-                        if (target.type >= 0 && target.type < 33 &&
+                        if (target.type >= 0 && target.type < 34 &&
                             (field.type == "GameObject" ||
                              field.type == componentTypes[target.type]) &&
                             exportHasComponent(world, target.entity, field.type)) {
@@ -1008,14 +1014,46 @@ inline void drawInspector(World& world,
                                ? world.get<InspectorOrder>(selected).types
                                : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,
                                                   5,  13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                                                  23, 24, 25, 26, 27, 28, 29, 30, 32};
+                                                  23, 24, 25, 26, 27, 28, 29, 30, 32, 33};
             for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15, 16,
-                           17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32}) {
+                           17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
             }
             for (int componentID : ordered) {
+                if (componentID == 33) {
+                    if (auto* d = world.tryGet<Decal>(selected);
+                        d && componentHeader<Decal>(world, selected, "Decal")) {
+                        auto edited = *d;
+                        EditorValues::bindDefaults(edited);
+                        EditorValues::Checkbox("Enabled", &edited.enabled);
+                        char path[4097]{};
+                        std::snprintf(path, sizeof(path), "%s", edited.texture.c_str());
+                        if (ImGui::InputText("Texture", path, sizeof(path))) {
+                            edited.texture = path;
+                        }
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                                if (payload->Data && payload->DataSize > 0) {
+                                    edited.texture = static_cast<const char*>(payload->Data);
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                        ImGui::ColorEdit3("Tint", &edited.color.x);
+                        EditorValues::SliderFloat("Opacity", &edited.opacity, 0, 1);
+                        EditorValues::DragFloat("Width", &edited.width, .01f, .001f, 1000);
+                        EditorValues::DragFloat("Height", &edited.height, .01f, .001f, 1000);
+                        EditorValues::DragFloat(
+                            "Projection depth", &edited.depth, .01f, .001f, 1000);
+                        ImGui::InputInt("Sorting order", &edited.sortingOrder);
+                        try {
+                            *d = Decals::parse(Decals::settings(edited));
+                        } catch (...) {
+                        }
+                    }
+                }
                 if (componentID == 32) {
                     if (auto* g = world.tryGet<UI>(selected);
                         g && componentHeader<UI>(world, selected, "UI")) {
@@ -2437,6 +2475,12 @@ inline void drawInspector(World& world,
                         world.add(selected, SpotLight{});
                     }
                     ImGui::EndMenu();
+                }
+                if (!world.has<Decal>(selected) && ImGui::MenuItem("Decal")) {
+                    if (!world.has<Transform>(selected)) {
+                        world.add(selected, Transform{});
+                    }
+                    world.add(selected, Decal{});
                 }
                 if (!world.has<LightShafts>(selected) && ImGui::MenuItem("LightShafts")) {
                     if (!world.has<Transform>(selected)) {

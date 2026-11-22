@@ -76,7 +76,8 @@ const char* types[]{"Transform",
                     "TPSCamera",
                     "NavMeshAgent",
                     "NavMeshObstacle",
-                    "UI"};
+                    "UI",
+                    "Decal"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -85,7 +86,7 @@ int componentType(lua_State* L, int index) {
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
-    for (int i = 0; i < 31; ++i) {
+    for (int i = 0; i < int(std::size(types)); ++i) {
         if (!std::strcmp(name, types[i])) {
             return i;
         }
@@ -141,6 +142,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<Water>(h.entity);
     case 26:
         return h.world->has<BoneAttachment>(h.entity);
+    case 31:
+        return h.world->has<Decal>(h.entity);
     case 30:
         return h.world->has<UI>(h.entity);
     case 29:
@@ -528,7 +531,7 @@ LuaScene::LuaScene(lua_State* L,
     lua_pushliteral(L, "locked");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
-    for (int i = 0; i < 31; ++i) {
+    for (int i = 0; i < int(std::size(types)); ++i) {
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -765,6 +768,9 @@ int LuaScene::api(lua_State* L) {
         case 25:
             self.world_.each<Water>([&](Entity e, Water&) { collect(e); });
             break;
+        case 31:
+            self.world_.each<Decal>([&](Entity e, Decal&) { collect(e); });
+            break;
         case 30:
             self.world_.each<UI>([&](Entity e, UI&) { collect(e); });
             break;
@@ -975,6 +981,9 @@ int LuaScene::api(lua_State* L) {
         case 25:
             self.world_.remove<Water>(h.entity);
             break;
+        case 31:
+            self.world_.remove<Decal>(h.entity);
+            break;
         case 30:
             self.world_.remove<UI>(h.entity);
             break;
@@ -1084,6 +1093,12 @@ int LuaScene::api(lua_State* L) {
                 self.world_.add(h.entity, Transform{});
             }
             self.world_.add(h.entity, Water{});
+            break;
+        case 31:
+            if (!self.world_.has<Transform>(h.entity)) {
+                self.world_.add(h.entity, Transform{});
+            }
+            self.world_.add(h.entity, Decal{});
             break;
         case 30:
             if (!self.world_.has<Transform>(h.entity)) {
@@ -1395,6 +1410,29 @@ int LuaScene::componentIndex(lua_State* L) {
     if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
         return luaL_error(L, "Component no longer exists");
     }
+    if (c.type == 31) {
+        const auto& d = c.object.world->get<Decal>(c.object.entity);
+        if (!std::strcmp(key, "enabled")) {
+            lua_pushboolean(L, d.enabled);
+        } else if (!std::strcmp(key, "color")) {
+            pushVector(L, d.color);
+        } else if (!std::strcmp(key, "texture")) {
+            lua_pushlstring(L, d.texture.data(), d.texture.size());
+        } else if (!std::strcmp(key, "opacity")) {
+            lua_pushnumber(L, d.opacity);
+        } else if (!std::strcmp(key, "width")) {
+            lua_pushnumber(L, d.width);
+        } else if (!std::strcmp(key, "height")) {
+            lua_pushnumber(L, d.height);
+        } else if (!std::strcmp(key, "depth")) {
+            lua_pushnumber(L, d.depth);
+        } else if (!std::strcmp(key, "sortingOrder")) {
+            lua_pushinteger(L, d.sortingOrder);
+        } else {
+            return luaL_error(L, "Unknown Decal property: %s", key);
+        }
+        return 1;
+    }
     if (c.type == 30) {
         const auto& g = c.object.world->get<UI>(c.object.entity);
         if (!std::strcmp(key, "enabled")) {
@@ -1457,7 +1495,7 @@ int LuaScene::componentIndex(lua_State* L) {
         return objectIndex(L);
     }
     // Component aliases resolve on the same owner, without storing raw pointers.
-    for (int type = 0; type < 31; ++type) {
+    for (int type = 0; type < int(std::size(types)); ++type) {
         std::string alias = type == 14   ? "fpsCamera"
                             : type == 27 ? "tpsCamera"
                             : type == 28 ? "navMeshAgent"
@@ -2191,6 +2229,56 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 31) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
+            return luaL_error(L, "Decal no longer exists");
+        }
+        const char* key = luaL_checkstring(L, 2);
+        const bool enabled = !std::strcmp(key, "enabled"), texture = !std::strcmp(key, "texture"),
+                   color = !std::strcmp(key, "color");
+        if (enabled) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+        }
+        const char* path = texture ? luaL_checkstring(L, 3) : nullptr;
+        const Vec3 tint = color ? vectorArgument(L, 3) : Vec3{};
+        float value = (!enabled && !texture && !color) ? float(luaL_checknumber(L, 3)) : 0;
+        bool ok = true;
+        {
+            auto d = c.object.world->get<Decal>(c.object.entity);
+            if (enabled) {
+                d.enabled = lua_toboolean(L, 3);
+            } else if (color) {
+                d.color = tint;
+            } else if (texture) {
+                d.texture = path;
+            } else if (!std::strcmp(key, "width")) {
+                d.width = value;
+            } else if (!std::strcmp(key, "height")) {
+                d.height = value;
+            } else if (!std::strcmp(key, "opacity")) {
+                d.opacity = value;
+            } else if (!std::strcmp(key, "depth")) {
+                d.depth = value;
+            } else if (!std::strcmp(key, "sortingOrder") && std::isfinite(value) &&
+                       value >= -10000 && value <= 10000) {
+                d.sortingOrder = int(value);
+            } else {
+                ok = false;
+            }
+            if (ok) {
+                try {
+                    c.object.world->get<Decal>(c.object.entity) =
+                        Decals::parse(Decals::settings(d));
+                } catch (...) {
+                    ok = false;
+                }
+            }
+        }
+        if (!ok) {
+            return luaL_error(L, "Invalid Decal property/value");
+        }
+        return 0;
+    }
     if (c.type == 30) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
             return luaL_error(L, "UI no longer exists");
@@ -3918,7 +4006,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
                 pushObject(field.entity);
             } else {
                 int type = 0;
-                for (; type < 31; ++type) {
+                for (; type < int(std::size(types)); ++type) {
                     if (field.type == types[type]) {
                         break;
                     }

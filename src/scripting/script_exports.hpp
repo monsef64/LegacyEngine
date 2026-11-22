@@ -6,13 +6,13 @@
 #include <iomanip>
 #include <sstream>
 inline bool exportReferenceType(const std::string& type) {
-    return type == "UI" || type == "GameObject" || type == "Transform" || type == "RigidBody" ||
-           type == "Collider" || type == "MeshRenderer" || type == "ObjectName" ||
-           type == "LuaScript" || type == "Camera" || type == "AudioSource" ||
-           type == "AudioListener" || type == "DirectionalLight" || type == "PointLight" ||
-           type == "SpotLight" || type == "Skybox" || type == "CharacterController" ||
-           type == "NavMeshObstacle" || type == "NavMeshAgent" || type == "TPSCamera" ||
-           type == "FPSCamera" || type == "Raycast" || type == "Animation" ||
+    return type == "Decal" || type == "UI" || type == "GameObject" || type == "Transform" ||
+           type == "RigidBody" || type == "Collider" || type == "MeshRenderer" ||
+           type == "ObjectName" || type == "LuaScript" || type == "Camera" ||
+           type == "AudioSource" || type == "AudioListener" || type == "DirectionalLight" ||
+           type == "PointLight" || type == "SpotLight" || type == "Skybox" ||
+           type == "CharacterController" || type == "NavMeshObstacle" || type == "NavMeshAgent" ||
+           type == "TPSCamera" || type == "FPSCamera" || type == "Raycast" || type == "Animation" ||
            type == "ParticleSystem" || type == "Laser" || type == "LightShafts" ||
            type == "Water" || type == "BoneAttachment" || type == "Vehicle" ||
            type == "CloudSystem" || type == "River" || type == "Fog" || type == "CameraEffects";
@@ -144,6 +144,7 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(River);
     EXPORT_COMPONENT(Vehicle);
     EXPORT_COMPONENT(UI);
+    EXPORT_COMPONENT(Decal);
     EXPORT_COMPONENT(Water);
     EXPORT_COMPONENT(BoneAttachment);
 #undef EXPORT_COMPONENT

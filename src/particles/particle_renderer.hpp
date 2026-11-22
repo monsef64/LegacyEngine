@@ -85,7 +85,9 @@ class ParticleRenderer {
             for (int i = 0; i < 3; ++i) {
                 int w = 0, h = 0, n = 0;
                 const auto path =
-                    std::filesystem::path(SDL_GetBasePath()) / "data" / "particles" / names[i];
+                    (engineDataRoot.empty() ? std::filesystem::path(SDL_GetBasePath()) / "data"
+                                            : engineDataRoot) /
+                    "particles" / names[i];
                 auto* pixels = stbi_load(path.string().c_str(), &w, &h, &n, 4);
                 if (!pixels) {
                     throw std::runtime_error("Cannot load bundled particle sprite");

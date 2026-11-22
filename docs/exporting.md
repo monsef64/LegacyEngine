@@ -7,12 +7,14 @@ Linux. The export window does not cross-compile or download a player.
 
 1. Save your script and asset edits. Choose **Current Scene** to snapshot the
    current editor scene, or select a registered starting level.
-2. Enter Game Name, Company, Version (`major.minor.patch`, each 0–65535),
-   Description and Copyright. Game Name is also the executable basename.
-3. Assign an absolute icon path: multi-resolution **ICO** on Windows, **PNG** on
+2. Enter Game Name and Version (`major.minor.patch`, each 0–65535).
+   Company, Description and Copyright are optional. Game Name is also the executable basename.
+3. Assign an icon using **Browse** (or type an absolute path): multi-resolution **ICO** on Windows, **PNG** on
    Linux (at most 4 MiB).
 4. Choose a **new, nonexistent output folder** and the native `LegacyPlayer`
-   template. Already exported executables cannot be reused as templates.
+   template. Output Browse selects a parent directory and appends Game Name, so it
+   does not require creating the output first. Browse beside Native player chooses
+   the player executable. Choose a chunk size from **1–64 MiB** (default 16). Already exported executables cannot be reused as templates.
 5. Click **Export Game** and wait for success or an actionable error. Do not edit
    project files externally while packaging. Existing output is never overwritten.
 
@@ -28,7 +30,7 @@ F11 toggles fullscreen.
 ## Packaging and encryption limitations
 
 Project assets/settings, the chosen scene and engine runtime data are packed into
-**16 MiB authenticated encrypted chunks**, with an encrypted manifest and a fresh
+**user-sized authenticated encrypted chunks**, with an encrypted manifest and a fresh
 per-export key/identifier. The player authenticates package contents before use.
 Plaintext license notices are also supplied as `GameName_Data/LICENSES.txt`; keep
 them in your distribution. Current package limits include 2 GiB total plaintext.
@@ -55,3 +57,20 @@ cmake -DPLAYER=/path/to/LegacyPlayer -P cmake/player_template.cmake
 
 Do not strip or modify an already exported executable: its package key/footer is
 part of the export. See the [manual checklist](../docs/manual/export-scripts-previews.md).
+
+
+Export folders must be outside the source Assets tree; `Project/Builds/Game` is a
+suitable destination. A different Windows drive is also supported. Existing output
+is never overwritten. Current player templates are required for adjustable chunks;
+older exported games retain their legacy 16 MiB package compatibility.
+
+The export window contains controls and operation results only; platform constraints,
+package layout, security limitations and build instructions are documented here.
+
+## Runtime data lookup
+
+Standalone players resolve shaders and built-in particle textures from their mounted
+`Engine/data` directory rather than beside the executable. This avoids the renderer
+initialization failure caused by looking for loose `data/shaders` in an encrypted
+export. Missing/invalid graphics drivers or unsupported OpenGL contexts can still
+cause renderer initialization errors; inspect the player log for the failing stage.

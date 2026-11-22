@@ -6,6 +6,7 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "effects/camera_effects_renderer.hpp"
+#include "effects/decal_renderer.hpp"
 #include "effects/environment_renderer.hpp"
 #include "effects/laser_renderer.hpp"
 #include "effects/light_shafts_renderer.hpp"
@@ -207,6 +208,7 @@ class Renderer {
     ParticleRenderer particles_;
     FoliageRenderer foliage_;
     LaserRenderer lasers_;
+    DecalRenderer decals_;
     EnvironmentRenderer environment_;
     LightShaftsRenderer shafts_;
     CookieAtlas cookies_;

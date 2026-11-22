@@ -1,5 +1,6 @@
 #pragma once
 #include "core/math.hpp"
+#include <initializer_list>
 
 // Extract/normalize once per view, rather than six square roots per object.
 struct ViewFrustum {

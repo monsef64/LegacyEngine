@@ -51,6 +51,86 @@ class AssetPreviewRenderer {
     int iconFrame_ = -1, iconBudget_ = 1, iconDrawBudget_ = 1;
     std::chrono::steady_clock::time_point nextIcon_{};
 
+    struct Readback {
+        unsigned buffer = 0;
+        GLsync fence = nullptr;
+        std::size_t bytes = 0;
+        std::filesystem::path file;
+        Json meta;
+    };
+    std::deque<Readback> readbacks_;
+    struct Write {
+        std::filesystem::path file;
+        Json meta;
+        std::vector<unsigned char> pixels;
+    };
+    std::deque<std::shared_ptr<Write>> writes_;
+    void writePreview(std::filesystem::path file, Json meta, std::vector<unsigned char> pixels) {
+        writes_.push_back(
+            std::make_shared<Write>(Write{std::move(file), std::move(meta), std::move(pixels)}));
+    }
+    void drainWrites() {
+        if (writes_.empty()) {
+            return;
+        }
+        auto data = writes_.front();
+        auto write = WorkerPool::shared().submit([data] {
+            const auto& file = data->file;
+            auto temporary = file;
+            temporary += ".tmp-" + std::to_string(
+                                       std::chrono::steady_clock::now().time_since_epoch().count());
+            try {
+                std::filesystem::create_directories(file.parent_path());
+                std::ofstream output(temporary, std::ios::binary);
+                output << data->meta.dump() << '\n';
+                output.write(reinterpret_cast<const char*>(data->pixels.data()),
+                             data->pixels.size());
+                output.close();
+                std::error_code ec;
+                if (output) {
+                    std::filesystem::rename(temporary, file, ec);
+                    if (ec) {
+                        std::filesystem::remove(file, ec);
+                        ec.clear();
+                        std::filesystem::rename(temporary, file, ec);
+                    }
+                }
+                std::filesystem::remove(temporary, ec);
+            } catch (...) {
+                std::error_code ec;
+                std::filesystem::remove(temporary, ec);
+            }
+        });
+        if (write) {
+            writes_.pop_front(); // Retry worker admission rather than dropping a cache.
+        }
+    }
+    void drainReadbacks() {
+        if (readbacks_.empty() || writes_.size() >= 8) {
+            return;
+        }
+        auto& item = readbacks_.front();
+        const auto status = glClientWaitSync(item.fence, 0, 0); // never wait on the render thread
+        if (status == GL_TIMEOUT_EXPIRED) {
+            return;
+        }
+        if (status != GL_WAIT_FAILED) {
+            GLint old;
+            glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &old);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, item.buffer);
+            const auto* data = static_cast<const unsigned char*>(
+                glMapBufferRange(GL_PIXEL_PACK_BUFFER, 0, item.bytes, GL_MAP_READ_BIT));
+            if (data) {
+                std::vector<unsigned char> pixels(data, data + item.bytes);
+                glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+                writePreview(item.file, std::move(item.meta), std::move(pixels));
+            }
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, old);
+        }
+        glDeleteSync(item.fence);
+        glDeleteBuffers(1, &item.buffer);
+        readbacks_.pop_front();
+    }
     struct Inventory {
         std::uint64_t signature = 14695981039346656037ull;
         std::vector<std::string> paths;
@@ -66,6 +146,7 @@ class AssetPreviewRenderer {
     };
     std::deque<Warm> warm_;
     bool rescan_ = true;
+    std::chrono::steady_clock::time_point nextWarm_{}, nextGeneration_{};
     static Inventory inventory(AssetManager assets, std::uint64_t previous) {
         Inventory result;
         if (!std::filesystem::exists(assets.root)) {
@@ -211,17 +292,18 @@ class AssetPreviewRenderer {
     }
     void
     saveModelPreview(Slot& slot, const AssetManager& assets, const std::string& path, bool icon) {
-        std::filesystem::path temp;
+        if (readbacks_.size() >= 8) {
+            return;
+        }
+        Readback pending;
         try {
             const auto source = assetContainerPath(assets.resolve(path));
             const auto file = modelPreviewPath(assets, path, icon);
-            std::vector<unsigned char> pixels;
             const float scale =
                 std::min(1.f, 512.f / std::max({1, slot.data.width, slot.data.height}));
             int width = icon ? 128 : std::max(1, int(slot.data.width * scale)),
                 height = icon ? 128 : std::max(1, int(slot.data.height * scale));
             if (slot.data.texture) {
-                pixels.resize(std::size_t(width) * height * 4);
                 struct Restore {
                     GLint read, draw, binding, renderbuffer;
                     bool scissor;
@@ -266,8 +348,15 @@ class AssetPreviewRenderer {
                 glBlitFramebuffer(
                     0, 0, sw, sh, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_LINEAR);
                 glBindFramebuffer(GL_READ_FRAMEBUFFER, scaled.framebuffer);
-                pixels.resize(std::size_t(width) * height * 4);
-                glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                pending.bytes = std::size_t(width) * height * 4;
+                GLint oldPack;
+                glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &oldPack);
+                glGenBuffers(1, &pending.buffer);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, pending.buffer);
+                glBufferData(GL_PIXEL_PACK_BUFFER, pending.bytes, nullptr, GL_STREAM_READ);
+                glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+                pending.fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, oldPack);
                 glBindFramebuffer(GL_READ_FRAMEBUFFER, read);
                 glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw);
                 glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
@@ -281,33 +370,24 @@ class AssetPreviewRenderer {
                 {"width", width},
                 {"height", height},
                 {"flip", slot.data.flip},
-                {"image", !pixels.empty()},
+                {"image", pending.buffer != 0},
                 {"text", slot.data.text.substr(0, 8192)},
                 {"error", slot.data.error.substr(0, 8192)},
                 {"seconds", slot.data.seconds},
                 {"waveform", slot.data.waveform}};
-            std::filesystem::create_directories(file.parent_path());
-            temp = file;
-            temp += ".tmp-" +
-                    std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-            std::ofstream output(temp, std::ios::binary);
-            output << meta.dump() << '\n';
-            output.write(reinterpret_cast<const char*>(pixels.data()), pixels.size());
-            output.close();
-            std::error_code ec;
-            if (output) {
-                std::filesystem::rename(temp, file, ec);
-                if (ec) {
-                    std::filesystem::remove(file, ec);
-                    ec.clear();
-                    std::filesystem::rename(temp, file, ec);
-                }
+            if (pending.buffer) {
+                pending.file = file;
+                pending.meta = std::move(meta);
+                readbacks_.push_back(std::move(pending));
+            } else {
+                writePreview(file, std::move(meta), {});
             }
-            std::filesystem::remove(temp, ec);
         } catch (...) {
-            if (!temp.empty()) {
-                std::error_code ec;
-                std::filesystem::remove(temp, ec);
+            if (pending.fence) {
+                glDeleteSync(pending.fence);
+            }
+            if (pending.buffer) {
+                glDeleteBuffers(1, &pending.buffer);
             }
         }
     }
@@ -620,6 +700,10 @@ class AssetPreviewRenderer {
                 slot.modified = stamp;
             }
             if (rebuild) {
+                if (now < nextGeneration_ || readbacks_.size() >= 6 || writes_.size() >= 6) {
+                    return slot.data;
+                }
+                nextGeneration_ = now + std::chrono::milliseconds(100);
                 slot.key = key;
                 slot.revision = modelAssetRevision;
                 slot.saved = false;
@@ -638,6 +722,10 @@ class AssetPreviewRenderer {
                 }
             }
             if (slot.world && (rebuild || slot.streaming || renderer_.streaming())) {
+                if (!rebuild && now < nextGeneration_) {
+                    return slot.data;
+                }
+                nextGeneration_ = now + std::chrono::milliseconds(100);
                 if (index == 2) {
                     if (iconDrawBudget_ <= 0) {
                         slot.streaming = true;
@@ -703,6 +791,8 @@ class AssetPreviewRenderer {
   public:
     // Called only on focused editor frames with an active GL/ImGui context.
     void service(const AssetManager& assets, bool allowWarm = true) {
+        drainWrites();
+        drainReadbacks();
         const auto now = std::chrono::steady_clock::now();
         if (inventoryRoot_ != assets.root) {
             inventoryRoot_ = assets.root;
@@ -726,7 +816,8 @@ class AssetPreviewRenderer {
                         pair.second->key.clear();
                     }
                     for (const auto& file : batch.paths) {
-                        warm_.push_back({file, true});
+                        // One rendered hover supplies both resolutions; do not render every asset
+                        // twice.
                         warm_.push_back({file, false});
                     }
                 }
@@ -743,7 +834,14 @@ class AssetPreviewRenderer {
                 inventoryJob_ = std::move(*job);
             }
         }
-        if (!allowWarm || !signature_ || warm_.empty()) {
+        const auto& io = ImGui::GetIO();
+        if (ImGui::IsAnyMouseDown() || ImGui::IsAnyItemActive() || io.MouseWheel != 0 ||
+            io.MouseDelta.x != 0 || io.MouseDelta.y != 0) {
+            nextWarm_ = now + std::chrono::milliseconds(300);
+            return;
+        }
+        if (!allowWarm || !signature_ || warm_.empty() || now < nextWarm_ ||
+            readbacks_.size() >= 6 || writes_.size() >= 6) {
             return;
         }
         auto& work = warm_.front();
@@ -756,7 +854,11 @@ class AssetPreviewRenderer {
         }
         const auto& slot = work.icon ? *icons_.at(work.path) : slots_[2];
         if (slot.saved || now - work.started > std::chrono::seconds(30)) {
+            if (slot.saved && !work.icon) {
+                saveModelPreview(slots_[2], assets, work.path, true);
+            }
             warm_.pop_front();
+            nextWarm_ = now + std::chrono::milliseconds(200);
         }
     }
     AssetPreviewRenderer(Renderer& renderer, ProjectIO::Meshes meshes)
@@ -792,6 +894,10 @@ class AssetPreviewRenderer {
         };
     }
     ~AssetPreviewRenderer() {
+        for (auto& item : readbacks_) {
+            glDeleteSync(item.fence);
+            glDeleteBuffers(1, &item.buffer);
+        }
         assetPreview = {};
         assetThumbnail = {};
         assetPreviewImported = {};

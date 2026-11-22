@@ -4,12 +4,16 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+// Standalone packages mount engine data separately from the executable.
+inline std::filesystem::path engineDataRoot;
 inline std::string loadShaderData(const char* name) {
     const char* base = SDL_GetBasePath();
     if (!base) {
         throw std::runtime_error("Cannot locate engine data directory");
     }
-    const auto path = std::filesystem::path(base) / "data" / "shaders" / name;
+    const auto path =
+        (engineDataRoot.empty() ? std::filesystem::path(base) / "data" : engineDataRoot) /
+        "shaders" / name;
     const auto bytes = std::filesystem::file_size(path);
     if (bytes > 256 * 1024) {
         throw std::runtime_error("Shader exceeds 256 KiB: " + path.string());
