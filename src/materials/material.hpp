@@ -9,6 +9,7 @@ struct MaterialProperties {
                     // Reflection
     Vec3 color{1, 1, 1};
     std::string texture, normalMap;
+    float alpha = 1; // Opacity multiplier for Diffuse Transparent; old materials default opaque.
     float normalStrength = 1, tilingX = 1, tilingY = 1, specular = 0;
 };
 enum MaterialOverride : unsigned {
@@ -18,7 +19,8 @@ enum MaterialOverride : unsigned {
     MaterialShader = 8,
     MaterialStrength = 16,
     MaterialTiling = 32,
-    MaterialSpecular = 64
+    MaterialSpecular = 64,
+    MaterialAlpha = 128
 };
 inline bool materialPathValid(const std::string& path) {
     if (path.size() > 4096 || path.find('\0') != std::string::npos ||
@@ -47,7 +49,8 @@ inline bool materialTexturePath(const std::string& path) {
 }
 inline bool validMaterial(const MaterialProperties& p) {
     auto color = [](float x) { return std::isfinite(x) && x >= 0 && x <= 100; };
-    return (p.shader >= 0 && p.shader <= 3) && color(p.color.x) && color(p.color.y) &&
+    return std::isfinite(p.alpha) && p.alpha >= 0 && p.alpha <= 1 &&
+           (p.shader >= 0 && p.shader <= 3) && color(p.color.x) && color(p.color.y) &&
            color(p.color.z) && materialTexturePath(p.texture) && materialTexturePath(p.normalMap) &&
            std::isfinite(p.normalStrength) && p.normalStrength >= 0 && p.normalStrength <= 4 &&
            std::isfinite(p.tilingX) && std::isfinite(p.tilingY) && std::abs(p.tilingX) >= .001f &&
@@ -57,6 +60,9 @@ inline bool validMaterial(const MaterialProperties& p) {
 }
 inline MaterialProperties
 applyMaterialOverrides(MaterialProperties p, const MaterialProperties& v, unsigned mask) {
+    if (mask & MaterialAlpha) {
+        p.alpha = v.alpha;
+    }
     if (mask & MaterialColor) {
         p.color = v.color;
     }

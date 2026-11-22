@@ -1336,10 +1336,71 @@ class AssetBrowser {
                             thumbnails.clear();
                         } else {
                             assets.error = history->error;
+                            // A failed Trash move is never silently converted into data loss.
+                            const auto folder = assets.resolve(selected);
+                            if (std::filesystem::is_directory(folder) &&
+                                !std::filesystem::is_symlink(folder)) {
+                                permanentDelete_ = selected;
+                                permanentRoot_ = assets.root;
+                                ImGui::OpenPopup("Permanently delete folder?");
+                            }
                         }
                     } else {
                         assets.error = "Asset deletion requires editor history";
                     }
+                }
+                if (ImGui::BeginPopupModal(
+                        "Permanently delete folder?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                    ImGui::TextWrapped(
+                        "Could not move this folder to the bin. Permanently delete it and ALL its contents instead? This cannot be undone.");
+                    ImGui::TextUnformatted(permanentDelete_.c_str());
+                    ImGui::BeginDisabled(!editable || permanentRoot_ != assets.root);
+                    if (ImGui::Button("Permanently delete")) {
+                        try {
+                            if (permanentDelete_.empty() || embeddedAsset(permanentDelete_)) {
+                                throw std::runtime_error("Invalid folder");
+                            }
+                            const auto folder = assets.resolve(permanentDelete_);
+                            if (folder == std::filesystem::weakly_canonical(assets.root) ||
+                                !std::filesystem::is_directory(folder) ||
+                                std::filesystem::is_symlink(folder)) {
+                                throw std::runtime_error("Folder changed; deletion cancelled");
+                            }
+                            std::filesystem::remove_all(folder);
+                            auto inside = [&](const std::string& path) {
+                                return path == permanentDelete_ ||
+                                       path.rfind(permanentDelete_ + "/", 0) == 0;
+                            };
+                            if (inside(openedScript)) {
+                                openedScript.clear();
+                                scripts.setSource("");
+                                scripts.setAssetContext("", {});
+                            }
+                            if (inside(currentFolder)) {
+                                currentFolder = std::filesystem::path(permanentDelete_)
+                                                    .parent_path()
+                                                    .generic_string();
+                            }
+                            if (inside(selected)) {
+                                selected.clear();
+                            }
+                            preview.stop();
+                            thumbnails.clear();
+                            ++modelAssetRevision;
+                            assets.error.clear();
+                            permanentDelete_.clear();
+                            ImGui::CloseCurrentPopup();
+                        } catch (const std::exception& e) {
+                            assets.error = e.what();
+                        }
+                    }
+                    ImGui::EndDisabled();
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel")) {
+                        permanentDelete_.clear();
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::EndPopup();
                 }
                 if (editable &&
                     ImGui::BeginPopup("Rename asset", ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -1470,5 +1531,7 @@ class AssetBrowser {
     }
     char rename_[256]{};
     float gridSpacing_ = 0, iconSize_ = 60;
+    std::string permanentDelete_;
+    std::filesystem::path permanentRoot_;
     bool renameRequested_ = false, deleteRequested_ = false, grid_ = true, renameFocus_ = false;
 };

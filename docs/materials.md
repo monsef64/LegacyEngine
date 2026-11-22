@@ -101,3 +101,18 @@ dropdown. Choose a tile or None to clear the slot; asset drag/drop still works.
 Material/texture thumbnails are now 128 × 128, and textures (including `.hdr`
 panoramas) have enlarged hover previews in Assets. HDR thumbnails are LDR
 display approximations; judge exposure in the actual skybox renderer.
+
+
+## Transparent material opacity and baked normal detail
+
+**Diffuse Transparent** exposes an **Alpha** slider (0..1). The output opacity is
+texture alpha multiplied by this material value, so an untextured surface can also
+be partially transparent. Old materials default to Alpha 1. Asset edits are shared;
+Play-mode instance overrides are discarded on Stop. Scripts can call
+`mesh:setMaterialAlpha(0.5)` on a MeshRenderer; `resetMaterialOverrides()` restores
+the asset values. Other shader types remain opaque regardless of this setting.
+
+Static baked lighting retains mapped-normal diffuse detail by comparing mapped
+lighting with the geometric-normal lighting used by the atlas. This is an
+irradiance-weighted approximation for overlapping baked lights, not a directional
+lightmap format. Project save/load accepts both current PNG and older TGA lightmaps.

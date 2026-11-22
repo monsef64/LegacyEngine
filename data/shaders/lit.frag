@@ -5,6 +5,7 @@ in vec2 vCheckerUV;
 in vec2 vUV;
 uniform sampler2D uMaterialTexture, uNormalTexture;
 uniform bool uHasMaterialTexture, uBumped, uTransparent;
+uniform float uMaterialAlpha;
 uniform float uNormalStrength;
 uniform vec2 uTiling;
 uniform bool uCheckerboard;
@@ -207,7 +208,7 @@ void main() {
     vec3 albedo = uColor;
     vec4 texel = uHasMaterialTexture ? texture(uMaterialTexture, uv) : vec4(1);
     albedo *= texel.rgb;
-    float alpha = uTransparent ? texel.a : 1.0;
+    float alpha = uTransparent ? texel.a * uMaterialAlpha : 1.0;
     if (alpha < 0.001) {
         discard;
     }
@@ -236,11 +237,13 @@ void main() {
             }
         }
         float diffuse = max(dot(normal, toLight), 0.0);
-        if (diffuse <= 0.0 || attenuation <= 0.0) {
+        float geometricDiffuse = max(dot(normalize(vNormal), toLight), 0.0);
+        bool bakedLight = uLightmapGrid > 0 && uLightBaked[i];
+        if (attenuation <= 0.0 || (diffuse <= 0.0 && (!bakedLight || geometricDiffuse <= 0.0))) {
             continue;
         }
         vec3 halfDirection = normalize(toLight + viewDirection);
-        float specular = uSpecular * pow(max(dot(normal, halfDirection), 0.0), 64.0);
+        float specular = diffuse > 0.0 ? uSpecular * pow(max(dot(normal, halfDirection), 0.0), 64.0) : 0.0;
         float shadow = visibility(i, normal, toLight, worldDx, worldDy);
         vec3 cookie=vec3(1);
         if(type==2 && uCookieRight[i].w>0.) {
@@ -253,10 +256,13 @@ void main() {
             cookie=texel.rgb*texel.a;
         }
         vec3 energy = uLightColor[i].rgb * attenuation * cookie;
-        if (uLightmapGrid > 0 && uLightBaked[i]) {
+        if (bakedLight) {
             // Keep realtime occluders on baked receivers. This irradiance-weighted
             // shadow mask is exact for one static light, approximate for overlapping lights.
-            staticDirect += diffuse * energy;
+            // The atlas was baked against the geometric normal. Re-light its
+            // visibility with the mapped normal instead of cancelling normal detail
+            // out of the staticVisible/staticDirect ratio.
+            staticDirect += geometricDiffuse * energy;
             staticVisible += diffuse * energy * shadow;
             result += vec3(specular) * energy * shadow;
         } else {
@@ -267,7 +273,7 @@ void main() {
         vec3 mask = vec3(1);
         for (int channel = 0; channel < 3; ++channel)
             if (staticDirect[channel] > 0.00001)
-                mask[channel] = clamp(staticVisible[channel] / staticDirect[channel], 0.0, 1.0);
+                mask[channel] = clamp(staticVisible[channel] / staticDirect[channel], 0.0, 8.0);
         // Indirect transport is static and must not receive the direct-light shadow mask.
         vec3 indirect = uHasIndirectLightmap
             ? pow(textureLod(uIndirectLightmap, vLightmapUV, 0.0).rgb, vec3(2.0)) * 16.0

@@ -12,13 +12,14 @@
     X(suspensionLength, .45f, .05f, 3.f)                                                           \
     X(springStrength, 35000.f, 100.f, 500000.f)                                                    \
     X(suspensionDamping, 4500.f, 0.f, 50000.f)                                                     \
+    X(antiRollStrength, 12000.f, 0.f, 200000.f)                                                    \
     X(engineForce, 8000.f, 0.f, 200000.f)                                                          \
     X(brakeForce, 12000.f, 0.f, 300000.f)                                                          \
     X(tireGrip, 1.5f, .05f, 5.f)                                                                   \
     X(maxSteerAngle, 30.f, 0.f, 70.f)                                                              \
     X(maxSpeed, 45.f, 1.f, 150.f)
 struct Vehicle {
-    bool enabled = true, keepUpright = true;
+    bool enabled = true;
 #define FIELD(name, value, lo, hi) float name = value;
     VEHICLE_SETTINGS(FIELD)
 #undef FIELD
@@ -40,7 +41,7 @@ inline bool valid(const Vehicle& v) {
     return true;
 }
 inline Json settings(const Vehicle& v) {
-    Json j = {{"enabled", v.enabled}, {"keepUpright", v.keepUpright}};
+    Json j = {{"enabled", v.enabled}};
 #define SAVE(name, value, lo, hi) j[#name] = v.name;
     VEHICLE_SETTINGS(SAVE)
 #undef SAVE
@@ -52,8 +53,6 @@ inline Vehicle parse(const Json& j) {
     }
     Vehicle v;
     v.enabled = j.value("enabled", true);
-    v.keepUpright =
-        j.value("keepUpright", true); // retired stabilityAssist is intentionally ignored
 #define LOAD(name, initial, lo, hi) v.name = j.value(#name, v.name);
     VEHICLE_SETTINGS(LOAD)
 #undef LOAD

@@ -629,4 +629,17 @@ single-object tools. Batch changes use the normal Undo/Redo and Play rollback.
 In the Occlusion Culling window, the selected-camera visibility preview excludes
 objects outside that camera's frustum and, when valid baked data exists, baked
 occluded objects. It does not change authored Active flags. Preview overlays are
-hidden so editor helpers do not obscure the retained visible geometry.
+hidden so editor helpers do not obscure the retained visible geometry, except
+for the selected camera frustum lines, which remain visible for orientation.
+
+
+### Terrain tools and folder deletion
+
+Selecting a Terrain no longer opens Terrain tools automatically. Use **Open terrain
+tools** in its Inspector to open the panel. Creating/adding a Terrain can still
+open its tools as part of that explicit creation action.
+
+Folder deletion first attempts the normal Trash/bin operation with Undo support.
+If that fails, the Assets browser offers a separate **Permanently delete** warning
+with Cancel. Permanent deletion includes all folder contents and cannot be undone;
+it is never attempted silently. Scene references remain missing until reassigned.

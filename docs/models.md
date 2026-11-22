@@ -82,3 +82,14 @@ of import scale. Hover previews appear after 1.5 seconds.
 
 Assimp's bundled notice is in `data/license/assimp.txt`. Model files themselves
 remain subject to their creators' licenses.
+
+
+### GoldSrc sequence compatibility
+
+GoldSrc animation durations are derived from frame-key times and sequence FPS,
+working around the Assimp 5.4 HL1 duration convention. Pose/zero-FPS sequences use
+a bounded fallback frame interval. Up to 2048 MDL blend clips are accepted under
+the existing total-key and packed-size budgets. Missing companion-file/import
+errors identify the source model and explain the main-model/companion layout.
+Actual model-specific failures still require the import error and source files to
+diagnose; an MDL extension alone does not identify a compatible GoldSrc file.

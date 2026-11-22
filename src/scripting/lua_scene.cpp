@@ -2039,8 +2039,9 @@ int LuaScene::componentIndex(lua_State* L) {
                               "setMaterialNormalStrength",
                               "setMaterialTiling",
                               "setMaterialSpecular",
-                              "resetMaterialOverrides"};
-        for (int i = 0; i < 9; ++i) {
+                              "resetMaterialOverrides",
+                              "setMaterialAlpha"};
+        for (int i = 0; i < 10; ++i) {
             if (!std::strcmp(key, methods[i])) {
                 lua_pushvalue(L, 1);
                 lua_pushinteger(L, i);
@@ -2376,7 +2377,6 @@ int LuaScene::componentNewIndex(lua_State* L) {
         try {
             const auto next = Vehicles::parse(j);
             v.enabled = next.enabled;
-            v.keepUpright = next.keepUpright;
 #define COPY_VEHICLE(name, value, lo, hi) v.name = next.name;
             VEHICLE_SETTINGS(COPY_VEHICLE)
 #undef COPY_VEHICLE
@@ -3495,6 +3495,10 @@ int LuaScene::materialMethod(lua_State* L) {
     if (op == 8) {
         r.materialOverrides = 0;
         return 0;
+    }
+    if (op == 9) {
+        edited.alpha = number(L, 1);
+        mask |= MaterialAlpha;
     }
     if (!validMaterial(edited)) {
         return luaL_error(L, "Invalid material properties or texture path");

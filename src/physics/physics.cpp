@@ -291,7 +291,7 @@ struct Physics::Impl {
         Box box;
         RigidBody rigid;
         bool hasCollider = false, hasRigid = false, sensor = false, controller = false,
-             visited = false, failed = false, upright = false;
+             visited = false, failed = false;
         Pose previous{}, current{};
         Transform shown{};
         JPH::EMotionType motion = JPH::EMotionType::Static;
@@ -605,18 +605,14 @@ struct Physics::Impl {
                 motion = JPH::EMotionType::Kinematic;
             }
             const bool controller = world.has<CharacterController>(entity);
-            const auto* vehicle = world.tryGet<Vehicle>(entity);
-            const bool upright = vehicle && vehicle->enabled && vehicle->keepUpright &&
-                                 motion == JPH::EMotionType::Dynamic;
             const bool changed =
                 body.hasCollider != bool(source) || body.hasRigid != bool(rigid) ||
-                body.sensor != sensor || body.controller != controller || body.upright != upright ||
-                body.motion != motion || box.shape != body.box.shape ||
-                box.halfSize != body.box.halfSize || box.center != body.box.center ||
-                box.radius != body.box.radius || box.height != body.box.height ||
-                box.model != body.box.model || box.meshDetail != body.box.meshDetail ||
-                box.revision != body.box.revision || box.hullScale != body.box.hullScale ||
-                (rigid && rigid->mass != body.rigid.mass);
+                body.sensor != sensor || body.controller != controller || body.motion != motion ||
+                box.shape != body.box.shape || box.halfSize != body.box.halfSize ||
+                box.center != body.box.center || box.radius != body.box.radius ||
+                box.height != body.box.height || box.model != body.box.model ||
+                box.meshDetail != body.box.meshDetail || box.revision != body.box.revision ||
+                box.hullScale != body.box.hullScale || (rigid && rigid->mass != body.rigid.mass);
             if (fresh && body.failed && !changed) {
                 return;
             }
@@ -648,10 +644,6 @@ struct Physics::Impl {
                     moved = true;
                 }
             }
-            if (upright) {
-                const auto f = rotateVector(pose.rotation, {0, 0, -1});
-                pose.rotation = axisAngle({0, 1, 0}, std::atan2(-f.x, -f.z));
-            }
             try {
                 if (rebuild) {
                     release(body);
@@ -673,11 +665,6 @@ struct Physics::Impl {
                         settings.mAllowedDOFs = JPH::EAllowedDOFs::TranslationX |
                                                 JPH::EAllowedDOFs::TranslationY |
                                                 JPH::EAllowedDOFs::TranslationZ;
-                    }
-                    if (upright && !controller) {
-                        settings.mAllowedDOFs =
-                            JPH::EAllowedDOFs::TranslationX | JPH::EAllowedDOFs::TranslationY |
-                            JPH::EAllowedDOFs::TranslationZ | JPH::EAllowedDOFs::RotationY;
                     }
                     if (motion == JPH::EMotionType::Dynamic) {
                         settings.mOverrideMassProperties =
@@ -733,7 +720,6 @@ struct Physics::Impl {
                 body.hasRigid = rigid != nullptr;
                 body.sensor = sensor;
                 body.controller = controller;
-                body.upright = upright;
                 body.motion = motion;
                 body.rigid = rigid ? *rigid : RigidBody{};
                 const auto objectLayer =
@@ -752,7 +738,6 @@ struct Physics::Impl {
                 body.hasRigid = rigid != nullptr;
                 body.sensor = sensor;
                 body.controller = controller;
-                body.upright = upright;
                 body.motion = motion;
                 body.rigid = rigid ? *rigid : RigidBody{};
                 body.failed = true;
@@ -989,6 +974,7 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                 float load = 0, inverseLong = 0, inverseSide = 0;
                 float longitudinal = 0, sideways = 0, drive = 0, brakeLimit = 0;
                 bool hold = false, rear = false;
+                int wheel = 0;
             };
             std::vector<TireContact> tires;
             tires.reserve(4);
@@ -1057,6 +1043,7 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                 }
                 TireContact tire;
                 tire.point = hit.point;
+                tire.wheel = wheel;
                 tire.direction = direction;
                 tire.lateral = lateral;
                 tire.gravity = relativeGravity;
@@ -1094,6 +1081,29 @@ void Physics::update(World& world, float seconds, const std::function<void(float
                     api.AddImpulse(tire.ground, jvec(impulse * -1.f), jvec(tire.point));
                 }
             };
+            // Anti-roll couples each axle's suspension loads, not chassis rotation.
+            // Only paired contacts exchange load; no airborne world-up torque/lock.
+            // Equal/opposite dynamic-ground impulses still flow through the tires.
+            for (int axle = 0; axle < 2; ++axle) {
+                TireContact *left = nullptr, *right = nullptr;
+                for (auto& tire : tires) {
+                    if (tire.wheel == axle * 2) {
+                        left = &tire;
+                    }
+                    if (tire.wheel == axle * 2 + 1) {
+                        right = &tire;
+                    }
+                }
+                if (left && right) {
+                    const float transfer =
+                        std::clamp(v.antiRollStrength * rest *
+                                       (v.compression[axle * 2] - v.compression[axle * 2 + 1]),
+                                   -left->load,
+                                   right->load);
+                    left->load += transfer;
+                    right->load -= transfer;
+                }
+            }
             // Apply all suspension impulses before solving traction, then iterate
             // accumulated, effective-mass tire constraints. A single mass/4 force
             // pass leaves residual yaw/slip and lets later wheels undo earlier ones.
@@ -1136,14 +1146,6 @@ void Physics::update(World& world, float seconds, const std::function<void(float
             auto& body = entry.second;
             if (body.id.IsInvalid()) {
                 continue;
-            }
-            if (body.upright) {
-                const auto f = rotateVector(quat(api.GetRotation(body.id)), {0, 0, -1});
-                api.SetRotation(body.id,
-                                jquat(axisAngle({0, 1, 0}, std::atan2(-f.x, -f.z))),
-                                JPH::EActivation::DontActivate);
-                const auto velocity = api.GetAngularVelocity(body.id);
-                api.SetAngularVelocity(body.id, {0, velocity.GetY(), 0});
             }
             body.current = {vec(api.GetPosition(body.id)), quat(api.GetRotation(body.id))};
             if (body.hasRigid) {

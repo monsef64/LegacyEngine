@@ -111,6 +111,7 @@
     "setMaterialShader": "fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection",
     "setMaterialNormalStrength": "fun(self:MeshRenderer,value:number)",
     "setMaterialTiling": "fun(self:MeshRenderer,x:number,y:number)",
+    "setMaterialAlpha": "fun(self:MeshRenderer,value:number) 0..1 opacity for Diffuse Transparent",
     "setMaterialSpecular": "fun(self:MeshRenderer,value:number)",
     "resetMaterialOverrides": "fun(self:MeshRenderer)",
     "mesh": "'Cube'|'Sphere'|'Capsule'|'Cone'|'Plane'",
@@ -542,13 +543,13 @@
     "wheelRadius": "number 0.05..3 local metres",
     "suspensionLength": "number 0.05..3 local metres",
     "springStrength": "number 100..500000 N/m per wheel",
+    "antiRollStrength": "number 0..200000 N/m, default 12000; grounded axle support, no rotation lock",
     "suspensionDamping": "number 0..50000 per wheel",
     "engineForce": "number 0..200000 N total",
     "brakeForce": "number 0..300000 N total",
     "tireGrip": "number 0.05..5",
     "maxSteerAngle": "number 0..70 degrees",
-    "maxSpeed": "number 1..150 m/s engine cutoff",
-    "keepUpright": "boolean Default true: hard world-up pitch/roll lock; false permits banking and flips"
+    "maxSpeed": "number 1..150 m/s engine cutoff"
   },
   "Water": {
     "mesh": "string Optional .mesh asset; empty uses this MeshRenderer or default plane"

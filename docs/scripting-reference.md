@@ -2037,6 +2037,17 @@ local component = self:getComponent(MeshRenderer) or self:addComponent(MeshRende
 component:setMaterialTiling(2, 2)
 ```
 
+### MeshRenderer.setMaterialAlpha
+
+`setMaterialAlpha(self:MeshRenderer,value:number) 0..1 opacity for Diffuse Transparent`
+
+- `mesh:setMaterialAlpha(value) - 0..1 opacity multiplier for Diffuse Transparent; defaults to 1.`
+
+```lua
+local component = self:getComponent(MeshRenderer) or self:addComponent(MeshRenderer)
+component:setMaterialAlpha(0.5)
+```
+
 ### MeshRenderer.setMaterialSpecular
 
 `setMaterialSpecular(self:MeshRenderer,value:number)`
@@ -5550,13 +5561,13 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `wheelRadius` | `number 0.05..3 local metres` |
 | `suspensionLength` | `number 0.05..3 local metres` |
 | `springStrength` | `number 100..500000 N/m per wheel` |
+| `antiRollStrength` | `number 0..200000 N/m, default 12000; grounded axle support, no rotation lock` |
 | `suspensionDamping` | `number 0..50000 per wheel` |
 | `engineForce` | `number 0..200000 N total` |
 | `brakeForce` | `number 0..300000 N total` |
 | `tireGrip` | `number 0.05..5` |
 | `maxSteerAngle` | `number 0..70 degrees` |
 | `maxSpeed` | `number 1..150 m/s engine cutoff` |
-| `keepUpright` | `boolean Default true: hard world-up pitch/roll lock; false permits banking and flips` |
 
 ### Water fields
 
@@ -5817,8 +5828,8 @@ available through component lookup/add/remove/find/export APIs; `target` is a
 GameObject reference, `offset` is assigned as a complete vector and
 `resolvedDistance` is read-only. Camera projection/activation remains on Camera.
 `Skybox.affectEnvironment` enables sampled sky-colored ambient light and
-`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.keepUpright`
-locks chassis pitch/roll to prevent flipping (boolean; default true).
+`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.antiRollStrength`
+couples grounded axle suspension loads without locking chassis pitch/roll.
 
 
 See [In-game UI](game-ui.md) for RML/RCSS setup and the `UI` component example.

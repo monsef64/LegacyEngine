@@ -338,7 +338,6 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
     }
     H(Vehicle) {
         B(Vehicle, enabled);
-        B(Vehicle, keepUpright);
 #define VF(n, initial, lo, hi) F(Vehicle, n, lo, hi);
         VEHICLE_SETTINGS(VF)
 #undef VF

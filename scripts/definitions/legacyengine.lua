@@ -67,6 +67,7 @@
 ---@field setMaterialShader fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection
 ---@field setMaterialNormalStrength fun(self:MeshRenderer,value:number)
 ---@field setMaterialTiling fun(self:MeshRenderer,x:number,y:number)
+---@field setMaterialAlpha fun(self:MeshRenderer,value:number) 0..1 opacity for Diffuse Transparent
 ---@field setMaterialSpecular fun(self:MeshRenderer,value:number)
 ---@field resetMaterialOverrides fun(self:MeshRenderer)
 ---@field mesh 'Cube'|'Sphere'|'Capsule'|'Cone'|'Plane'
@@ -906,6 +907,7 @@ River = nil
 ---@field wheelRadius number 0.05..3 local metres
 ---@field suspensionLength number 0.05..3 local metres
 ---@field springStrength number 100..500000 N/m per wheel
+---@field antiRollStrength number 0..200000 N/m, default 12000; grounded axle support, no rotation lock
 ---@field suspensionDamping number 0..50000 per wheel
 ---@field engineForce number 0..200000 N total
 ---@field brakeForce number 0..300000 N total
@@ -961,7 +963,6 @@ TPSCamera = nil
 ---@field environmentIntensity number 0..5, default 1
 
 ---@class Vehicle
----@field keepUpright boolean Default true: hard world-up pitch/roll lock; false permits banking and flips
 
 ---@class NavMeshAgent
 ---@field enabled boolean

@@ -2748,6 +2748,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     occlusionWindow.previewCulled = renderer.occlusion.culled;
                     occlusionWindow.previewTested = renderer.occlusion.tested;
                 }
+                // Camera frustum lines remain useful when inspecting its culling volume.
+                if (visibilityPreview) {
+                    renderer.drawCamera(world.get<Transform>(selectedEntity),
+                                        world.get<Camera>(selectedEntity),
+                                        viewProjection);
+                }
                 if (!visibilityPreview) {
                     renderer.drawEditorGrid(browser.settings.grid, viewProjection);
                     if (navigationWindow.showMesh && navigationWindow.system.valid) {
