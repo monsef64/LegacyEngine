@@ -55,8 +55,8 @@ inline void parseFoliage(const Json& j, Data& d, bool trees) {
         };
         auto ext = std::filesystem::path(f.asset).extension();
         if (!materialPathValid(f.asset) ||
-            (!f.asset.empty() &&
-             (trees ? (ext != ".mesh" && ext != ".lemesh") : !materialTexturePath(f.asset))) ||
+            (!f.asset.empty() && (trees ? (ext != ".mesh" && ext != ".model" && ext != ".lemesh")
+                                        : !materialTexturePath(f.asset))) ||
             !range(f.width, .01f, 100) || !range(f.height, .01f, 100) ||
             !range(f.minScale, .01f, 100) || !range(f.maxScale, f.minScale, 100) ||
             !range(f.distance, 1, 2000) || !range(f.color.x, 0, 1) || !range(f.color.y, 0, 1) ||

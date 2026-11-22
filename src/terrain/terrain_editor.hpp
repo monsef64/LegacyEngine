@@ -108,7 +108,8 @@ class Editor {
                                        &assets,
                                        [&](const std::string& path) {
                                            auto ext = AssetManager::extension(path);
-                                           return trees ? (ext == ".mesh" || ext == ".lemesh")
+                                           return trees ? (ext == ".mesh" || ext == ".model" ||
+                                                           ext == ".lemesh")
                                                         : materialTexturePath(path);
                                        });
             if (!trees) {

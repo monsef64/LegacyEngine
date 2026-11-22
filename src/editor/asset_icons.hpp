@@ -27,7 +27,8 @@ inline const char* assetIcon(const std::string& path, bool folder = false) {
     if (textureAsset(path)) {
         return "\xef\x87\x85"; // file-image
     }
-    if (ext == ".mesh" || ext == ".lemesh" || ext == ".obj" || ext == ".gltf" || ext == ".glb") {
+    if (ext == ".mesh" || ext == ".model" || ext == ".lemesh" || ext == ".obj" || ext == ".gltf" ||
+        ext == ".glb") {
         return "\xef\x86\xb2"; // cube
     }
     if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") {

@@ -513,8 +513,9 @@ class AssetBrowser {
             };
             auto fix = [&](const std::filesystem::path& file) {
                 const auto ext = AssetManager::extension(file);
-                if (ext != ".mesh" && ext != ".lemesh" && ext != ".leanim" && ext != ".mat" &&
-                    ext != ".prefab" && ext != ".level" && ext != ".cubemap" && ext != ".terrain") {
+                if (ext != ".mesh" && ext != ".model" && ext != ".lemesh" && ext != ".leanim" &&
+                    ext != ".mat" && ext != ".prefab" && ext != ".level" && ext != ".cubemap" &&
+                    ext != ".terrain") {
                     return;
                 }
                 auto doc = readJsonFile(file, 256 * 1024 * 1024);

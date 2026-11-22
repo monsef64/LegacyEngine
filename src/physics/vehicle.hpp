@@ -5,6 +5,9 @@
 
 // Four-wheel raycast vehicle, local -Z forward, +Y up. Commands are not saved.
 #define VEHICLE_SETTINGS(X)                                                                        \
+    X(centerOfMassX, 0.f, -10.f, 10.f)                                                             \
+    X(centerOfMassY, 0.f, -10.f, 10.f)                                                             \
+    X(centerOfMassZ, 0.f, -10.f, 10.f)                                                             \
     X(wheelBase, 2.4f, .2f, 20.f)                                                                  \
     X(trackWidth, 1.5f, .2f, 10.f)                                                                 \
     X(mountHeight, -.2f, -10.f, 10.f)                                                              \

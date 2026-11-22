@@ -28,6 +28,60 @@ inline bool triangle(const Ray& ray, Vec3 a, Vec3 b, Vec3 c, float& nearest) {
     nearest = distance;
     return true;
 }
+#if defined(__SSE2__)
+// Four independent Moller-Trumbore intersections per SIMD batch. Keep the scalar
+// tail/fallback and identical two-sided hit/epsilon rules.
+inline bool triangles4(const Ray& ray, const Vertex* vertices, float& nearest) {
+    struct V {
+        __m128 x, y, z;
+    };
+    auto gather = [&](int corner) {
+        const auto a = vertices[corner].position, b = vertices[corner + 3].position,
+                   c = vertices[corner + 6].position, d = vertices[corner + 9].position;
+        return V{_mm_set_ps(d.x, c.x, b.x, a.x),
+                 _mm_set_ps(d.y, c.y, b.y, a.y),
+                 _mm_set_ps(d.z, c.z, b.z, a.z)};
+    };
+    auto sub = [](V a, V b) {
+        return V{_mm_sub_ps(a.x, b.x), _mm_sub_ps(a.y, b.y), _mm_sub_ps(a.z, b.z)};
+    };
+    auto cross4 = [](V a, V b) {
+        return V{_mm_sub_ps(_mm_mul_ps(a.y, b.z), _mm_mul_ps(a.z, b.y)),
+                 _mm_sub_ps(_mm_mul_ps(a.z, b.x), _mm_mul_ps(a.x, b.z)),
+                 _mm_sub_ps(_mm_mul_ps(a.x, b.y), _mm_mul_ps(a.y, b.x))};
+    };
+    auto dot4 = [](V a, V b) {
+        return _mm_add_ps(_mm_add_ps(_mm_mul_ps(a.x, b.x), _mm_mul_ps(a.y, b.y)),
+                          _mm_mul_ps(a.z, b.z));
+    };
+    auto splat = [](Vec3 v) { return V{_mm_set1_ps(v.x), _mm_set1_ps(v.y), _mm_set1_ps(v.z)}; };
+    const auto a = gather(0), ab = sub(gather(1), a), ac = sub(gather(2), a);
+    const auto direction = splat(ray.direction), p = cross4(direction, ac);
+    const auto det = dot4(ab, p);
+    const auto delta = sub(splat(ray.origin), a), q = cross4(delta, ab);
+    const auto u = _mm_div_ps(dot4(delta, p), det), v = _mm_div_ps(dot4(direction, q), det),
+               distance = _mm_div_ps(dot4(ac, q), det);
+    const auto zero = _mm_setzero_ps(), one = _mm_set1_ps(1.f);
+    auto mask = _mm_cmpge_ps(_mm_andnot_ps(_mm_set1_ps(-0.0f), det), _mm_set1_ps(1e-9f));
+    mask = _mm_and_ps(mask, _mm_and_ps(_mm_cmpge_ps(u, zero), _mm_cmple_ps(u, one)));
+    mask = _mm_and_ps(mask, _mm_and_ps(_mm_cmpge_ps(v, zero), _mm_cmple_ps(_mm_add_ps(u, v), one)));
+    mask = _mm_and_ps(
+        mask,
+        _mm_and_ps(_mm_cmpge_ps(distance, zero), _mm_cmplt_ps(distance, _mm_set1_ps(nearest))));
+    const auto hits = _mm_movemask_ps(mask);
+    if (!hits) {
+        return false;
+    }
+    float values[4];
+    _mm_storeu_ps(values, distance);
+    for (int i = 0; i < 4; ++i) {
+        if (hits & (1 << i)) {
+            nearest = std::min(nearest, values[i]);
+        }
+    }
+    return true;
+}
+#endif
 inline Entity pick(
     World& world, const AssetManager& assets, const Ray& ray, float& nearest, Entity initial = {}) {
     static std::filesystem::path root;
@@ -147,7 +201,14 @@ inline Entity pick(
                 }
             }
             const auto& vertices = cached.mesh.vertices;
-            for (size_t i = 0; i + 2 < vertices.size(); i += 3) {
+            size_t i = 0;
+#if defined(__SSE2__)
+            for (; i + 11 < vertices.size(); i += 12) {
+                if (triangles4(local, vertices.data() + i, nearest))
+                    result = e;
+            }
+#endif
+            for (; i + 2 < vertices.size(); i += 3) {
                 if (triangle(local,
                              vertices[i].position,
                              vertices[i + 1].position,

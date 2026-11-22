@@ -10,7 +10,7 @@ inline bool embeddedAsset(const std::string& path) {
         return false;
     }
     const auto extension = std::filesystem::path(path.substr(0, split)).extension();
-    return extension == ".mesh" || extension == ".lemesh";
+    return extension == ".mesh" || extension == ".model" || extension == ".lemesh";
 }
 inline std::filesystem::path assetContainerPath(const std::filesystem::path& path) {
     const auto value = path.generic_string();

@@ -79,7 +79,8 @@ class Renderer {
                      const std::string& path,
                      Vec3& low,
                      Vec3& high,
-                     unsigned depth = 0) {
+                     unsigned depth = 0,
+                     bool asynchronous = false) {
         if (depth > 2) {
             throw std::runtime_error("Cyclic model reference");
         }
@@ -87,6 +88,12 @@ class Renderer {
         if (modelRevision_ != modelAssetRevision) {
             clearModelCache();
             modelRevision_ = modelAssetRevision;
+        }
+        if (asynchronous) {
+            if (!requestModel(path)) {
+                return false;
+            }
+            return meshBounds(modelMeshes_.at(path), low, high);
         }
         const auto& doc = cachedModelDocument(materialAssets_, path, &modelDocuments_);
         if (doc.at("version") == 2) {
@@ -97,7 +104,12 @@ class Renderer {
             }
             for (const auto& part : parts) {
                 Vec3 a{}, b{};
-                if (!modelBounds(assets, part.at("mesh").get<std::string>(), a, b, depth + 1)) {
+                if (!modelBounds(assets,
+                                 part.at("mesh").get<std::string>(),
+                                 a,
+                                 b,
+                                 depth + 1,
+                                 asynchronous)) {
                     continue;
                 }
                 if (!any) {

@@ -31,6 +31,7 @@
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/EmptyShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/ShapeCast.h>
@@ -290,6 +291,7 @@ struct Physics::Impl {
         JPH::BodyID id;
         Box box;
         RigidBody rigid;
+        Vec3 centerOfMass;
         bool hasCollider = false, hasRigid = false, sensor = false, controller = false,
              visited = false, failed = false;
         Pose previous{}, current{};
@@ -605,9 +607,19 @@ struct Physics::Impl {
                 motion = JPH::EMotionType::Kinematic;
             }
             const bool controller = world.has<CharacterController>(entity);
+            Vec3 centerOfMass;
+            if (const auto* vehicle = world.tryGet<Vehicle>(entity);
+                vehicle && Vehicles::valid(*vehicle) && motion == JPH::EMotionType::Dynamic) {
+                centerOfMass = {
+                    vehicle->centerOfMassX, vehicle->centerOfMassY, vehicle->centerOfMassZ};
+                centerOfMass = {centerOfMass.x * transform.scale.x,
+                                centerOfMass.y * transform.scale.y,
+                                centerOfMass.z * transform.scale.z};
+            }
             const bool changed =
-                body.hasCollider != bool(source) || body.hasRigid != bool(rigid) ||
-                body.sensor != sensor || body.controller != controller || body.motion != motion ||
+                centerOfMass != body.centerOfMass || body.hasCollider != bool(source) ||
+                body.hasRigid != bool(rigid) || body.sensor != sensor ||
+                body.controller != controller || body.motion != motion ||
                 box.shape != body.box.shape || box.halfSize != body.box.halfSize ||
                 box.center != body.box.center || box.radius != body.box.radius ||
                 box.height != body.box.height || box.model != body.box.model ||
@@ -647,7 +659,11 @@ struct Physics::Impl {
             try {
                 if (rebuild) {
                     release(body);
-                    const auto geometry = shape(box, source != nullptr, terrain);
+                    auto geometry = shape(box, source != nullptr, terrain);
+                    if (centerOfMass != Vec3{}) {
+                        geometry =
+                            new JPH::OffsetCenterOfMassShape(geometry.GetPtr(), jvec(centerOfMass));
+                    }
                     JPH::BodyCreationSettings settings(
                         geometry,
                         jvec(pose.position),
@@ -716,6 +732,7 @@ struct Physics::Impl {
                     }
                 }
                 body.box = box;
+                body.centerOfMass = centerOfMass;
                 body.hasCollider = source != nullptr;
                 body.hasRigid = rigid != nullptr;
                 body.sensor = sensor;

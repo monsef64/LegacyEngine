@@ -107,3 +107,63 @@ void writeCompressedMesh(std::ostream& stream, const Json& document, const char*
     stream.write(reinterpret_cast<const char*>(size), 8);
     stream.write(reinterpret_cast<const char*>(packed.data()), std::streamsize(count));
 }
+
+// One retained container across all workers, rather than one large DOM per
+// embedded member or per thread. Callers keep immutable snapshots while in use.
+#include <atomic>
+#include <mutex>
+namespace {
+std::atomic<std::uint64_t> containerGeneration{0};
+}
+void invalidateModelContainer() {
+    ++containerGeneration;
+}
+std::shared_ptr<const Json> readModelContainer(const std::filesystem::path& path) {
+    static std::mutex mutex;
+    static std::filesystem::path key;
+    static std::filesystem::file_time_type modified;
+    static std::uintmax_t bytes = 0;
+    static std::uint64_t generation = 0;
+    static std::shared_ptr<const Json> cached;
+    const auto file = std::filesystem::absolute(path).lexically_normal();
+    const auto stamp = std::filesystem::last_write_time(file);
+    const auto size = std::filesystem::file_size(file);
+    const auto version = containerGeneration.load();
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (cached && key == file && modified == stamp && bytes == size && generation == version) {
+            return cached;
+        }
+    }
+    auto document = std::make_shared<const Json>(readJsonFile(file, 256 * 1024 * 1024));
+    // Large containers are still readable, but don't retain an unbounded DOM.
+    // The import format's decoded byte limit remains enforced by readJsonFile.
+    std::uint64_t decodedBytes = size;
+    {
+        std::ifstream input(file, std::ios::binary);
+        unsigned char header[16]{};
+        input.read(reinterpret_cast<char*>(header), sizeof(header));
+        if (input.gcount() == 16 &&
+            (std::string(reinterpret_cast<char*>(header), 8) == "LEMZ0001" ||
+             std::string(reinterpret_cast<char*>(header), 8) == "LEMZ0002")) {
+            decodedBytes = 0;
+            for (int i = 0; i < 8; ++i) {
+                decodedBytes |= std::uint64_t(header[8 + i]) << (8 * i);
+            }
+        }
+    }
+    const bool retain = decodedBytes <= 32 * 1024 * 1024;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (retain && version == containerGeneration.load() &&
+            std::filesystem::last_write_time(file) == stamp &&
+            std::filesystem::file_size(file) == size) {
+            cached = document;
+            key = file;
+            modified = stamp;
+            bytes = size;
+            generation = version;
+        }
+    }
+    return document;
+}

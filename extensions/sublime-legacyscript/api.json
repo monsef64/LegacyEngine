@@ -433,7 +433,7 @@
   },
   {
     "name": "Vehicle",
-    "signature": "Vehicle - four-wheel raycast chassis, local -Z forward. enabled; throttle (-1..1), steering (-1..1), brake (0..1), handbrake (boolean). Read-only speed (signed m/s), groundedWheels, isGrounded, wheelCompression (copy, FL/FR/RL/RR). Settings: wheelBase, trackWidth, mountHeight, wheelRadius, suspensionLength, springStrength, suspensionDamping, antiRollStrength, engineForce, brakeForce, tireGrip, maxSteerAngle (degrees), maxSpeed (m/s). Requires dynamic primitive chassis; adding supplies missing dependencies only."
+    "signature": "Vehicle - four-wheel raycast chassis, local -Z forward. enabled; throttle (-1..1), steering (-1..1), brake (0..1), handbrake (boolean). Read-only speed (signed m/s), groundedWheels, isGrounded, wheelCompression (copy, FL/FR/RL/RR). Settings: centerOfMassX, centerOfMassY, centerOfMassZ (local chassis offset metres, default 0; negative Y lowers COM), wheelBase, trackWidth, mountHeight, wheelRadius, suspensionLength, springStrength, suspensionDamping, antiRollStrength, engineForce, brakeForce, tireGrip, maxSteerAngle (degrees), maxSpeed (m/s). Requires dynamic primitive chassis; adding supplies missing dependencies only."
   },
   {
     "name": "throttle",
@@ -1270,6 +1270,18 @@
   {
     "name": "setMaterialTiling",
     "signature": "mesh:setMaterialTiling(x,y) - nonzero UV repeat scale"
+  },
+  {
+    "name": "centerOfMassX",
+    "signature": "Vehicle.centerOfMassX: -10..10 local metres, default 0. Chassis center-of-mass offset; collision geometry stays in place."
+  },
+  {
+    "name": "centerOfMassY",
+    "signature": "Vehicle.centerOfMassY: -10..10 local metres, default 0. Negative values lower the chassis center of mass without locking rotation."
+  },
+  {
+    "name": "centerOfMassZ",
+    "signature": "Vehicle.centerOfMassZ: -10..10 local metres, default 0. Chassis center-of-mass offset along local Z."
   },
   {
     "name": "antiRollStrength",

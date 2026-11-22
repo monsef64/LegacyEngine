@@ -4,21 +4,33 @@
 #include "models/model_pose.hpp"
 #include "project/json_io.hpp"
 #include "rendering/mesh.hpp"
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#endif
 
 inline bool modelAsset(const std::string& path) {
     return materialPathValid(path) &&
-           (AssetManager::extension(path) == ".mesh" || AssetManager::extension(path) == ".lemesh");
+           (AssetManager::extension(path) == ".mesh" || AssetManager::extension(path) == ".model" ||
+            AssetManager::extension(path) == ".lemesh");
 }
 constexpr std::size_t maxModelVertices = 1500000;
 inline bool validModelVertex(const Vertex& v) {
     const float values[]{
         v.position.x, v.position.y, v.position.z, v.normal.x, v.normal.y, v.normal.z, v.u, v.v};
+#if defined(__SSE2__)
+    // Ordered comparisons reject NaN and infinity as well as out-of-range values.
+    const auto sign = _mm_set1_ps(-0.0f), limit = _mm_set1_ps(1e6f);
+    const auto a = _mm_andnot_ps(sign, _mm_loadu_ps(values));
+    const auto b = _mm_andnot_ps(sign, _mm_loadu_ps(values + 4));
+    return _mm_movemask_ps(_mm_and_ps(_mm_cmple_ps(a, limit), _mm_cmple_ps(b, limit))) == 15;
+#else
     for (float value : values) {
         if (!std::isfinite(value) || std::abs(value) > 1e6f) {
             return false;
         }
     }
     return true;
+#endif
 }
 inline unsigned modelAssetRevision = 0;
 inline float modelImportScale(const Json& json) {
@@ -30,9 +42,10 @@ inline float modelImportScale(const Json& json) {
 }
 inline Json modelDocument(const AssetManager& assets, const std::string& path) {
     if (!modelAsset(path)) {
-        throw std::runtime_error("Expected a .mesh asset");
+        throw std::runtime_error("Expected a .mesh or .model asset");
     }
-    auto json = readJsonFile(assets.resolve(path), 256 * 1024 * 1024);
+    auto json = embeddedAsset(path) ? readJsonFile(assets.resolve(path), 256 * 1024 * 1024)
+                                    : *readModelContainer(assets.resolve(path));
     if (json.at("format") != "LegacyEngineMesh" ||
         (json.at("version") != 1 && json.at("version") != 2)) {
         throw std::runtime_error("Invalid model asset");
