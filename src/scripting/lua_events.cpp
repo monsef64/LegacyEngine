@@ -21,6 +21,14 @@ void pushValue(lua_State* L, const LuaConsole::EventValue& value) {
         lua_pushnumber(L, *v);
     } else if (auto* v = std::get_if<std::string>(&value)) {
         lua_pushlstring(L, v->data(), v->size());
+    } else if (auto* r = std::get_if<LuaConsole::Resolution>(&value)) {
+        lua_createtable(L, 0, 3);
+        lua_pushinteger(L, r->width);
+        lua_setfield(L, -2, "width");
+        lua_pushinteger(L, r->height);
+        lua_setfield(L, -2, "height");
+        lua_pushnumber(L, r->refreshRate);
+        lua_setfield(L, -2, "refreshRate");
     } else {
         lua_pushnil(L);
     }
@@ -56,6 +64,14 @@ void LuaConsole::dispatchEvents() {
             }
         }
     }
+}
+bool LuaConsole::hasTasks() {
+    for (auto* console : subscribers) {
+        if (console->scene_ && console->scene_->hasTasks()) {
+            return true;
+        }
+    }
+    return false;
 }
 void LuaConsole::drawGUI() {
     const auto recipients = subscribers;
@@ -189,7 +205,13 @@ void LuaConsole::receiveEvent(const std::string& name, const std::vector<EventVa
             pushValue(state_, value);
         }
         beginBudget();
-        const int result = lua_pcall(state_, int(values.size()), 0, base + 1);
+        int result;
+        auto call = [&] { result = lua_pcall(state_, int(values.size()), 0, base + 1); };
+        if (name == "OnGamePreQuit" && scene_) {
+            scene_->preQuitListener(call);
+        } else {
+            call();
+        }
         endBudget();
         if (result != LUA_OK) {
             const char* error = lua_tostring(state_, -1);
@@ -198,7 +220,9 @@ void LuaConsole::receiveEvent(const std::string& name, const std::vector<EventVa
         lua_settop(state_, base);
         return result == LUA_OK;
     };
-    if (name == "onLevelLoaded" || name == "onLevelFailedToLoad") {
+    if (name == "onLevelLoaded" || name == "onLevelFailedToLoad" || name == "OnFocus" ||
+        name == "OnFocusLost" || name == "OnUrlOpened" || name == "OnGamePreQuit" ||
+        name == "OnResolutionChanged") {
         if (!invoke(0, true)) {
             lua_pushnil(state_);
             lua_setglobal(state_, name.c_str());

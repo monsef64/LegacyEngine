@@ -19,7 +19,7 @@ named input buttons in Project > Input Settings and create/register the `Main` l
 before level examples. Find/get functions can return nil; check before dereferencing.
 
 See [LegacyScript guide](scripting.md), [input/audio details](audio-input.md),
-[prefab workflow](prefabs.md), [level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).
+[game services](game-services.md), [prefab workflow](prefabs.md), [level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).
 
 ## Named script components
 
@@ -4928,6 +4928,236 @@ function onGUI()
 end
 ```
 
+## ScreenAPI
+
+### ScreenAPI.getResolutions
+
+`getResolutions():ScreenResolution[]`
+
+```lua
+for _, mode in ipairs(Screen.getResolutions()) do debug.log(mode.width, mode.height) end
+```
+
+### ScreenAPI.getResolution
+
+`getResolution(width:integer,height:integer):boolean Checks availability.`
+
+```lua
+debug.log(Screen.getResolution(1920, 1080))
+```
+
+### ScreenAPI.setResolution
+
+`setResolution(width:integer,height:integer):boolean|nil,error?:string Separate game/player windows only.`
+
+```lua
+if Screen.getResolution(1920, 1080) then Screen.setResolution(1920, 1080) end
+```
+
+### ScreenAPI.takeScreenshot
+
+`takeScreenshot(path:string):boolean|nil,error?:string Queue a PNG under userDataPath.`
+
+```lua
+Screen.takeScreenshot("Screenshots/view.png")
+```
+
+## GameAPI
+
+### GameAPI.openURL
+
+`openURL(url:string):boolean|nil,error?:string HTTP/HTTPS only; success means handed to OS.`
+
+```lua
+Game.openURL("https://example.com")
+```
+
+### GameAPI.quit
+
+`quit() Deferred graceful quit; stops Play in editor.`
+
+```lua
+Game.quit()
+```
+
+## SavingAPI
+
+### SavingAPI.saveString
+
+`saveString(key:string,value:string):boolean|nil,error?:string`
+
+```lua
+local result, err = Saving.saveString("example", "Player")
+```
+
+### SavingAPI.loadString
+
+`loadString(key:string,default?:string):string|nil,error?:string`
+
+```lua
+local result, err = Saving.loadString("example", "Player")
+```
+
+### SavingAPI.saveInt
+
+`saveInt(key:string,value:integer):boolean|nil,error?:string`
+
+```lua
+local result, err = Saving.saveInt("example", 10)
+```
+
+### SavingAPI.loadInt
+
+`loadInt(key:string,default?:integer):integer|nil,error?:string`
+
+```lua
+local result, err = Saving.loadInt("example", 10)
+```
+
+### SavingAPI.saveFloat
+
+`saveFloat(key:string,value:number):boolean|nil,error?:string`
+
+```lua
+local result, err = Saving.saveFloat("example", 0.5)
+```
+
+### SavingAPI.loadFloat
+
+`loadFloat(key:string,default?:number):number|nil,error?:string`
+
+```lua
+local result, err = Saving.loadFloat("example", 0.5)
+```
+
+### SavingAPI.saveBool
+
+`saveBool(key:string,value:boolean):boolean|nil,error?:string`
+
+```lua
+local result, err = Saving.saveBool("example", true)
+```
+
+### SavingAPI.loadBool
+
+`loadBool(key:string,default?:boolean):boolean|nil,error?:string`
+
+```lua
+local result, err = Saving.loadBool("example", true)
+```
+
+### SavingAPI.saveTable
+
+`saveTable(key:string,value:table):boolean|nil,error?:string`
+
+```lua
+local result, err = Saving.saveTable("example", {score = 10})
+```
+
+### SavingAPI.loadTable
+
+`loadTable(key:string,default?:table):table|nil,error?:string`
+
+```lua
+local result, err = Saving.loadTable("example", {score = 10})
+```
+
+### SavingAPI.saveVector3
+
+`saveVector3(key:string,value:Vec3):boolean|nil,error?:string`
+
+```lua
+local result, err = Saving.saveVector3("example", {x = 1, y = 2, z = 3})
+```
+
+### SavingAPI.loadVector3
+
+`loadVector3(key:string,default?:Vec3):Vec3|nil,error?:string`
+
+```lua
+local result, err = Saving.loadVector3("example", {x = 1, y = 2, z = 3})
+```
+
+## FileAPI
+
+### FileAPI.open
+
+`open(path:string,mode:string):GameFile|nil,error?:string r/rb/w/wb/a/ab; sandboxed paths.`
+
+```lua
+local f, err = File.open("notes.txt", "w")
+if f then File.close(f) end
+```
+
+### FileAPI.read
+
+`read(file:GameFile,format?:string|integer):string|nil,error?:string Default *l; also *a or byte count.`
+
+```lua
+local f = File.open("notes.txt", "r")
+if f then File.read(f, "*a"); File.close(f) end
+```
+
+### FileAPI.write
+
+`write(file:GameFile,data:string):boolean|nil,error?:string`
+
+```lua
+local f = File.open("notes.txt", "w")
+if f then File.write(f, "Hello\n"); File.close(f) end
+```
+
+### FileAPI.close
+
+`close(file:GameFile)`
+
+```lua
+local f = File.open("notes.txt", "r")
+if f then File.close(f) end
+```
+
+### FileAPI.flush
+
+`flush(file:GameFile):boolean`
+
+```lua
+local f = File.open("notes.txt", "r")
+if f then File.flush(f); File.close(f) end
+```
+
+### FileAPI.seek
+
+`seek(file:GameFile,whence?:string,offset?:integer):integer|nil,error?:string set/cur/end.`
+
+```lua
+local f = File.open("notes.txt", "r")
+if f then File.seek(f, "set", 0); File.close(f) end
+```
+
+### FileAPI.lines
+
+`lines(file:GameFile|string):fun():string|nil Path form auto-closes at EOF.`
+
+```lua
+for line in File.lines("notes.txt") do debug.log(line) end
+```
+
+### FileAPI.rename
+
+`rename(oldPath:string,newPath:string):boolean|nil,error?:string Never overwrites.`
+
+```lua
+File.rename("notes.txt", "old-notes.txt")
+```
+
+### FileAPI.remove
+
+`remove(path:string):boolean|nil,error?:string Files only.`
+
+```lua
+File.remove("old-notes.txt")
+```
+
 ## Component fields and type tokens
 
 Component type names such as `Transform`, `Skybox`, `PointLight` and `AudioSource`
@@ -5635,6 +5865,37 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `depth` | `number` |
 | `opacity` | `number` |
 | `sortingOrder` | `integer` |
+
+### ScreenResolution fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `width` | `integer` |
+| `height` | `integer` |
+| `refreshRate` | `number` |
+
+### ScreenAPI fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `brightness` | `number Rendered-game brightness, 0..1 (not monitor brightness).` |
+| `currentResolution` | `ScreenResolution Read-only display mode.` |
+| `fullScreen` | `boolean Separate game/player windows only.` |
+| `width` | `integer Read-only game render width in pixels.` |
+| `height` | `integer Read-only game render height in pixels.` |
+
+### GameAPI fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `companyName` | `string Read-only.` |
+| `getDataPath` | `string Read-only mounted game asset directory (a property).` |
+| `isEditor` | `boolean Read-only.` |
+| `isFocused` | `boolean Read-only native-window focus.` |
+| `userDataPath` | `string Read-only per-game persistent directory.` |
+| `engineVersion` | `string Read-only.` |
+| `blockGameKilling` | `boolean Holds normal graceful quit until cleared or the ten-second timeout.` |
+| `targetFrameRate` | `integer -1 uncapped, or 1..1000; VSync may cap further.` |
 
 ## Skybox1 to Skybox2 transition
 

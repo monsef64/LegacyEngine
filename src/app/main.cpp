@@ -3,6 +3,7 @@
 #include "editor/scene_picking.hpp"
 #include "effects/laser_update.hpp"
 #include "engine_version.hpp"
+#include "scripting/game_services.hpp"
 #include "ui/game_ui.hpp"
 #include "ui/script_gui.hpp"
 #include <cctype>
@@ -372,8 +373,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                                                : SDL_WaitEvent(&event);
     };
     while (running) {
+        GameServices::update(gameWindow ? gameWindow : window, playMode.active());
+        if (playMode.active()) {
+            LuaConsole::dispatchEvents();
+        }
         browser.pollImports();
-        if (!smokeTest && !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
+        if (!smokeTest && !GameServices::pendingQuit() &&
+            !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
             !(gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS))) {
             input.releaseMouse();
             input.clear();
@@ -515,6 +521,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         while (SDL_PollEvent(&event)) {
             if (gameWindow && event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
                 event.window.windowID == SDL_GetWindowID(gameWindow)) {
+                if (playMode.active()) {
+                    GameServices::requestQuit();
+                    continue;
+                }
                 input.releaseMouse();
                 input.window = window;
                 scriptGUI.shutdown();
@@ -1742,6 +1752,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         projectError = SDL_GetError();
                     }
                 }
+                GameServices::configure(gameWindow ? gameWindow : window,
+                                        true,
+                                        "",
+                                        browser.assets.root.parent_path().filename().string(),
+                                        browser.assets.root,
+                                        gameWindow == nullptr);
+                GameServices::update(gameWindow ? gameWindow : window, true);
                 panelOpen[6] = true;
                 physics.reset();
                 audio.start(world);
@@ -1771,7 +1788,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         ImGui::SameLine();
         if (playbackButton("##Stop", "Stop (F7)", PlaybackIcon::Stop) ||
-            (stopKey && playMode.active())) {
+            ((stopKey || GameServices::quitReady()) && playMode.active())) {
             editor.finish(world);
             clicking = false;
             // Run stop callbacks before restoring, so their edits are discarded too.
@@ -1795,6 +1812,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             scriptGUI.shutdown();
             TextureQuality::lifecycle(false);
             playMode.stop(world);
+            GameServices::cancelQuit();
             input.releaseMouse();
             physics.reset();
             scripts.resetRuntime();
@@ -2559,7 +2577,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 world.get<Camera>(active).aspect = float(std::max(1, gw)) / std::max(1, gh);
             }
         }
-        if (playMode.playing()) {
+        if (playMode.playing() || GameServices::pendingQuit()) {
             world.each<CameraEffects>([&](Entity, CameraEffects& fx) {
                 float step = fx.fadeSpeed * std::min(seconds, .25f);
                 if (fx.fadeAmount < fx.fadeTarget) {
@@ -2830,6 +2848,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                 viewProjection);
                         }
                         if (transform) {
+                            if (const auto* decal = world.tryGet<Decal>(selectedEntity)) {
+                                Collider projector;
+                                projector.size = {decal->width, decal->height, decal->depth};
+                                renderer.drawCollider(*transform, projector, viewProjection);
+                            }
                             if (const auto* query = world.tryGet<Raycast>(selectedEntity)) {
                                 renderer.drawRaycast(*transform,
                                                      *query,
@@ -2925,6 +2948,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                  gameSurface.height,
                                  playMode.playing(),
                                  browser.assets.root);
+                GameServices::finishFrame(
+                    gameSurface.framebuffer, gameSurface.width, gameSurface.height);
             }
             if (gameWindow && gameVisible) {
                 auto context = SDL_GL_GetCurrentContext();
@@ -3103,6 +3128,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         }
         profiler.checkpoint(ProfilePart::Other);
         SDL_GL_SwapWindow(window);
+        if (playMode.active()) {
+            GameServices::paceFrame(frameStarted);
+        }
         const auto flags = SDL_GetWindowFlags(window);
         const bool foreground =
             (!(flags & SDL_WINDOW_MINIMIZED) && (flags & SDL_WINDOW_INPUT_FOCUS)) ||

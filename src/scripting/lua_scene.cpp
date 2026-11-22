@@ -4306,3 +4306,20 @@ int LuaScene::guiMethod(lua_State* L) {
     lua_call(L, 2, 1);
     return 1;
 }
+
+// Built-in pre-quit listeners remain synchronous, but may spawn owned tasks.
+void LuaScene::preQuitListener(const std::function<void()>& invoke) {
+    Task context;
+    context.owner = selfEntity_;
+    context.objectReference = LUA_NOREF;
+    context.callback = "OnGamePreQuit";
+    auto* previous = currentTask_;
+    currentTask_ = &context;
+    try {
+        invoke();
+    } catch (...) {
+        currentTask_ = previous;
+        throw;
+    }
+    currentTask_ = previous;
+}

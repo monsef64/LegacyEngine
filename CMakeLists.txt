@@ -227,8 +227,9 @@ add_library(legacy_audio STATIC src/audio/audio_clip.cpp src/audio/audio_output.
 target_include_directories(legacy_audio PUBLIC src)
 target_link_libraries(legacy_audio PUBLIC legacy_miniaudio)
 
-add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_scene.cpp src/scripting/lua_input.cpp src/scripting/lua_levels.cpp src/scripting/lua_events.cpp src/ui/script_gui.cpp)
-target_include_directories(lua_console PUBLIC src)
+add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_scene.cpp src/scripting/lua_input.cpp src/scripting/lua_levels.cpp src/scripting/lua_events.cpp src/scripting/game_services.cpp src/ui/script_gui.cpp)
+target_include_directories(lua_console PUBLIC src PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_link_libraries(lua_console PRIVATE glad)
 target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3 legacy_imgui)
 
 add_library(legacy_thumbnails STATIC src/assets/texture_preview.cpp)

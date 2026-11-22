@@ -1028,19 +1028,9 @@ inline void drawInspector(World& world,
                         auto edited = *d;
                         EditorValues::bindDefaults(edited);
                         EditorValues::Checkbox("Enabled", &edited.enabled);
-                        char path[4097]{};
-                        std::snprintf(path, sizeof(path), "%s", edited.texture.c_str());
-                        if (ImGui::InputText("Texture", path, sizeof(path))) {
-                            edited.texture = path;
-                        }
-                        if (ImGui::BeginDragDropTarget()) {
-                            if (const auto* payload = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
-                                if (payload->Data && payload->DataSize > 0) {
-                                    edited.texture = static_cast<const char*>(payload->Data);
-                                }
-                            }
-                            ImGui::EndDragDropTarget();
-                        }
+                        assetPicker("Texture", edited.texture, assets, [](const std::string& path) {
+                            return materialTexturePath(path);
+                        });
                         ImGui::ColorEdit3("Tint", &edited.color.x);
                         EditorValues::SliderFloat("Opacity", &edited.opacity, 0, 1);
                         EditorValues::DragFloat("Width", &edited.width, .01f, .001f, 1000);

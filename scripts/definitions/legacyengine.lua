@@ -1246,3 +1246,78 @@ function setTextureQuality(quality) end
 ---@field sortingOrder integer
 ---@type ComponentToken
 Decal = {}
+
+
+---@class ScreenResolution
+---@field width integer
+---@field height integer
+---@field refreshRate number
+---@class ScreenAPI
+---@field brightness number Rendered-game brightness, 0..1 (not monitor brightness).
+---@field currentResolution ScreenResolution Read-only display mode.
+---@field fullScreen boolean Separate game/player windows only.
+---@field width integer Read-only game render width in pixels.
+---@field height integer Read-only game render height in pixels.
+---@field getResolutions fun():ScreenResolution[]
+---@field getResolution fun(width:integer,height:integer):boolean Checks availability.
+---@field setResolution fun(width:integer,height:integer):boolean|nil,error?:string Separate game/player windows only.
+---@field takeScreenshot fun(path:string):boolean|nil,error?:string Queue a PNG under userDataPath.
+---@type ScreenAPI
+Screen = {}
+---@class GameAPI
+---@field companyName string Read-only.
+---@field getDataPath string Read-only mounted game asset directory (a property).
+---@field isEditor boolean Read-only.
+---@field isFocused boolean Read-only native-window focus.
+---@field userDataPath string Read-only per-game persistent directory.
+---@field engineVersion string Read-only.
+---@field blockGameKilling boolean Holds normal graceful quit until cleared or the ten-second timeout.
+---@field targetFrameRate integer -1 uncapped, or 1..1000; VSync may cap further.
+---@field openURL fun(url:string):boolean|nil,error?:string HTTP/HTTPS only; success means handed to OS.
+---@field quit fun() Deferred graceful quit; stops Play in editor.
+---@type GameAPI
+Game = {}
+---@class SavingAPI
+---@field saveString fun(key:string,value:string):boolean|nil,error?:string
+---@field loadString fun(key:string,default?:string):string|nil,error?:string
+---@field saveInt fun(key:string,value:integer):boolean|nil,error?:string
+---@field loadInt fun(key:string,default?:integer):integer|nil,error?:string
+---@field saveFloat fun(key:string,value:number):boolean|nil,error?:string
+---@field loadFloat fun(key:string,default?:number):number|nil,error?:string
+---@field saveBool fun(key:string,value:boolean):boolean|nil,error?:string
+---@field loadBool fun(key:string,default?:boolean):boolean|nil,error?:string
+---@field saveTable fun(key:string,value:table):boolean|nil,error?:string
+---@field loadTable fun(key:string,default?:table):table|nil,error?:string
+---@field saveVector3 fun(key:string,value:Vec3):boolean|nil,error?:string
+---@field loadVector3 fun(key:string,default?:Vec3):Vec3|nil,error?:string
+---@type SavingAPI
+Saving = {}
+---@class GameFile Opaque file handle; use File functions, not io.
+---@class FileAPI
+---@field open fun(path:string,mode:string):GameFile|nil,error?:string r/rb/w/wb/a/ab; sandboxed paths.
+---@field read fun(file:GameFile,format?:string|integer):string|nil,error?:string Default *l; also *a or byte count.
+---@field write fun(file:GameFile,data:string):boolean|nil,error?:string
+---@field close fun(file:GameFile)
+---@field flush fun(file:GameFile):boolean
+---@field seek fun(file:GameFile,whence?:string,offset?:integer):integer|nil,error?:string set/cur/end.
+---@field lines fun(file:GameFile|string):fun():string|nil Path form auto-closes at EOF.
+---@field rename fun(oldPath:string,newPath:string):boolean|nil,error?:string Never overwrites.
+---@field remove fun(path:string):boolean|nil,error?:string Files only.
+---@type FileAPI
+File = {}
+-- Built-in events may be global functions or registered using on(name, callback):
+-- OnResolutionChanged(resolution), OnFocusLost(), OnFocus(), OnUrlOpened(url), OnGamePreQuit().
+
+-- Compatibility aliases for the typed Saving API.
+saveString = Saving.saveString
+loadString = Saving.loadString
+saveInt = Saving.saveInt
+loadInt = Saving.loadInt
+saveFloat = Saving.saveFloat
+loadFloat = Saving.loadFloat
+saveBool = Saving.saveBool
+loadBool = Saving.loadBool
+saveTable = Saving.saveTable
+loadTable = Saving.loadTable
+saveVector3 = Saving.saveVector3
+loadVector3 = Saving.loadVector3

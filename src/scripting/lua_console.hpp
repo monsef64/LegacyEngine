@@ -56,7 +56,12 @@ class LuaConsole {
     }
     void fixedUpdate(float deltaTime);
     void shutdown();
-    using EventValue = std::variant<std::monostate, bool, double, std::string>;
+    struct Resolution {
+        int width, height;
+        float refreshRate;
+    };
+    using EventValue = std::variant<std::monostate, bool, double, std::string, Resolution>;
+    static bool hasTasks();
     static bool postEvent(std::string name, std::vector<EventValue> values = {});
     static void dispatchEvents();
     static void drawGUI();

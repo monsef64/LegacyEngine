@@ -42,3 +42,10 @@ end
 Scripting exposes enabled, texture, width, height, depth, color, opacity and sortingOrder. Color reads return a copy; assign the whole
 vector to update it. Values are validated and asset paths must stay
 project-relative. `@export mark Decal` references an existing component.
+
+The Decal texture field uses the shared filtered asset picker, including packed
+model textures. To make an editable standalone copy, right-click a packed texture
+in the Asset browser and choose **Copy texture to Assets folder...**, then select
+a folder inside the project's Assets directory. Existing files are not replaced.
+The selected Decal's projector box is shown in the editor; an opaque surface must
+intersect that box to receive the projected texture.

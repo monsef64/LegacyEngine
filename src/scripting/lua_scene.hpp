@@ -31,6 +31,10 @@ class LuaScene {
     bool receivesEvents() const {
         return active_ && (selfEntity_ == Entity{} || isActive(world_, selfEntity_));
     }
+    void preQuitListener(const std::function<void()>& invoke);
+    bool hasTasks() const {
+        return !tasks_.empty();
+    }
     void drawGUI();
     void update(float dt);
     void fixedUpdate(float dt);

@@ -162,6 +162,28 @@ def inventory():
 
 def example(entry):
     owner, name = entry['owner'], entry['name']
+    if owner == 'ScreenAPI':
+        return {
+            'getResolutions': 'for _, mode in ipairs(Screen.getResolutions()) do debug.log(mode.width, mode.height) end',
+            'getResolution': 'debug.log(Screen.getResolution(1920, 1080))',
+            'setResolution': 'if Screen.getResolution(1920, 1080) then Screen.setResolution(1920, 1080) end',
+            'takeScreenshot': 'Screen.takeScreenshot("Screenshots/view.png")',
+        }[name]
+    if owner == 'GameAPI':
+        return {'openURL': 'Game.openURL("https://example.com")', 'quit': 'Game.quit()'}[name]
+    if owner == 'SavingAPI':
+        value = {'String': '"Player"', 'Int': '10', 'Float': '0.5', 'Bool': 'true', 'Table': '{score = 10}', 'Vector3': '{x = 1, y = 2, z = 3}'}[name[4:]]
+        return f'local result, err = Saving.{name}("example", {value})'
+    if owner == 'FileAPI':
+        if name == 'lines': return 'for line in File.lines("notes.txt") do debug.log(line) end'
+        if name == 'rename': return 'File.rename("notes.txt", "old-notes.txt")'
+        if name == 'remove': return 'File.remove("old-notes.txt")'
+        if name == 'open': return 'local f, err = File.open("notes.txt", "w")\nif f then File.close(f) end'
+        args = {'read': '"*a"', 'write': '"Hello\\n"', 'flush': '', 'seek': '"set", 0', 'close': ''}[name]
+        mode = 'w' if name == 'write' else 'r'
+        call = f'File.{name}(f' + (', ' + args if args else '') + ')'
+        cleanup = '' if name == 'close' else '; File.close(f)'
+        return f'local f = File.open("notes.txt", "{mode}")\nif f then {call}{cleanup} end'
     if name == 'getScript':
         return 'local health = self:getScript("Health")\nif health then debug.log(health.health) end'
     if name == 'getTextureQuality':
@@ -359,7 +381,7 @@ def render_reference():
              'named input buttons in Project > Input Settings and create/register the `Main` level',
              'before level examples. Find/get functions can return nil; check before dereferencing.', '',
              'See [LegacyScript guide](scripting.md), [input/audio details](audio-input.md),',
-             '[prefab workflow](prefabs.md), [level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).', '',
+             '[game services](game-services.md), [prefab workflow](prefabs.md), [level storage](projects.md#levels), and [skybox transitions](skybox.md#smooth-scripted-crossfades).', '',
              '## Named script components', '',
              'Use `object:getScript("Health")` or `object:getComponent("Health")` to resolve an enabled',
              'attachment by its unique case-insensitive filename stem. Proxies expose global scalar',

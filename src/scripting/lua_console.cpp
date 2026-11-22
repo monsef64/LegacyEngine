@@ -1,4 +1,5 @@
 #include "scripting/lua_console.hpp"
+#include "scripting/game_services.hpp"
 #include "scripting/legacy_script.hpp"
 #include "scripting/lua_scene.hpp"
 
@@ -106,6 +107,7 @@ void LuaConsole::reset() {
     installInput();
     installLevels();
     installEvents();
+    GameServices::install(state_);
     lua_newtable(state_);
     const char* names[]{"log", "error", "warning"};
     const Kind kinds[]{Kind::Output, Kind::Error, Kind::Warning};
