@@ -201,23 +201,20 @@ Linux compilation does not validate native desktop behavior or driving feel;
 these interactive checks remain pending.
 
 
-### Hard upright mode (prevents flipping)
+### Suspension and anti-roll support
 
-`Vehicle.keepUpright` is a boolean, default **true**, shown as **Keep upright
-(prevent flipping)**. It replaces the retired `stabilityAssist` steering limiter.
-The chassis has only world-Y yaw rotation plus free translation in the solver;
-pitch and roll are locked, with a post-step upright correction for numerical drift.
-Steering retains its full configured angle. This also prevents impact/airborne
-flipping and uprights an initially tilted chassis when physics takes over.
+The hard **Keep upright** mode has been removed. Chassis pitch and roll are no
+longer locked or forcibly reset after a physics step. Old saved `keepUpright` and
+`stabilityAssist` settings are ignored when loading and omitted on the next save.
 
-This is intentionally arcade behavior: the chassis cannot bank or pitch to match
-slopes. Set `vehicle.keepUpright = false` for unrestricted suspension/body rotation,
-stunts or realistic banking. Changing the mode rebuilds the chassis constraints.
-Old serialized `stabilityAssist` values are ignored; Fix Project removes them.
-The existing sample's optional script-side steering smoothing/reduction remains
-independent of this solver constraint.
+Four wheel spring/damper contacts support the chassis. `antiRollStrength` (default
+12000 N/m, range 0..200000) transfers suspension load between grounded wheels on
+each axle. The transfer is bounded so neither contact pulls the chassis toward
+the road, and dynamic ground receives opposite impulses. Set it to zero to disable
+axle coupling. It does not apply world-up torque in the air, so slopes, jumps,
+collisions, banking and flips retain full rigid-body rotation.
 
-Manual checks: drive hard turns into a curb, collide sideways with another body,
-drop the vehicle from a jump and start it tilted. With upright mode on, roll/pitch
-must remain zero while steering/yaw/translation work. Toggle off and verify free
-rotation, then on to recover. Test save/reopen and scripting the checkbox.
+Tune springStrength, suspensionDamping, wheel spacing, suspension travel and body
+mass together. Anti-roll is support, not a guarantee against rollover. Manual
+checks: rest on a slope, cross uneven ground, corner at speed, hit a curb, jump,
+and land on dynamic platforms. Verify Undo, save/reopen and Play/Stop rollback.

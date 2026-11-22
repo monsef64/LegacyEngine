@@ -205,7 +205,7 @@ class Renderer {
     CameraFx::Renderer cameraEffects_;
     bool composingEffects_ = false;
     EditorLines editorLines_;
-    int litTransparent_ = -1;
+    int litTransparent_ = -1, litAlpha_ = -1;
     int litTexture_ = -1, litNormalTexture_ = -1, litHasTexture_ = -1, litBumped_ = -1,
         litStrength_ = -1, litTiling_ = -1;
     void drawWire(const MeshData& wire,

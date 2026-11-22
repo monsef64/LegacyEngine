@@ -45,6 +45,10 @@ std::string importModel(AssetManager& assets,
     }
     Assimp::Importer importer;
     importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_ANIMATIONS, true);
+    // Import render/skeleton data, not game-event and hitbox helper hierarchies.
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_ANIMATION_EVENTS, false);
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_HITBOXES, false);
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_ATTACHMENTS, false);
     importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_TRANSFORM_COORD_SYSTEM, true);
     importer.SetPropertyBool(AI_CONFIG_PP_PTV_KEEP_HIERARCHY, true);
     const auto* scene = importer.ReadFile(
@@ -52,9 +56,14 @@ std::string importModel(AssetManager& assets,
         aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_ValidateDataStructure |
             aiProcess_SortByPType | aiProcess_PopulateArmatureData);
     if (!scene || !scene->HasMeshes()) {
-        throw std::runtime_error(std::string("Assimp import failed: ") + importer.GetErrorString());
+        throw std::runtime_error(
+            std::string("Assimp import failed for ") + source.filename().string() + ": " +
+            importer.GetErrorString() +
+            (AssetManager::extension(source) == ".mdl"
+                 ? " Import the main GoldSrc IDST v10 model and keep its T.mdl texture and numbered sequence-group companions beside it."
+                 : ""));
     }
-    if (scene->mNumAnimations > 256) {
+    if (scene->mNumAnimations > (AssetManager::extension(source) == ".mdl" ? 2048u : 256u)) {
         throw std::runtime_error("Too many model animations");
     }
     auto matrix = [](const aiMatrix4x4& m) {
@@ -100,6 +109,27 @@ std::string importModel(AssetManager& assets,
         const auto* a = scene->mAnimations[i];
         double rate = a->mTicksPerSecond > 0 ? a->mTicksPerSecond : 25;
         double duration = a->mDuration / rate;
+        if (AssetManager::extension(source) == ".mdl") {
+            // Assimp 5.4's HL1 loader reports fps * frameCount as duration even
+            // though key times are frame indices. Derive time from those keys,
+            // retaining single-frame/zero-fps pose sequences as a nonzero clip.
+            double lastTick = 0;
+            for (unsigned c = 0; c < a->mNumChannels; ++c) {
+                const auto* ch = a->mChannels[c];
+                if (ch->mNumPositionKeys) {
+                    lastTick =
+                        std::max(lastTick, ch->mPositionKeys[ch->mNumPositionKeys - 1].mTime);
+                }
+                if (ch->mNumRotationKeys) {
+                    lastTick =
+                        std::max(lastTick, ch->mRotationKeys[ch->mNumRotationKeys - 1].mTime);
+                }
+                if (ch->mNumScalingKeys) {
+                    lastTick = std::max(lastTick, ch->mScalingKeys[ch->mNumScalingKeys - 1].mTime);
+                }
+            }
+            duration = std::max(1.0, lastTick) / rate;
+        }
         if (!std::isfinite(duration) || duration <= 0 || duration > 86400) {
             throw std::runtime_error("Invalid model animation duration");
         }

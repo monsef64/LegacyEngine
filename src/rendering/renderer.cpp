@@ -156,6 +156,7 @@ bool Renderer::init() {
     environmentType_ = glGetUniformLocation(litProgram_, "uEnvironmentType");
     environmentColor_ = glGetUniformLocation(litProgram_, "uEnvironmentColor");
     litTransparent_ = glGetUniformLocation(litProgram_, "uTransparent");
+    litAlpha_ = glGetUniformLocation(litProgram_, "uMaterialAlpha");
     litTexture_ = glGetUniformLocation(litProgram_, "uMaterialTexture");
     litNormalTexture_ = glGetUniformLocation(litProgram_, "uNormalTexture");
     litHasTexture_ = glGetUniformLocation(litProgram_, "uHasMaterialTexture");
@@ -858,6 +859,7 @@ void Renderer::draw(World& world,
             }
             glUniform1i(litReflective_, material.shader == 3);
             glUniform1i(litTransparent_, material.shader == 2);
+            glUniform1f(litAlpha_, material.alpha);
             glUniform1i(litTexture_, 2);
             glUniform1i(litNormalTexture_, 3);
             glUniform1i(litHasTexture_, texture != 0);

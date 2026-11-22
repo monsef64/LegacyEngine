@@ -10,7 +10,7 @@
 namespace Terrains {
 class Editor {
     Entity selected_{}, stroke_{};
-    bool visible_ = true, enabled_ = false;
+    bool visible_ = false, enabled_ = false;
     int tool_ = 0, layer_ = 0, resolution_ = 1, brushShape_ = 0;
     float radius_ = 5, strength_ = 5, falloff_ = .5f, flatten_ = 0, size_ = 128, importScale_ = 50,
           importOffset_ = 0;
@@ -316,7 +316,6 @@ class Editor {
         if (selected != selected_) {
             finish(world, selected, history);
             selected_ = selected;
-            visible_ = true;
             enabled_ = false;
         }
         if (openTools) {

@@ -18,6 +18,7 @@ inline Json materialJson(const MaterialProperties& p) {
              : p.shader == 1 ? "Diffuse Bumped"
                              : "Diffuse"},
             {"color", {p.color.x, p.color.y, p.color.z}},
+            {"alpha", p.alpha},
             {"texture", p.texture},
             {"normalMap", p.normalMap},
             {"normalStrength", p.normalStrength},
@@ -52,6 +53,7 @@ inline MaterialProperties parseMaterial(const Json& json) {
     p.normalMap = json.at("normalMap").get<std::string>();
     p.normalStrength = json.at("normalStrength").get<float>();
     p.specular = json.at("specular").get<float>();
+    p.alpha = json.value("alpha", 1.f);
     if (!validMaterial(p)) {
         throw std::runtime_error("Invalid material properties");
     }

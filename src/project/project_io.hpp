@@ -152,11 +152,11 @@ inline std::string encodeLegacy(World& world,
             writeVec(out, m->color);
             out << m->checkerboard << ' ' << m->specular << ' ';
             require(m->material.empty() || materialAsset(m->material));
-            require(m->materialOverrides <= 127 && validMaterial(m->materialValues));
+            require(m->materialOverrides <= 255 && validMaterial(m->materialValues));
             require(m->lightmapGrid >= 0 && m->lightmapGrid <= 2048 &&
-                    (m->lightmap.empty() ||
-                     (materialPathValid(m->lightmap) &&
-                      std::filesystem::path(m->lightmap).extension() == ".tga")));
+                    (m->lightmap.empty() || (materialPathValid(m->lightmap) &&
+                                             (AssetManager::extension(m->lightmap) == ".tga" ||
+                                              AssetManager::extension(m->lightmap) == ".png"))));
             out << std::quoted(m->material) << ' ' << m->materialOverrides << ' '
                 << std::quoted(materialJson(m->materialValues).dump()) << ' '
                 << std::quoted(m->model) << ' ' << std::quoted(m->lightmap) << ' '
@@ -490,7 +490,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             if (version >= 11) {
                 std::string values;
                 in >> std::quoted(m.material) >> m.materialOverrides >> std::quoted(values);
-                require(values.size() <= 64 * 1024 && m.materialOverrides <= 127 &&
+                require(values.size() <= 64 * 1024 && m.materialOverrides <= 255 &&
                         (m.material.empty() || materialAsset(m.material)));
                 m.materialValues = parseMaterial(parseJson(values));
             }
@@ -504,9 +504,9 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             if (version >= 21) {
                 in >> std::quoted(m.lightmap) >> m.lightmapGrid;
                 require(m.lightmapGrid >= 0 && m.lightmapGrid <= 2048 &&
-                        (m.lightmap.empty() ||
-                         (materialPathValid(m.lightmap) &&
-                          std::filesystem::path(m.lightmap).extension() == ".tga")));
+                        (m.lightmap.empty() || (materialPathValid(m.lightmap) &&
+                                                (AssetManager::extension(m.lightmap) == ".tga" ||
+                                                 AssetManager::extension(m.lightmap) == ".png"))));
             }
             result.world.add(e, m);
         }

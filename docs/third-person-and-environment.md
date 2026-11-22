@@ -106,11 +106,9 @@ Multiple skyboxes use the first enabled active one, as the background already do
 
 ## Vehicle steering stability
 
-**Vehicle > Keep upright (prevent flipping)** (`vehicle.keepUpright` in Lua)
-defaults to true. The solver locks chassis pitch/roll to world up while leaving
-yaw and translation free, preventing flips even during collisions or airborne
-motion. Disable it for terrain banking, realistic pitching and stunts. The retired
-`stabilityAssist` steering reduction is no longer used. See [Vehicles](vehicles.md#hard-upright-mode-prevents-flipping).
+Vehicle suspension now supports free pitch/roll and uses `antiRollStrength` to
+couple grounded wheels on each axle. There is no hard upright rotation lock or
+airborne world-up correction. See [Vehicles](vehicles.md#suspension-and-anti-roll-support).
 
 ## Terrain and Scene selection
 

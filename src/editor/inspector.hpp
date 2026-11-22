@@ -717,6 +717,9 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
             &edited.shader,
             "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0");
         changed |= EditorValues::ColorEdit3("Color", &edited.color.x);
+        if (edited.shader == 2) {
+            changed |= EditorValues::SliderFloat("Alpha", &edited.alpha, 0, 1);
+        }
         auto texture = [&](const char* label, std::string& value) {
             bool result = assetPicker(label, value, &assets, [](const std::string& file) {
                 return materialTexturePath(file);
@@ -1284,6 +1287,10 @@ inline void drawInspector(World& world,
                                         "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0");
                                     changed |=
                                         EditorValues::ColorEdit3("Material color", &edited.color.x);
+                                    if (edited.shader == 2) {
+                                        changed |=
+                                            EditorValues::SliderFloat("Alpha", &edited.alpha, 0, 1);
+                                    }
                                     auto textureField = [&](const char* label, std::string& path) {
                                         ImGui::PushID(label);
                                         bool editedTexture = false;
@@ -1329,7 +1336,7 @@ inline void drawInspector(World& world,
                                         try {
                                             if (runtime) {
                                                 r->materialValues = edited;
-                                                r->materialOverrides = 127;
+                                                r->materialOverrides = 255;
                                             } else {
                                                 saveMaterial(*assets, r->material, edited);
                                             }
@@ -1526,10 +1533,9 @@ inline void drawInspector(World& world,
                         auto edited = *v;
                         EditorValues::bindDefaults(edited);
                         EditorValues::Checkbox("Enabled", &edited.enabled);
-                        EditorValues::Checkbox("Keep upright (prevent flipping)",
-                                               &edited.keepUpright);
+
                         ImGui::TextWrapped(
-                            "Upright mode locks chassis pitch/roll to world up, even in the air. Disable for unrestricted slope banking and stunts.");
+                            "Four-wheel suspension supports the chassis. Anti-roll strength couples grounded wheels on each axle while allowing slope banking, jumps and flips.");
 #define VEHICLE_UI(name, value, lo, hi)                                                            \
     EditorValues::DragFloat(                                                                       \
         #name, &edited.name, .05f, lo, hi, "%.2f", ImGuiSliderFlags_AlwaysClamp);

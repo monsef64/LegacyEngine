@@ -116,7 +116,7 @@ METHOD_ARGS = {
 'setMaterial':'"Materials/example.mat"', 'setMaterialColor':'1, 0.6, 0.3',
 'setMaterialTexture':'"Textures/albedo.png"', 'setMaterialNormalMap':'"Textures/normal.png"',
 'setMaterialShader':'"Diffuse Bumped"', 'setMaterialNormalStrength':'1',
-'setMaterialTiling':'2, 2', 'setMaterialSpecular':'0.5', 'setPitch':'1.2',
+'setMaterialTiling':'2, 2', 'setMaterialAlpha':'0.5', 'setMaterialSpecular':'0.5', 'setPitch':'1.2',
 'fadeIn':'1', 'fadeOut':'1', 'setVolume':'0.75', 'setLooping':'true', 'setPan':'0',
 'setDistance':'25', 'spatialBlend':'1', 'setSpatialBlend':'1',
 'playOneShot':'AudioClip("Audio/example.wav")', 'setColor':'1, 0.8, 0.6',
@@ -332,8 +332,8 @@ available through component lookup/add/remove/find/export APIs; `target` is a
 GameObject reference, `offset` is assigned as a complete vector and
 `resolvedDistance` is read-only. Camera projection/activation remains on Camera.
 `Skybox.affectEnvironment` enables sampled sky-colored ambient light and
-`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.keepUpright`
-locks chassis pitch/roll to prevent flipping (boolean; default true).
+`Skybox.environmentIntensity` sets 0..5 intensity. `Vehicle.antiRollStrength`
+couples grounded axle suspension loads without locking chassis pitch/roll.
 
 
 See [In-game UI](game-ui.md) for RML/RCSS setup and the `UI` component example.
