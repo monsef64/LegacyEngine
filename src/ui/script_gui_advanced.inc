@@ -108,7 +108,7 @@ void pop(lua_State* L, int kind) {
     if (scopes.empty() || scopes.back() != kind) {
         luaL_error(L, "Unbalanced GUI scope end");
     }
-    close(kind);
+    closeGuiScope(kind);
     scopes.pop_back();
 }
 ImU32 rgba(lua_State* L, int first) {

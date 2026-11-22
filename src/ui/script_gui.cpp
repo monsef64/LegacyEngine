@@ -137,7 +137,8 @@ float number(lua_State* L, int arg, float fallback = 0) {
     }
     return float(value);
 }
-void close(int kind) {
+// Avoid colliding with the CRT close(int) declaration exposed by MinGW headers.
+void closeGuiScope(int kind) {
     switch (kind) {
     case 1:
         ImGui::End();
@@ -330,7 +331,7 @@ void ScriptGUI::beginScope(std::uintptr_t owner, int listener) {
 }
 void ScriptGUI::endScope() {
     while (!scopes.empty()) {
-        close(scopes.back());
+        closeGuiScope(scopes.back());
         scopes.pop_back();
     }
     drawing = false;
@@ -373,7 +374,7 @@ int ScriptGUI::api(lua_State* L) {
         if (scopes.empty() || scopes.back() != expected) {
             return false;
         }
-        close(expected);
+        closeGuiScope(expected);
         scopes.pop_back();
         return true;
     };
