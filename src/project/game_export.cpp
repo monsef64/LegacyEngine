@@ -7,10 +7,15 @@
 #include <set>
 #include <sstream>
 #ifdef _WIN32
+#ifndef NOMINMAX
 #define NOMINMAX
-#include <bcrypt.h>
+#endif
+// BCrypt requires Windows types first; preserve this dependency order.
+// clang-format off
 #include <windows.h>
+#include <bcrypt.h>
 #include <winver.h>
+// clang-format on
 #else
 #include <sys/stat.h>
 #endif
