@@ -77,19 +77,20 @@ jobs:
           -DBUILD_TESTING=OFF
           -DLEGACY_WINDOWS7=${{ matrix.win7 }}
       - name: Build
-        run: cmake --build build --target LegacyEngine --parallel 4
+        run: cmake --build build --target LegacyEngine LegacyPlayer --parallel 4
       - name: Package executable, runtime DLLs and data
         run: |
           set -euo pipefail
           mkdir -p package/LegacyEngine
-          cp build/LegacyEngine.exe package/LegacyEngine/
+          cp build/LegacyEngine.exe build/LegacyPlayer.exe package/LegacyEngine/
           # Strip only the distribution copy; retain the build binary for debugging.
-          strip --strip-unneeded package/LegacyEngine/LegacyEngine.exe
+          strip --strip-unneeded package/LegacyEngine/LegacyEngine.exe package/LegacyEngine/LegacyPlayer.exe
+          cmake -DPLAYER=package/LegacyEngine/LegacyPlayer.exe -P cmake/player_template.cmake
           cp -R data package/LegacyEngine/data
           cp LICENSE package/LegacyEngine/
           # ldd lists transitive dependencies too. Bundle MinGW runtime DLLs,
           # but leave Windows system DLLs to the operating system.
-          ldd build/LegacyEngine.exe > build/runtime-dependencies.txt
+          { ldd build/LegacyEngine.exe; ldd build/LegacyPlayer.exe; } > build/runtime-dependencies.txt
           awk -v root="/${{ matrix.runtime }}/bin/" '$2 == "=>" && index($3, root) == 1 {print $3}' build/runtime-dependencies.txt |
             while IFS= read -r dll; do
               cp "$dll" package/LegacyEngine/

@@ -7,6 +7,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <vector>
 
 class AssetManager {
@@ -22,6 +23,41 @@ class AssetManager {
     }
     static bool script(const std::filesystem::path& p) {
         return extension(p) == ".ls" || extension(p) == ".lua";
+    }
+    static std::string scriptName(const std::filesystem::path& path) {
+        auto name = path.stem().string();
+        for (auto& c : name) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        return name;
+    }
+    // Project-wide component identifiers, case-insensitive across .lua/.ls.
+    void validateScriptName(const std::string& path, const std::string& ignored = {}) const {
+        if (!script(path)) {
+            return;
+        }
+        const auto name = scriptName(path);
+        if (name.empty()) {
+            throw std::runtime_error("Script component name cannot be empty");
+        }
+        const auto destination = resolve(path);
+        const auto skip = ignored.empty() ? std::filesystem::path{} : resolve(ignored);
+        if (!std::filesystem::exists(root)) {
+            return;
+        }
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(root)) {
+            if (!entry.is_regular_file() || entry.is_symlink() || !script(entry.path())) {
+                continue;
+            }
+            const auto file = std::filesystem::weakly_canonical(entry.path());
+            if (file == destination || (!skip.empty() && file == skip)) {
+                continue;
+            }
+            if (scriptName(file) == name) {
+                throw std::runtime_error("Script component name already exists in project: " +
+                                         name);
+            }
+        }
     }
     std::filesystem::path resolve(const std::string& relative) const {
         if (root.empty()) {
@@ -124,6 +160,12 @@ class AssetManager {
         }
         std::uintmax_t bytes = 0;
         std::size_t count = 0;
+        std::set<std::string> scriptNames;
+        for (const auto& file : files()) {
+            if (script(file)) {
+                scriptNames.insert(scriptName(file));
+            }
+        }
         auto validate = [&](const auto& file) {
             if (extension(file) == ".blend") {
                 throw std::runtime_error(
@@ -134,6 +176,10 @@ class AssetManager {
                     "Directories containing symbolic links cannot be imported");
             }
             if (std::filesystem::is_regular_file(file)) {
+                if (script(file) && !scriptNames.insert(scriptName(file)).second) {
+                    throw std::runtime_error("Script component name already exists: " +
+                                             scriptName(file));
+                }
                 bytes += std::filesystem::file_size(file);
                 if (++count > 10000 || bytes > 1024ull * 1024 * 1024 ||
                     std::filesystem::file_size(file) > 256 * 1024 * 1024) {
@@ -181,6 +227,7 @@ class AssetManager {
         if (!script(path) || source.size() > 64 * 1024) {
             throw std::runtime_error("Invalid LegacyScript asset");
         }
+        validateScriptName(path);
         auto destination = resolve(path);
         std::filesystem::create_directories(destination.parent_path());
         auto temp = destination;

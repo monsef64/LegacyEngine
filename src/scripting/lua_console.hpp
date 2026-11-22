@@ -32,7 +32,10 @@ class LuaConsole {
     ~LuaConsole();
     LuaConsole(const LuaConsole&) = delete;
     LuaConsole& operator=(const LuaConsole&) = delete;
-    bool execute(std::string_view source, std::string_view sourceName = "editor");
+    bool execute(std::string_view source,
+                 std::string_view sourceName = "editor",
+                 bool startScene = true);
+    void startRuntime();
     void reset();
     void setAssetRoot(const std::filesystem::path& root);
     void bindWorld(World& world,
@@ -43,6 +46,8 @@ class LuaConsole {
                    MeshHandle plane = {});
     bool bindObject(Entity entity);
     bool bindExports(const std::vector<ScriptField>& fields);
+    void nameScript(Entity entity, const std::string& path);
+    static int pushNamedScript(lua_State* caller, World& world, Entity entity, const char* name);
     void update(float deltaTime);
     void
     objectEvent(Entity entity, const char* name, Entity other = {}, bool colliderArgument = false);
@@ -67,6 +72,22 @@ class LuaConsole {
     }
 
   private:
+    struct NamedProxy {
+        World* world;
+        Entity entity;
+        char name[256];
+    };
+    static std::vector<LuaConsole*> namedScripts_;
+    inline static unsigned namedCalls_ = 0;
+    Entity scriptEntity_;
+    std::string scriptPath_, scriptName_;
+    int budgetDepth_ = 0;
+    static LuaConsole* resolveNamed(const NamedProxy& proxy);
+    static int namedIndex(lua_State* L);
+    static int namedWrite(lua_State* L);
+    static int namedInvoke(lua_State* L);
+    static int namedTransfer(
+        lua_State* L, int operation, const NamedProxy& proxy, const char* member, int first);
     lua_State* state_ = nullptr;
     World* world_ = nullptr;
     std::filesystem::path assetRoot_;

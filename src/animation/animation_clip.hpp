@@ -14,11 +14,26 @@ struct AnimationTrack {
     std::string target, property = "Transform.position";
     std::vector<AnimationKey> keys;
 };
+struct AnimationScriptEvent {
+    float time = 0;
+    std::string target, script, function;
+};
+inline bool animationFunctionName(const std::string& name) {
+    if (name.empty() || name.size() > 128 || name[0] == '_' ||
+        name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") !=
+            std::string::npos ||
+        std::isdigit(static_cast<unsigned char>(name[0]))) {
+        return false;
+    }
+    return name != "onGUI" && name != "onStart" && name != "onUpdate" && name != "onFixedUpdate" &&
+           name != "onDestroy";
+}
 struct AnimationClip {
     std::string model;
     int modelAnimation = -1;
     float duration = 1;
     std::vector<AnimationTrack> tracks;
+    std::vector<AnimationScriptEvent> events;
 };
 inline bool animationAsset(const std::string& path) {
     return materialPathValid(path) && AssetManager::extension(path) == ".leanim";
@@ -108,6 +123,31 @@ inline AnimationClip decodeAnimationClip(const Json& doc) {
         }
         clip.tracks.push_back(std::move(track));
     }
+    if (doc.contains("events")) {
+        const auto& events = doc.at("events");
+        if (!events.is_array() || events.size() > 256) {
+            throw std::runtime_error("Animation event limit exceeded");
+        }
+        for (const auto& event : events) {
+            AnimationScriptEvent call;
+            call.time = event.at("time");
+            call.target = event.value("target", std::string{});
+            call.script = event.at("script");
+            call.function = event.at("function");
+            if (!std::isfinite(call.time) || call.time < 0 || call.time > clip.duration ||
+                call.target.size() > 1024 ||
+                (!call.target.empty() && !materialPathValid(call.target)) || call.script.empty() ||
+                call.script.size() > 128 ||
+                call.script.find_first_of("/\\#") != std::string::npos ||
+                !animationFunctionName(call.function)) {
+                throw std::runtime_error("Invalid animation script event");
+            }
+            clip.events.push_back(std::move(call));
+        }
+        std::stable_sort(clip.events.begin(), clip.events.end(), [](const auto& a, const auto& b) {
+            return a.time < b.time;
+        });
+    }
     return clip;
 }
 inline Json encodeAnimationClip(const AnimationClip& clip) {
@@ -132,6 +172,13 @@ inline Json encodeAnimationClip(const AnimationClip& clip) {
                 {"version", 1},
                 {"duration", clip.duration},
                 {"tracks", tracks}};
+    result["events"] = Json::array();
+    for (const auto& event : clip.events) {
+        result["events"].push_back({{"time", event.time},
+                                    {"target", event.target},
+                                    {"script", event.script},
+                                    {"function", event.function}});
+    }
     if (!clip.model.empty()) {
         result["model"] = clip.model;
         result["modelAnimation"] = clip.modelAnimation;

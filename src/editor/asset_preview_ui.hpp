@@ -13,6 +13,8 @@ struct AssetPreviewData {
     std::vector<float> waveform;
     float seconds = 0;
 };
+// Import completion queues work only; GPU generation runs on focused editor frames.
+inline std::function<void(const AssetManager&)> assetPreviewImported;
 // Thumbnail requests return only an image descriptor, never transient detail-slot data.
 inline std::function<AssetPreviewData(const AssetManager&, const std::string&)> assetThumbnail;
 // The running editor installs a renderer; header-only UI remains usable without GL.

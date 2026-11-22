@@ -184,7 +184,7 @@ void LuaConsole::instructionHook(lua_State* state, lua_Debug*) {
     }
 }
 
-bool LuaConsole::execute(std::string_view source, std::string_view sourceName) {
+bool LuaConsole::execute(std::string_view source, std::string_view sourceName, bool startScene) {
     if (!state_) {
         append(Kind::Error, "Lua runtime is unavailable");
         return false;
@@ -203,7 +203,7 @@ bool LuaConsole::execute(std::string_view source, std::string_view sourceName) {
     if (status == LUA_OK) {
         status = lua_pcall(state_, 0, 0, 1);
     }
-    if (status == LUA_OK && scene_) {
+    if (status == LUA_OK && scene_ && startScene) {
         scene_->start();
     }
     endBudget();
@@ -216,11 +216,24 @@ bool LuaConsole::execute(std::string_view source, std::string_view sourceName) {
     return status == LUA_OK && errorCount_ == errorsBefore;
 }
 
+void LuaConsole::startRuntime() {
+    if (scene_) {
+        beginBudget();
+        scene_->start();
+        endBudget();
+    }
+}
 void LuaConsole::beginBudget() {
+    if (budgetDepth_++ > 0) {
+        return;
+    }
     remainingInstructions_ = 1000000;
     lua_sethook(state_, instructionHook, LUA_MASKCOUNT, 1000);
 }
 void LuaConsole::endBudget() {
+    if (budgetDepth_ <= 0 || --budgetDepth_ > 0) {
+        return;
+    }
     lua_sethook(state_, nullptr, 0, 0);
 }
 void LuaConsole::installScene() {
@@ -278,6 +291,10 @@ void LuaConsole::fixedUpdate(float dt) {
     }
 }
 void LuaConsole::shutdown() {
+    namedScripts_.erase(std::remove(namedScripts_.begin(), namedScripts_.end(), this),
+                        namedScripts_.end());
+    scriptName_.clear();
+    scriptPath_.clear();
     removeEventListeners();
     if (scene_) {
         beginBudget();
@@ -341,4 +358,323 @@ void LuaConsole::objectEvent(Entity entity, const char* name, Entity other, bool
     beginBudget();
     scene_->objectEvent(entity, name, other, colliderArgument);
     endBudget();
+}
+
+// Named script components retain isolated Lua states. Only bounded scalar values
+// cross the boundary; engine handles, closures, threads and tables never escape.
+#include "assets/assets.hpp"
+#include <cmath>
+#include <cstring>
+std::vector<LuaConsole*> LuaConsole::namedScripts_;
+namespace {
+struct ScriptScalar {
+    int type = LUA_TNIL;
+    lua_Number number = 0;
+    lua_Integer integer = 0;
+    bool integral = false;
+    bool boolean = false;
+    std::size_t size = 0;
+    char text[4097]{};
+};
+bool captureScalar(lua_State* L, int index, ScriptScalar& value) {
+    value.type = lua_type(L, index);
+    switch (value.type) {
+    case LUA_TNIL:
+        return true;
+    case LUA_TBOOLEAN:
+        value.boolean = lua_toboolean(L, index);
+        return true;
+    case LUA_TNUMBER:
+        value.integral = lua_isinteger(L, index);
+        value.integer = value.integral ? lua_tointeger(L, index) : 0;
+        value.number = lua_tonumber(L, index);
+        return std::isfinite(value.number);
+    case LUA_TSTRING: {
+        const char* text = lua_tolstring(L, index, &value.size);
+        if (value.size > 4096) {
+            return false;
+        }
+        std::memcpy(value.text, text, value.size);
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+void pushScalar(lua_State* L, const ScriptScalar& value) {
+    switch (value.type) {
+    case LUA_TBOOLEAN:
+        lua_pushboolean(L, value.boolean);
+        break;
+    case LUA_TNUMBER:
+        if (value.integral) {
+            lua_pushinteger(L, value.integer);
+        } else {
+            lua_pushnumber(L, value.number);
+        }
+        break;
+    case LUA_TSTRING:
+        lua_pushlstring(L, value.text, value.size);
+        break;
+    default:
+        lua_pushnil(L);
+        break;
+    }
+}
+thread_local int namedCallDepth = 0;
+bool publicScriptMember(const char* name) {
+    if (!name || !*name || std::strlen(name) > 128 || name[0] == '_') {
+        return false;
+    }
+    // Lifecycle entry points cannot be spoofed through a function proxy.
+    const char* reserved[]{
+        "onStart",        "onUpdate",     "onFixedUpdate", "onDestroy", "onGUI",  "self",   "wait",
+        "task",           "print",        "error",         "assert",    "pcall",  "xpcall", "load",
+        "collectgarbage", "setmetatable", "getmetatable",  "rawset",    "rawget", "next",   "pairs",
+        "ipairs",         "type",         "tostring",      "tonumber",  "select", "require"};
+    for (const auto* key : reserved) {
+        if (std::strcmp(key, name) == 0) {
+            return false;
+        }
+    }
+    return true;
+}
+void rawScriptGlobal(lua_State* L, const char* name) {
+    lua_pushglobaltable(L);
+    lua_pushstring(L, name);
+    lua_rawget(L, -2);
+    lua_remove(L, -2);
+}
+} // namespace
+void LuaConsole::nameScript(Entity entity, const std::string& path) {
+    if (!world_ || !world_->alive(entity)) {
+        throw std::runtime_error("Invalid script owner");
+    }
+    scriptName_ = AssetManager::scriptName(path);
+    scriptPath_ = path;
+    scriptEntity_ = entity;
+    for (auto* script : namedScripts_) {
+        if (script != this && script->world_ == world_ && script->scriptEntity_ == entity &&
+            script->scriptName_ == scriptName_) {
+            throw std::runtime_error("Ambiguous script component: " + scriptName_);
+        }
+    }
+    namedScripts_.push_back(this);
+}
+LuaConsole* LuaConsole::resolveNamed(const NamedProxy& proxy) {
+    if (!proxy.world || !proxy.world->alive(proxy.entity) ||
+        !isActive(*proxy.world, proxy.entity)) {
+        return nullptr;
+    }
+    const auto* attached = proxy.world->tryGet<LuaScript>(proxy.entity);
+    if (!attached) {
+        return nullptr;
+    }
+    LuaConsole* found = nullptr;
+    for (auto* script : namedScripts_) {
+        if (script->world_ != proxy.world || script->scriptEntity_ != proxy.entity ||
+            script->scriptName_ != proxy.name) {
+            continue;
+        }
+        bool enabled = false;
+        for (const auto& item : scriptAttachments(*attached)) {
+            enabled |= item.enabled && item.path == script->scriptPath_;
+        }
+        if (!enabled) {
+            continue;
+        }
+        if (found) {
+            return nullptr;
+        }
+        found = script;
+    }
+    return found;
+}
+int LuaConsole::pushNamedScript(lua_State* L, World& world, Entity entity, const char* name) {
+    NamedProxy proxy{};
+    proxy.world = &world;
+    proxy.entity = entity;
+    const auto size = std::strlen(name);
+    if (!size || size >= sizeof(proxy.name) || std::strpbrk(name, "/\\#")) {
+        return luaL_error(L, "Expected a script component name, not a path");
+    }
+    for (std::size_t i = 0; i < size; ++i) {
+        proxy.name[i] = char(std::tolower(static_cast<unsigned char>(name[i])));
+    }
+    if (size > 4 && std::strcmp(proxy.name + size - 4, ".lua") == 0) {
+        proxy.name[size - 4] = 0;
+    } else if (size > 3 && std::strcmp(proxy.name + size - 3, ".ls") == 0) {
+        proxy.name[size - 3] = 0;
+    }
+    if (!resolveNamed(proxy)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    if (luaL_newmetatable(L, "NamedScriptComponent")) {
+        lua_pushcfunction(L, namedIndex);
+        lua_setfield(L, -2, "__index");
+        lua_pushcfunction(L, namedWrite);
+        lua_setfield(L, -2, "__newindex");
+        lua_pushliteral(L, "ScriptComponent");
+        lua_setfield(L, -2, "__metatable");
+    }
+    lua_pop(L, 1);
+    auto* result = static_cast<NamedProxy*>(lua_newuserdatauv(L, sizeof(NamedProxy), 0));
+    *result = proxy;
+    luaL_setmetatable(L, "NamedScriptComponent");
+    return 1;
+}
+int LuaConsole::namedIndex(lua_State* L) {
+    auto* proxy = static_cast<NamedProxy*>(luaL_checkudata(L, 1, "NamedScriptComponent"));
+    return namedTransfer(L, 0, *proxy, luaL_checkstring(L, 2), 0);
+}
+int LuaConsole::namedWrite(lua_State* L) {
+    auto* proxy = static_cast<NamedProxy*>(luaL_checkudata(L, 1, "NamedScriptComponent"));
+    return namedTransfer(L, 1, *proxy, luaL_checkstring(L, 2), 3);
+}
+int LuaConsole::namedInvoke(lua_State* L) {
+    auto* proxy =
+        static_cast<NamedProxy*>(luaL_checkudata(L, lua_upvalueindex(1), "NamedScriptComponent"));
+    const int first = lua_gettop(L) && lua_rawequal(L, 1, lua_upvalueindex(1)) ? 2 : 1;
+    return namedTransfer(L, 2, *proxy, lua_tostring(L, lua_upvalueindex(2)), first);
+}
+int LuaConsole::namedTransfer(
+    lua_State* L, int operation, const NamedProxy& proxy, const char* member, int first) {
+    if (!publicScriptMember(member)) {
+        return luaL_error(L, "Reserved script member");
+    }
+    if (operation == 2 && ++namedCalls_ > 256) {
+        return luaL_error(L, "Script call frame budget exceeded");
+    }
+    if (namedCallDepth >= 4) {
+        return luaL_error(L, "Script call depth limit exceeded");
+    }
+    auto* target = resolveNamed(proxy);
+    if (!target || !target->state_) {
+        return luaL_error(L, "Script component no longer exists or is disabled");
+    }
+    const int arguments = operation == 1 ? 1 : operation == 2 ? lua_gettop(L) - first + 1 : 0;
+    if (arguments > 8) {
+        return luaL_error(L, "Script calls support at most eight arguments");
+    }
+    struct Request {
+        const char* member;
+        int operation, count;
+        ScriptScalar arguments[8], results[8];
+        int resultCount = 0;
+        bool function = false;
+    } request{};
+    request.member = member;
+    request.operation = operation;
+    request.count = arguments;
+    for (int i = 0; i < arguments; ++i) {
+        if (!captureScalar(L, first + i, request.arguments[i])) {
+            return luaL_error(
+                L,
+                "Script access supports nil, boolean, finite number and strings up to 4096 bytes");
+        }
+    }
+    // Self-state access can use the same Lua stack directly; nested external
+    // calls into an executing state are rejected to prevent cyclic bridges.
+    const bool sameState = *static_cast<LuaConsole**>(lua_getextraspace(L)) == target;
+    if (sameState && operation == 2) {
+        rawScriptGlobal(L, member);
+        if (!lua_isfunction(L, -1)) {
+            return luaL_error(L, "Script function not found");
+        }
+        for (int i = 0; i < arguments; ++i) {
+            pushScalar(L, request.arguments[i]);
+        }
+        ++namedCallDepth;
+        const int status = lua_pcall(L, arguments, LUA_MULTRET, 0);
+        --namedCallDepth;
+        if (status != LUA_OK) {
+            return lua_error(L);
+        }
+        // Apply the same scalar/result limits even when calling our own state.
+        const int results = lua_gettop(L) - (first + arguments - 1);
+        if (results > 8) {
+            return luaL_error(L, "Script calls support at most eight results");
+        }
+        for (int i = 0; i < results; ++i) {
+            if (!captureScalar(L, first + arguments + i, request.results[i])) {
+                return luaL_error(L, "Unsupported script result/field type");
+            }
+        }
+        return results;
+    }
+    auto* T = sameState ? L : target->state_;
+    if (!sameState && target->budgetDepth_ > 0) {
+        return luaL_error(L, "Cyclic/reentrant script call rejected");
+    }
+    const int saved = lua_gettop(T);
+    // All operations that allocate in the target state run under its pcall.
+    lua_pushcfunction(
+        T, +[](lua_State* T) -> int {
+            auto& r = *static_cast<Request*>(lua_touserdata(T, 1));
+            if (r.operation == 1) {
+                rawScriptGlobal(T, r.member);
+                if (!lua_isnil(T, -1) && !lua_isboolean(T, -1) && !lua_isnumber(T, -1) &&
+                    !lua_isstring(T, -1)) {
+                    return luaL_error(T, "Only scalar script fields can be changed");
+                }
+                lua_pop(T, 1);
+                lua_pushglobaltable(T);
+                lua_pushstring(T, r.member);
+                pushScalar(T, r.arguments[0]);
+                lua_rawset(T, -3);
+                return 0;
+            }
+            rawScriptGlobal(T, r.member);
+            if (r.operation == 0 && lua_isfunction(T, -1)) {
+                r.function = true;
+                return 0;
+            }
+            if (r.operation == 2) {
+                if (!lua_isfunction(T, -1)) {
+                    return luaL_error(T, "Script function not found");
+                }
+                for (int i = 0; i < r.count; ++i) {
+                    pushScalar(T, r.arguments[i]);
+                }
+                lua_call(T, r.count, LUA_MULTRET);
+            }
+            r.resultCount = lua_gettop(T) - 1;
+            if (r.resultCount > 8) {
+                return luaL_error(T, "Script calls support at most eight results");
+            }
+            for (int i = 0; i < r.resultCount; ++i) {
+                if (!captureScalar(T, i + 2, r.results[i])) {
+                    return luaL_error(T, "Unsupported script result/field type");
+                }
+            }
+            return 0;
+        });
+    lua_pushlightuserdata(T, &request);
+    target->beginBudget();
+    ++namedCallDepth;
+    const int status = lua_pcall(T, 1, 0, 0);
+    --namedCallDepth;
+    target->endBudget();
+    char error[1024]{};
+    if (status != LUA_OK) {
+        std::snprintf(error,
+                      sizeof(error),
+                      "%s",
+                      lua_tostring(T, -1) ? lua_tostring(T, -1) : "Script access failed");
+    }
+    lua_settop(T, saved);
+    if (status != LUA_OK) {
+        return luaL_error(L, "%s", error);
+    }
+    if (request.function) {
+        lua_pushvalue(L, 1);
+        lua_pushstring(L, member);
+        lua_pushcclosure(L, namedInvoke, 2);
+        return 1;
+    }
+    for (int i = 0; i < request.resultCount; ++i) {
+        pushScalar(L, request.results[i]);
+    }
+    return request.resultCount;
 }

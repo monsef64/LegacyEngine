@@ -26,6 +26,20 @@ class ScriptComponents {
             }
         }
     }
+    bool callNamed(Entity entity, const std::string& script, const std::string& function) {
+        if (!world_ || !isActive(*world_, entity)) {
+            return false;
+        }
+        const auto name = AssetManager::scriptName(script);
+        for (auto& entry : entries_) {
+            if (entry.console && entry.entity == entity && valid(entry) &&
+                AssetManager::scriptName(entry.path) == name) {
+                entry.console->objectEvent(entity, function.c_str());
+                return true;
+            }
+        }
+        return false;
+    }
     void update(float dt) {
         sync();
         for (auto& entry : entries_) {
@@ -75,6 +89,7 @@ class ScriptComponents {
         Entity entity;
         std::string path, error;
         std::unique_ptr<LuaConsole> console;
+        bool started = false;
     };
     std::vector<Entry> entries_;
     World* world_ = nullptr;
@@ -140,6 +155,7 @@ class ScriptComponents {
                 continue;
             }
             try {
+                assets_->validateScriptName(entry.path);
                 auto source = assets_->readScript(entry.path);
                 entry.console = std::make_unique<LuaConsole>();
                 entry.console->setAssetRoot(assets_->root);
@@ -158,7 +174,10 @@ class ScriptComponents {
                 syncScriptExports(source, *fields);
                 if (entry.console->bindObject(entry.entity) &&
                     entry.console->bindExports(*fields)) {
-                    entry.console->execute(source, entry.path);
+                    entry.console->nameScript(entry.entity, entry.path);
+                    if (!entry.console->execute(source, entry.path, false)) {
+                        entry.console->shutdown();
+                    }
                 }
             } catch (const std::exception& error) {
                 entry.error = error.what();
@@ -168,6 +187,13 @@ class ScriptComponents {
                              entry.error.c_str());
             }
             entries_.push_back(std::move(entry));
+        }
+        // All new scripts have loaded globals before any onStart is invoked.
+        for (auto& entry : entries_) {
+            if (entry.console && !entry.started && valid(entry)) {
+                entry.started = true;
+                entry.console->startRuntime();
+            }
         }
     }
 };

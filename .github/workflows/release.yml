@@ -196,9 +196,10 @@ jobs:
           package=LegacyEngine-$ENGINE_VERSION-linux-x86_64
 
           mkdir -p "$package"
-          cp build/LegacyEngine "$package/"
+          cp build/LegacyEngine build/LegacyPlayer "$package/"
           # Keep symbols in build/ for diagnosis, not in the shipped executable.
-          strip --strip-unneeded "$package/LegacyEngine"
+          strip --strip-unneeded "$package/LegacyEngine" "$package/LegacyPlayer"
+          cmake -DPLAYER="$package/LegacyPlayer" -P cmake/player_template.cmake
           cp LICENSE "$package/"
           cp -r build/docs "$package/docs"
           test -s "$package/docs/scripting-reference.html"

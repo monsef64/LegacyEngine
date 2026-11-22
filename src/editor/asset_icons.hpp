@@ -43,14 +43,15 @@ inline void fileBadge(const std::string& path,
                       ImVec2 pos,
                       bool folder = false,
                       unsigned thumbnail = 0,
-                      float size = 32) {
+                      float size = 32,
+                      bool flip = false) {
     auto* draw = ImGui::GetWindowDrawList();
     if (thumbnail) {
         draw->AddImage(static_cast<ImTextureID>(thumbnail),
                        ImVec2(pos.x, pos.y),
                        ImVec2(pos.x + size, pos.y + size),
-                       modelAsset(path) ? ImVec2(0, 1) : ImVec2(0, 0),
-                       modelAsset(path) ? ImVec2(1, 0) : ImVec2(1, 1));
+                       (flip || modelAsset(path)) ? ImVec2(0, 1) : ImVec2(0, 0),
+                       (flip || modelAsset(path)) ? ImVec2(1, 0) : ImVec2(1, 1));
         return;
     }
     draw->AddRectFilled(pos, ImVec2(pos.x + size, pos.y + size), IM_COL32(35, 45, 60, 255), 4);

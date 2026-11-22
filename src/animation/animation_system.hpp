@@ -93,7 +93,8 @@ class AnimationSystem {
   public:
     struct Event {
         Entity owner;
-        const char* name;
+        std::string name;
+        std::string script;
     };
     std::vector<Event> events;
     void clear() {
@@ -251,8 +252,39 @@ class AnimationSystem {
                     animation.error = e.what();
                 }
             }
+            auto scriptEvents = [&](float from, float to, bool includeStart) {
+                for (const auto& event : state.clip.events) {
+                    if (events.size() >= 256) {
+                        break;
+                    }
+                    if ((event.time > from || (includeStart && event.time == from)) &&
+                        event.time <= to) {
+                        const auto target = animationTarget(world, owner, event.target);
+                        if (target != Entity{} && isActive(world, target)) {
+                            events.push_back({target, event.function, event.script});
+                        }
+                    }
+                }
+            };
+            if (state.loaded && began && state.phase == Phase::Playing) {
+                scriptEvents(0, 0, true);
+            }
             if (state.loaded && state.phase == Phase::Playing && !began) {
+                const float previousTime = animation.time;
                 animation.time += seconds;
+                if (animation.loop && animation.time >= state.clip.duration) {
+                    scriptEvents(previousTime, state.clip.duration, false);
+                    const int loops = std::min(
+                        256,
+                        int(std::min(256.f, std::floor(animation.time / state.clip.duration))));
+                    for (int cycle = 1; cycle < loops && events.size() < 256; ++cycle) {
+                        scriptEvents(0, state.clip.duration, true);
+                    }
+                    scriptEvents(0, std::fmod(animation.time, state.clip.duration), true);
+                } else {
+                    scriptEvents(
+                        previousTime, std::min(animation.time, state.clip.duration), false);
+                }
                 if (state.fadeDuration > 0) {
                     state.fadeTime += seconds;
                     animation.blendWeight = std::min(1.f, state.fadeTime / state.fadeDuration);

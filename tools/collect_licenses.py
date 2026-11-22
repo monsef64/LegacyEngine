@@ -37,8 +37,9 @@ for folder, filename, target in [
     ('fontawesome', 'LICENSE.txt', 'FontAwesome.txt'), ('glad', 'LICENSE', 'glad.txt'),
     ('json', 'LICENSE.MIT', 'nlohmann-json.txt'), ('miniaudio', 'LICENSE', 'miniaudio.txt'),
     ('roboto', 'LICENSE', 'Roboto.txt'), ('simdjson', 'LICENSE', 'simdjson.txt'),
-    ('stb', 'LICENSE', 'stb.txt')]:
+    ('stb', 'LICENSE', 'stb.txt'), ('monocypher', 'LICENCE.md', 'Monocypher.txt')]:
     copy(ROOT / 'third_party' / folder / filename, target)
+copy(ROOT / 'LICENSE', 'LegacyEngine.txt')
 comments(ROOT / 'third_party/glad/include/KHR/khrplatform.h', 'Khronos.txt')
 # simdjson distributes the complete Apache-2.0 text, also referenced by glad.
 copy(ROOT / 'third_party/simdjson/LICENSE', 'Apache-2.0.txt')

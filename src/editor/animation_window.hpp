@@ -535,6 +535,48 @@ class AnimationWindow {
                     }
                 }
                 ImGui::Separator();
+                if (ImGui::TreeNode("Script function events")) {
+                    ImGui::TextWrapped(
+                        "Runtime only: calls a named attached script on this object or a child. Scrubbing never executes functions.");
+                    static char eventScript[129]{}, eventFunction[129]{}, eventTarget[1025]{};
+                    ImGui::InputText("Script component", eventScript, sizeof(eventScript));
+                    ImGui::InputText("Function", eventFunction, sizeof(eventFunction));
+                    ImGui::InputText("Child path (empty = self)", eventTarget, sizeof(eventTarget));
+                    ImGui::BeginDisabled(!editMode || clip_.events.size() >= 256);
+                    if (ImGui::Button("Add function at playhead")) {
+                        if (!animationFunctionName(eventFunction) || !*eventScript ||
+                            (*eventTarget && !materialPathValid(eventTarget))) {
+                            error_ = "Choose a script component and a non-lifecycle function name.";
+                        } else {
+                            clip_.events.push_back(
+                                {time_, eventTarget, eventScript, eventFunction});
+                            std::stable_sort(
+                                clip_.events.begin(),
+                                clip_.events.end(),
+                                [](const auto& a, const auto& b) { return a.time < b.time; });
+                            dirty_ = true;
+                        }
+                    }
+                    for (std::size_t i = 0; i < clip_.events.size(); ++i) {
+                        ImGui::PushID(int(i));
+                        const auto& event = clip_.events[i];
+                        ImGui::Text("%.3fs  %s  %s.%s()",
+                                    event.time,
+                                    event.target.empty() ? "self" : event.target.c_str(),
+                                    event.script.c_str(),
+                                    event.function.c_str());
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton("Remove")) {
+                            clip_.events.erase(clip_.events.begin() + i);
+                            dirty_ = true;
+                            ImGui::PopID();
+                            break;
+                        }
+                        ImGui::PopID();
+                    }
+                    ImGui::EndDisabled();
+                    ImGui::TreePop();
+                }
                 if (ImGui::Button("Clip / Settings")) {
                     ImGui::OpenPopup("Clip settings");
                 }
@@ -598,6 +640,9 @@ class AnimationWindow {
                                     if (!t.keys.empty()) {
                                         last = std::max(last, t.keys.back().time);
                                     }
+                                }
+                                for (const auto& event : clip_.events) {
+                                    last = std::max(last, event.time);
                                 }
                                 clip_.duration = std::clamp(duration, last, 86400.f);
                                 time_ = std::min(time_, clip_.duration);
