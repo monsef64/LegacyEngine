@@ -6,6 +6,7 @@ struct Skybox {
     Vec3 color{1, 1, 1};
     bool enabled = true;
     bool affectEnvironment = false;
+    bool hdrCompression = false; // Packed RGB9_E5 GPU storage; original HDR asset stays unchanged.
     float environmentIntensity = 1;
     std::string right, left, top, bottom, front, back, hdr; // Legacy faces remain readable.
     std::string cubemap;

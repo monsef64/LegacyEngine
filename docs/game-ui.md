@@ -36,7 +36,6 @@ function onStart()
     if not gui then return end
     gui:onClick("buy", function()
         gui:setText("message", "Purchased!")
-    end)
 end
 ```
 
@@ -154,27 +153,26 @@ Manual verification (no automated tests):
 
 **UI** is the RML/RCSS component described above. **GUI** is a separate Lua
 namespace, not a component or export-reference type. It needs no RML/RCSS assets.
-Attach a LegacyScript to an active GameObject and register once:
+Attach a LegacyScript to an active GameObject and define `onGUI()`:
 
 ```lua
 local supplies = 0
-function onStart()
-    GUI.onDraw(function()
-        if GUI.beginWindow("Inventory") then
-            GUI.text("Supplies: " .. supplies)
-            if GUI.button("Collect") then supplies = supplies + 1 end
-        end
-        GUI.endWindow()
-    end)
+function onGUI()
+    if GUI.beginWindow("Inventory") then
+        GUI.text("Supplies: " .. supplies)
+        if GUI.button("Collect") then supplies = supplies + 1 end
+    end
+    GUI.endWindow()
 end
 ```
 
 `data/examples/imgui/hud.lua` includes text input, a slider and checkbox.
-`GUI.onDraw(callback)` returns an `off(token)` subscription handle. Call it once
-in `onStart`, not every update. Its callback receives no arguments. Other GUI
-functions are valid only inside that callback. `wait` and `task` are not supported
-there: set flags and handle longer work in `onUpdate` instead. The normal event
-instruction budget and error handling protect these callbacks.
+`onGUI()` is called once per rendered Game frame during unpaused Play. GUI
+functions are valid only inside this callback, not in `onStart`/`onUpdate` or
+event listeners. `GUI.onDraw` registration has been removed: move the drawing
+body directly into `function onGUI() ... end`. `wait` and `task` are not supported
+here; use state flags and handle longer work in `onUpdate`. Local variables
+persist between frames. The normal script instruction budget protects drawing.
 
 Widgets are generated every frame. Store values in Lua locals. Inputs return
 `newValue, changed`; colors return their channels followed by `changed`. Buttons
@@ -187,11 +185,11 @@ surface pixels. Keep Game focused and the cursor unlocked. Keyboard/text and
 mouse capture suppress corresponding gameplay input. Avoid overlapping RML UI
 and ImGui GUI controls; GUI is drawn on top. Draw callbacks run only during
 unpaused Play while Game is rendered. Pause hides GUI; Stop clears its context.
-Inactive script owners do not draw, and shutdown removes their subscriptions.
+Inactive script owners do not draw. Each callback gets its own automatically recovered GUI scope.
 
 ### Supported GUI functions
 
-- Registration: `onDraw`.
+- Lifecycle: `onGUI()` (global or GameObject callback), no registration needed.
 - Windows/layout: `beginWindow`, `endWindow`, `beginChild`, `endChild`,
   `beginGroup`, `endGroup`, `beginDisabled`, `endDisabled`, `pushID`, `popID`,
   `setNextWindowPos`, `setNextWindowSize`, `setCursorPos`, `setNextItemWidth`,
@@ -225,7 +223,7 @@ raw texture handles and multi-viewport platform windows are not exposed.
 Always balance window/child/group/disabled/ID scopes. `beginWindow` and `beginChild`
 require matching ends even when returning false. Errors automatically unwind
 open scopes before another callback runs. Window identities are isolated per
-subscription. Limits: 4096 API calls per callback, 32 nested scopes, 256-byte
+script/object. Limits: 4096 API calls per callback, 32 nested scopes, 256-byte
 labels, 4096-byte text (4095 for input content), and finite numbers within
 +/-10000000. Embedded NULs and raw ImGui/GL handles are not allowed.
 

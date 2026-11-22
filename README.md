@@ -67,5 +67,5 @@ Third-party dependencies and assets retain their respective licenses and notices
 collected under [`data/license/`](data/license/README.md) and included in releases.
 
 Runtime interfaces offer the RML/RCSS **UI** component and the separate **GUI**
-ImGui scripting namespace (`GUI.onDraw`). See [in-game interfaces](docs/game-ui.md)
+ImGui scripting namespace (draw inside `onGUI()`). See [in-game interfaces](docs/game-ui.md)
 and the examples in `data/examples/rmlui` and `data/examples/imgui`.

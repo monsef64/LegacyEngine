@@ -474,6 +474,7 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
         F(Skybox, type, 0, 1);
         F(Skybox, color, 0, 100);
         B(Skybox, affectEnvironment);
+        B(Skybox, hdrCompression);
         F(Skybox, environmentIntensity, 0, 5);
         S(Skybox, cubemap);
         S(Skybox, hdr);

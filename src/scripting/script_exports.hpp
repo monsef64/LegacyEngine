@@ -46,10 +46,10 @@ inline bool exportName(const std::string& name) {
             return false;
         }
     }
-    return name != "self" && name != "onStart" && name != "onUpdate" && name != "onFixedUpdate" &&
-           name != "onDestroy" && name != "onTriggerEnter" && name != "onTriggerStay" &&
-           name != "onTriggerExit" && name != "onCollisionEnter" && name != "onCollisionStay" &&
-           name != "onCollisionExit";
+    return name != "self" && name != "onStart" && name != "onGUI" && name != "onUpdate" &&
+           name != "onFixedUpdate" && name != "onDestroy" && name != "onTriggerEnter" &&
+           name != "onTriggerStay" && name != "onTriggerExit" && name != "onCollisionEnter" &&
+           name != "onCollisionStay" && name != "onCollisionExit";
 }
 inline void syncScriptExports(std::string_view source, std::vector<ScriptField>& fields) {
     std::vector<ScriptField> next;

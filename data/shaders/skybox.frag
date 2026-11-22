@@ -1,15 +1,13 @@
 #version 330 core
-in vec2 uv;
+in vec3 viewRay;
 out vec4 fragColor;
-uniform mat4 inverseVP;
 uniform vec3 tint;
 uniform float opacity;
 uniform bool hasTexture, isHDR;
 uniform samplerCube faces;
 uniform sampler2D panorama;
 void main() {
-    vec4 nearP = inverseVP * vec4(uv, -1, 1), farP = inverseVP * vec4(uv, 1, 1);
-    vec3 d = normalize(farP.xyz / farP.w - nearP.xyz / nearP.w);
+    vec3 d = normalize(viewRay);
     vec3 c = vec3(1);
     if (hasTexture) {
         if (isHDR) {

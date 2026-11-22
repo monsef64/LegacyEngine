@@ -56,5 +56,18 @@
       "end)"
     ],
     "description": "Independent cooperative block: waits pause only this task, not its caller"
+  },
+  "Draw runtime GUI": {
+    "prefix": "onGUI",
+    "body": [
+      "function onGUI()",
+      "    if GUI.beginWindow(\"${1:HUD}\") then",
+      "        GUI.text(\"${2:Hello}\")",
+      "        $0",
+      "    end",
+      "    GUI.endWindow()",
+      "end"
+    ],
+    "description": "Draw runtime ImGui once per rendered Game frame; no onStart registration."
   }
 }

@@ -93,3 +93,16 @@ the existing total-key and packed-size budgets. Missing companion-file/import
 errors identify the source model and explain the main-model/companion layout.
 Actual model-specific failures still require the import error and source files to
 diagnose; an MDL extension alone does not identify a compatible GoldSrc file.
+
+
+### GoldSrc companion-file imports
+
+Folder imports skip texture-only `*T.mdl` and `IDSQ` sequence files instead of
+reporting them as failed standalone models. Selecting a conventionally named
+companion directly redirects to its adjacent main `.mdl` when identifiable.
+Companion lookup tolerates filename capitalization differences (without choosing
+between ambiguous duplicate names), matching common Windows-authored model packs.
+Only render/skeleton/animation data is requested from Assimp; unused game-specific
+helper hierarchies are disabled. Keep the whole pack together while importing.
+If a particular file still fails, retain the exact error and model/companions for
+diagnosis; Source/Quake MDL formats remain unsupported.

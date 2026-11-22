@@ -99,6 +99,18 @@ function onStart()
 end
 ```
 
+### onGUI
+
+`onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task.`
+
+```lua
+function onGUI()
+    GUI.beginWindow("HUD")
+    GUI.text("Hello")
+    GUI.endWindow()
+end
+```
+
 ### onUpdate
 
 `onUpdate(deltaTime) - once per frame, seconds`
@@ -1480,6 +1492,18 @@ end
 ```lua
 self.onAnimationResume = function()
     debug.log("Object callback: onAnimationResume")
+end
+```
+
+### GameObject.onGUI
+
+`onGUI()|nil Draw GUI once per rendered Game frame; no wait/task`
+
+- `onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task.`
+
+```lua
+self.onGUI = function()
+    debug.log("Object callback: onGUI")
 end
 ```
 
@@ -3268,12 +3292,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.image("icon.png", 64, 64)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3285,12 +3307,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.imageButton("icon", "icon.png", 64, 64)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3302,8 +3322,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
         GUI.tableSetupColumn("Name")
@@ -3317,7 +3336,6 @@ function onStart()
         GUI.endTable()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3329,8 +3347,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
         GUI.tableSetupColumn("Name")
@@ -3344,7 +3361,6 @@ function onStart()
         GUI.endTable()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3356,8 +3372,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
         GUI.tableSetupColumn("Name")
@@ -3371,7 +3386,6 @@ function onStart()
         GUI.endTable()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3383,8 +3397,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
         GUI.tableSetupColumn("Name")
@@ -3398,7 +3411,6 @@ function onStart()
         GUI.endTable()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3410,8 +3422,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
         GUI.tableSetupColumn("Name")
@@ -3425,7 +3436,6 @@ function onStart()
         GUI.endTable()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3437,8 +3447,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
         GUI.tableSetupColumn("Name")
@@ -3452,7 +3461,6 @@ function onStart()
         GUI.endTable()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3464,8 +3472,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
         GUI.tableSetupColumn("Name")
@@ -3479,7 +3486,6 @@ function onStart()
         GUI.endTable()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3491,8 +3497,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
         GUI.tableSetupColumn("Name")
@@ -3506,7 +3511,6 @@ function onStart()
         GUI.endTable()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3518,8 +3522,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
         GUI.tableSetupColumn("Name")
@@ -3533,7 +3536,6 @@ function onStart()
         GUI.endTable()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3545,15 +3547,13 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginMenu("Actions") then
         if GUI.menuItem("Save") then debug.log("Save") end
         GUI.endMenu()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3565,15 +3565,13 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginMenu("Actions") then
         if GUI.menuItem("Save") then debug.log("Save") end
         GUI.endMenu()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3585,8 +3583,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginMenuBar() then
         if GUI.beginMenu("Actions") then
@@ -3596,7 +3593,6 @@ function onStart()
         GUI.endMenuBar()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3608,12 +3604,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginMenuBar() then GUI.endMenuBar() end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3625,15 +3619,13 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginMenu("Actions") then
         if GUI.menuItem("Save") then debug.log("Save") end
         GUI.endMenu()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3645,8 +3637,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.button("Open") then GUI.openPopup("Info") end
         if GUI.beginPopup("Info") then
@@ -3655,7 +3646,6 @@ function onStart()
         GUI.endPopup()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3667,8 +3657,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.button("Open") then GUI.openPopup("Info") end
         if GUI.beginPopup("Info") then
@@ -3677,7 +3666,6 @@ function onStart()
         GUI.endPopup()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3689,8 +3677,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.button("Open") then GUI.openPopup("Info") end
         if GUI.beginPopup("Info") then
@@ -3699,7 +3686,6 @@ function onStart()
         GUI.endPopup()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3711,8 +3697,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.button("Open") then GUI.openPopup("Info") end
         if GUI.beginPopup("Info") then
@@ -3721,7 +3706,6 @@ function onStart()
         GUI.endPopup()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3733,8 +3717,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.button("Open") then GUI.openPopup("Info") end
         if GUI.beginPopup("Info") then
@@ -3743,7 +3726,6 @@ function onStart()
         GUI.endPopup()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3755,15 +3737,13 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginCombo("Choice", "First") then
         GUI.selectable("First")
         GUI.endCombo()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3775,15 +3755,13 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.beginCombo("Choice", "First") then
         GUI.selectable("First")
         GUI.endCombo()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3795,12 +3773,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         local index, changed = GUI.combo("Choice", 1, {"First", "Second"})
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3812,12 +3788,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.radioButton("First", true) then debug.log("First") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3829,14 +3803,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.pushStyleColor(GUI.Col.Text, 1, 0.8, 0.2, 1)
         GUI.text("Gold")
         GUI.popStyleColor()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3848,14 +3820,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.pushStyleVar(GUI.StyleVar.Alpha, 0.8)
         GUI.text("Styled")
         GUI.popStyleVar()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3867,14 +3837,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.pushStyleVar(GUI.StyleVar.Alpha, 0.8)
         GUI.text("Styled")
         GUI.popStyleVar()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3886,14 +3854,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.pushStyleVar(GUI.StyleVar.WindowPadding, 12, 12)
         GUI.text("Padded")
         GUI.popStyleVar()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3905,14 +3871,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.pushFontSize(24)
         GUI.text("Large")
         GUI.popFont()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3924,14 +3888,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.pushFontSize(24)
         GUI.text("Large")
         GUI.popFont()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3943,8 +3905,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.button("Drag")
         if GUI.beginDragDropSource() then
@@ -3959,7 +3920,6 @@ function onStart()
         GUI.endDragDropTarget()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3971,8 +3931,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.button("Drag")
         if GUI.beginDragDropSource() then
@@ -3987,7 +3946,6 @@ function onStart()
         GUI.endDragDropTarget()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -3999,8 +3957,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.button("Drag")
         if GUI.beginDragDropSource() then
@@ -4015,7 +3972,6 @@ function onStart()
         GUI.endDragDropTarget()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4027,8 +3983,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.button("Drag")
         if GUI.beginDragDropSource() then
@@ -4043,7 +3998,6 @@ function onStart()
         GUI.endDragDropTarget()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4055,8 +4009,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.button("Drag")
         if GUI.beginDragDropSource() then
@@ -4071,7 +4024,6 @@ function onStart()
         GUI.endDragDropTarget()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4083,8 +4035,7 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.button("Drag")
         if GUI.beginDragDropSource() then
@@ -4099,7 +4050,6 @@ function onStart()
         GUI.endDragDropTarget()
         end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4111,13 +4061,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         local x, y = GUI.getMousePos()
         GUI.text(tostring(x))
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4129,12 +4077,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.isMouseClicked(0) then debug.log("Click") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4146,12 +4092,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.isMouseClicked(0) then debug.log("Click") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4163,12 +4107,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.isMouseClicked(0) then debug.log("Click") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4182,12 +4124,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.isKeyDown("Space") then GUI.text("Space") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4201,12 +4141,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.isKeyDown("Space") then GUI.text("Space") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4220,12 +4158,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.isKeyPressed("Space") then debug.log("Space") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4237,12 +4173,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.drawLine(20, 20, 100, 100, 1, 1, 1, 1, 2)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4254,12 +4188,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.drawRect(20, 20, 100, 60, 1, 1, 1, 1)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4271,12 +4203,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.drawRect(20, 20, 100, 60, 1, 1, 1, 1)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4288,12 +4218,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.drawCircle(80, 80, 30, 1, 0, 0, 1)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4305,12 +4233,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.drawCircle(80, 80, 30, 1, 0, 0, 1)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4322,12 +4248,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.drawText(20, 20, "Hello", 1, 1, 1, 1)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4339,29 +4263,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.drawTriangleFilled(20, 20, 60, 80, 100, 20, 1, 0, 0, 1)
         GUI.endWindow()
-    end)
-end
-```
-
-### GUI.onDraw
-
-`onDraw(callback:fun()):integer Register once in onStart; returns off(token) handle.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
-        GUI.beginWindow("HUD")
-        GUI.text("Hello")
-        GUI.endWindow()
-    end)
 end
 ```
 
@@ -4373,12 +4278,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.text("Window contents")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4390,12 +4293,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.text("Window contents")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4407,12 +4308,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.text("Hello, player!")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4424,12 +4323,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.textWrapped("A longer message for the player.")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4441,12 +4338,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.button("Collect") then debug.log("Collected") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4458,12 +4353,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.smallButton("Reset") then debug.log("Reset") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4475,12 +4368,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         enabled, changed = GUI.checkbox("Enabled", enabled)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4492,12 +4383,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         volume, changed = GUI.sliderFloat("Volume", volume, 0, 1)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4509,12 +4398,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         count, changed = GUI.sliderInt("Count", count, 0, 10)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4526,12 +4413,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         volume, changed = GUI.dragFloat("Value", volume, 0.1)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4543,12 +4428,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         volume, changed = GUI.inputFloat("Value", volume)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4560,12 +4443,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         count, changed = GUI.inputInt("Count", count)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4577,12 +4458,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         name, changed = GUI.inputText("Name", name)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4594,12 +4473,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         r, g, b, changed = GUI.colorEdit3("Color", r, g, b)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4611,12 +4488,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         r, g, b, a, changed = GUI.colorEdit4("Color", r, g, b, a)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4628,12 +4503,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.separator()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4645,12 +4518,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.text("Label"); GUI.sameLine(); GUI.button("Action")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4662,12 +4533,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.spacing()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4679,12 +4548,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.newLine()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4696,12 +4563,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.progressBar(0.75)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4713,12 +4578,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.selectable("Item", false) then debug.log("Selected") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4730,12 +4593,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         if GUI.collapsingHeader("Details") then GUI.text("More information") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4747,14 +4608,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.beginChild("Content", 200, 100)
         GUI.text("Child contents")
         GUI.endChild()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4766,14 +4625,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.beginChild("Content", 200, 100)
         GUI.text("Child contents")
         GUI.endChild()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4785,14 +4642,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.beginGroup()
         GUI.text("Group")
         GUI.endGroup()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4804,14 +4659,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.beginGroup()
         GUI.text("Group")
         GUI.endGroup()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4823,14 +4676,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.beginDisabled(true)
         GUI.button("Unavailable")
         GUI.endDisabled()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4842,14 +4693,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.beginDisabled(true)
         GUI.button("Unavailable")
         GUI.endDisabled()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4861,14 +4710,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.pushID("item-1")
         GUI.button("Use")
         GUI.popID()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4880,14 +4727,12 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.pushID("item-1")
         GUI.button("Use")
         GUI.popID()
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4899,13 +4744,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.setNextWindowPos(20, 20)
         GUI.beginWindow("HUD")
         GUI.text("Positioned window")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4917,13 +4760,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.setNextWindowSize(300, 200)
         GUI.beginWindow("HUD")
         GUI.text("Sized window")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4935,13 +4776,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.setCursorPos(20, 60)
         GUI.text("Positioned text")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4953,13 +4792,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         local w, h = GUI.getWindowSize()
         GUI.text(tostring(w) .. " x " .. tostring(h))
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4971,13 +4808,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         local w, h = GUI.getContentRegionAvail()
         GUI.text(tostring(w) .. " available")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -4989,13 +4824,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.setNextItemWidth(180)
         name = GUI.inputText("Name", name)
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -5007,13 +4840,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.button("Help")
         if GUI.isItemHovered() then GUI.setTooltip("A helpful hint") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -5025,13 +4856,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.button("Hold")
         if GUI.isItemActive() then debug.log("Active") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -5043,13 +4872,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.button("Help")
         if GUI.isItemHovered() then GUI.setTooltip("A helpful hint") end
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -5061,12 +4888,10 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         GUI.bulletText("Objective: find supplies")
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -5078,13 +4903,11 @@ end
 local enabled, changed = true, false
 local volume, count, name = 0.5, 1, "Player"
 local r, g, b, a = 1, 1, 1, 1
-function onStart()
-    GUI.onDraw(function()
+function onGUI()
         GUI.beginWindow("HUD")
         local w, h = GUI.getDisplaySize()
         GUI.text(tostring(w) .. " x " .. tostring(h))
         GUI.endWindow()
-    end)
 end
 ```
 
@@ -5264,6 +5087,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
+| `hdrCompression` | `boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged` |
 | `type` | `integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama` |
 | `enabled` | `boolean` |
 | `color` | `Vector3 Color tint` |

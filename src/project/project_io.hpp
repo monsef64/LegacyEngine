@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 35\n";
+    out << std::setprecision(9) << "LegacyEngineProject 36\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -251,7 +251,7 @@ inline std::string encodeLegacy(World& world,
         }
         if (const auto* sky = world.tryGet<Skybox>(e)) {
             out << std::quoted(sky->cubemap) << ' ' << sky->affectEnvironment << ' '
-                << sky->environmentIntensity << ' ';
+                << sky->environmentIntensity << ' ' << sky->hdrCompression << ' ';
         }
         if (const auto* activity = world.tryGet<ObjectActivity>(e)) {
             out << activity->enabled << " ";
@@ -374,7 +374,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 35));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 36));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -687,6 +687,9 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             }
             if (version >= 32) {
                 in >> sky.affectEnvironment >> sky.environmentIntensity;
+            }
+            if (version >= 36) {
+                in >> sky.hdrCompression;
             }
             require(validSkybox(sky));
             result.world.add(e, sky);

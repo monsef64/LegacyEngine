@@ -140,7 +140,8 @@ class AssetBrowser {
                 std::vector<std::string> sources;
                 for (const auto& entry :
                      std::filesystem::recursive_directory_iterator(assets.resolve(selected))) {
-                    if (entry.is_regular_file() && importableModel(entry.path())) {
+                    if (entry.is_regular_file() && importableModel(entry.path()) &&
+                        !modelCompanionFile(entry.path())) {
                         sources.push_back(entry.path().string());
                     }
                 }

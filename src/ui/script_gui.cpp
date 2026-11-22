@@ -28,7 +28,8 @@ struct TableState {
     bool layout = false;
 };
 std::vector<TableState> tableStates;
-const char* names[]{"onDraw",
+// Slot zero is retired; keep widget operation numbers stable.
+const char* names[]{nullptr,
                     "beginWindow",
                     "endWindow",
                     "text",
@@ -338,7 +339,7 @@ void ScriptGUI::endScope() {
 }
 void ScriptGUI::install(lua_State* L) {
     lua_newtable(L);
-    for (int i = 0; i < int(sizeof(names) / sizeof(*names)); ++i) {
+    for (int i = 1; i < int(sizeof(names) / sizeof(*names)); ++i) {
         lua_pushinteger(L, i);
         lua_pushcclosure(L, api, 1);
         lua_setfield(L, -2, names[i]);
@@ -348,16 +349,8 @@ void ScriptGUI::install(lua_State* L) {
 }
 int ScriptGUI::api(lua_State* L) {
     const int op = int(lua_tointeger(L, lua_upvalueindex(1)));
-    if (op == 0) {
-        luaL_checktype(L, 1, LUA_TFUNCTION);
-        lua_getglobal(L, "on");
-        lua_pushliteral(L, "__runtime_gui");
-        lua_pushvalue(L, 1);
-        lua_call(L, 2, 1);
-        return 1;
-    }
     if (!drawing) {
-        return luaL_error(L, "GUI widgets are only available inside GUI.onDraw callbacks");
+        return luaL_error(L, "GUI widgets are only available inside onGUI()");
     }
     if (++widgets > 4096) {
         return luaL_error(L, "GUI widget budget exceeded");

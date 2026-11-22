@@ -8,7 +8,7 @@
   Each row has **three binding buttons**, accepting a keyboard key, mouse button,
   or gamepad button. Right-click a slot to clear it; Remove deletes the row.
   Enter commits a renamed action. Escape cancels capture.
-- **Settings → Editor Settings:** Legacy Dark, Grey, or Unity 5 Classic theme and internal/external code editor.
+- **Settings → Editor Settings:** Legacy Dark, Grey, or Classic Light theme and internal/external code editor.
 - **Help:** repository link and About.
 
 Right-click an Inspector component header to remove it. Transform removal is
@@ -80,7 +80,7 @@ under **Rendering**. **Settings > Editor Settings > Always Show Colliders** show
 unselected Scene colliders in translucent green; the selected collider stays
 bright green. **Debug > Show Game Colliders** controls the separate Game overlay.
 
-**Unity 5 Classic** uses light-grey panels, blue selections, bordered controls and
+**Classic Light** uses light-grey panels, blue selections, bordered controls and
 top-lit glossy buttons inspired by the older editor. Select it under
 **Settings > Editor Settings > Theme**; the choice persists between launches.
 
@@ -93,9 +93,9 @@ is initially selected. **Windows > Reset layout** restores this arrangement.
 The updated default uses a new dockspace identifier so older saved layouts do
 not hide the change; subsequent custom arrangements are still saved normally.
 
-Choose **Settings > Editor Settings > Theme > Unity Dark Classic** for the
+Choose **Settings > Editor Settings > Theme > Classic Dark** for the
 reference-inspired charcoal panels, grey glossy buttons and muted blue selections.
-The earlier light **Unity 5 Classic** theme remains available.
+The earlier light **Classic Light** theme remains available.
 
 The Scene viewport's upper-right orientation gizmo shows colored X/Y/Z axes.
 Click a colored axis endpoint to snap to the positive direction, or a pale
@@ -643,3 +643,24 @@ Folder deletion first attempts the normal Trash/bin operation with Undo support.
 If that fails, the Assets browser offers a separate **Permanently delete** warning
 with Cancel. Permanent deletion includes all folder contents and cannot be undone;
 it is never attempted silently. Scene references remain missing until reassigned.
+
+
+### Skybox loading and HDR storage
+
+Skybox image decoding and ambient-color sampling run on the shared worker pool.
+Unchanged cubemap descriptors are no longer parsed every frame; dependency stamps
+are checked at most once a second per skybox renderer. Project/asset changes discard
+stale jobs before they can upload. Crossfades wait for the requested textures to be
+ready. Until an image loads, the ordinary tinted fallback remains visible.
+
+For an HDR panorama, enable **Compress HDR (RGB9_E5)** in the Skybox Inspector.
+This packs GPU HDR storage into 4 bytes/pixel instead of RGB16F's 6 (about one-third
+less base-level texture memory). It trades color precision for memory/bandwidth,
+particularly for very differently sized RGB channels. It is not BC6H and does not
+rewrite/compress the original `.hdr` file on disk. Set `sky.hdrCompression` in Lua
+for a Play-time change. Old projects default to uncompressed RGB16F. The setting
+is included in scene/prefab serialization, undo and Stop rollback.
+
+The shader reconstructs sky rays at the fullscreen triangle vertices rather than
+doing inverse-matrix transforms for every fragment. Performance gains depend on
+scene, image size, hardware and resolution; they have not been benchmarked here.

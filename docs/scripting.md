@@ -481,13 +481,13 @@ See [In-game UI](game-ui.md) for component setup and the interactive example.
 
 Use **UI** components for RML/RCSS documents and scoped `ui:onClick(...)` /
 `ui:setText(...)`. Use the **GUI** namespace for script-authored ImGui controls,
-registered once through `GUI.onDraw(function() ... end)`. GUI is not a component
+drawn each rendered frame inside `function onGUI() ... end`. GUI is not a component
 or export-reference type. See [in-game interfaces](game-ui.md).
 
 ### Advanced runtime GUI
 
-`GUI` is the ImGui scripting namespace; `UI` is the RML/RCSS component. Register
-`GUI.onDraw(function() ... end)` once in `onStart`. Use the generated scripting
+`GUI` is the ImGui scripting namespace; `UI` is the RML/RCSS component. Define
+`function onGUI() ... end` for per-rendered-frame drawing. Use the generated scripting
 reference for images, tables, menus, popups, combos, radio buttons, style/font
 scopes, typed drag/drop, custom drawing and mouse/key queries. Window flags combine
 with Lua's `|`, for example `GUI.WindowFlags.MenuBar | GUI.WindowFlags.NoCollapse`.
