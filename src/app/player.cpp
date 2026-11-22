@@ -320,10 +320,10 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
                         v = input.mouseLocked ? .5f : my / std::max(1, logicalH);
             if (u >= c.viewportX && u <= c.viewportX + c.viewportWidth && v >= c.viewportY &&
                 v <= c.viewportY + c.viewportHeight) {
-                const auto near = cameraScreenToWorld(pose, c, {u, v, 0}),
-                           far = cameraScreenToWorld(pose, c, {u, v, 1});
+                const auto nearPoint = cameraScreenToWorld(pose, c, {u, v, 0}),
+                           farPoint = cameraScreenToWorld(pose, c, {u, v, 1});
                 RayHit hit;
-                if (physics.raycast({near, normalize(far - near)}, c.farClip, hit)) {
+                if (physics.raycast({nearPoint, normalize(farPoint - nearPoint)}, c.farClip, hit)) {
                     hovered = hit.entity;
                 }
             }
