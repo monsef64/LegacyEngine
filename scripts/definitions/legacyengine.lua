@@ -23,6 +23,7 @@
 ---@field onAnimationStopped fun()|nil
 ---@field onAnimationPause fun()|nil
 ---@field onAnimationResume fun()|nil
+---@field onGUI fun()|nil Draw GUI once per rendered Game frame; no wait/task
 ---@field onStart fun()|nil
 ---@field onUpdate fun(deltaTime:number)|nil
 ---@field onFixedUpdate fun(deltaTime:number)|nil
@@ -78,6 +79,8 @@
 ---@field value string
 
 function onStart() end
+---Draw GUI only in this callback; called each rendered Game frame during Play.
+function onGUI() end
 ---@param deltaTime number Seconds since the previous frame (capped at 0.25).
 function onUpdate(deltaTime) end
 ---@param deltaTime number Fixed physics interval, 1/60 seconds.
@@ -432,6 +435,7 @@ function isCursorVisible() end
 function isCursorLocked() end
 
 ---@class Skybox
+---@field hdrCompression boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged
 ---@field type integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama
 ---@field enabled boolean
 ---@field color Vector3 Color tint
@@ -1061,7 +1065,6 @@ UI = nil
 ---@field drawCircleFilled fun(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) Screen-pixel coordinates; radius 0..100000.
 ---@field drawText fun(x:number,y:number,value:string,r:number,g:number,b:number,a?:number) Screen-pixel coordinates.
 ---@field drawTriangleFilled fun(x:number,y:number,x2:number,y2:number,x3:number,y3:number,r:number,g:number,b:number,a?:number) Screen-pixel coordinates.
----@field onDraw fun(callback:fun()):integer Register once in onStart; returns off(token) handle.
 ---@field beginWindow fun(title:string,flags?:integer):boolean Always call endWindow even when false.
 ---@field endWindow fun() End the current window.
 ---@field text fun(value:string) Plain text, never a printf format.

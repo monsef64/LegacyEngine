@@ -2011,6 +2011,9 @@ inline void drawInspector(World& world,
                     };
                     if (sky->type == 1) {
                         slot("HDR panorama", sky->hdr, true);
+                        EditorValues::Checkbox("Compress HDR (RGB9_E5)", &sky->hdrCompression);
+                        ImGui::TextDisabled(
+                            "Packed GPU HDR: 4 bytes/pixel instead of 6; reduced precision, source unchanged.");
                     } else {
                         slot("Cubemap asset", sky->cubemap, false);
                     }

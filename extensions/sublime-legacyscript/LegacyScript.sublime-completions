@@ -323,13 +323,7 @@
       "trigger": "GUI",
       "contents": "GUI",
       "annotation": "LegacyEngine",
-      "details": "GUI - ImGui runtime interface namespace, not a component. Register GUI.onDraw(callback) once in onStart. Draw widgets only in this callback; no wait/task. Windows are scoped per subscription and rendered into Game, including the separate Game window. UI is the RML/RCSS component."
-    },
-    {
-      "trigger": "GUI.onDraw",
-      "contents": "GUI.onDraw",
-      "annotation": "LegacyEngine",
-      "details": "GUI.onDraw(callback:fun()):integer - Register once in onStart; returns off(token) handle."
+      "details": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window. UI is the RML/RCSS component."
     },
     {
       "trigger": "GUI.beginWindow",
@@ -1718,6 +1712,18 @@
       "details": "onStart() - called when Execute succeeds"
     },
     {
+      "trigger": "onGUI",
+      "contents": "onGUI",
+      "annotation": "LegacyEngine",
+      "details": "onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task."
+    },
+    {
+      "trigger": "hdrCompression",
+      "contents": "hdrCompression",
+      "annotation": "LegacyEngine",
+      "details": "Skybox.hdrCompression: boolean, default false. Packed RGB9_E5 GPU HDR storage (4 bytes/pixel instead of RGB16F 6); lower precision, source unchanged."
+    },
+    {
       "trigger": "onUpdate",
       "contents": "onUpdate",
       "annotation": "LegacyEngine",
@@ -2196,6 +2202,12 @@
       "contents": "onAnimationResume",
       "annotation": "GameObject",
       "details": "fun()|nil"
+    },
+    {
+      "trigger": "onGUI",
+      "contents": "onGUI",
+      "annotation": "GameObject",
+      "details": "fun()|nil Draw GUI once per rendered Game frame; no wait/task"
     },
     {
       "trigger": "onStart",
@@ -3384,6 +3396,12 @@
       "contents": "setSpotAngles",
       "annotation": "SpotLight",
       "details": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
+    },
+    {
+      "trigger": "hdrCompression",
+      "contents": "hdrCompression",
+      "annotation": "Skybox",
+      "details": "boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged"
     },
     {
       "trigger": "type",
@@ -5580,12 +5598,6 @@
       "contents": "drawTriangleFilled",
       "annotation": "GUI",
       "details": "fun(x:number,y:number,x2:number,y2:number,x3:number,y3:number,r:number,g:number,b:number,a?:number) Screen-pixel coordinates."
-    },
-    {
-      "trigger": "onDraw",
-      "contents": "onDraw",
-      "annotation": "GUI",
-      "details": "fun(callback:fun()):integer Register once in onStart; returns off(token) handle."
     },
     {
       "trigger": "beginWindow",

@@ -14,6 +14,7 @@
 #include "scene/skybox_transition.hpp"
 #include "scripting/script_exports.hpp"
 #include "ui/game_ui.hpp"
+#include "ui/script_gui.hpp"
 #include <cstdio>
 extern "C" {
 #include <lauxlib.h>
@@ -294,6 +295,7 @@ Field field(lua_State* L, const Component& c, const char* key) {
     case 12: {
         auto& v = h.world->get<Skybox>(h.entity);
         FIELD(affectEnvironment, Boolean);
+        FIELD(hdrCompression, Boolean);
         FIELD(environmentIntensity, Number);
         FIELD(type, Integer);
         FIELD(color, Vec);
@@ -451,7 +453,7 @@ LuaScene::LuaScene(lua_State* L,
     : state_(L), world_(world), meshes_{cube, sphere, capsule, cone, plane},
       error_(std::move(error)) {
     // Keep lifecycle keys interned even when a script exhausts its allocation budget.
-    for (const char* key : {"onStart", "onUpdate", "onFixedUpdate", "onDestroy"}) {
+    for (const char* key : {"onStart", "onUpdate", "onFixedUpdate", "onGUI", "onDestroy"}) {
         lua_pushboolean(L, 1);
         lua_setfield(L, LUA_REGISTRYINDEX, key);
     }
@@ -3008,7 +3010,7 @@ void LuaScene::resume(Task& task, int arguments) {
 }
 void LuaScene::call(
     const char* name, int reference, float dt, bool delta, Entity other, bool colliderArgument) {
-    if (tasks_.size() >= 128) {
+    if (std::strcmp(name, "onGUI") && tasks_.size() >= 128) {
         error_("Too many waiting callbacks");
         return;
     }
@@ -3028,6 +3030,18 @@ void LuaScene::call(
         lua_remove(state_, -2);
     }
     if (!lua_isfunction(state_, -1)) {
+        lua_settop(state_, base);
+        return;
+    }
+    if (!std::strcmp(name, "onGUI")) {
+        // Immediate-mode drawing cannot yield or leave ImGui scopes alive.
+        ScriptGUI::beginScope(reinterpret_cast<std::uintptr_t>(this), reference);
+        const int result = lua_pcall(state_, 0, 0, 0);
+        ScriptGUI::endScope();
+        if (result != LUA_OK) {
+            const char* text = lua_tostring(state_, -1);
+            error_(text ? text : "onGUI callback failed");
+        }
         lua_settop(state_, base);
         return;
     }
@@ -3245,6 +3259,19 @@ void LuaScene::tick(const char* name, float dt) {
             entries_.erase(entries_.begin() + static_cast<std::ptrdiff_t>(i));
         } else {
             ++i;
+        }
+    }
+}
+void LuaScene::drawGUI() {
+    if (!ScriptGUI::inFrame() || !receivesEvents() || !started_) {
+        return;
+    }
+    call("onGUI", LUA_NOREF, 0, false);
+    const auto count = entries_.size();
+    for (std::size_t i = 0; i < count && active_; ++i) {
+        if (!entries_[i].destroying && entries_[i].started &&
+            isActive(world_, entries_[i].entity)) {
+            call("onGUI", entries_[i].reference, 0, false);
         }
     }
 }

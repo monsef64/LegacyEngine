@@ -1481,10 +1481,14 @@ void Renderer::drawEditorGrid(const GridSettings& settings, const Mat4& vp) {
 }
 
 void Renderer::updateSkyboxFades(World& world, float dt) {
+    bool waiting = false;
     world.each<SkyboxTransition>([&](Entity entity, const SkyboxTransition& fade) {
-        if (!skyboxFadeRenderer_.prepare(fade.to, materialAssets_)) {
+        if (!skyboxRenderer_.prepare(fade.from, materialAssets_) ||
+            !skyboxFadeRenderer_.prepare(fade.to, materialAssets_)) {
             world.remove<SkyboxTransition>(entity);
+        } else if (!skyboxRenderer_.ready() || !skyboxFadeRenderer_.ready()) {
+            waiting = true;
         }
     });
-    updateSkyboxTransitions(world, dt);
+    updateSkyboxTransitions(world, waiting ? 0.f : dt);
 }

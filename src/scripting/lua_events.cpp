@@ -60,7 +60,11 @@ void LuaConsole::drawGUI() {
     const auto recipients = subscribers;
     for (auto* console : recipients) {
         if (std::find(subscribers.begin(), subscribers.end(), console) != subscribers.end()) {
-            console->receiveEvent("__runtime_gui", {});
+            if (console->scene_ && ScriptGUI::inFrame()) {
+                console->beginBudget();
+                console->scene_->drawGUI();
+                console->endBudget();
+            }
         }
     }
 }
@@ -159,7 +163,7 @@ int LuaConsole::eventAPI(lua_State* L) {
     return 1;
 }
 void LuaConsole::receiveEvent(const std::string& name, const std::vector<EventValue>& values) {
-    if (name == "__runtime_gui" && !ScriptGUI::inFrame()) {
+    if (name == "__runtime_gui" || name == "onGUI") {
         return;
     }
     if (scene_ && !scene_->receivesEvents()) {
@@ -183,15 +187,9 @@ void LuaConsole::receiveEvent(const std::string& name, const std::vector<EventVa
         for (const auto& value : values) {
             pushValue(state_, value);
         }
-        if (name == "__runtime_gui") {
-            ScriptGUI::beginScope(reinterpret_cast<std::uintptr_t>(this), reference);
-        }
         beginBudget();
         const int result = lua_pcall(state_, int(values.size()), 0, base + 1);
         endBudget();
-        if (name == "__runtime_gui") {
-            ScriptGUI::endScope();
-        }
         if (result != LUA_OK) {
             const char* error = lua_tostring(state_, -1);
             append(Kind::Error, name + ": " + (error ? error : "Unknown callback error"));

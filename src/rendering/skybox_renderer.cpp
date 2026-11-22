@@ -1,5 +1,6 @@
 #include "rendering/skybox_renderer.hpp"
 #include "assets/cubemap.hpp"
+#include "core/worker_pool.hpp"
 #include "rendering/shader_data.hpp"
 #include <algorithm>
 #include <glad/gl.h>
@@ -81,6 +82,117 @@ std::vector<unsigned char> readImage(const AssetManager& assets, const std::stri
     }
     return data;
 }
+std::string resourceStamp(const AssetManager& assets,
+                          const std::string& key,
+                          const Skybox& sky,
+                          const std::vector<std::string>& paths) {
+    std::string stamp = key;
+    auto append = [&](const std::string& path) {
+        stamp += '|';
+        try {
+            const auto file = assets.resolve(path);
+            stamp +=
+                std::to_string(std::filesystem::last_write_time(file).time_since_epoch().count()) +
+                ':' + std::to_string(std::filesystem::file_size(file));
+        } catch (...) {
+            stamp += "missing";
+        }
+    };
+    if (sky.type == 0 && !sky.cubemap.empty()) {
+        append(sky.cubemap);
+    }
+    for (const auto& path : paths) {
+        append(path);
+    }
+    return stamp;
+}
+SkyboxDecoded decodeSkybox(const Skybox& sky, const AssetManager& assets, const std::string& key) {
+    SkyboxDecoded out;
+    out.paths = sky.type == 1 ? std::vector<std::string>{sky.hdr}
+                              : std::vector<std::string>{
+                                    sky.right, sky.left, sky.top, sky.bottom, sky.back, sky.front};
+    if (sky.type == 0 && !sky.cubemap.empty()) {
+        const auto map = loadCubemap(assets, sky.cubemap);
+        out.paths = {
+            map.faces[0], map.faces[1], map.faces[2], map.faces[3], map.faces[5], map.faces[4]};
+    }
+    out.stamp = resourceStamp(assets, key, sky, out.paths);
+    Vec3 sum{};
+    float total = 0;
+    int faceSize = 0;
+    for (std::size_t face = 0; face < out.paths.size(); ++face) {
+        auto encoded = readImage(assets, out.paths[face]);
+        SkyboxDecoded::Image image;
+        int channels = 0;
+        auto& w = image.width;
+        auto& h = image.height;
+        if (!stbi_info_from_memory(encoded.data(), int(encoded.size()), &w, &h, &channels) ||
+            w <= 0 || h <= 0) {
+            throw std::runtime_error("Invalid skybox image: " + out.paths[face]);
+        }
+        if (sky.type == 1) {
+            if (w > 4096 || h > 2048 ||
+                !stbi_is_hdr_from_memory(encoded.data(), int(encoded.size()))) {
+                throw std::runtime_error("HDR panorama must be Radiance .hdr, at most 4096 x 2048");
+            }
+            std::unique_ptr<float, decltype(&stbi_image_free)> pixels(
+                stbi_loadf_from_memory(encoded.data(), int(encoded.size()), &w, &h, &channels, 3),
+                stbi_image_free);
+            if (!pixels) {
+                throw std::runtime_error("Cannot decode HDR panorama");
+            }
+            image.floats.assign(pixels.get(), pixels.get() + std::size_t(w) * h * 3);
+            for (auto& value : image.floats) {
+                value = std::isfinite(value)
+                            ? std::clamp(value, 0.f, sky.hdrCompression ? 65408.f : 65504.f)
+                            : 0.f;
+            }
+            for (int y = 0; y < h; y += std::max(1, h / 32)) {
+                for (int x = 0; x < w; x += std::max(1, w / 64)) {
+                    const float lat = (.5f - (y + .5f) / h) * kPi;
+                    const float weight = std::max(0.f, std::sin(lat) + .25f) * std::cos(lat);
+                    const auto* rgb = image.floats.data() + (std::size_t(y) * w + x) * 3;
+                    sum = sum + Vec3{rgb[0], rgb[1], rgb[2]} * weight;
+                    total += weight;
+                }
+            }
+        } else {
+            if (w != h || w > 2048 || (faceSize && w != faceSize)) {
+                throw std::runtime_error(
+                    "Skybox faces must be equal square images, at most 2048 x 2048");
+            }
+            faceSize = w;
+            std::unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels(
+                stbi_load_from_memory(encoded.data(), int(encoded.size()), &w, &h, &channels, 4),
+                stbi_image_free);
+            if (!pixels) {
+                throw std::runtime_error("Cannot decode skybox face");
+            }
+            image.bytes.assign(pixels.get(), pixels.get() + std::size_t(w) * h * 4);
+            const float weight = face == 2 ? 1.f : face == 3 ? 0.f : .5f;
+            for (int y = 0; y < h; y += std::max(1, h / 32)) {
+                for (int x = 0; x < w; x += std::max(1, w / 32)) {
+                    const auto* rgb = image.bytes.data() + (std::size_t(y) * w + x) * 4;
+                    sum = sum + Vec3{std::pow(rgb[0] / 255.f, 2.2f),
+                                     std::pow(rgb[1] / 255.f, 2.2f),
+                                     std::pow(rgb[2] / 255.f, 2.2f)} *
+                                    weight;
+                    total += weight;
+                }
+            }
+        }
+        out.images.push_back(std::move(image));
+    }
+    if (total > 0) {
+        out.ambient = sum * (1 / total);
+        if (sky.type == 1) {
+            out.ambient = {out.ambient.x / (1 + out.ambient.x),
+                           out.ambient.y / (1 + out.ambient.y),
+                           out.ambient.z / (1 + out.ambient.z)};
+        }
+    }
+    return out;
+}
 } // namespace
 bool SkyboxRenderer::init() {
 
@@ -116,6 +228,14 @@ bool SkyboxRenderer::init() {
         return false;
     }
     glGenVertexArrays(1, &vao_);
+    inverseLocation_ = glGetUniformLocation(program_, "inverseVP");
+    tintLocation_ = glGetUniformLocation(program_, "tint");
+    opacityLocation_ = glGetUniformLocation(program_, "opacity");
+    textureLocation_ = glGetUniformLocation(program_, "hasTexture");
+    hdrLocation_ = glGetUniformLocation(program_, "isHDR");
+    glUseProgram(program_);
+    glUniform1i(glGetUniformLocation(program_, "faces"), 4);
+    glUniform1i(glGetUniformLocation(program_, "panorama"), 5);
     return true;
 }
 void SkyboxRenderer::clear() {
@@ -125,6 +245,11 @@ void SkyboxRenderer::clear() {
     texture_ = 0;
     loaded_ = false;
     signature_.clear();
+    requestKey_.clear();
+    dependencies_.clear();
+    pending_ = {};
+    ready_ = false;
+    ambient_ = {1, 1, 1};
     checked_ = {};
     error.clear();
 }
@@ -147,174 +272,111 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
         sky.type == 1 ? std::vector<std::string>{sky.hdr}
                       : std::vector<std::string>{
                             sky.right, sky.left, sky.top, sky.bottom, sky.back, sky.front};
-    if (sky.type == 0 && !sky.cubemap.empty()) {
-        try {
-            const auto cubemap = loadCubemap(assets, sky.cubemap);
-            paths = {cubemap.faces[0],
-                     cubemap.faces[1],
-                     cubemap.faces[2],
-                     cubemap.faces[3],
-                     cubemap.faces[5],
-                     cubemap.faces[4]};
-        } catch (const std::exception& e) {
-            error = e.what();
-            if (texture_) {
-                glDeleteTextures(1, &texture_);
-            }
-            texture_ = 0;
-            loaded_ = false;
-            signature_.clear();
-            return false;
-        }
+    std::string key = assets.root.generic_string() + '|' + std::to_string(sky.type) + '|' +
+                      std::to_string(sky.hdrCompression);
+    for (const auto& path : paths) {
+        key += '|' + std::to_string(path.size()) + ':' + path;
     }
-    if (std::all_of(
-            paths.begin(), paths.end(), [](const std::string& path) { return path.empty(); })) {
-        if (texture_) {
-            glDeleteTextures(1, &texture_);
-        }
-        texture_ = 0;
-        loaded_ = false;
-        signature_.clear();
+    key += '|' + std::to_string(sky.cubemap.size()) + ':' + sky.cubemap;
+    if (key != requestKey_) {
+        clear();
+        requestKey_ = key;
+        dependencies_ = paths;
+    }
+    if (std::all_of(paths.begin(), paths.end(), [](const std::string& p) { return p.empty(); }) &&
+        (sky.type == 1 || sky.cubemap.empty())) {
+        ready_ = true;
         error.clear();
         return true;
     }
-    std::string key = std::to_string(sky.type);
-    for (const auto& p : paths) {
-        key += '|' + std::to_string(p.size()) + ':' + p;
-    }
-    const auto now = std::chrono::steady_clock::now();
-    if (now - checked_ > std::chrono::seconds(1) ||
-        signature_.compare(0, key.size() + 1, key + '|') != 0) {
-        checked_ = now;
-        std::string stamp = key + '|';
-        for (const auto& p : paths) {
-            try {
-                auto file = assets.resolve(p);
-                stamp += std::to_string(
-                             std::filesystem::last_write_time(file).time_since_epoch().count()) +
-                         ':' + std::to_string(std::filesystem::file_size(file)) + ';';
-            } catch (...) {
-                stamp += "missing;";
-            }
+    if (pending_.valid()) {
+        if (pending_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            return true;
         }
-        if (stamp != signature_) {
-            signature_ = stamp;
-            loaded_ = false;
-            ambient_ = {1, 1, 1};
+        try {
+            auto decoded = pending_.get();
+            dependencies_ = std::move(decoded.paths);
+            signature_ = std::move(decoded.stamp);
+            const unsigned target = sky.type == 1 ? GL_TEXTURE_2D : GL_TEXTURE_CUBE_MAP;
+            glGenTextures(1, &texture_);
+            glActiveTexture(GL_TEXTURE4);
+            glBindTexture(target, texture_);
+            for (std::size_t i = 0; i < decoded.images.size(); ++i) {
+                const auto& image = decoded.images[i];
+                if (sky.type == 1) {
+                    glTexImage2D(target,
+                                 0,
+                                 sky.hdrCompression ? GL_RGB9_E5 : GL_RGB16F,
+                                 image.width,
+                                 image.height,
+                                 0,
+                                 GL_RGB,
+                                 GL_FLOAT,
+                                 image.floats.data());
+                } else {
+                    glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + unsigned(i),
+                                 0,
+                                 GL_RGBA8,
+                                 image.width,
+                                 image.height,
+                                 0,
+                                 GL_RGBA,
+                                 GL_UNSIGNED_BYTE,
+                                 image.bytes.data());
+                }
+            }
+            glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(
+                target, GL_TEXTURE_WRAP_S, sky.type == 1 ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+            glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            if (sky.type == 0) {
+                glTexParameteri(target, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+            }
+            glActiveTexture(GL_TEXTURE0);
+            ambient_ = decoded.ambient;
+            ready_ = loaded_ = true;
+            error.clear();
+        } catch (const std::exception& e) {
+            error = e.what();
+            signature_.clear(); // Retry failures at the metadata-check cadence (also missing
+                                // cubemap dependencies).
+            checked_ = std::chrono::steady_clock::now();
+            ready_ = false;
             if (texture_) {
                 glDeleteTextures(1, &texture_);
             }
             texture_ = 0;
-            try {
-                const unsigned target = sky.type == 1 ? GL_TEXTURE_2D : GL_TEXTURE_CUBE_MAP;
-                glActiveTexture(GL_TEXTURE4);
-                Vec3 ambientSum{};
-                float ambientWeight = 0;
-                glGenTextures(1, &texture_);
-                glBindTexture(target, texture_);
-                int faceSize = 0;
-                for (std::size_t face = 0; face < paths.size(); ++face) {
-                    auto encoded = readImage(assets, paths[face]);
-                    int w = 0, h = 0, c = 0;
-                    if (!stbi_info_from_memory(encoded.data(), int(encoded.size()), &w, &h, &c) ||
-                        w <= 0 || h <= 0) {
-                        throw std::runtime_error("Invalid skybox image: " + paths[face]);
-                    }
-                    if (sky.type == 1) {
-                        if (w > 4096 || h > 2048 ||
-                            !stbi_is_hdr_from_memory(encoded.data(), int(encoded.size()))) {
-                            throw std::runtime_error(
-                                "HDR panorama must be Radiance .hdr, at most 4096 x 2048");
-                        }
-                        std::unique_ptr<float, decltype(&stbi_image_free)> pixels(
-                            stbi_loadf_from_memory(
-                                encoded.data(), int(encoded.size()), &w, &h, &c, 3),
-                            stbi_image_free);
-                        if (!pixels) {
-                            throw std::runtime_error("Cannot decode HDR panorama");
-                        }
-                        for (std::size_t i = 0; i < std::size_t(w) * h * 3; ++i) {
-                            if (!std::isfinite(pixels.get()[i]) || pixels.get()[i] < 0) {
-                                pixels.get()[i] = 0;
-                            } else {
-                                pixels.get()[i] = std::min(pixels.get()[i], 65504.0f);
-                            }
-                        }
-                        for (int y = 0; y < h; y += std::max(1, h / 32)) {
-                            for (int x = 0; x < w; x += std::max(1, w / 64)) {
-                                const float latitude = (.5f - (y + .5f) / h) * kPi;
-                                const float weight =
-                                    std::max(0.f, std::sin(latitude) + .25f) * std::cos(latitude);
-                                const auto* rgb = pixels.get() + (std::size_t(y) * w + x) * 3;
-                                ambientSum = ambientSum + Vec3{rgb[0], rgb[1], rgb[2]} * weight;
-                                ambientWeight += weight;
-                            }
-                        }
-                        glTexImage2D(target, 0, GL_RGB16F, w, h, 0, GL_RGB, GL_FLOAT, pixels.get());
-                    } else {
-                        if (w != h || w > 2048 || (faceSize && w != faceSize)) {
-                            throw std::runtime_error(
-                                "Skybox faces must be equal square images, at most 2048 x 2048");
-                        }
-                        faceSize = w;
-                        std::unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels(
-                            stbi_load_from_memory(
-                                encoded.data(), int(encoded.size()), &w, &h, &c, 4),
-                            stbi_image_free);
-                        if (!pixels) {
-                            throw std::runtime_error("Cannot decode skybox face");
-                        }
-                        const float weight = face == 2 ? 1.f : face == 3 ? 0.f : .5f;
-                        for (int y = 0; y < h; y += std::max(1, h / 32)) {
-                            for (int x = 0; x < w; x += std::max(1, w / 32)) {
-                                const auto* rgb = pixels.get() + (std::size_t(y) * w + x) * 4;
-                                ambientSum = ambientSum + Vec3{std::pow(rgb[0] / 255.f, 2.2f),
-                                                               std::pow(rgb[1] / 255.f, 2.2f),
-                                                               std::pow(rgb[2] / 255.f, 2.2f)} *
-                                                              weight;
-                                ambientWeight += weight;
-                            }
-                        }
-                        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + unsigned(face),
-                                     0,
-                                     GL_RGBA8,
-                                     w,
-                                     h,
-                                     0,
-                                     GL_RGBA,
-                                     GL_UNSIGNED_BYTE,
-                                     pixels.get());
-                    }
-                }
-                if (ambientWeight > 0) {
-                    ambient_ = ambientSum * (1 / ambientWeight);
-                    if (sky.type == 1) {
-                        ambient_ = {ambient_.x / (1 + ambient_.x),
-                                    ambient_.y / (1 + ambient_.y),
-                                    ambient_.z / (1 + ambient_.z)};
-                    }
-                }
-                glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-                glTexParameteri(
-                    target, GL_TEXTURE_WRAP_S, sky.type == 1 ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-                glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                if (sky.type == 0) {
-                    glTexParameteri(target, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-                }
-                loaded_ = true;
-                error.clear();
-            } catch (const std::exception& e) {
-                error = e.what();
-                if (texture_) {
-                    glDeleteTextures(1, &texture_);
-                }
-                texture_ = 0;
-            }
+            glActiveTexture(GL_TEXTURE0);
         }
+        return error.empty();
     }
-    glActiveTexture(GL_TEXTURE0);
-    return error.empty();
+    const auto now = std::chrono::steady_clock::now();
+    if (checked_.time_since_epoch().count() && now - checked_ < std::chrono::seconds(1)) {
+        return error.empty();
+    }
+    checked_ = now;
+    const auto stamp = resourceStamp(assets, key, sky, dependencies_);
+    if (stamp == signature_) {
+        return error.empty();
+    }
+    // Abandoned jobs own all CPU data. Only the currently requested future can upload.
+    if (texture_) {
+        glDeleteTextures(1, &texture_);
+    }
+    texture_ = 0;
+    loaded_ = ready_ = false;
+    error.clear();
+    ambient_ = {1, 1, 1};
+    auto job =
+        WorkerPool::shared().submit([sky, assets, key] { return decodeSkybox(sky, assets, key); });
+    if (job) {
+        pending_ = std::move(*job);
+        signature_ = stamp;
+    } else {
+        checked_ = {};
+    }
+    return true;
 }
 void SkyboxRenderer::draw(const Skybox& sky,
                           const AssetManager& assets,
@@ -325,18 +387,19 @@ void SkyboxRenderer::draw(const Skybox& sky,
         return;
     }
     prepare(sky, assets);
+    if (opacity <= 0) {
+        return;
+    }
     Mat4 inv;
     if (!inverse(vp, inv)) {
         return;
     }
     glUseProgram(program_);
-    glUniformMatrix4fv(glGetUniformLocation(program_, "inverseVP"), 1, GL_FALSE, inv.m);
-    glUniform3f(glGetUniformLocation(program_, "tint"), sky.color.x, sky.color.y, sky.color.z);
-    glUniform1f(glGetUniformLocation(program_, "opacity"), opacity);
-    glUniform1i(glGetUniformLocation(program_, "hasTexture"), loaded_);
-    glUniform1i(glGetUniformLocation(program_, "isHDR"), sky.type == 1);
-    glUniform1i(glGetUniformLocation(program_, "faces"), 4);
-    glUniform1i(glGetUniformLocation(program_, "panorama"), 5);
+    glUniformMatrix4fv(inverseLocation_, 1, GL_FALSE, inv.m);
+    glUniform3f(tintLocation_, sky.color.x, sky.color.y, sky.color.z);
+    glUniform1f(opacityLocation_, opacity);
+    glUniform1i(textureLocation_, loaded_);
+    glUniform1i(hdrLocation_, sky.type == 1);
     glActiveTexture(GL_TEXTURE4);
     glBindTexture(GL_TEXTURE_CUBE_MAP, sky.type == 0 ? texture_ : 0);
     glActiveTexture(GL_TEXTURE5);

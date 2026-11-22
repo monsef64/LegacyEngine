@@ -208,7 +208,8 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"hdr", 's'},
       {"cubemap", 's'},
       {"affectEnvironment", 'b'},
-      {"environmentIntensity", 'f'}}},
+      {"environmentIntensity", 'f'},
+      {"hdrCompression", 'b'}}},
     {"ObjectActivity", {{"enabled", 'b'}}},
     {"PrefabInstance", {{"asset", 's'}}},
     {"CharacterController",
@@ -260,6 +261,9 @@ inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
 }
 inline void writeSchema(std::ostream& out, const Json& original, const std::vector<Field>& fields) {
     Json object = original;
+    if (!object.contains("hdrCompression")) {
+        object["hdrCompression"] = false;
+    }
     if (!object.contains("affectEnvironment")) {
         object["affectEnvironment"] = false;
     }
@@ -366,7 +370,7 @@ inline Json fromLegacy(const std::string& text) {
     in >> magic >> version;
     Json doc = read(in, {{"script", 's'}, {"assets", 's'}});
     doc["format"] = "LegacyEngine";
-    doc["version"] = 26;
+    doc["version"] = 27;
     doc["editorCamera"] = read(in,
                                {{"target", 'f', 3},
                                 {"yaw", 'f'},
@@ -397,6 +401,9 @@ inline Json fromLegacy(const std::string& text) {
                     }
                 } else {
                     auto fields = components[type].second;
+                    if (type == 12 && version < 36) {
+                        fields.pop_back();
+                    }
                     if (type == 12 && version < 32) {
                         fields.resize(fields.size() - 2);
                     }
@@ -416,12 +423,13 @@ inline std::string toLegacy(const Json& doc) {
          doc.at("version") != 15 && doc.at("version") != 16 && doc.at("version") != 17 &&
          doc.at("version") != 18 && doc.at("version") != 19 && doc.at("version") != 20 &&
          doc.at("version") != 21 && doc.at("version") != 22 && doc.at("version") != 23 &&
-         doc.at("version") != 24 && doc.at("version") != 25 && doc.at("version") != 26) ||
+         doc.at("version") != 24 && doc.at("version") != 25 && doc.at("version") != 26 &&
+         doc.at("version") != 27) ||
         !doc.at("objects").is_array() || doc.at("objects").size() > 10000) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 35\n";
+    out << std::setprecision(17) << "LegacyEngineProject 36\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),

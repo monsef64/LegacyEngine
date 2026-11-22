@@ -235,7 +235,7 @@ struct EditorSettings {
         if (ImGui::Begin("Editor Settings", &visible, ImGuiWindowFlags_NoDocking)) {
             ImGui::SetNextItemWidth(-120);
             if (EditorValues::Combo(
-                    "Theme", &theme, "Legacy Dark\0Grey\0Unity 5 Classic\0Unity Dark Classic\0")) {
+                    "Theme", &theme, "Legacy Dark\0Grey\0Classic Light\0Classic Dark\0")) {
                 applyEditorPalette(theme);
                 save();
             }

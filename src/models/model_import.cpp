@@ -1,6 +1,7 @@
 #include "models/model_import.hpp"
 #include "materials/material_io.hpp"
 #include <algorithm>
+#include <assimp/DefaultIOSystem.h>
 #include <assimp/Importer.hpp>
 #include <assimp/config.h>
 #include <assimp/material.h>
@@ -8,6 +9,52 @@
 #include <assimp/scene.h>
 #include <functional>
 #include <map>
+
+namespace {
+// GoldSrc models were authored against case-insensitive filesystems. Assimp
+// synthesizes T.mdl / 01.mdl filenames; their case often differs in real packs.
+class GoldSrcIOSystem final : public Assimp::DefaultIOSystem {
+  public:
+    static std::string existingPath(const char* filename) {
+        auto path = std::filesystem::u8path(filename);
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(path, ec)) {
+            return path.u8string();
+        }
+        auto parent = path.parent_path();
+        if (parent.empty()) {
+            parent = ".";
+        }
+        auto lower = [](std::string value) {
+            for (auto& c : value) {
+                c = char(std::tolower(static_cast<unsigned char>(c)));
+            }
+            return value;
+        };
+        const auto wanted = lower(path.filename().u8string());
+        std::string found;
+        for (std::filesystem::directory_iterator it(parent, ec), end; !ec && it != end;
+             it.increment(ec)) {
+            if (it->is_regular_file(ec) && lower(it->path().filename().u8string()) == wanted) {
+                if (!found.empty()) {
+                    return filename; // ambiguous: never pick an arbitrary companion
+                }
+                found = it->path().u8string();
+            }
+        }
+        return found.empty() ? filename : found;
+    }
+
+  public:
+    bool Exists(const char* path) const override {
+        return Assimp::DefaultIOSystem::Exists(existingPath(path).c_str());
+    }
+    Assimp::IOStream* Open(const char* path, const char* mode = "rb") override {
+        const auto resolved = existingPath(path);
+        return Assimp::DefaultIOSystem::Open(resolved.c_str(), mode);
+    }
+};
+} // namespace
 
 std::string modelImportExtensions() {
     // Do not advertise internal Assimp dependencies (MD2 supplies MDL normals).
@@ -18,6 +65,27 @@ bool importableModel(const std::filesystem::path& path) {
     const auto extension = AssetManager::extension(path);
     return extension == ".obj" || extension == ".gltf" || extension == ".glb" ||
            extension == ".mdl";
+}
+bool modelCompanionFile(const std::filesystem::path& path) {
+    if (AssetManager::extension(path) != ".mdl") {
+        return false;
+    }
+    std::ifstream input(path, std::ios::binary);
+    unsigned char h[208]{};
+    input.read(reinterpret_cast<char*>(h), sizeof(h));
+    const auto count = input.gcount();
+    if (count < 8 || h[0] != 'I' || h[1] != 'D' || h[2] != 'S' || h[4] != 10 || h[5] || h[6] ||
+        h[7]) {
+        return false;
+    }
+    if (h[3] == 'Q') {
+        return true; // separate sequence group, never standalone geometry
+    }
+    auto value = [&](int offset) {
+        return std::uint32_t(h[offset]) | (std::uint32_t(h[offset + 1]) << 8) |
+               (std::uint32_t(h[offset + 2]) << 16) | (std::uint32_t(h[offset + 3]) << 24);
+    };
+    return count == sizeof(h) && h[3] == 'T' && value(180) > 0 && value(204) == 0;
 }
 std::string importModel(AssetManager& assets,
                         const std::filesystem::path& source,
@@ -30,6 +98,26 @@ std::string importModel(AssetManager& assets,
     if (!std::filesystem::is_regular_file(source) ||
         std::filesystem::file_size(source) > 256 * 1024 * 1024) {
         throw std::runtime_error("Model source must be a file smaller than 256 MiB");
+    }
+    if (modelCompanionFile(source)) {
+        auto stem = source.stem().u8string();
+        // Selecting a texture/group companion is common in model packs. Resolve
+        // its main model instead of feeding a non-geometry file to Assimp.
+        if (!stem.empty() && (stem.back() == 'T' || stem.back() == 't')) {
+            stem.pop_back();
+        } else if (stem.size() >= 2 && std::isdigit(static_cast<unsigned char>(stem.back())) &&
+                   std::isdigit(static_cast<unsigned char>(stem[stem.size() - 2]))) {
+            stem.resize(stem.size() - 2);
+        }
+        auto candidate = source.parent_path() / std::filesystem::u8path(stem + ".mdl");
+        candidate =
+            std::filesystem::u8path(GoldSrcIOSystem::existingPath(candidate.u8string().c_str()));
+        if (candidate != source && std::filesystem::is_regular_file(candidate) &&
+            !modelCompanionFile(candidate)) {
+            return importModel(assets, candidate, folder, publishRevision);
+        }
+        throw std::runtime_error(
+            "This MDL contains only textures/sequence data. Import its main GoldSrc model and keep all companion files beside it.");
     }
     // MDL is shared by unrelated formats. Accept only a main GoldSrc studio
     // model, never a Quake/Source model or a standalone sequence-group file.
@@ -44,9 +132,16 @@ std::string importModel(AssetManager& assets,
         }
     }
     Assimp::Importer importer;
+    if (AssetManager::extension(source) == ".mdl") {
+        importer.SetIOHandler(new GoldSrcIOSystem);
+    }
     importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_ANIMATIONS, true);
     // Import render/skeleton data, not game-event and hitbox helper hierarchies.
     importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_ANIMATION_EVENTS, false);
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_BLEND_CONTROLLERS, false);
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_SEQUENCE_TRANSITIONS, false);
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_BONE_CONTROLLERS, false);
+    importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_MISC_GLOBAL_INFO, false);
     importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_HITBOXES, false);
     importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_READ_ATTACHMENTS, false);
     importer.SetPropertyBool(AI_CONFIG_IMPORT_MDL_HL1_TRANSFORM_COORD_SYSTEM, true);

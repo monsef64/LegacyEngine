@@ -22,6 +22,7 @@
     "onAnimationStopped": "fun()|nil",
     "onAnimationPause": "fun()|nil",
     "onAnimationResume": "fun()|nil",
+    "onGUI": "fun()|nil Draw GUI once per rendered Game frame; no wait/task",
     "onStart": "fun()|nil",
     "onUpdate": "fun(deltaTime:number)|nil",
     "onFixedUpdate": "fun(deltaTime:number)|nil",
@@ -256,6 +257,7 @@
     "setSpotAngles": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
   },
   "Skybox": {
+    "hdrCompression": "boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged",
     "type": "integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama",
     "enabled": "boolean",
     "color": "Vector3 Color tint",
@@ -668,7 +670,6 @@
     "drawCircleFilled": "fun(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) Screen-pixel coordinates; radius 0..100000.",
     "drawText": "fun(x:number,y:number,value:string,r:number,g:number,b:number,a?:number) Screen-pixel coordinates.",
     "drawTriangleFilled": "fun(x:number,y:number,x2:number,y2:number,x3:number,y3:number,r:number,g:number,b:number,a?:number) Screen-pixel coordinates.",
-    "onDraw": "fun(callback:fun()):integer Register once in onStart; returns off(token) handle.",
     "beginWindow": "fun(title:string,flags?:integer):boolean Always call endWindow even when false.",
     "endWindow": "fun() End the current window.",
     "text": "fun(value:string) Plain text, never a printf format.",

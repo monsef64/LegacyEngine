@@ -31,6 +31,7 @@ class LuaScene {
     bool receivesEvents() const {
         return active_ && (selfEntity_ == Entity{} || isActive(world_, selfEntity_));
     }
+    void drawGUI();
     void update(float dt);
     void fixedUpdate(float dt);
     void stop();

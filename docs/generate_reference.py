@@ -22,6 +22,7 @@ GLOBALS = {
 'onTriggerStay': 'function onTriggerStay(collider)\n    if collider then debug.log("Overlapping", collider.gameObject.layer) end\nend',
 'onTriggerExit': 'function onTriggerExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Destroyed collider", "left")\nend',
 'onStart': 'function onStart()\n    debug.log("Script started", self:getName())\nend',
+'onGUI': 'function onGUI()\n    GUI.beginWindow("HUD")\n    GUI.text("Hello")\n    GUI.endWindow()\nend',
 'onUpdate': 'function onUpdate(deltaTime)\n    self:translate(deltaTime, 0, 0)\nend',
 'onFixedUpdate': 'function onFixedUpdate(deltaTime)\n    debug.log("Fixed step", deltaTime)\nend',
 'onDestroy': 'function onDestroy()\n    debug.log("Script stopping")\nend',
@@ -179,7 +180,7 @@ def example(entry):
     if name == 'setTextureQuality':
         return 'function onStart()\n    setTextureQuality(1)\nend'
     if owner == 'GUI':
-        calls = {'onDraw': 'GUI.text("Hello")',
+        calls = {
          'beginWindow': 'GUI.text("Window contents")',
          'endWindow': 'GUI.text("Window contents")',
          'text': 'GUI.text("Hello, player!")',
@@ -229,7 +230,7 @@ def example(entry):
         setup = 'local enabled, changed = true, false\nlocal volume, count, name = 0.5, 1, \"Player\"\nlocal r, g, b, a = 1, 1, 1, 1\n'
         before = '        GUI.setNextWindowPos(20, 20)\n' if name == 'setNextWindowPos' else '        GUI.setNextWindowSize(300, 200)\n' if name == 'setNextWindowSize' else ''
         body = '\n'.join('        ' + line for line in calls[name].splitlines())
-        return setup + 'function onStart()\n    GUI.onDraw(function()\n' + before + '        GUI.beginWindow(\"HUD\")\n' + body + '\n        GUI.endWindow()\n    end)\nend'
+        return setup + 'function onGUI()\n' + before + '        GUI.beginWindow(\"HUD\")\n' + body + '\n        GUI.endWindow()\nend'
     if owner == 'UI':
         return {
             'isLoaded': 'local gui = self:getComponent(UI)\nif gui and gui:isLoaded() then debug.log("UI ready") end',
