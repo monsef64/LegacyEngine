@@ -348,7 +348,24 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     bool orbitStarted = false;
     bool selectModelRoots = false;
     bool focusSuspended = false;
+    auto handleAssetDrop = [&](const SDL_Event& event) {
+        if (event.type != SDL_EVENT_DROP_FILE) {
+            return false;
+        }
+        if (!playMode.active() && !projectDialog.pending() && !levels.busy() && event.drop.data) {
+            // SDL drop payloads are transient: importFile owns a copy before the next event pump.
+            browser.importFile(event.drop.data);
+        }
+        return true;
+    };
+    auto waitWhileSuspended = [&](SDL_Event& event) {
+        // Workers/native dialogs need no window event to finish. Only wake periodically
+        // while imports need servicing; an idle unfocused engine still blocks normally.
+        return browser.importing() || browser.dialog.pending() ? SDL_WaitEventTimeout(&event, 100)
+                                                               : SDL_WaitEvent(&event);
+    };
     while (running) {
+        browser.pollImports();
         if (!smokeTest && !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
             !(gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS))) {
             input.releaseMouse();
@@ -359,12 +376,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 audio.suspend(true);
                 focusSuspended = true;
             }
-            // Do not poll project transitions/import results or run editor work
-            // while backgrounded. Only pump OS events until focus or a close request.
+            // Keep simulation, scripting, rendering and project transitions paused.
+            // Asset imports are an explicit exception: service their queue and accept drops.
             while (!(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
                    !(gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS))) {
+                browser.pollImports();
                 SDL_Event wake;
-                if (!SDL_WaitEvent(&wake)) {
+                if (!waitWhileSuspended(wake)) {
                     SDL_Delay(50);
                     continue;
                 }
@@ -372,7 +390,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     SDL_PushEvent(&wake);
                     break;
                 }
-                ImGui_ImplSDL3_ProcessEvent(&wake);
+                if (!handleAssetDrop(wake)) {
+                    ImGui_ImplSDL3_ProcessEvent(&wake);
+                }
             }
             lastTicks = SDL_GetTicksNS();
             lastAutosave = std::chrono::steady_clock::now();
@@ -606,10 +626,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
             switch (event.type) {
             case SDL_EVENT_DROP_FILE:
-                if (!playMode.active() && !projectDialog.pending() && !levels.busy() &&
-                    event.drop.data) {
-                    browser.importFile(event.drop.data);
-                }
+                handleAssetDrop(event);
                 break;
             case SDL_EVENT_WINDOW_FOCUS_LOST:
                 orbitPivot.reset();
@@ -812,8 +829,11 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             // Block instead of rendering/simulating at a background frame rate.
             // Preserve the wake event for the normal event handler (including Quit).
             SDL_Event wake;
-            if (running && SDL_WaitEvent(&wake)) {
-                SDL_PushEvent(&wake);
+            if (running && waitWhileSuspended(wake)) {
+                // Do not requeue a shallow copy of SDL's transient drop payload.
+                if (!handleAssetDrop(wake)) {
+                    SDL_PushEvent(&wake);
+                }
             }
             lastTicks = SDL_GetTicksNS();
             lastAutosave = std::chrono::steady_clock::now();
