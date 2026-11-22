@@ -109,7 +109,8 @@ class AssetBrowser {
                             result.error + "\n";
                     }
                     assets.error = importErrors_;
-                    thumbnails.clear();
+                    // GPU thumbnail invalidation is deferred to draw() via modelAssetRevision.
+                    // Import servicing must also work while rendering is suspended.
                 }
             } catch (const std::exception& e) {
                 importErrors_ += std::string("Import failed: ") + e.what() + "\n";
@@ -560,12 +561,8 @@ class AssetBrowser {
         selected.clear();
         openedScript.clear();
     }
-    void draw(SDL_Window* window,
-              World& world,
-              Entity selectedObject,
-              ScriptEditor& scripts,
-              bool editable,
-              EditorHistory* history = nullptr) {
+    // Main-thread, CPU-only maintenance; safe without an ImGui frame or GPU work.
+    void pollImports() {
         pollImport();
         if (auto result = dialog.poll()) {
             if (!result->error.empty()) {
@@ -578,6 +575,14 @@ class AssetBrowser {
                 importFile(result->path);
             }
         }
+    }
+    void draw(SDL_Window* window,
+              World& world,
+              Entity selectedObject,
+              ScriptEditor& scripts,
+              bool editable,
+              EditorHistory* history = nullptr) {
+        pollImports();
         preview.update();
         if (thumbnailRevision_ != modelAssetRevision) {
             thumbnails.clear();
