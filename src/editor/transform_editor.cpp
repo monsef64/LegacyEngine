@@ -89,10 +89,10 @@ void TransformEditor::draw(World& world,
         transform.position + rotateVector(transform.rotation, pivotLocal_ * transform.scale);
     Mat4 model = transformMatrix(pivot, transform.rotation, transform.scale);
     const Mat4 view = lookAt(camera.position(), camera.target, camera.up());
-    const Mat4 projection = perspective(camera.fieldOfView, aspect, 0.1f, 200);
+    const Mat4 projection = camera.projection(aspect);
     const ImGuizmo::OPERATION operations[]{ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE};
     ImGuizmo::Enable(!navigationOnly);
-    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::SetOrthographic(camera.orthographic);
     ImGuizmo::SetDrawlist(drawList ? drawList : ImGui::GetBackgroundDrawList());
     const auto* viewport = ImGui::GetMainViewport();
     ImGuizmo::SetRect(scene ? scene->x : viewport->Pos.x,
@@ -100,7 +100,8 @@ void TransformEditor::draw(World& world,
                       scene ? scene->width : viewport->Size.x,
                       scene ? scene->height : viewport->Size.y);
     const bool wasDragging = dragging_;
-    const float snapValues[3]{snap_, snap_, snap_};
+    const float step = tool_ == TransformTool::Rotate ? rotationSnap_ : snap_;
+    const float snapValues[3]{step, step, step};
     const bool changed = ImGuizmo::Manipulate(view.m,
                                               projection.m,
                                               operations[static_cast<int>(tool_)],
@@ -191,15 +192,19 @@ void TransformEditor::drawToolbar() {
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + width - 390);
     }
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Snap");
+    const bool rotation = tool_ == TransformTool::Rotate;
+    ImGui::TextUnformatted(rotation ? "Snap (deg)" : "Snap");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(130);
-    if (ImGui::InputFloat("##Snap", &snap_, .25f, .25f, "%.2f")) {
-        snap_ = std::isfinite(snap_) ? std::clamp(std::round(snap_ * 4) / 4, .25f, 10000.f) : .5f;
+    float& step = rotation ? rotationSnap_ : snap_;
+    if (ImGui::InputFloat("##Snap", &step, rotation ? 5.f : .25f, rotation ? 15.f : 1.f, "%.2f")) {
+        step = std::isfinite(step)
+                   ? std::clamp(step, rotation ? 1.f : .25f, rotation ? 180.f : 10000.f)
+                   : (rotation ? 15.f : .5f);
     }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip(
-            "Hold Ctrl while dragging: move in world units, rotate in degrees, scale in increments. Step 0.25; minimum 0.25.");
+            "Hold Ctrl while dragging: move in world units, rotate in degrees, scale in increments. Rotation has its own degree step (default 15).");
     }
     ImGui::EndDisabled();
 }

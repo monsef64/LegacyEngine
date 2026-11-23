@@ -444,7 +444,7 @@ inline constexpr LuaDefinition luaDefinitions
        {"setMaterialNormalMap",
         "mesh:setMaterialNormalMap(Texture) - instance normal map override; nil clears"},
        {"setMaterialShader",
-        "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"},
+        "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection'|'Stochastic Texture Sampling')"},
        {"setMaterialNormalStrength", "mesh:setMaterialNormalStrength(value) - 0..4"},
        {"setMaterialTiling", "mesh:setMaterialTiling(x,y) - nonzero UV repeat scale"},
        {"centerOfMassX",

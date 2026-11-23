@@ -53,7 +53,11 @@ drawAssetPreview(const AssetManager& assets, const std::string& path, float widt
     }
     if (!preview.error.empty()) {
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + width);
-        ImGui::TextDisabled("%s", preview.error.c_str());
+        const bool filesystem = preview.error.find("filesystem error") != std::string::npos ||
+                                preview.error.find("filesystem_error") != std::string::npos;
+        ImGui::TextDisabled("%s",
+                            filesystem ? "Preview unavailable: asset is missing or inaccessible."
+                                       : preview.error.c_str());
         ImGui::PopTextWrapPos();
     }
 }

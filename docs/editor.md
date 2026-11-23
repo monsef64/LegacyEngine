@@ -103,6 +103,9 @@ opposite endpoint to view from the negative direction. Drag within the gizmo to
 orbit around the Scene camera's current pivot. Snapping preserves that pivot and
 viewing distance, including stable straight-down/straight-up views. This is
 Scene navigation only: it does not rotate selected objects or the Game camera.
+Click the center cube to toggle **Ortho/Persp** for the level-editor camera.
+Orthographic picking and transform gizmos follow the same projection; the view
+keeps its pivot and apparent size when toggled. Scene Camera components are unchanged.
 
 ## Scene-only grid and file workflows
 
@@ -383,7 +386,10 @@ RigidBody owns mass, gravity, and linear/angular damping, not surface material.
 The Scene toolbar has a right-aligned **Snap** increment, initially **0.50**.
 Its minus/plus controls change by **0.25**, with a minimum of **0.25**. Hold
 **Ctrl** while dragging a transform gizmo to snap; release Ctrl for free dragging.
-Move uses scene units, Rotate uses degrees, and Scale uses scale increments.
+Move uses scene units and Scale uses scale increments. Rotate has a separate
+**Snap (deg)** step, default **15 degrees**, adjustable from 1 to 180 degrees.
+Hold Ctrl while dragging a rotation ring to use angular snapping; it does not
+change the Move/Scale snap step.
 Collider face handles are independent of transform snapping. Narrow Scene panels
 use a second toolbar row so the pivot and snap controls remain accessible.
 

@@ -74,3 +74,33 @@ Standalone players resolve shaders and built-in particle textures from their mou
 initialization failure caused by looking for loose `data/shaders` in an encrypted
 export. Missing/invalid graphics drivers or unsupported OpenGL contexts can still
 cause renderer initialization errors; inspect the player log for the failing stage.
+
+## Only referenced project assets are packaged
+
+Exports collect a dependency closure from the exported scene and every level in
+`Assets/Levels/levels.json` (registered levels are runtime-addressable roots).
+Referenced materials, model containers, animations, prefabs, terrain layers,
+foliage, images, audio, lightmaps and RML/RCSS dependencies are followed recursively.
+Unused files and unregistered, unreferenced levels are left out. Packed model
+members travel with their model container; exports do not rewrite those containers
+or remove individual embedded members. Engine runtime resources and project
+Settings are retained separately from this Assets filtering.
+
+Literal paths in included scripts and UI are detected, including relative UI/CSS
+paths. An exporter cannot infer a path constructed at runtime, such as
+`"Textures/" .. name .. ".png"`. Declare these dependencies explicitly in
+`Settings/ExportAssets.json` before exporting:
+
+```json
+{
+  "include": ["Textures/RuntimeChoices/", "Prefabs/Spawnable.prefab"]
+}
+```
+
+Entries are Assets-relative files or directories. Included directories retain all
+files inside, and each included asset's own dependencies are followed. Missing
+explicit entries stop export rather than silently making an incomplete package.
+Keep this list specific instead of including all of Assets. Test every level,
+spawn path and UI screen in the exported player, especially when paths are built
+from save data, downloaded configuration or script variables. Referenced symlinks
+are rejected; dependency cycles are handled without packaging duplicate files.

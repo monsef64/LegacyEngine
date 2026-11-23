@@ -4,6 +4,7 @@
 #include "input/input.hpp"
 #include "physics/physics.hpp"
 #include "project/layers.hpp"
+#include "terrain/terrain.hpp"
 
 inline void updateCharacterControllers(World& world, Physics& physics) {
     world.each<CharacterController, Transform, RigidBody, Collider>(
@@ -21,8 +22,10 @@ inline void updateCharacterControllers(World& world, Physics& physics) {
             RayHit groundHit;
             const bool grounded = physics.raycast(
                 {origin, {0, -1, 0}}, halfHeight + c.groundProbe, groundHit, [&](Entity target) {
-                    return target != e && world.has<Collider>(target) &&
-                           !world.get<Collider>(target).isTrigger &&
+                    const auto* solid = world.tryGet<Collider>(target);
+                    const auto* terrain = world.tryGet<Terrain>(target);
+                    return target != e &&
+                           ((solid && !solid->isTrigger) || (terrain && terrain->data)) &&
                            LayerSettings::collide(LayerSettings::effective(world, e),
                                                   LayerSettings::effective(world, target));
                 });
