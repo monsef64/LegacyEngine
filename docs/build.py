@@ -20,7 +20,7 @@ from pygments.token import Comment
 
 
 class LegacyScriptLexer(LuaLexer):
-    tokens = {'root': [(r'(?m)^\s*(?:expose|@export)\b[^\n]*', Comment.Preproc), inherit]}
+    tokens = {'root': [(r'(?m)^\s*(?:global|expose)\b[^\n]*', Comment.Preproc), inherit]}
 
 SOURCE = Path(__file__).resolve().parent
 REPO = SOURCE.parent

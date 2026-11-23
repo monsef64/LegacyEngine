@@ -3,7 +3,7 @@ const types = new Set(('Recoil UI GameObject Transform RigidBody Collider MeshRe
 const reserved = new Set('self onStart onGUI onUpdate onFixedUpdate onDestroy onTriggerEnter onTriggerStay onTriggerExit onCollisionEnter onCollisionStay onCollisionExit'.split(' '));
 
 // Preserve UTF-16 offsets and line breaks when removing engine-only declarations.
-// Strings and long comments are skipped, so examples containing @export are text.
+// Strings and long comments are skipped, so examples containing declarations are text.
 function preprocess(text) {
   const output = text.split('');
   let atLineStart = true;
@@ -11,13 +11,11 @@ function preprocess(text) {
   for (let i = 0; i < text.length;) {
     const start = i;
     const leading = atLineStart;
-    const typed=leading && text.startsWith('expose',i) && (!text[i+6] || /\s/.test(text[i+6]));
-    const bare = typed || leading && text.startsWith('@export', i) && (!text[i + 7] || /\s/.test(text[i + 7]));
-    const annotation = leading && text.startsWith('---@export', i) && (!text[i + 10] || /\s/.test(text[i + 10]));
-    if (bare || annotation) {
+    const typed=leading && (text.startsWith('global',i) || text.startsWith('expose',i)) && (!text[i+6] || /\s/.test(text[i+6]));
+    if (typed) {
       let end = text.indexOf('\n', i); if (end < 0) end = text.length;
-      exports.push({start: i, end, typed, body: text.slice(i + (typed ? 6 : bare ? 7 : 10), end)});
-      if (bare) for (let j = i; j < end; ++j) if (text[j] !== '\r') output[j] = ' ';
+      exports.push({start: i, end, typed, body: text.slice(i + 6, end)});
+      for (let j = i; j < end; ++j) if (text[j] !== '\r') output[j] = ' ';
       atLineStart = false; i = end; continue;
     }
     const comment = text.startsWith('--', i);
@@ -68,7 +66,7 @@ function diagnostics(doc) {
     if(field.typed && declaration){const type=declaration[1];declaration[1]=declaration[2];declaration[2]=type;}
 
     let message;
-    if (!declaration) message = 'Expected expose Type name = defaultValue.';
+    if (!declaration) message = 'Expected global Type name = defaultValue.';
     else if (reserved.has(declaration[1]) || declaration[1].length > 128) message = `Invalid or reserved exported name '${declaration[1]}'.`;
     else if (!types.has(declaration[2])) message = `Unknown export type '${declaration[2]}'.`;
     else if (names.has(declaration[1])) message = `Duplicate exported field '${declaration[1]}'.`;

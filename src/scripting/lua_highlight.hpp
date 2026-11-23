@@ -37,14 +37,10 @@ inline std::vector<LuaToken> luaTokens(std::string_view s) {
                 auto e = s.find('\n', i);
                 i = e == s.npos ? s.size() : e;
             }
-        } else if (s.substr(i, 6) == "expose" &&
+        } else if ((s.substr(i, 6) == "global" || s.substr(i, 6) == "expose") &&
                    (i + 6 == s.size() || std::isspace(static_cast<unsigned char>(s[i + 6])))) {
             kind = LuaToken::Api;
             i += 6;
-        } else if (s.substr(i, 7) == "@export" &&
-                   (i + 7 == s.size() || std::isspace(static_cast<unsigned char>(s[i + 7])))) {
-            kind = LuaToken::Api;
-            i += 7;
         } else if (s[i] == '\'' || s[i] == '"') {
             kind = LuaToken::String;
             char q = s[i++];

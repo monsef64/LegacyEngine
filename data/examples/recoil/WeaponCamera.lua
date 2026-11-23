@@ -1,10 +1,10 @@
 -- Attach to the camera. Add Camera > Recoil, then assign optional clip/prefab fields.
 -- Configure Fire in Project > Input Settings. No engine-host filesystem APIs used.
-expose Recoil recoil
-expose Animation weaponAnimation
-expose AnimationClip reloadClip = ""
-expose Prefab casing = ""
-expose float roundsPerSecond = 10
+global Recoil recoil
+global Animation weaponAnimation
+global AnimationClip reloadClip = ""
+global Prefab casing = ""
+global float roundsPerSecond = 10
 
 function onStart()
     recoil = recoil or self:getComponent(Recoil) or self:addComponent(Recoil)

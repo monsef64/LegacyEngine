@@ -16,7 +16,7 @@ The level-editor freecam is unaffected.
 ## Triggering from scripts
 
 ```lua
-expose Recoil recoil
+global Recoil recoil
 
 function onStart()
     recoil = recoil or self:getComponent(Recoil)

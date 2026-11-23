@@ -3270,7 +3270,7 @@ void LuaScene::call(
     }
     lua_settop(state_, base);
 }
-void LuaScene::advanceTasks(float dt) {
+void LuaScene::advanceTasks(double dt) {
     const auto count = tasks_.size();
     auto it = tasks_.begin();
     for (std::size_t i = 0; i < count && it != tasks_.end(); ++i) {
@@ -3301,7 +3301,7 @@ void LuaScene::advanceTasks(float dt) {
             ready = (animation ? animation->eventSequence[current->audioEvent]
                                : audio->eventSequence[current->audioEvent]) != current->sequence;
         } else {
-            current->seconds -= std::max(0.f, dt);
+            current->seconds -= std::isfinite(dt) ? std::max(0.0, dt) : 0.0;
             ready = current->seconds <= 0;
         }
         if (ready) {
@@ -3355,8 +3355,8 @@ int LuaScene::waitAPI(lua_State* L) {
         return luaL_error(L, "wait is only supported inside running lifecycle/object callbacks");
     }
     if (lua_toboolean(L, lua_upvalueindex(2)) || lua_type(L, 1) == LUA_TNUMBER) {
-        float seconds = number(L, 1);
-        if (seconds < 0 || seconds > 86400) {
+        const double seconds = luaL_checknumber(L, 1);
+        if (!std::isfinite(seconds) || seconds < 0 || seconds > 86400) {
             return luaL_error(L, "Wait seconds must be between 0 and 86400");
         }
         scene.currentTask_->seconds = seconds;
@@ -3480,12 +3480,14 @@ void LuaScene::drawGUI() {
         }
     }
 }
-void LuaScene::update(float dt) {
+void LuaScene::update(float dt, double waitDelta) {
     if (selfEntity_ != Entity{} && !isActive(world_, selfEntity_)) {
         return;
     }
     if (active_) {
-        advanceTasks(dt);
+        // Movement/physics delta is capped for stability; waits measure all
+        // elapsed playing time, including slow rendered frames in exported games.
+        advanceTasks(waitDelta < 0 ? double(dt) : waitDelta);
     }
     tick("onUpdate", dt);
     updateHierarchy(world_);

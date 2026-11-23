@@ -80,10 +80,10 @@
       "details": "animation:playClip(AnimationClip(path)) - Plays a selected clip; decoding is asynchronous and Stop cancels pending playback."
     },
     {
-      "trigger": "expose",
-      "contents": "expose",
+      "trigger": "global",
+      "contents": "global",
       "annotation": "LegacyEngine",
-      "details": "expose Type name = default - Inspector fields; int, float, bool, string, Prefab, AnimationClip, Texture, AudioClip and component references."
+      "details": "global Type name = default - Inspector fields; int, float, bool, string, Prefab, AnimationClip, Texture, AudioClip and component references."
     },
     {
       "trigger": "File",
@@ -701,7 +701,7 @@
       "trigger": "UI",
       "contents": "UI",
       "annotation": "LegacyEngine",
-      "details": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or expose UI hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
+      "details": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or global UI hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
     },
     {
       "trigger": "Vector3",
@@ -1289,7 +1289,7 @@
       "trigger": "Texture",
       "contents": "Texture",
       "annotation": "LegacyEngine",
-      "details": "Texture - export-only image or HDR asset path; expose Texture image ="
+      "details": "Texture - export-only image or HDR asset path; global Texture image ="
     },
     {
       "trigger": "AudioListener",

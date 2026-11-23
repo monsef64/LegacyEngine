@@ -432,6 +432,11 @@ void build(const Settings& s,
                     const auto name =
                         prefix + "/" + it->path().lexically_relative(root).generic_string();
                     safeRelative(name);
+                    // Editor export preferences contain local paths and are not
+                    // runtime settings. Keep them in the project, not the package.
+                    if (name == "Settings/Export.json") {
+                        continue;
+                    }
                     files.push_back({it->path(), name, {}, false});
                 }
             }

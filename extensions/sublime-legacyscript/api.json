@@ -52,8 +52,8 @@
     "signature": "animation:playClip(AnimationClip(path)) - Plays a selected clip; decoding is asynchronous and Stop cancels pending playback."
   },
   {
-    "name": "expose",
-    "signature": "expose Type name = default - Inspector fields; int, float, bool, string, Prefab, AnimationClip, Texture, AudioClip and component references."
+    "name": "global",
+    "signature": "global Type name = default - Inspector fields; int, float, bool, string, Prefab, AnimationClip, Texture, AudioClip and component references."
   },
   {
     "name": "File",
@@ -465,7 +465,7 @@
   },
   {
     "name": "UI",
-    "signature": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or expose UI hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
+    "signature": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or global UI hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
   },
   {
     "name": "Vector3",
@@ -857,7 +857,7 @@
   },
   {
     "name": "Texture",
-    "signature": "Texture - export-only image or HDR asset path; expose Texture image ="
+    "signature": "Texture - export-only image or HDR asset path; global Texture image ="
   },
   {
     "name": "AudioListener",

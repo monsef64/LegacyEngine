@@ -40,13 +40,6 @@
     ],
     "description": "Set FOV on owning Camera"
   },
-  "Export field": {
-    "prefix": "expose",
-    "body": [
-      "expose ${1|int,float,bool,string,Prefab,AnimationClip,GameObject,Texture,AudioClip,Asset,Transform,RigidBody,Collider,Camera|} ${2:value} = ${3:0}"
-    ],
-    "description": "Expose a typed field in the component Inspector"
-  },
   "Independent waiting task": {
     "prefix": "task",
     "body": [
@@ -69,5 +62,12 @@
       "end"
     ],
     "description": "Draw runtime ImGui once per rendered Game frame; no onStart registration."
+  },
+  "Global Inspector field": {
+    "prefix": "global",
+    "body": [
+      "global ${1|int,float,bool,string,Prefab,AnimationClip,GameObject,Texture,AudioClip,Asset,Transform,RigidBody,Collider,Camera|} ${2:value} = ${3:0}"
+    ],
+    "description": "Declare a typed global field editable in the Inspector"
   }
 }

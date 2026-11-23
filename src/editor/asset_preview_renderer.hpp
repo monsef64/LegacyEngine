@@ -711,7 +711,10 @@ class AssetPreviewRenderer {
             }
             if (rebuild) {
                 if (now < nextGeneration_ || readbacks_.size() >= 6 || writes_.size() >= 6) {
-                    return slot.data;
+                    // A detail slot is reusable, but its old image/text is not a
+                    // valid response for a different asset (or asset revision).
+                    // Leave the old key intact so the next request still rebuilds.
+                    return changed ? pending : slot.data;
                 }
                 nextGeneration_ = now + std::chrono::milliseconds(100);
                 slot.key = key;
