@@ -32,6 +32,14 @@
     "signature": "MeshRenderer.castShadow: boolean, default true. Controls realtime and baked shadow casting; rebake static lighting after changing."
   },
   {
+    "name": "Recoil",
+    "signature": "Recoil - Camera > Recoil. Render-only six-axis damped spring, bounded stacking, seeded variation, timed bursts and scheduled sequences. trigger(strength=1), start(), stop(), reset(), playSequence(), setSequence(keys)."
+  },
+  {
+    "name": "onAnimationRestarted",
+    "signature": "onAnimationRestarted() - Owner callback on replay or loop wrap. Animation.onRestarted is the corresponding wait token."
+  },
+  {
     "name": "Random",
     "signature": "Random.randomFloat(min,max), randomInt(min,max), randomBool(), randomString(length). Also available globally; non-cryptographic."
   },
@@ -569,7 +577,7 @@
   },
   {
     "name": "Animation",
-    "signature": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"
+    "signature": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25), playClip(clip); onFinished/onStarted/onRestarted/onStopped/onPaused/onResumed wait tokens; isPlaying is read-only"
   },
   {
     "name": "onAnimationFinish",
@@ -761,7 +769,7 @@
   },
   {
     "name": "wait",
-    "signature": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event"
+    "signature": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio/animation component event"
   },
   {
     "name": "isActive",
@@ -801,7 +809,7 @@
   },
   {
     "name": "loadLevelAsync",
-    "signature": "loadLevelAsync(name=nil) -> accepted, error; background file read"
+    "signature": "loadLevelAsync(name=nil) -> accepted, error; background decoding and asset preloading"
   },
   {
     "name": "unloadLevel",

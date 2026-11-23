@@ -23,6 +23,7 @@
     "onAnimationStopped": "fun()|nil",
     "onAnimationPause": "fun()|nil",
     "onAnimationResume": "fun()|nil",
+    "onAnimationRestarted": "fun()|nil",
     "onGUI": "fun()|nil Draw GUI once per rendered Game frame; no wait/task",
     "onStart": "fun()|nil",
     "onUpdate": "fun(deltaTime:number)|nil",
@@ -351,6 +352,12 @@
     "Sphere": "integer"
   },
   "Animation": {
+    "onFinished": "ComponentEvent Natural nonloop completion, not Stop.",
+    "onRestarted": "ComponentEvent Explicit restart or loop wrap.",
+    "onStopped": "ComponentEvent Stop or Reset while active.",
+    "onStarted": "ComponentEvent Playback starts after the clip is ready.",
+    "onPaused": "ComponentEvent Playback paused.",
+    "onResumed": "ComponentEvent Playback resumed.",
     "gameObject": "GameObject",
     "clip": "string",
     "loop": "boolean",
@@ -898,5 +905,42 @@
     "randomInt": "fun(min:integer,max:integer):integer Inclusive uniform bounds.",
     "randomBool": "fun():boolean Equally likely true/false.",
     "randomString": "fun(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic."
+  },
+  "Recoil": {
+    "enabled": "boolean Render-only local camera recoil, independent of FPS/TPS Transform.",
+    "playOnStart": "boolean Start burst, or sequence if keys exist.",
+    "sequenceLoop": "boolean Repeat the scheduled sequence.",
+    "burstCount": "integer Zero repeats until stopped or duration expires.",
+    "seed": "integer Nonnegative pseudorandom seed.",
+    "isFiring": "boolean Read-only burst/sequence activity, not recovery state.",
+    "trigger": "fun(self:Recoil,strength?:number) One impulse; multiplier 0..10, default 1.",
+    "start": "fun(self:Recoil) Start/restart timed burst after delay.",
+    "stop": "fun(self:Recoil) Stop future impulses; let the spring recover.",
+    "reset": "fun(self:Recoil) Stop and zero offsets immediately.",
+    "playSequence": "fun(self:Recoil) Start the authored sequence after delay.",
+    "setSequence": "fun(self:Recoil,keys:RecoilKey[]) Replace sorted keys; stops firing.",
+    "pitch": "number Degrees, -45..45. Positive lifts the view.",
+    "yaw": "number Degrees, -45..45.",
+    "roll": "number Degrees, -45..45.",
+    "back": "number Metres, -1..1; positive local Z kicks backward.",
+    "up": "number Metres, -1..1.",
+    "side": "number Metres, -1..1.",
+    "rotationRandom": "number Independent random angle amplitude, 0..45 degrees.",
+    "positionRandom": "number Fraction of absolute back displacement, 0..2.",
+    "frequency": "number Angular spring frequency, 0.1..40 Hz.",
+    "damping": "number Angular damping ratio, 0.1..3; one is critical damping.",
+    "positionFrequency": "number Position spring frequency, 0.1..40 Hz.",
+    "positionDamping": "number Position damping ratio, 0.1..3.",
+    "maxAngle": "number Combined angular displacement cap, 0..89 degrees.",
+    "maxDistance": "number Combined positional displacement cap, 0..2 metres.",
+    "interval": "number Timed shot spacing / sequence loop gap, 0.01..60 seconds.",
+    "duration": "number Burst duration after delay, 0..3600; zero unlimited.",
+    "delay": "number Start delay, 0..3600 seconds.",
+    "strength": "number Global impulse multiplier, 0..10.",
+    "recovery": "number Spring frequency multiplier, 0.1..4."
+  },
+  "RecoilKey": {
+    "time": "number Seconds from sequence start, 0..3600; sorted ascending.",
+    "strength": "number Optional impulse multiplier, 0..10; default 1."
   }
 }

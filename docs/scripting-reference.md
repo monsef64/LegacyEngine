@@ -48,7 +48,7 @@ and animation function events.
   Up targets the object that received Down, even if released outside it.
 - Audio callbacks target scripts attached to the AudioSource owner. Finished means natural
   primary-clip completion, not pause, explicit stop, fade-out stop or one-shot completion.
-- `waitForSeconds` and `wait(audio.onAudioFinished)` suspend lifecycle/object callbacks only.
+- `waitForSeconds`, `wait(audio.onAudioFinished)` and `wait(animation.onFinished)` suspend lifecycle/object callbacks only.
   Do not use them at file top-level, in custom event listeners or onDestroy. Each callback
   has at most one pending invocation. Other callbacks keep running; Play pause or object
   deactivation freezes timers, and Stop cancels waits. Audio waits observe the next event,
@@ -799,7 +799,7 @@ if not accepted then debug.warning(reason) end
 
 ### loadLevelAsync
 
-`loadLevelAsync(name=nil) -> accepted, error; background file read`
+`loadLevelAsync(name=nil) -> accepted, error; background decoding and asset preloading`
 
 - `param name? string`
 - `return boolean accepted`
@@ -1119,11 +1119,11 @@ end
 
 ### wait
 
-`wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event`
+`wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio/animation component event`
 
-Takes an opaque AudioEvent token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the AudioSource cancels its continuation.
+Takes an opaque audio or animation component event token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the watched component cancels its continuation.
 
-- `param secondsOrEvent number|AudioEvent Finite 0..86400 seconds or a live audio event token`
+- `param secondsOrEvent number|AudioEvent|ComponentEvent Finite 0..86400 seconds or a live audio/animation event token`
 
 ```lua
 function onStart()
@@ -1552,6 +1552,18 @@ end
 ```lua
 self.onAnimationResume = function()
     debug.log("Object callback: onAnimationResume")
+end
+```
+
+### GameObject.onAnimationRestarted
+
+`onAnimationRestarted()|nil`
+
+- `onAnimationRestarted() - Owner callback on replay or loop wrap. Animation.onRestarted is the corresponding wait token.`
+
+```lua
+self.onAnimationRestarted = function()
+    debug.log("Object callback: onAnimationRestarted")
 end
 ```
 
@@ -5252,6 +5264,64 @@ local value = Random.randomBool()
 local value = Random.randomString(12)
 ```
 
+## Recoil
+
+### Recoil.trigger
+
+`trigger(self:Recoil,strength?:number) One impulse; multiplier 0..10, default 1.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:trigger(1) end
+```
+
+### Recoil.start
+
+`start(self:Recoil) Start/restart timed burst after delay.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:start() end
+```
+
+### Recoil.stop
+
+`stop(self:Recoil) Stop future impulses; let the spring recover.`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:stop() end
+```
+
+### Recoil.reset
+
+`reset(self:Recoil) Stop and zero offsets immediately.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:reset() end
+```
+
+### Recoil.playSequence
+
+`playSequence(self:Recoil) Start the authored sequence after delay.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:playSequence() end
+```
+
+### Recoil.setSequence
+
+`setSequence(self:Recoil,keys:RecoilKey[]) Replace sorted keys; stops firing.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:setSequence({{time=0,strength=1},{time=0.1,strength=0.8}}) end
+```
+
 ## Component fields and type tokens
 
 Component type names such as `Transform`, `Skybox`, `PointLight` and `AudioSource`
@@ -5525,6 +5595,12 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
+| `onFinished` | `ComponentEvent Natural nonloop completion, not Stop.` |
+| `onRestarted` | `ComponentEvent Explicit restart or loop wrap.` |
+| `onStopped` | `ComponentEvent Stop or Reset while active.` |
+| `onStarted` | `ComponentEvent Playback starts after the clip is ready.` |
+| `onPaused` | `ComponentEvent Playback paused.` |
+| `onResumed` | `ComponentEvent Playback resumed.` |
 | `gameObject` | `GameObject` |
 | `clip` | `string` |
 | `loop` | `boolean` |
@@ -5990,6 +6066,43 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `engineVersion` | `string Read-only.` |
 | `blockGameKilling` | `boolean Holds normal graceful quit until cleared or the ten-second timeout.` |
 | `targetFrameRate` | `integer -1 uncapped, or 1..1000; VSync may cap further.` |
+
+### Recoil fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean Render-only local camera recoil, independent of FPS/TPS Transform.` |
+| `playOnStart` | `boolean Start burst, or sequence if keys exist.` |
+| `sequenceLoop` | `boolean Repeat the scheduled sequence.` |
+| `burstCount` | `integer Zero repeats until stopped or duration expires.` |
+| `seed` | `integer Nonnegative pseudorandom seed.` |
+| `isFiring` | `boolean Read-only burst/sequence activity, not recovery state.` |
+| `pitch` | `number Degrees, -45..45. Positive lifts the view.` |
+| `yaw` | `number Degrees, -45..45.` |
+| `roll` | `number Degrees, -45..45.` |
+| `back` | `number Metres, -1..1; positive local Z kicks backward.` |
+| `up` | `number Metres, -1..1.` |
+| `side` | `number Metres, -1..1.` |
+| `rotationRandom` | `number Independent random angle amplitude, 0..45 degrees.` |
+| `positionRandom` | `number Fraction of absolute back displacement, 0..2.` |
+| `frequency` | `number Angular spring frequency, 0.1..40 Hz.` |
+| `damping` | `number Angular damping ratio, 0.1..3; one is critical damping.` |
+| `positionFrequency` | `number Position spring frequency, 0.1..40 Hz.` |
+| `positionDamping` | `number Position damping ratio, 0.1..3.` |
+| `maxAngle` | `number Combined angular displacement cap, 0..89 degrees.` |
+| `maxDistance` | `number Combined positional displacement cap, 0..2 metres.` |
+| `interval` | `number Timed shot spacing / sequence loop gap, 0.01..60 seconds.` |
+| `duration` | `number Burst duration after delay, 0..3600; zero unlimited.` |
+| `delay` | `number Start delay, 0..3600 seconds.` |
+| `strength` | `number Global impulse multiplier, 0..10.` |
+| `recovery` | `number Spring frequency multiplier, 0.1..4.` |
+
+### RecoilKey fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `time` | `number Seconds from sequence start, 0..3600; sorted ascending.` |
+| `strength` | `number Optional impulse multiplier, 0..10; default 1.` |
 
 ## Skybox1 to Skybox2 transition
 

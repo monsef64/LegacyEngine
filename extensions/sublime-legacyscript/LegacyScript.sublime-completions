@@ -50,6 +50,18 @@
       "details": "MeshRenderer.castShadow: boolean, default true. Controls realtime and baked shadow casting; rebake static lighting after changing."
     },
     {
+      "trigger": "Recoil",
+      "contents": "Recoil",
+      "annotation": "LegacyEngine",
+      "details": "Recoil - Camera > Recoil. Render-only six-axis damped spring, bounded stacking, seeded variation, timed bursts and scheduled sequences. trigger(strength=1), start(), stop(), reset(), playSequence(), setSequence(keys)."
+    },
+    {
+      "trigger": "onAnimationRestarted",
+      "contents": "onAnimationRestarted",
+      "annotation": "LegacyEngine",
+      "details": "onAnimationRestarted() - Owner callback on replay or loop wrap. Animation.onRestarted is the corresponding wait token."
+    },
+    {
       "trigger": "Random",
       "contents": "Random",
       "annotation": "LegacyEngine",
@@ -857,7 +869,7 @@
       "trigger": "Animation",
       "contents": "Animation",
       "annotation": "LegacyEngine",
-      "details": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"
+      "details": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25), playClip(clip); onFinished/onStarted/onRestarted/onStopped/onPaused/onResumed wait tokens; isPlaying is read-only"
     },
     {
       "trigger": "onAnimationFinish",
@@ -1145,7 +1157,7 @@
       "trigger": "wait",
       "contents": "wait",
       "annotation": "LegacyEngine",
-      "details": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event"
+      "details": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio/animation component event"
     },
     {
       "trigger": "isActive",
@@ -1205,7 +1217,7 @@
       "trigger": "loadLevelAsync",
       "contents": "loadLevelAsync",
       "annotation": "LegacyEngine",
-      "details": "loadLevelAsync(name=nil) -> accepted, error; background file read"
+      "details": "loadLevelAsync(name=nil) -> accepted, error; background decoding and asset preloading"
     },
     {
       "trigger": "unloadLevel",
@@ -2326,6 +2338,12 @@
     {
       "trigger": "onAnimationResume",
       "contents": "onAnimationResume",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAnimationRestarted",
+      "contents": "onAnimationRestarted",
       "annotation": "GameObject",
       "details": "fun()|nil"
     },
@@ -3996,6 +4014,42 @@
       "contents": "Sphere",
       "annotation": "RaycastType",
       "details": "integer"
+    },
+    {
+      "trigger": "onFinished",
+      "contents": "onFinished",
+      "annotation": "Animation",
+      "details": "ComponentEvent Natural nonloop completion, not Stop."
+    },
+    {
+      "trigger": "onRestarted",
+      "contents": "onRestarted",
+      "annotation": "Animation",
+      "details": "ComponentEvent Explicit restart or loop wrap."
+    },
+    {
+      "trigger": "onStopped",
+      "contents": "onStopped",
+      "annotation": "Animation",
+      "details": "ComponentEvent Stop or Reset while active."
+    },
+    {
+      "trigger": "onStarted",
+      "contents": "onStarted",
+      "annotation": "Animation",
+      "details": "ComponentEvent Playback starts after the clip is ready."
+    },
+    {
+      "trigger": "onPaused",
+      "contents": "onPaused",
+      "annotation": "Animation",
+      "details": "ComponentEvent Playback paused."
+    },
+    {
+      "trigger": "onResumed",
+      "contents": "onResumed",
+      "annotation": "Animation",
+      "details": "ComponentEvent Playback resumed."
     },
     {
       "trigger": "gameObject",
@@ -6966,6 +7020,204 @@
       "contents": "randomString",
       "annotation": "RandomAPI",
       "details": "fun(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic."
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Recoil",
+      "details": "boolean Render-only local camera recoil, independent of FPS/TPS Transform."
+    },
+    {
+      "trigger": "playOnStart",
+      "contents": "playOnStart",
+      "annotation": "Recoil",
+      "details": "boolean Start burst, or sequence if keys exist."
+    },
+    {
+      "trigger": "sequenceLoop",
+      "contents": "sequenceLoop",
+      "annotation": "Recoil",
+      "details": "boolean Repeat the scheduled sequence."
+    },
+    {
+      "trigger": "burstCount",
+      "contents": "burstCount",
+      "annotation": "Recoil",
+      "details": "integer Zero repeats until stopped or duration expires."
+    },
+    {
+      "trigger": "seed",
+      "contents": "seed",
+      "annotation": "Recoil",
+      "details": "integer Nonnegative pseudorandom seed."
+    },
+    {
+      "trigger": "isFiring",
+      "contents": "isFiring",
+      "annotation": "Recoil",
+      "details": "boolean Read-only burst/sequence activity, not recovery state."
+    },
+    {
+      "trigger": "trigger",
+      "contents": "trigger",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil,strength?:number) One impulse; multiplier 0..10, default 1."
+    },
+    {
+      "trigger": "start",
+      "contents": "start",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Start/restart timed burst after delay."
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Stop future impulses; let the spring recover."
+    },
+    {
+      "trigger": "reset",
+      "contents": "reset",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Stop and zero offsets immediately."
+    },
+    {
+      "trigger": "playSequence",
+      "contents": "playSequence",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Start the authored sequence after delay."
+    },
+    {
+      "trigger": "setSequence",
+      "contents": "setSequence",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil,keys:RecoilKey[]) Replace sorted keys; stops firing."
+    },
+    {
+      "trigger": "pitch",
+      "contents": "pitch",
+      "annotation": "Recoil",
+      "details": "number Degrees, -45..45. Positive lifts the view."
+    },
+    {
+      "trigger": "yaw",
+      "contents": "yaw",
+      "annotation": "Recoil",
+      "details": "number Degrees, -45..45."
+    },
+    {
+      "trigger": "roll",
+      "contents": "roll",
+      "annotation": "Recoil",
+      "details": "number Degrees, -45..45."
+    },
+    {
+      "trigger": "back",
+      "contents": "back",
+      "annotation": "Recoil",
+      "details": "number Metres, -1..1; positive local Z kicks backward."
+    },
+    {
+      "trigger": "up",
+      "contents": "up",
+      "annotation": "Recoil",
+      "details": "number Metres, -1..1."
+    },
+    {
+      "trigger": "side",
+      "contents": "side",
+      "annotation": "Recoil",
+      "details": "number Metres, -1..1."
+    },
+    {
+      "trigger": "rotationRandom",
+      "contents": "rotationRandom",
+      "annotation": "Recoil",
+      "details": "number Independent random angle amplitude, 0..45 degrees."
+    },
+    {
+      "trigger": "positionRandom",
+      "contents": "positionRandom",
+      "annotation": "Recoil",
+      "details": "number Fraction of absolute back displacement, 0..2."
+    },
+    {
+      "trigger": "frequency",
+      "contents": "frequency",
+      "annotation": "Recoil",
+      "details": "number Angular spring frequency, 0.1..40 Hz."
+    },
+    {
+      "trigger": "damping",
+      "contents": "damping",
+      "annotation": "Recoil",
+      "details": "number Angular damping ratio, 0.1..3; one is critical damping."
+    },
+    {
+      "trigger": "positionFrequency",
+      "contents": "positionFrequency",
+      "annotation": "Recoil",
+      "details": "number Position spring frequency, 0.1..40 Hz."
+    },
+    {
+      "trigger": "positionDamping",
+      "contents": "positionDamping",
+      "annotation": "Recoil",
+      "details": "number Position damping ratio, 0.1..3."
+    },
+    {
+      "trigger": "maxAngle",
+      "contents": "maxAngle",
+      "annotation": "Recoil",
+      "details": "number Combined angular displacement cap, 0..89 degrees."
+    },
+    {
+      "trigger": "maxDistance",
+      "contents": "maxDistance",
+      "annotation": "Recoil",
+      "details": "number Combined positional displacement cap, 0..2 metres."
+    },
+    {
+      "trigger": "interval",
+      "contents": "interval",
+      "annotation": "Recoil",
+      "details": "number Timed shot spacing / sequence loop gap, 0.01..60 seconds."
+    },
+    {
+      "trigger": "duration",
+      "contents": "duration",
+      "annotation": "Recoil",
+      "details": "number Burst duration after delay, 0..3600; zero unlimited."
+    },
+    {
+      "trigger": "delay",
+      "contents": "delay",
+      "annotation": "Recoil",
+      "details": "number Start delay, 0..3600 seconds."
+    },
+    {
+      "trigger": "strength",
+      "contents": "strength",
+      "annotation": "Recoil",
+      "details": "number Global impulse multiplier, 0..10."
+    },
+    {
+      "trigger": "recovery",
+      "contents": "recovery",
+      "annotation": "Recoil",
+      "details": "number Spring frequency multiplier, 0.1..4."
+    },
+    {
+      "trigger": "time",
+      "contents": "time",
+      "annotation": "RecoilKey",
+      "details": "number Seconds from sequence start, 0..3600; sorted ascending."
+    },
+    {
+      "trigger": "strength",
+      "contents": "strength",
+      "annotation": "RecoilKey",
+      "details": "number Optional impulse multiplier, 0..10; default 1."
     }
   ]
 }

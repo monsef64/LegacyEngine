@@ -310,6 +310,36 @@ MeshHandle Renderer::createMesh(const MeshData& data) {
 
 // Decode/decompress/pose the bind mesh with a private document cache on a CPU
 // worker. Only this render-thread completion path publishes cache entries/GL IDs.
+bool Renderer::preloadAssets(const std::set<std::string>& paths) {
+    if (modelRevision_ != modelAssetRevision) {
+        clearModelCache();
+        modelRevision_ = modelAssetRevision;
+    }
+    pumpModels();
+    materialTextures_.beginFrame();
+    bool ready = true;
+    for (const auto& path : paths) {
+        if (modelAsset(path)) {
+            if (failedModels_.count(path)) {
+                throw std::runtime_error("Cannot preload model: " + path + ": " + modelError);
+            }
+            if (!requestModel(path)) {
+                ready = false;
+            }
+        } else if (!path.empty() && materialTexturePath(path)) {
+            std::string error;
+            const auto texture = materialTextures_.get(materialAssets_, path, error);
+            if (!error.empty()) {
+                throw std::runtime_error("Cannot preload texture: " + path + ": " + error);
+            }
+            if (!texture) {
+                ready = false;
+            }
+        }
+    }
+    return ready && !materialTextures_.streaming();
+}
+
 void Renderer::pumpModels() {
     for (auto it = pendingModels_.begin(); it != pendingModels_.end(); ++it) {
         if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {

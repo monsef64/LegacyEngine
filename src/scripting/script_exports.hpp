@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <sstream>
 inline bool exportReferenceType(const std::string& type) {
-    return type == "Decal" || type == "UI" || type == "GameObject" || type == "Transform" ||
+    return type == "Recoil" || type == "Decal" || type == "UI" || type == "GameObject" || type == "Transform" ||
            type == "RigidBody" || type == "Collider" || type == "MeshRenderer" ||
            type == "ObjectName" || type == "LuaScript" || type == "Camera" ||
            type == "AudioSource" || type == "AudioListener" || type == "DirectionalLight" ||
@@ -174,6 +174,7 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(River);
     EXPORT_COMPONENT(Vehicle);
     EXPORT_COMPONENT(UI);
+    EXPORT_COMPONENT(Recoil);
     EXPORT_COMPONENT(Decal);
     EXPORT_COMPONENT(Water);
     EXPORT_COMPONENT(BoneAttachment);

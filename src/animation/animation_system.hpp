@@ -147,6 +147,11 @@ class AnimationSystem {
         std::string script;
     };
     std::vector<Event> events;
+    void publishPreloaded(std::map<std::string, AnimationClip> clips,
+                          const std::filesystem::path& assetRoot) {
+        clips_ = std::move(clips);
+        root_ = assetRoot;
+    }
     void clear() {
         states_.clear();
         pendingClips_.clear();
@@ -185,7 +190,17 @@ class AnimationSystem {
             auto commands = std::move(animation.commands);
             animation.commands.clear();
             bool began = false;
-            auto emit = [&](const char* name) { events.push_back({owner, name}); };
+            auto emit = [&](const char* name) {
+                const std::string_view n(name);
+                int id = n == "onAnimationFinish"      ? 0
+                         : n == "onAnimationRestarted" ? 1
+                         : n == "onAnimationStopped"   ? 2
+                         : n == "onAnimationStart"     ? 3
+                         : n == "onAnimationPause"     ? 4
+                                                       : 5;
+                ++animation.eventSequence[id];
+                events.push_back({owner, name});
+            };
             for (std::size_t commandIndex = 0; commandIndex < commands.size(); ++commandIndex) {
                 const auto& command = commands[commandIndex];
                 try {
@@ -203,6 +218,7 @@ class AnimationSystem {
                         }
                     }
                     if (changing) {
+                        const bool restarting = state.loaded && state.asset == command.clip;
                         auto next = *prepared;
                         if (!std::isfinite(command.duration) || command.duration < 0 ||
                             command.duration > 3600) {
@@ -257,6 +273,9 @@ class AnimationSystem {
                         animation.error.clear();
                         apply(world, owner, animation, state);
                         emit("onAnimationStart");
+                        if (restarting) {
+                            emit("onAnimationRestarted");
+                        }
                         began = true;
                         continue;
                     }
@@ -268,7 +287,8 @@ class AnimationSystem {
                         state.loaded = true;
                     }
                     switch (command.action) {
-                    case AnimationAction::Play:
+                    case AnimationAction::Play: {
+                        const bool restarting = state.phase != Phase::Stopped;
                         if (state.recapture) {
                             state.originals = capture(world, owner, state.clip);
                             state.recapture = false;
@@ -278,8 +298,12 @@ class AnimationSystem {
                         animation.time = 0;
                         apply(world, owner, animation, state);
                         emit("onAnimationStart");
+                        if (restarting) {
+                            emit("onAnimationRestarted");
+                        }
                         began = true;
                         break;
+                    }
                     case AnimationAction::Pause:
                         if (state.phase == Phase::Playing) {
                             state.phase = Phase::Paused;
@@ -306,6 +330,9 @@ class AnimationSystem {
                         break;
                     }
                     case AnimationAction::Reset:
+                        if (state.phase == Phase::Playing || state.phase == Phase::Paused) {
+                            emit("onAnimationStopped");
+                        }
                         cancelFade(animation, state);
                         state.phase = Phase::Stopped;
                         animation.time = 0;
@@ -368,6 +395,7 @@ class AnimationSystem {
                 }
                 if (animation.time >= state.clip.duration) {
                     if (animation.loop) {
+                        emit("onAnimationRestarted");
                         animation.time = std::fmod(animation.time, state.clip.duration);
                     } else {
                         animation.time = state.clip.duration;

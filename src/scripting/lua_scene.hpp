@@ -53,6 +53,8 @@ class LuaScene {
         float seconds = 0;
         Entity audioEntity;
         int audioEvent = -1;
+        bool animationEvent = false;
+        std::uint64_t eventInstance = 0;
         unsigned sequence = 0;
         Entity owner;
     };
@@ -95,6 +97,7 @@ class LuaScene {
     static int audioMethod(lua_State* state);
     static int guiMethod(lua_State* state);
     static int particleMethod(lua_State* state);
+    static int recoilMethod(lua_State* state);
     static int animationMethod(lua_State* state);
     static int cameraApi(lua_State* state);
     static int objectApi(lua_State* state);

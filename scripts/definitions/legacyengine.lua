@@ -7,7 +7,7 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'|'UI'|'Decal'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'|'UI'|'Decal'|'Recoil'
 ---Live named script proxy. Public globals accept scalar values/functions; see scripting guide.
 ---@class NamedScriptComponent
 ---@class GameObject
@@ -26,6 +26,7 @@
 ---@field onAnimationStopped fun()|nil
 ---@field onAnimationPause fun()|nil
 ---@field onAnimationResume fun()|nil
+---@field onAnimationRestarted fun()|nil
 ---@field onGUI fun()|nil Draw GUI once per rendered Game frame; no wait/task
 ---@field onStart fun()|nil
 ---@field onUpdate fun(deltaTime:number)|nil
@@ -542,8 +543,8 @@ function task(block) end
 ---Suspend this lifecycle callback/task without blocking the engine. Not supported at top-level/onDestroy/custom event listeners.
 ---@param seconds number Finite seconds from 0 to 86400; zero resumes on next update
 function waitForSeconds(seconds) end
----Wait for playing-time seconds or the next AudioSource event; past events do not count.
----@param secondsOrEvent number|AudioEvent Finite 0..86400 seconds or a live audio event token
+---Wait for playing-time seconds or the next audio/animation event; past events do not count.
+---@param secondsOrEvent number|AudioEvent|ComponentEvent Finite 0..86400 seconds or a live audio/animation event token
 function wait(secondsOrEvent) end
 
 ---Instantiate a prefab asset or copy a GameObject subtree. Returns the new root.
@@ -705,6 +706,12 @@ function findComponentInParent(gameObject,componentType) end
 function findComponentInChildren(gameObject,componentType) end
 
 ---@class Animation
+---@field onFinished ComponentEvent Natural nonloop completion, not Stop.
+---@field onRestarted ComponentEvent Explicit restart or loop wrap.
+---@field onStopped ComponentEvent Stop or Reset while active.
+---@field onStarted ComponentEvent Playback starts after the clip is ready.
+---@field onPaused ComponentEvent Playback paused.
+---@field onResumed ComponentEvent Playback resumed.
 ---@field gameObject GameObject
 ---@field clip string
 ---@field loop boolean
@@ -1322,3 +1329,43 @@ function randomFloat(min,max) end
 function randomInt(min,max) end
 function randomBool() end
 function randomString(length) end
+
+---@class ComponentEvent
+---Opaque next-occurrence event for wait(); read it from a live component.
+---@class Recoil
+---@field enabled boolean Render-only local camera recoil, independent of FPS/TPS Transform.
+---@field playOnStart boolean Start burst, or sequence if keys exist.
+---@field sequenceLoop boolean Repeat the scheduled sequence.
+---@field burstCount integer Zero repeats until stopped or duration expires.
+---@field seed integer Nonnegative pseudorandom seed.
+---@field isFiring boolean Read-only burst/sequence activity, not recovery state.
+---@field trigger fun(self:Recoil,strength?:number) One impulse; multiplier 0..10, default 1.
+---@field start fun(self:Recoil) Start/restart timed burst after delay.
+---@field stop fun(self:Recoil) Stop future impulses; let the spring recover.
+---@field reset fun(self:Recoil) Stop and zero offsets immediately.
+---@field playSequence fun(self:Recoil) Start the authored sequence after delay.
+---@field setSequence fun(self:Recoil,keys:RecoilKey[]) Replace sorted keys; stops firing.
+---@field pitch number Degrees, -45..45. Positive lifts the view.
+---@field yaw number Degrees, -45..45.
+---@field roll number Degrees, -45..45.
+---@field back number Metres, -1..1; positive local Z kicks backward.
+---@field up number Metres, -1..1.
+---@field side number Metres, -1..1.
+---@field rotationRandom number Independent random angle amplitude, 0..45 degrees.
+---@field positionRandom number Fraction of absolute back displacement, 0..2.
+---@field frequency number Angular spring frequency, 0.1..40 Hz.
+---@field damping number Angular damping ratio, 0.1..3; one is critical damping.
+---@field positionFrequency number Position spring frequency, 0.1..40 Hz.
+---@field positionDamping number Position damping ratio, 0.1..3.
+---@field maxAngle number Combined angular displacement cap, 0..89 degrees.
+---@field maxDistance number Combined positional displacement cap, 0..2 metres.
+---@field interval number Timed shot spacing / sequence loop gap, 0.01..60 seconds.
+---@field duration number Burst duration after delay, 0..3600; zero unlimited.
+---@field delay number Start delay, 0..3600 seconds.
+---@field strength number Global impulse multiplier, 0..10.
+---@field recovery number Spring frequency multiplier, 0.1..4.
+---@type ComponentToken
+Recoil = {}
+---@class RecoilKey
+---@field time number Seconds from sequence start, 0..3600; sorted ascending.
+---@field strength number Optional impulse multiplier, 0..10; default 1.

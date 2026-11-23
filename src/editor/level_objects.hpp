@@ -110,6 +110,9 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(CharacterController{});
     component(FPSCamera{});
     component(TPSCamera{});
+    if (const auto* r = sourceWorld.tryGet<Recoil>(source)) {
+        world.add(copy, Recoils::parse(Recoils::settings(*r)));
+    }
     component(NavMeshObstacle{});
     component(UI{});
 
