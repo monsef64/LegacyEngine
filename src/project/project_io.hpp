@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 37\n";
+    out << std::setprecision(9) << "LegacyEngineProject 38\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -162,7 +162,7 @@ inline std::string encodeLegacy(World& world,
             out << std::quoted(m->material) << ' ' << m->materialOverrides << ' '
                 << std::quoted(materialJson(m->materialValues).dump()) << ' '
                 << std::quoted(m->model) << ' ' << std::quoted(m->lightmap) << ' '
-                << m->lightmapGrid << ' ';
+                << m->lightmapGrid << ' ' << m->castShadow << ' ';
         }
         if (auto* c = world.tryGet<Collider>(e)) {
             writeVec(out, c->size);
@@ -254,7 +254,7 @@ inline std::string encodeLegacy(World& world,
         }
         if (const auto* sky = world.tryGet<Skybox>(e)) {
             out << std::quoted(sky->cubemap) << ' ' << sky->affectEnvironment << ' '
-                << sky->environmentIntensity << ' ' << sky->hdrCompression << ' ';
+                << sky->environmentIntensity << ' ' << true << ' ';
         }
         if (const auto* activity = world.tryGet<ObjectActivity>(e)) {
             out << activity->enabled << " ";
@@ -382,7 +382,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 37));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 38));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -517,6 +517,9 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                         (m.lightmap.empty() || (materialPathValid(m.lightmap) &&
                                                 (AssetManager::extension(m.lightmap) == ".tga" ||
                                                  AssetManager::extension(m.lightmap) == ".png"))));
+            }
+            if (version >= 38) {
+                in >> m.castShadow;
             }
             result.world.add(e, m);
         }
@@ -702,6 +705,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             if (version >= 36) {
                 in >> sky.hdrCompression;
             }
+            sky.hdrCompression = true; // Old serialized flags are consumed for compatibility only.
             require(validSkybox(sky));
             result.world.add(e, sky);
         }

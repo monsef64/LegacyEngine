@@ -342,6 +342,10 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
     }
 }
 
+template <class T, class = void> struct InspectorHasEnabled : std::false_type {};
+template <class T>
+struct InspectorHasEnabled<T, std::void_t<decltype(std::declval<T&>().enabled)>> : std::true_type {
+};
 template <class T>
 inline bool
 componentHeader(World& world, Entity entity, const char* name, const T& defaults = T{}) {
@@ -361,7 +365,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                           : !std::strcmp(name, "FPSCamera")     ? "FPS"
                                                                 : name;
     const std::string title = std::string(display) + "###" + name;
-    const bool open = ImGui::CollapsingHeader(title.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+    const bool open = ImGui::CollapsingHeader(
+        title.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
     const auto header = ImGui::GetItemRectMin(), end = ImGui::GetItemRectMax();
     ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(header.x, header.y + 3),
                                               ImVec2(header.x + 3, end.y - 3),
@@ -602,6 +607,28 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         world.remove<T>(entity);
         return false;
     }
+    // Overlay the existing runtime switch on the header, even while collapsed.
+    if constexpr (InspectorHasEnabled<T>::value || std::is_same_v<T, Camera>) {
+        auto cursor = ImGui::GetCursorScreenPos();
+        ImGui::SetCursorScreenPos({std::max(header.x + 130.f, end.x - 94.f), header.y + 5.f});
+        ImGui::PushID(name);
+        if constexpr (std::is_same_v<T, Camera>) {
+            auto& camera = world.get<T>(entity);
+            bool enabled = camera.active;
+            if (EditorValues::Checkbox("Enabled", &enabled)) {
+                if (enabled) {
+                    activateCamera(world, entity);
+                } else {
+                    camera.active = false;
+                }
+            }
+        } else {
+            EditorValues::Checkbox("Enabled", &world.get<T>(entity).enabled);
+        }
+        ImGui::PopID();
+        ImGui::SetCursorScreenPos(cursor);
+        ImGui::Dummy({0, 0});
+    }
     return open;
 }
 inline void drawScriptExports(World& world,
@@ -644,7 +671,12 @@ inline void drawScriptExports(World& world,
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
-        if (field.type == "number") {
+        if (field.type == "int") {
+            int value = int(field.number);
+            if (EditorValues::SliderInt("##value", &value, -1000000, 1000000)) {
+                field.number = float(value);
+            }
+        } else if (field.type == "number") {
             EditorValues::DragFloat("##value",
                                     &field.number,
                                     .1f,
@@ -670,7 +702,10 @@ inline void drawScriptExports(World& world,
                                           : "None (drop object / component)";
             if (asset) {
                 assetPicker("##Asset", field.text, assets, [&](const std::string& path) {
-                    return field.type == "AudioClip" ? audioAsset(path)
+                    return field.type == "Prefab" ? AssetManager::extension(path) == ".prefab"
+                           : field.type == "AnimationClip"
+                               ? AssetManager::extension(path) == ".leanim"
+                           : field.type == "AudioClip" ? audioAsset(path)
                            : field.type == "Texture"
                                ? (materialTexturePath(path) || skyboxHDRPath(path))
                                : true;
@@ -683,7 +718,11 @@ inline void drawScriptExports(World& world,
                 if (asset) {
                     if (auto* p = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
                         std::string path = static_cast<const char*>(p->Data);
-                        if ((field.type != "AudioClip" || audioAsset(path)) &&
+                        if ((field.type != "Prefab" ||
+                             AssetManager::extension(path) == ".prefab") &&
+                            (field.type != "AnimationClip" ||
+                             AssetManager::extension(path) == ".leanim") &&
+                            (field.type != "AudioClip" || audioAsset(path)) &&
                             (field.type != "Texture" ||
                              (!path.empty() &&
                               (materialTexturePath(path) || skyboxHDRPath(path))))) {
@@ -1047,7 +1086,7 @@ inline void drawInspector(World& world,
                         d && componentHeader<Decal>(world, selected, "Decal")) {
                         auto edited = *d;
                         EditorValues::bindDefaults(edited);
-                        EditorValues::Checkbox("Enabled", &edited.enabled);
+
                         assetPicker("Texture", edited.texture, assets, [](const std::string& path) {
                             return materialTexturePath(path);
                         });
@@ -1067,7 +1106,7 @@ inline void drawInspector(World& world,
                 if (componentID == 32) {
                     if (auto* g = world.tryGet<UI>(selected);
                         g && componentHeader<UI>(world, selected, "UI")) {
-                        EditorValues::Checkbox("Enabled", &g->enabled);
+
                         assetPicker("RML asset", g->rml, assets, [](const std::string& file) {
                             return AssetManager::extension(file) == ".rml";
                         });
@@ -1199,6 +1238,7 @@ inline void drawInspector(World& world,
                         }
                         ImGui::EndCombo();
                     }
+                    EditorValues::Checkbox("Cast shadow", &r->castShadow);
                     if (assets) {
                         static std::string materialError;
                         try {
@@ -1520,14 +1560,6 @@ inline void drawInspector(World& world,
                     componentHeader<Camera>(world, selected, "Camera")) {
                     Camera edited = *camera;
                     EditorValues::bindDefaults(edited);
-                    bool active = camera->active;
-                    if (EditorValues::Checkbox("Active camera", &active)) {
-                        if (active) {
-                            activateCamera(world, selected);
-                        } else {
-                            camera->active = false;
-                        }
-                    }
                     edited.active = camera->active;
                     EditorValues::Checkbox("Orthographic", &edited.orthographic);
                     EditorValues::DragFloat(
@@ -1565,7 +1597,7 @@ inline void drawInspector(World& world,
                         auto edited = *component;
                         EditorValues::bindDefaults(edited);
                         auto* c = &edited;
-                        EditorValues::Checkbox("Enabled", &c->enabled);
+
                         EditorValues::Checkbox("Volumetric", &c->volumetric);
                         EditorValues::ColorEdit3("Color", &c->color.x);
                         editVector("Size", c->size, .1f, .1f, 10000);
@@ -1587,7 +1619,6 @@ inline void drawInspector(World& world,
                         v && componentHeader<Vehicle>(world, selected, "Vehicle")) {
                         auto edited = *v;
                         EditorValues::bindDefaults(edited);
-                        EditorValues::Checkbox("Enabled", &edited.enabled);
 
                         ImGui::TextWrapped(
                             "Four-wheel spring/damper suspension supports the chassis. Center-of-mass offsets tune balance without locking pitch or roll; slopes, jumps and flips remain free.");
@@ -1609,7 +1640,7 @@ inline void drawInspector(World& world,
                 if (componentID == 27) {
                     if (auto* b = world.tryGet<BoneAttachment>(selected);
                         b && componentHeader<BoneAttachment>(world, selected, "BoneAttachment")) {
-                        EditorValues::Checkbox("Enabled", &b->enabled);
+
                         const auto* label = world.tryGet<ObjectName>(b->source);
                         if (ImGui::BeginCombo("Animated model",
                                               label ? label->value.c_str() : "Select model")) {
@@ -1663,7 +1694,7 @@ inline void drawInspector(World& world,
                 if (componentID == 26) {
                     if (auto* w = world.tryGet<Water>(selected);
                         w && componentHeader<Water>(world, selected, "Water")) {
-                        EditorValues::Checkbox("Enabled", &w->enabled);
+
                         if (assets) {
                             assetPicker("Water mesh (optional)",
                                         w->mesh,
@@ -1689,7 +1720,7 @@ inline void drawInspector(World& world,
                         auto edited = *component;
                         EditorValues::bindDefaults(edited);
                         auto* r = &edited;
-                        EditorValues::Checkbox("Enabled", &r->enabled);
+
                         EditorValues::Checkbox("Edit curve in Scene", &r->editCurve);
                         drawWaterSettings(*r);
                         EditorValues::ColorEdit3("Water color", &r->color.x);
@@ -1734,7 +1765,7 @@ inline void drawInspector(World& world,
                         f && componentHeader<Fog>(world, selected, "Fog")) {
                         auto edited = *f;
                         EditorValues::bindDefaults(edited);
-                        EditorValues::Checkbox("Enabled", &edited.enabled);
+
                         EditorValues::ColorEdit3("Color", &edited.color.x);
                         EditorValues::DragFloat("Density", &edited.density, .001f, 0, 10);
                         EditorValues::DragFloat(
@@ -1754,7 +1785,7 @@ inline void drawInspector(World& world,
                         if (!world.has<Camera>(selected)) {
                             ImGui::TextWrapped("Add Camera to this object to use effects.");
                         }
-                        EditorValues::Checkbox("Enabled", &fx->enabled);
+
                         const int first[]{0, 2, 6, 7, 10, 11, 12, 13, 13, 15, 17};
                         const int last[]{2, 6, 7, 10, 11, 12, 13, 13, 15, 17, 19};
                         for (int i = 1; i < int(CameraFx::boolFields.size()); ++i) {
@@ -1792,8 +1823,20 @@ inline void drawInspector(World& world,
                     if (auto* terrain = world.tryGet<Terrain>(selected);
                         terrain && componentHeader<Terrain>(world, selected, "Terrain")) {
                         ImGui::TextWrapped("%s",
-                                           terrain->asset.empty() ? "Unsaved terrain"
-                                                                  : terrain->asset.c_str());
+                                           terrain->asset.empty()
+                                               ? "Unsaved terrain"
+                                               : std::filesystem::path(terrain->asset)
+                                                     .filename()
+                                                     .string()
+                                                     .c_str());
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip(
+                                "%s",
+                                std::filesystem::path(terrain->asset).filename().string().c_str());
+                            if (ImGui::IsItemHovered() && !terrain->asset.empty()) {
+                                ImGui::SetTooltip("%s", terrain->asset.c_str());
+                            }
+                        }
                         if (ImGui::Button("Open terrain tools")) {
                             Terrains::openTools = true;
                         }
@@ -1804,7 +1847,7 @@ inline void drawInspector(World& world,
                         shaft && componentHeader<LightShafts>(world, selected, "LightShafts")) {
                         auto edited = *shaft;
                         EditorValues::bindDefaults(edited);
-                        EditorValues::Checkbox("Enabled", &edited.enabled);
+
                         editVector("Local direction", edited.direction);
                         EditorValues::ColorEdit3("Shaft color", &edited.color.x);
                         EditorValues::DragFloat("Height", &edited.height, .1f, .01f, 1000);
@@ -1851,7 +1894,7 @@ inline void drawInspector(World& world,
                         laser && componentHeader<Laser>(world, selected, "Laser")) {
                         LaserSettings edited = *laser;
                         EditorValues::bindDefaults(edited);
-                        EditorValues::Checkbox("Enabled", &edited.enabled);
+
                         EditorValues::ColorEdit3("Beam color", &edited.color.x);
                         EditorValues::DragFloat("Beam intensity", &edited.intensity, .05f, 0, 100);
                         EditorValues::DragFloat("Beam range", &edited.range, .1f, .01f, 10000);
@@ -1888,7 +1931,7 @@ inline void drawInspector(World& world,
                                         : edited.bake.empty()
                                             ? "Not baked: realtime fallback"
                                             : "Baked snapshot (rebake after edits)");
-                    EditorValues::Checkbox("Enabled", &edited.enabled);
+
                     EditorValues::ColorEdit3("Color", &edited.color.x);
                     EditorValues::DragFloat("Intensity", &edited.intensity, .05f, 0, 1000);
                     if (kind != 0) {
@@ -1947,7 +1990,7 @@ inline void drawInspector(World& world,
                     componentID == 30 && o &&
                     componentHeader<NavMeshObstacle>(world, selected, "NavMeshObstacle")) {
                     auto edited = *o;
-                    EditorValues::Checkbox("Enabled", &edited.enabled);
+
                     editVector("Size", edited.size, .05f, .01f, 10000);
                     editVector("Center", edited.center);
                     try {
@@ -1961,7 +2004,7 @@ inline void drawInspector(World& world,
                 if (auto* a = world.tryGet<NavMeshAgent>(selected);
                     componentID == 29 && a &&
                     componentHeader<NavMeshAgent>(world, selected, "NavMeshAgent")) {
-                    EditorValues::Checkbox("Enabled", &a->enabled);
+
                     EditorValues::SliderFloat("Speed", &a->speed, 0, 100);
                     EditorValues::Checkbox("Rotate toward movement", &a->updateRotation);
                     EditorValues::SliderFloat("Angular speed", &a->angularSpeed, 0, 3600);
@@ -1983,7 +2026,7 @@ inline void drawInspector(World& world,
                 if (auto* c = world.tryGet<TPSCamera>(selected);
                     componentID == 28 && c &&
                     componentHeader<TPSCamera>(world, selected, "TPSCamera")) {
-                    EditorValues::Checkbox("Enabled", &c->enabled);
+
                     const auto* name = world.tryGet<ObjectName>(c->target);
                     ImGui::Button(name ? name->value.c_str()
                                        : "Drop follow target (empty = parent)");
@@ -2040,7 +2083,7 @@ inline void drawInspector(World& world,
                 if (auto* sky = world.tryGet<Skybox>(selected);
                     componentID == 12 && sky &&
                     componentHeader<Skybox>(world, selected, "Skybox")) {
-                    EditorValues::Checkbox("Skybox enabled", &sky->enabled);
+
                     EditorValues::Combo("Skybox type", &sky->type, "Cubemap asset\0HDR panorama\0");
                     EditorValues::ColorEdit3("Skybox color", &sky->color.x);
                     EditorValues::Checkbox("Affect environment", &sky->affectEnvironment);
@@ -2066,7 +2109,7 @@ inline void drawInspector(World& world,
                     };
                     if (sky->type == 1) {
                         slot("HDR panorama", sky->hdr, true);
-                        EditorValues::Checkbox("Compress HDR (RGB9_E5)", &sky->hdrCompression);
+
                         ImGui::TextDisabled(
                             "Packed GPU HDR: 4 bytes/pixel instead of 6; reduced precision, source unchanged.");
                     } else {
@@ -2085,7 +2128,7 @@ inline void drawInspector(World& world,
                 if (auto* listener = world.tryGet<AudioListener>(selected);
                     componentID == 8 && listener &&
                     componentHeader<AudioListener>(world, selected, "AudioListener")) {
-                    EditorValues::Checkbox("Listener enabled", &listener->enabled);
+
                     ImGui::TextWrapped(
                         "Receives audio at this object's world position. With multiple enabled listeners, the lowest entity ID is used.");
                 }
@@ -2142,7 +2185,9 @@ inline void drawInspector(World& world,
                             }
                             ImGui::EndPopup();
                         }
-                        EditorValues::Checkbox("Enabled", &enabled);
+                        if (index > 0) {
+                            EditorValues::Checkbox("Enabled", &enabled);
+                        }
                         assetPicker("Script", path, assets, [](const std::string& file) {
                             return AssetManager::script(file);
                         });

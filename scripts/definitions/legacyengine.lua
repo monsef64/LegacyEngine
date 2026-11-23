@@ -63,6 +63,7 @@
 -- Texture exports are project-relative PNG/JPEG/BMP/TGA/HDR asset paths, not loaders.
 ---@alias Texture string
 ---@class MeshRenderer
+---@field castShadow boolean Cast realtime/baked shadows; default true. Rebake static lighting after changes.
 ---@field material string Project-relative .mat asset path; empty uses inline Diffuse
 ---@field setMaterial fun(self:MeshRenderer,path:string) Assign an asset, reset instance overrides
 ---@field setMaterialColor fun(self:MeshRenderer,r:number,g:number,b:number)
@@ -438,7 +439,6 @@ function isCursorVisible() end
 function isCursorLocked() end
 
 ---@class Skybox
----@field hdrCompression boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged
 ---@field type integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama
 ---@field enabled boolean
 ---@field color Vector3 Color tint
@@ -714,6 +714,7 @@ function findComponentInChildren(gameObject,componentType) end
 ---@field time number Read-only seconds
 ---@field error string Read-only loading error
 ---@field play fun(self:Animation)
+---@field playClip fun(self:Animation,clip:string) Play an AnimationClip path value; loads asynchronously if needed.
 ---@field stop fun(self:Animation) Stops and rewinds to frame zero
 ---@field pause fun(self:Animation)
 ---@field resume fun(self:Animation)
@@ -1275,9 +1276,6 @@ Screen = {}
 ---@field targetFrameRate integer -1 uncapped, or 1..1000; VSync may cap further.
 ---@field openURL fun(url:string):boolean|nil,error?:string HTTP/HTTPS only; success means handed to OS.
 ---@field quit fun() Deferred graceful quit; stops Play in editor.
----@type GameAPI
-Game = {}
----@class SavingAPI
 ---@field saveString fun(key:string,value:string):boolean|nil,error?:string
 ---@field loadString fun(key:string,default?:string):string|nil,error?:string
 ---@field saveInt fun(key:string,value:integer):boolean|nil,error?:string
@@ -1290,8 +1288,8 @@ Game = {}
 ---@field loadTable fun(key:string,default?:table):table|nil,error?:string
 ---@field saveVector3 fun(key:string,value:Vec3):boolean|nil,error?:string
 ---@field loadVector3 fun(key:string,default?:Vec3):Vec3|nil,error?:string
----@type SavingAPI
-Saving = {}
+---@type GameAPI
+Game = {}
 ---@class GameFile Opaque file handle; use File functions, not io.
 ---@class FileAPI
 ---@field open fun(path:string,mode:string):GameFile|nil,error?:string r/rb/w/wb/a/ab; sandboxed paths.
@@ -1308,16 +1306,19 @@ File = {}
 -- Built-in events may be global functions or registered using on(name, callback):
 -- OnResolutionChanged(resolution), OnFocusLost(), OnFocus(), OnUrlOpened(url), OnGamePreQuit().
 
--- Compatibility aliases for the typed Saving API.
-saveString = Saving.saveString
-loadString = Saving.loadString
-saveInt = Saving.saveInt
-loadInt = Saving.loadInt
-saveFloat = Saving.saveFloat
-loadFloat = Saving.loadFloat
-saveBool = Saving.saveBool
-loadBool = Saving.loadBool
-saveTable = Saving.saveTable
-loadTable = Saving.loadTable
-saveVector3 = Saving.saveVector3
-loadVector3 = Saving.loadVector3
+
+---@param path string
+---@return string clip Checked .leanim asset path value.
+function AnimationClip(path) end
+---@class RandomAPI
+---@field randomFloat fun(min:number,max:number):number Finite bounds, min <= max; uniform floating sample.
+---@field randomInt fun(min:integer,max:integer):integer Inclusive uniform bounds.
+---@field randomBool fun():boolean Equally likely true/false.
+---@field randomString fun(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic.
+---@type RandomAPI
+Random = {}
+-- The same Random functions are also available globally.
+function randomFloat(min,max) end
+function randomInt(min,max) end
+function randomBool() end
+function randomString(length) end

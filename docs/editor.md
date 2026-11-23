@@ -663,13 +663,11 @@ are checked at most once a second per skybox renderer. Project/asset changes dis
 stale jobs before they can upload. Crossfades wait for the requested textures to be
 ready. Until an image loads, the ordinary tinted fallback remains visible.
 
-For an HDR panorama, enable **Compress HDR (RGB9_E5)** in the Skybox Inspector.
-This packs GPU HDR storage into 4 bytes/pixel instead of RGB16F's 6 (about one-third
-less base-level texture memory). It trades color precision for memory/bandwidth,
-particularly for very differently sized RGB channels. It is not BC6H and does not
-rewrite/compress the original `.hdr` file on disk. Set `sky.hdrCompression` in Lua
-for a Play-time change. Old projects default to uncompressed RGB16F. The setting
-is included in scene/prefab serialization, undo and Stop rollback.
+HDR panoramas always use packed RGB9_E5 GPU storage (4 bytes/pixel rather than
+RGB16F's 6). This reduces base-level texture storage by about one-third at the
+cost of precision, especially for differently sized RGB channels. It is not BC6H
+and does not modify the original `.hdr` file. There is no Compress checkbox or
+runtime compression toggle; older serialized flags are consumed for compatibility.
 
 The shader reconstructs sky rays at the fullscreen triangle vertices rather than
 doing inverse-matrix transforms for every fragment. Performance gains depend on
@@ -720,3 +718,16 @@ polled without waiting; cache serialization and writes run on workers with bound
 backpressure. These changes remove synchronous GPU readback/disk writes from the
 normal preview save path. Very large prefab/model decoding and GPU uploads can
 still have costs; desktop performance needs manual verification on target hardware.
+
+### Component switches and asset labels
+
+Components that already support enabled/active state now expose **Enabled** on
+their collapsible header, including when collapsed. This does not add disabling
+to structural components such as Transform or Collider. Camera uses its existing
+active-camera selection rules. The primary script is controlled from the script
+component header; additional attachments keep individual switches.
+
+Shared asset fields show **filename.extension** instead of the full path; hover
+for the full project-relative path. The stored reference is unchanged, so same-name
+assets in different folders remain distinct. Selection dialogs retain their path
+context. Prefab and AnimationClip script fields use the same filtered asset picker.

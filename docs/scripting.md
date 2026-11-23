@@ -8,8 +8,8 @@ Existing `.lua` assets remain supported. Lifecycle callbacks are `onStart`,
 `onUpdate(deltaTime)`, `onFixedUpdate(deltaTime)` and `onDestroy`.
 
 ```lua
-@export target GameObject
-@export speed number 5
+expose GameObject target =
+expose float speed = 5
 
 function onStart()
     debug.log("Started", self:getName())
@@ -26,8 +26,11 @@ Define `Move` in Project → Input Settings first. Exported fields appear in the
 script's Inspector. Drag objects/components/assets into reference slots; **X**
 clears them. Supported values include number, boolean, string, GameObject, engine
 component types, Asset and AudioClip. Defaults are literals, not Lua expressions.
-Declarations must lead a line; `---@export` comments remain compatible. Bare
-`@export` is preprocessed before Lua runs, preserving error line numbers.
+Declarations use `expose Type name = default` at the beginning of a line and are
+preprocessed before Lua runs, preserving error line numbers. Old `@export` and
+`---@export` declarations remain readable for existing projects; use `expose`
+for new scripts. Integers use Lua integer values; float, bool and string defaults
+are supported, as are `Prefab` and `AnimationClip` asset fields.
 Exports currently become globals in the attachment's state: do not shadow them
 with local declarations. Missing references bind as `nil` at script startup.
 
@@ -564,3 +567,47 @@ end
 Events fire when playback crosses their time, including loop crossings, not while
 scrubbing the editor timeline. The target must have an active, enabled script
 attachment. Clips serialize their events alongside component/transform tracks.
+
+## Typed exposed fields and prefab assets
+
+```lua
+expose int score = 10
+expose float speed = 4.5
+expose bool canFire = true
+expose string title = "Player"
+expose Prefab enemy = "Prefabs/Enemy.prefab"
+expose AnimationClip walk = "Animations/Walk.leanim"
+
+function onStart()
+    if enemy ~= "" then spawn(enemy, {x=0,y=1,z=0}, {x=0,y=0,z=0}) end
+    local animation = self:getComponent(Animation)
+    if animation and walk ~= "" then animation:playClip(walk) end
+end
+```
+
+Asset fields use the shared filtered picker and accept Asset browser drops.
+`Prefab` fields hold project-relative `.prefab` paths (not instantiated scene
+objects); pass them to `spawn`. `AnimationClip` fields hold `.leanim` path values,
+which can also be made with `AnimationClip("Animations/Walk.leanim")`.
+`animation:playClip(clip)` selects and restarts that clip without cross-fading.
+The existing `play()` uses the assigned clip; `crossFade(clip, seconds)` transitions
+from the current pose. First-time clip decoding runs on a worker; a new clip starts
+when ready while the outgoing animation can continue. Stop/Reset cancel pending
+playback and retain existing rewind/restore semantics. `animation.error` reports
+load errors. Clip caches live for the animation session and clear on Stop Play.
+
+`int`/`integer` fields become Lua integer values; `float`/`number` fields become
+Lua numbers; `bool`/`boolean` and `string` are also supported. Numeric Inspector
+fields/defaults retain the engine's ±1,000,000 limit. Defaults are literal values,
+not expressions or function calls. Scene-component types continue to hold scene
+references and are assigned separately from prefab asset paths.
+
+## Random helpers
+
+Use `Random.randomFloat(min, max)`, `Random.randomInt(min, max)`,
+`Random.randomBool()`, and `Random.randomString(length)`. The same functions are
+available globally as `randomFloat`, `randomInt`, `randomBool`, and `randomString`;
+Integer bounds are inclusive. Floating bounds must be finite with min ≤ max.
+Booleans are equally likely. Strings contain ASCII letters/digits, with a length
+of 0–4096. These helpers are for gameplay randomness, not passwords, encryption,
+or deterministic multiplayer/replays.

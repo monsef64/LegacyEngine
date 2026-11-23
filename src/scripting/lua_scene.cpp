@@ -279,6 +279,7 @@ Field field(lua_State* L, const Component& c, const char* key) {
         auto& v = h.world->get<MeshRenderer>(h.entity);
         FIELD(color, Vec);
         FIELD(checkerboard, Boolean);
+        FIELD(castShadow, Boolean);
         FIELD(specular, Number);
         FIELD(mesh, Mesh);
         FIELD(model, String);
@@ -299,7 +300,7 @@ Field field(lua_State* L, const Component& c, const char* key) {
     case 12: {
         auto& v = h.world->get<Skybox>(h.entity);
         FIELD(affectEnvironment, Boolean);
-        FIELD(hdrCompression, Boolean);
+
         FIELD(environmentIntensity, Number);
         FIELD(type, Integer);
         FIELD(color, Vec);
@@ -593,6 +594,16 @@ LuaScene::LuaScene(lua_State* L,
             return 1;
         });
     lua_setglobal(L, "AudioClip");
+    lua_pushcfunction(
+        L, +[](lua_State* L) -> int {
+            const char* path = luaL_checkstring(L, 1);
+            if (!animationAsset(path)) {
+                return luaL_error(L, "Expected a .leanim AnimationClip path");
+            }
+            lua_pushvalue(L, 1);
+            return 1;
+        });
+    lua_setglobal(L, "AnimationClip");
     const char* cameraFunctions[]{"createCamera",
                                   "setActiveCamera",
                                   "getActiveCamera",
@@ -1950,8 +1961,8 @@ int LuaScene::componentIndex(lua_State* L) {
     }
     if (c.type == 16) {
         const auto& a = c.object.world->get<Animation>(c.object.entity);
-        const char* methods[]{"play", "stop", "pause", "resume", "reset", "crossFade"};
-        for (int i = 0; i < 6; ++i) {
+        const char* methods[]{"play", "stop", "pause", "resume", "reset", "crossFade", "playClip"};
+        for (int i = 0; i < 7; ++i) {
             if (!std::strcmp(key, methods[i])) {
                 lua_pushvalue(L, 1);
                 lua_pushinteger(L, i);
@@ -3995,7 +4006,9 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
         if (!exportName(field.name)) {
             continue;
         }
-        if (field.type == "number") {
+        if (field.type == "int") {
+            lua_pushinteger(state_, lua_Integer(std::round(field.number)));
+        } else if (field.type == "number") {
             lua_pushnumber(state_, field.number);
         } else if (field.type == "boolean") {
             lua_pushboolean(state_, field.boolean);
@@ -4130,14 +4143,16 @@ int LuaScene::animationMethod(lua_State* L) {
     }
     auto& animation = c.object.world->get<Animation>(c.object.entity);
     const int method = int(lua_tointeger(L, lua_upvalueindex(2)));
-    if (method == 5) {
+    if (method == 5 || method == 6) {
         int arg = luaL_testudata(L, 1, "Component") ? 2 : 1;
         const char* clip = luaL_checkstring(L, arg);
-        float duration = float(luaL_optnumber(L, arg + 1, .25));
+        float duration = method == 6 ? 0.f : float(luaL_optnumber(L, arg + 1, .25));
         if (!std::isfinite(duration) || duration < 0 || duration > 3600) {
             return luaL_error(L, "Cross-fade duration must be 0..3600 seconds");
         }
-        if (!animation.request(AnimationAction::CrossFade, clip, duration)) {
+        if (!animation.request(method == 6 ? AnimationAction::PlayClip : AnimationAction::CrossFade,
+                               clip,
+                               duration)) {
             return luaL_error(L, "Animation command queue is full");
         }
         return 0;

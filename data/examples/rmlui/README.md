@@ -24,7 +24,7 @@ browser: no JavaScript or full DOM Lua binding is provided.
 
 API:
 
-- `local gui = self:getComponent(UI)` or `@export HUD UI`.
+- `local gui = self:getComponent(UI)` or `expose UI HUD =`.
 - `gui:isLoaded()` returns a boolean (loading may finish after first onStart).
 - `gui:setText(id, plainText)` returns success and escapes markup.
 - `local token = gui:onClick(id, function() ... end)` registers once; `off(token)`

@@ -3,7 +3,7 @@
   "patterns": [
     {
       "name": "keyword.other.export.legacyscript",
-      "match": "^\\s*@export\\b"
+      "match": "^\\s*(?:expose|@export)\\b"
     },
     {
       "name": "comment.block.lua",

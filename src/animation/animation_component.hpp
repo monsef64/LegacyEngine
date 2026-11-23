@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-enum class AnimationAction { Play, Stop, Pause, Resume, Reset, CrossFade };
+enum class AnimationAction { Play, Stop, Pause, Resume, Reset, CrossFade, PlayClip };
 struct AnimationCommand {
     AnimationAction action;
     std::string clip;
@@ -28,12 +28,15 @@ struct Animation {
     std::vector<AnimationPose> blendFrozenPose;
     std::vector<AnimationCommand> commands;
     bool request(AnimationAction action, const std::string& target = {}, float duration = 0) {
+        if (action == AnimationAction::Stop || action == AnimationAction::Reset) {
+            commands.clear();
+        }
         if (commands.size() >= 64) {
             return false;
         }
         commands.push_back({action, target, duration});
         if (action == AnimationAction::Play || action == AnimationAction::Resume ||
-            action == AnimationAction::CrossFade) {
+            (action == AnimationAction::CrossFade || action == AnimationAction::PlayClip)) {
             isPlaying = true;
             paused = false;
         } else if (action == AnimationAction::Pause) {

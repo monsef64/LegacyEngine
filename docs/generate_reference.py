@@ -170,10 +170,14 @@ def example(entry):
             'takeScreenshot': 'Screen.takeScreenshot("Screenshots/view.png")',
         }[name]
     if owner == 'GameAPI':
-        return {'openURL': 'Game.openURL("https://example.com")', 'quit': 'Game.quit()'}[name]
-    if owner == 'SavingAPI':
+        if name in ('openURL','quit'): return {'openURL': 'Game.openURL("https://example.com")', 'quit': 'Game.quit()'}[name]
         value = {'String': '"Player"', 'Int': '10', 'Float': '0.5', 'Bool': 'true', 'Table': '{score = 10}', 'Vector3': '{x = 1, y = 2, z = 3}'}[name[4:]]
-        return f'local result, err = Saving.{name}("example", {value})'
+        return f'local result, err = Game.{name}("example", {value})'
+    if owner == 'RandomAPI' or (not owner and name in ('randomFloat','randomInt','randomBool','randomString')):
+        args={'randomFloat':'0, 1','randomInt':'1, 6','randomBool':'','randomString':'12'}[name]
+        return f'local value = Random.{name}({args})'
+    if name == 'AnimationClip': return 'local clip = AnimationClip("Animations/Walk.leanim")'
+    if owner == 'Animation' and name == 'playClip': return 'local animation = self:getComponent(Animation)\nanimation:playClip(AnimationClip("Animations/Walk.leanim"))'
     if owner == 'FileAPI':
         if name == 'lines': return 'for line in File.lines("notes.txt") do debug.log(line) end'
         if name == 'rename': return 'File.rename("notes.txt", "old-notes.txt")'

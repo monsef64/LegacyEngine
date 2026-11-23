@@ -1,5 +1,6 @@
 #pragma once
 #include "animation/animation_clip.hpp"
+#include "core/worker_pool.hpp"
 #include <map>
 
 class AnimationSystem {
@@ -20,6 +21,55 @@ class AnimationSystem {
     };
     std::map<std::pair<unsigned, unsigned>, State> states_;
     std::filesystem::path root_;
+    // CPU I/O/decompression and clip decoding never run in the frame callback.
+    std::map<std::string, std::future<AnimationClip>> pendingClips_;
+    std::map<std::string, AnimationClip> clips_;
+    const AnimationClip* readyClip(const AssetManager& assets, const std::string& path) {
+        // Cancelled/deleted owners need not request their completed jobs again.
+        // Reap those futures so four abandoned loads cannot starve the queue.
+        for (auto it = pendingClips_.begin(); it != pendingClips_.end();) {
+            if (it->first != path &&
+                it->second.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                try {
+                    auto loaded = it->second.get();
+                    if (clips_.size() >= 64) {
+                        clips_.erase(clips_.begin());
+                    }
+                    clips_.insert_or_assign(it->first, std::move(loaded));
+                } catch (const std::exception&) {
+                }
+                it = pendingClips_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        auto ready = clips_.find(path);
+        if (ready != clips_.end()) {
+            return &ready->second;
+        }
+        auto job = pendingClips_.find(path);
+        if (job == pendingClips_.end()) {
+            if (pendingClips_.size() >= 4) {
+                return nullptr;
+            }
+            if (clips_.size() >= 64) {
+                clips_.erase(clips_.begin());
+            }
+            auto future = WorkerPool::shared().submit(
+                [assets, path] { return loadAnimationClip(assets, path); });
+            if (future) {
+                pendingClips_.emplace(path, std::move(*future));
+            }
+            return nullptr;
+        }
+        if (job->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            return nullptr;
+        }
+        auto future = std::move(job->second);
+        pendingClips_.erase(job);
+        return &clips_.emplace(path, future.get()).first->second;
+    }
+
     static void restore(World& world, State& state) {
         for (const auto& o : state.originals) {
             if (const auto* p = animationProperty(o.property)) {
@@ -99,6 +149,8 @@ class AnimationSystem {
     std::vector<Event> events;
     void clear() {
         states_.clear();
+        pendingClips_.clear();
+        clips_.clear();
         events.clear();
         root_.clear();
     }
@@ -106,6 +158,8 @@ class AnimationSystem {
         events.clear();
         if (root_ != assets.root) {
             states_.clear();
+            pendingClips_.clear();
+            clips_.clear();
             root_ = assets.root;
         }
         seconds = std::isfinite(seconds) ? std::clamp(seconds, 0.f, .25f) : 0;
@@ -132,24 +186,40 @@ class AnimationSystem {
             animation.commands.clear();
             bool began = false;
             auto emit = [&](const char* name) { events.push_back({owner, name}); };
-            for (const auto& command : commands) {
+            for (std::size_t commandIndex = 0; commandIndex < commands.size(); ++commandIndex) {
+                const auto& command = commands[commandIndex];
                 try {
-                    if (command.action == AnimationAction::CrossFade) {
-                        auto next = loadAnimationClip(assets, command.clip);
+                    const bool changing = command.action == AnimationAction::CrossFade ||
+                                          command.action == AnimationAction::PlayClip;
+                    const AnimationClip* prepared = nullptr;
+                    if (changing || (!state.loaded && command.action == AnimationAction::Play)) {
+                        prepared = readyClip(assets, changing ? command.clip : animation.clip);
+                        if (!prepared) {
+                            animation.commands.insert(animation.commands.begin(),
+                                                      commands.begin() + commandIndex,
+                                                      commands.end());
+                            break; // Keep the current pose playing while the worker loads the next
+                                   // clip.
+                        }
+                    }
+                    if (changing) {
+                        auto next = *prepared;
                         if (!std::isfinite(command.duration) || command.duration < 0 ||
                             command.duration > 3600) {
                             throw std::runtime_error("Cross-fade duration must be 0..3600 seconds");
                         }
-                        if (state.loaded && state.clip.model != next.model) {
+                        if (command.action == AnimationAction::CrossFade && state.loaded &&
+                            state.clip.model != next.model) {
                             throw std::runtime_error(
                                 "Cross-fade requires clips for the same model (or two property clips)");
                         }
                         auto values = capture(world, owner, next);
-                        const bool fading =
-                            state.loaded && animation.poseActive && animation.blendWeight < 1;
+                        const bool fading = command.action == AnimationAction::CrossFade &&
+                                            state.loaded && animation.poseActive &&
+                                            animation.blendWeight < 1;
                         std::vector<AnimationPose> frozen;
                         if (fading && !next.model.empty()) {
-                            const auto doc = modelDocument(assets, next.model);
+                            const auto& doc = *next.skeleton;
                             auto from = animation.blendFrozenPose.empty()
                                             ? modelLocalTRS(doc,
                                                             animation.blendSourceAnimation,
@@ -190,9 +260,8 @@ class AnimationSystem {
                         began = true;
                         continue;
                     }
-                    if (!state.loaded && (command.action == AnimationAction::Play ||
-                                          command.action == AnimationAction::Stop)) {
-                        auto clip = loadAnimationClip(assets, animation.clip);
+                    if (!state.loaded && command.action == AnimationAction::Play) {
+                        auto clip = *prepared;
                         auto originals = capture(world, owner, clip);
                         state.clip = std::move(clip);
                         state.originals = std::move(originals);
@@ -244,6 +313,7 @@ class AnimationSystem {
                         animation.poseActive = false;
                         state.recapture = true;
                         break;
+                    case AnimationAction::PlayClip:
                     case AnimationAction::CrossFade:
                         break;
                     }
