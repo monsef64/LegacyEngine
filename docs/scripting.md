@@ -611,3 +611,80 @@ Integer bounds are inclusive. Floating bounds must be finite with min ≤ max.
 Booleans are equally likely. Strings contain ASCII letters/digits, with a length
 of 0–4096. These helpers are for gameplay randomness, not passwords, encryption,
 or deterministic multiplayer/replays.
+
+## Animation wait events
+
+Animation exposes opaque next-occurrence tokens, just like AudioSource:
+
+```lua
+function onStart()
+    local animation = self:getComponent(Animation)
+    if not animation then return end
+    animation.loop = false
+    animation:play()
+    wait(animation.onStarted)
+    debug.log("Clip is loaded and playing")
+    wait(animation.onFinished)
+    debug.log("Natural end reached")
+end
+```
+
+Tokens: `onStarted`, `onFinished`, `onRestarted`, `onStopped`, `onPaused`, and
+`onResumed`. Use the exact capitalization **onFinished**, not `onFInished`.
+`onFinished` is natural **nonlooping** completion only. Stop/Reset while active
+emits `onStopped`, not Finished. Loop wrap and explicit replay emit `onRestarted`;
+explicit replay also emits Started. Switching to a different clip emits Started
+when ready. Several very short loops in one update coalesce to one Restarted
+notification. These events also retain the existing owner callback names
+`onAnimationStart`, `onAnimationFinish`, `onAnimationStopped`,
+`onAnimationPause`, `onAnimationResume`, plus `onAnimationRestarted`.
+
+`wait` subscribes when called, not when the token was first read, so an event that
+already happened is not latched. Subscribe immediately after issuing a playback
+command, or use an independent `task` for concurrent waits. Invalid clip loads set
+`animation.error` and do not emit Started/Finished; interruption does not finish a
+clip. Weapon logic should explicitly cancel/recover its waiting state on failure
+or interruption rather than assume every started clip finishes.
+
+Waits require a running lifecycle/object callback or owned task, not top-level
+code, GUI frames or global event listeners. Pause/inactivity freeze script tasks.
+Removing the watched Animation, replacing it on the same owner, deleting an owner,
+Stop Play, or replacing the runtime cancels the continuation. Audio waits retain
+their existing behavior.
+
+See [Camera recoil](recoil.md) for scripted impulses, timed bursts and sequences.
+
+## Asset preloading before level publication
+
+Both level-load APIs now stage decoding and dependency preloading before replacing
+the live world. `loadLevelAsync` also defers the initial level-file read. Scripts
+continue against the outgoing level until the destination preload gate succeeds;
+destination scripts and `onLevelLoaded` run afterward. Failures preserve the old
+level and report `onLevelFailedToLoad`/the level error. Project changes cancel the
+publication of outstanding worker results.
+
+The dependency walker follows level component assets, script literals, exposed
+asset overrides, assigned prefab assets and their dependencies, material/model
+references (including packed members), UI references and explicit
+`Settings/ExportAssets.json` includes. Unlike export packaging, this mode does not
+preload every registered level. Computed runtime paths cannot be inferred; include
+those assets explicitly. Newly created or edited assets may invalidate warm caches.
+
+- CPU level/prefab decode and prefab refresh run on workers. Prefab templates are
+  cached by file metadata, root and built-in mesh handles (64 entries / 64 MiB of
+  source files), so first spawn avoids repeated JSON decode. Instantiation still
+  copies ECS entities and can cost time for a large hierarchy.
+- Meshes and textures are warmed through existing bounded worker/upload caches
+  before the world swap. Workers never call OpenGL. Uploads remain on the GL thread.
+- Referenced audio is decoded before publication (256 MiB total PCM limit), and
+  referenced clips are decoded/cached (64-clip limit). Over-budget preloads fail
+  rather than silently over-allocating. Resource gates have a two-minute watchdog.
+- Exported-player startup and editor Play use a loading screen before scripts
+  start. It pumps close events; a failed editor preload leaves editing available.
+
+This reduces known cold-cache stalls, **not a guarantee of zero lag spikes**.
+GPU-driver allocation/upload, shader work, physics cooking, terrain mesh building,
+UI document creation, cache eviction, runtime-created assets and dynamically
+constructed paths can still have first-use costs. Measure frame times with the
+actual target levels and exported player; preload memory budgets must fit the
+machine. The loading screen uses a simple animated indicator, not a percentage/progress API.

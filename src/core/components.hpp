@@ -10,6 +10,7 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "effects/camera_effects.hpp"
+#include "effects/recoil.hpp"
 #include "effects/decal.hpp"
 #include "effects/environment.hpp"
 #include "effects/fog.hpp"

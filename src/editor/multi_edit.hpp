@@ -35,6 +35,9 @@ template <class C> bool valid(const C& c) {
     } else if constexpr (std::is_same_v<C, ParticleSystem>) {
         Particles::parse(Particles::settings(c));
         return true;
+    } else if constexpr (std::is_same_v<C, Recoil>) {
+        Recoils::parse(Recoils::settings(c));
+        return true;
     } else if constexpr (std::is_same_v<C, TPSCamera>) {
         TPSCameras::parse(TPSCameras::settings(c));
         return true;
@@ -279,6 +282,16 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
         B(FPSCamera, mouseLook);
         F(FPSCamera, sensitivity, .001f, 10);
         S(FPSCamera, speed);
+    }
+    H(Recoil) {
+        B(Recoil, enabled);
+        B(Recoil, playOnStart);
+        B(Recoil, sequenceLoop);
+        S(Recoil, burstCount);
+        S(Recoil, seed);
+        for (const auto& f : Recoils::fields) {
+            field<Recoil>(w, p, f.name, f.member, f.low, f.high);
+        }
     }
     H(TPSCamera) {
         B(TPSCamera, enabled);

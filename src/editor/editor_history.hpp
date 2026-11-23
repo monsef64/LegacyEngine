@@ -121,6 +121,7 @@ inline std::string sceneSignature(World& world) {
                 fields(entry.fields);
             }
         });
+        component(e, Recoil{}, [&](const Recoil& c){result+=Recoils::settings(c).dump();});
         component(e, Decal{}, [&](const Decal& d) { result += Decals::settings(d).dump(); });
         component(
             e, LightShafts{}, [&](const LightShafts& s) { result += Shafts::settings(s).dump(); });

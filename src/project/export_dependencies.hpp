@@ -12,7 +12,9 @@ namespace GameExport {
 // declared in Settings/ExportAssets.json: {"include":["Folder/file", "Folder/"]}.
 inline std::set<std::string> exportDependencies(const AssetManager& assets,
                                                 const std::string& scene,
-                                                const std::string& startLevel) {
+                                                const std::string& startLevel,
+                                                bool allLevels = true,
+                                                std::set<std::string>* packedMembers = nullptr) {
     std::map<std::string, std::filesystem::path> inventory;
     std::set<std::string> linkedDirectories;
     for (auto it = std::filesystem::recursive_directory_iterator(assets.root);
@@ -70,6 +72,9 @@ inline std::set<std::string> exportDependencies(const AssetManager& assets,
         }
         // Packed members travel with their indivisible model container.
         const auto hash = value.find('#');
+        if (hash != value.npos && packedMembers && materialPathValid(value)) {
+            packedMembers->insert(value);
+        }
         if (hash != value.npos) {
             value.resize(hash);
         }
@@ -154,9 +159,11 @@ inline std::set<std::string> exportDependencies(const AssetManager& assets,
         }
     };
     documentReferences(documentReferences, parseJson(scene), "", 0);
-    include("Levels/levels.json");
+    if (allLevels) {
+        include("Levels/levels.json");
+    }
     const auto registry = assets.resolve("Levels/levels.json");
-    if (std::filesystem::exists(registry)) {
+    if (allLevels && std::filesystem::exists(registry)) {
         auto doc = readJsonFile(registry, 128 * 1024);
         for (const auto& name : doc.at("levels")) {
             const auto level = name.get<std::string>();

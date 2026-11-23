@@ -32,6 +32,8 @@ struct AudioWaitToken {
     World* world;
     Entity entity;
     int event;
+    bool animation = false;
+    std::uint64_t instance = 0;
 };
 struct Handle {
     LuaScene* scene;
@@ -77,7 +79,8 @@ const char* types[]{"Transform",
                     "NavMeshAgent",
                     "NavMeshObstacle",
                     "UI",
-                    "Decal"};
+                    "Decal",
+                    "Recoil"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -142,6 +145,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<Water>(h.entity);
     case 26:
         return h.world->has<BoneAttachment>(h.entity);
+    case 32:
+        return h.world->has<Recoil>(h.entity);
     case 31:
         return h.world->has<Decal>(h.entity);
     case 30:
@@ -560,7 +565,7 @@ LuaScene::LuaScene(lua_State* L,
         0);
     lua_setglobal(L, "Vector3");
     luaL_newmetatable(L, "AudioWaitToken");
-    lua_pushliteral(L, "Audio event");
+    lua_pushliteral(L, "Component event");
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
     for (int seconds = 0; seconds < 2; ++seconds) {
@@ -992,6 +997,9 @@ int LuaScene::api(lua_State* L) {
         case 25:
             self.world_.remove<Water>(h.entity);
             break;
+        case 32:
+            self.world_.remove<Recoil>(h.entity);
+            break;
         case 31:
             self.world_.remove<Decal>(h.entity);
             break;
@@ -1104,6 +1112,9 @@ int LuaScene::api(lua_State* L) {
                 self.world_.add(h.entity, Transform{});
             }
             self.world_.add(h.entity, Water{});
+            break;
+        case 32:
+            self.world_.add(h.entity, Recoil{});
             break;
         case 31:
             if (!self.world_.has<Transform>(h.entity)) {
@@ -1582,6 +1593,32 @@ int LuaScene::componentIndex(lua_State* L) {
         }
         return 1;
     }
+    if (c.type == 32) {
+        const auto& r = c.object.world->get<Recoil>(c.object.entity);
+        const char* methods[]{"trigger", "start", "stop", "reset", "playSequence", "setSequence"};
+        for (int i = 0; i < 6; ++i) {
+            if (!std::strcmp(key, methods[i])) {
+                lua_pushvalue(L, 1);
+                lua_pushinteger(L, i);
+                lua_pushcclosure(L, recoilMethod, 2);
+                return 1;
+            }
+        }
+        if (!std::strcmp(key, "isFiring")) {
+            lua_pushboolean(L, r.firing || r.sequencePlaying);
+            return 1;
+        }
+        const auto j = Recoils::settings(r);
+        if (!j.contains(key) || !j.at(key).is_primitive()) {
+            return luaL_error(L, "Unknown Recoil property; use setSequence for keys");
+        }
+        if (j.at(key).is_boolean()) {
+            lua_pushboolean(L, j.at(key).get<bool>());
+        } else {
+            lua_pushnumber(L, j.at(key).get<double>());
+        }
+        return 1;
+    }
     if (c.type == 29) {
         const auto j =
             Navigation::obstacleSettings(c.object.world->get<NavMeshObstacle>(c.object.entity));
@@ -1961,6 +1998,15 @@ int LuaScene::componentIndex(lua_State* L) {
     }
     if (c.type == 16) {
         const auto& a = c.object.world->get<Animation>(c.object.entity);
+        for (int i = 0; i < 6; ++i) {
+            if (!std::strcmp(key, Animation::eventNames[i])) {
+                auto* token =
+                    static_cast<AudioWaitToken*>(lua_newuserdatauv(L, sizeof(AudioWaitToken), 0));
+                *token = {c.object.world, c.object.entity, i, true, a.eventInstance};
+                luaL_setmetatable(L, "AudioWaitToken");
+                return 1;
+            }
+        }
         const char* methods[]{"play", "stop", "pause", "resume", "reset", "crossFade", "playClip"};
         for (int i = 0; i < 7; ++i) {
             if (!std::strcmp(key, methods[i])) {
@@ -2311,6 +2357,39 @@ int LuaScene::componentNewIndex(lua_State* L) {
             return luaL_error(L, "Expected a project-relative RML/RCSS asset path");
         }
         (!std::strcmp(key, "rml") ? g.rml : g.rcss) = path;
+        return 0;
+    }
+    if (c.type == 32) {
+        if (!has(c.object, 32)) {
+            return luaL_error(L, "Recoil no longer exists");
+        }
+        const char* key = luaL_checkstring(L, 2);
+        auto& r = c.object.world->get<Recoil>(c.object.entity);
+        auto j = Recoils::settings(r);
+        if (!j.contains(key) || !j.at(key).is_primitive()) {
+            return luaL_error(L, "Unknown/read-only Recoil property");
+        }
+        if (j.at(key).is_boolean()) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            j[key] = bool(lua_toboolean(L, 3));
+        } else if (j.at(key).is_number_integer()) {
+            j[key] = luaL_checkinteger(L, 3);
+        } else {
+            j[key] = number(L, 3);
+        }
+        try {
+            const auto validated = Recoils::parse(j);
+            r.enabled = validated.enabled;
+            r.playOnStart = validated.playOnStart;
+            r.sequenceLoop = validated.sequenceLoop;
+            r.burstCount = validated.burstCount;
+            r.seed = validated.seed;
+            for (const auto& f : Recoils::fields) {
+                r.*(f.member) = validated.*(f.member);
+            }
+        } catch (const std::exception& e) {
+            return luaL_error(L, "%s", e.what());
+        }
         return 0;
     }
     if (c.type == 29) {
@@ -3208,13 +3287,19 @@ void LuaScene::advanceTasks(float dt) {
         }
         bool ready = false;
         if (current->audioEvent >= 0) {
-            auto* audio = world_.tryGet<AudioSource>(current->audioEntity);
-            if (!audio) {
+            const auto* audio = current->animationEvent
+                                    ? nullptr
+                                    : world_.tryGet<AudioSource>(current->audioEntity);
+            const auto* animation =
+                current->animationEvent ? world_.tryGet<Animation>(current->audioEntity) : nullptr;
+            if ((!audio && !animation) ||
+                (animation && animation->eventInstance != current->eventInstance)) {
                 luaL_unref(state_, LUA_REGISTRYINDEX, current->reference);
                 tasks_.erase(current);
                 continue;
             }
-            ready = audio->eventSequence[current->audioEvent] != current->sequence;
+            ready = (animation ? animation->eventSequence[current->audioEvent]
+                               : audio->eventSequence[current->audioEvent]) != current->sequence;
         } else {
             current->seconds -= std::max(0.f, dt);
             ready = current->seconds <= 0;
@@ -3279,15 +3364,21 @@ int LuaScene::waitAPI(lua_State* L) {
         // Event tokens are opaque, generation-safe AudioSource references.
         auto* token = static_cast<struct AudioWaitToken*>(luaL_checkudata(L, 1, "AudioWaitToken"));
         if (token->world != &scene.world_) {
-            return luaL_error(L, "Audio event belongs to another world");
+            return luaL_error(L, "Component event belongs to another world");
         }
-        auto* audio = scene.world_.tryGet<AudioSource>(token->entity);
-        if (!audio) {
-            return luaL_error(L, "AudioSource no longer exists");
+        const auto* audio =
+            token->animation ? nullptr : scene.world_.tryGet<AudioSource>(token->entity);
+        const auto* animation =
+            token->animation ? scene.world_.tryGet<Animation>(token->entity) : nullptr;
+        if ((!audio && !animation) || (animation && animation->eventInstance != token->instance)) {
+            return luaL_error(L, "Wait event component no longer exists");
         }
         scene.currentTask_->audioEntity = token->entity;
         scene.currentTask_->audioEvent = token->event;
-        scene.currentTask_->sequence = audio->eventSequence[token->event];
+        scene.currentTask_->animationEvent = token->animation;
+        scene.currentTask_->eventInstance = token->instance;
+        scene.currentTask_->sequence =
+            animation ? animation->eventSequence[token->event] : audio->eventSequence[token->event];
     }
     return lua_yield(L, 0);
 }
@@ -4136,6 +4227,57 @@ int LuaScene::spawnAPI(lua_State* L) {
     return 1;
 }
 
+int LuaScene::recoilMethod(lua_State* L) {
+    const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
+    if (!has(c.object, 32)) {
+        return luaL_error(L, "Recoil no longer exists");
+    }
+    auto& r = c.object.world->get<Recoil>(c.object.entity);
+    const int method = int(lua_tointeger(L, lua_upvalueindex(2))),
+              arg = luaL_testudata(L, 1, "Component") ? 2 : 1;
+    if (method == 0) {
+        const float v = lua_isnoneornil(L, arg) ? 1 : number(L, arg);
+        if (v < 0 || v > 10) {
+            return luaL_error(L, "Recoil strength must be 0..10");
+        }
+        r.trigger(v);
+    } else if (method == 1) {
+        r.start();
+    } else if (method == 2) {
+        r.stop();
+    } else if (method == 3) {
+        r.reset();
+    } else if (method == 4) {
+        r.startSequence();
+    } else {
+        luaL_checktype(L, arg, LUA_TTABLE);
+        const auto count = lua_rawlen(L, arg);
+        if (count > 256) {
+            return luaL_error(L, "Recoil sequence supports up to 256 keys");
+        }
+        Json j = Recoils::settings(r);
+        j["sequence"] = Json::array();
+        for (std::size_t i = 1; i <= count; ++i) {
+            lua_rawgeti(L, arg, i);
+            luaL_checktype(L, -1, LUA_TTABLE);
+            lua_getfield(L, -1, "time");
+            const float t = number(L, -1);
+            lua_pop(L, 1);
+            lua_getfield(L, -1, "strength");
+            const float s = lua_isnil(L, -1) ? 1 : number(L, -1);
+            lua_pop(L, 2);
+            j["sequence"].push_back({{"time", t}, {"strength", s}});
+        }
+        try {
+            auto validated = Recoils::parse(j);
+            r.sequence = std::move(validated.sequence);
+            r.stop();
+        } catch (const std::exception& e) {
+            return luaL_error(L, "%s", e.what());
+        }
+    }
+    return 0;
+}
 int LuaScene::animationMethod(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
     if (!c.object.world->alive(c.object.entity) || !has(c.object, 16)) {

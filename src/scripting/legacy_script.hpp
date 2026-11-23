@@ -15,7 +15,7 @@ inline std::vector<ExportDeclaration> exportDeclarations(std::string_view source
         }
         const bool typed = token.kind == LuaToken::Api && source.substr(token.begin, 6) == "expose";
         const bool bare =
-            typed || token.kind == LuaToken::Api && source.substr(token.begin, 7) == "@export";
+            typed || (token.kind == LuaToken::Api && source.substr(token.begin, 7) == "@export");
         const bool comment =
             token.kind == LuaToken::Comment && source.substr(token.begin, 10) == "---@export";
         if (!bare && !comment) {

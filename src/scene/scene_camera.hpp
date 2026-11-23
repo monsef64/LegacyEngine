@@ -3,6 +3,27 @@
 #include <algorithm>
 #include <stdexcept>
 
+inline void updateRecoil(World& world, float dt) {
+    world.each<Recoil>([&](Entity e, Recoil& c) {
+        if (isActive(world, e)) {
+            Recoils::update(c, dt);
+        }
+    });
+}
+inline Transform recoilCameraPose(World& world, Entity e, const Transform& base) {
+    auto pose = base;
+    const auto* c = world.tryGet<Recoil>(e);
+    if (!c || !c->enabled) {
+        return pose;
+    }
+    pose.position = pose.position + rotateVector(base.rotation, c->offset);
+    constexpr float rad = .01745329252f;
+    auto q = composeRotation(axisAngle({0, 1, 0}, c->angles.y * rad),
+                             composeRotation(axisAngle({1, 0, 0}, c->angles.x * rad),
+                                             axisAngle({0, 0, 1}, c->angles.z * rad)));
+    pose.rotation = composeRotation(base.rotation, q);
+    return pose;
+}
 inline Entity activeCamera(World& world) {
     Entity found;
     world.each<Camera, Transform>([&](Entity e, Camera& c, Transform&) {
@@ -32,10 +53,11 @@ inline void aimCamera(Transform& transform, Vec3 target) {
 inline bool validCamera(const Camera& c) {
     auto finite = [](float n) { return std::isfinite(n) && std::abs(n) <= 1e6; };
     return finite(c.fieldOfView) && c.fieldOfView > 0 && c.fieldOfView < 179 &&
-           finite(c.nearClip) && finite(c.farClip) && c.nearClip >= .020f && c.farClip > c.nearClip &&
-           finite(c.orthographicSize) && c.orthographicSize > 0 && finite(c.viewportX) &&
-           finite(c.viewportY) && finite(c.viewportWidth) && finite(c.viewportHeight) &&
-           c.viewportX >= 0 && c.viewportY >= 0 && c.viewportWidth > 0 && c.viewportHeight > 0 &&
+           finite(c.nearClip) && finite(c.farClip) && c.nearClip >= .020f &&
+           c.farClip > c.nearClip && finite(c.orthographicSize) && c.orthographicSize > 0 &&
+           finite(c.viewportX) && finite(c.viewportY) && finite(c.viewportWidth) &&
+           finite(c.viewportHeight) && c.viewportX >= 0 && c.viewportY >= 0 &&
+           c.viewportWidth > 0 && c.viewportHeight > 0 &&
            c.viewportX + c.viewportWidth <= 1.00001f && c.viewportY + c.viewportHeight <= 1.00001f;
 }
 inline Vec3 cameraEye(const Transform& t, const Camera& c) {

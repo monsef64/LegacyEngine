@@ -140,6 +140,7 @@ class Renderer {
 
     // Frees what init() and createMesh() created. Call it if init() succeeded,
     // before the OpenGL context is destroyed.
+    bool preloadAssets(const std::set<std::string>& paths);
     void shutdown();
 
     // Copies a mesh to the graphics card. Put the returned handle in the

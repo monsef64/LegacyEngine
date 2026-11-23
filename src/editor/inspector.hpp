@@ -482,6 +482,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Water>) {
             type = 26;
         }
+        if constexpr (std::is_same_v<T, Recoil>) {
+            type = 34;
+        }
         if constexpr (std::is_same_v<T, Decal>) {
             type = 33;
         }
@@ -561,8 +564,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "NavMeshObstacle",
                                 "RemovedAnimator",
                                 "UI",
-                                "Decal"};
-            for (int i = 0; i < 34; ++i) {
+                                "Decal",
+                                "Recoil"};
+            for (int i = 0; i < 35; ++i) {
                 if (!std::strcmp(name, names[i])) {
                     target = i;
                 }
@@ -667,7 +671,8 @@ inline void drawScriptExports(World& world,
                                  "NavMeshObstacle",
                                  "RemovedAnimator",
                                  "UI",
-                                 "Decal"};
+                                 "Decal",
+                                 "Recoil"};
     for (auto& field : fields) {
         ImGui::PushID(field.name.c_str());
         ImGui::Text("%s (%s)", field.name.c_str(), field.type.c_str());
@@ -1073,14 +1078,87 @@ inline void drawInspector(World& world,
                                ? world.get<InspectorOrder>(selected).types
                                : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,
                                                   5,  13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                                                  23, 24, 25, 26, 27, 28, 29, 30, 32, 33};
-            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15, 16,
-                           17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33}) {
+                                                  23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34};
+            for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15, 16, 17,
+                           18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
             }
             for (int componentID : ordered) {
+                if (componentID == 34) {
+                    if (auto* c = world.tryGet<Recoil>(selected);
+                        c && componentHeader<Recoil>(world, selected, "Recoil")) {
+                        for (const auto& f : Recoils::fields) {
+                            EditorValues::DragFloat(f.name,
+                                                    &(c->*(f.member)),
+                                                    .01f,
+                                                    f.low,
+                                                    f.high,
+                                                    "%.3f",
+                                                    ImGuiSliderFlags_AlwaysClamp);
+                        }
+                        EditorValues::Checkbox("Play on start", &c->playOnStart);
+                        EditorValues::Checkbox("Sequence loop", &c->sequenceLoop);
+                        c->burstCount = std::clamp(c->burstCount, 0, 100000);
+                        EditorValues::InputInt("Burst count (0 = repeat)", &c->burstCount);
+                        c->burstCount = std::clamp(c->burstCount, 0, 100000);
+                        EditorValues::InputInt("Random seed", &c->seed);
+                        c->seed = std::max(0, c->seed);
+                        for (std::size_t i = 0; i < c->sequence.size(); ++i) {
+                            ImGui::PushID(int(i));
+                            auto& k = c->sequence[i];
+                            EditorValues::DragFloat("Time",
+                                                    &k.time,
+                                                    .01f,
+                                                    0,
+                                                    3600,
+                                                    "%.3f",
+                                                    ImGuiSliderFlags_AlwaysClamp);
+                            EditorValues::DragFloat("Strength",
+                                                    &k.strength,
+                                                    .01f,
+                                                    0,
+                                                    10,
+                                                    "%.3f",
+                                                    ImGuiSliderFlags_AlwaysClamp);
+                            if (ImGui::SmallButton("Remove key")) {
+                                c->sequence.erase(c->sequence.begin() + i);
+                                ImGui::PopID();
+                                break;
+                            }
+                            ImGui::PopID();
+                        }
+                        if (c->sequence.size() < 256 && ImGui::Button("Add sequence key")) {
+                            c->sequence.push_back(
+                                {c->sequence.empty() ? 0 : c->sequence.back().time + c->interval,
+                                 1});
+                        }
+                        std::stable_sort(
+                            c->sequence.begin(),
+                            c->sequence.end(),
+                            [](const auto& a, const auto& b) { return a.time < b.time; });
+                        if (ImGui::Button("Trigger")) {
+                            c->trigger();
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Start burst")) {
+                            c->start();
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Play sequence")) {
+                            c->startSequence();
+                        }
+                        if (ImGui::Button("Stop firing")) {
+                            c->stop();
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Reset recoil")) {
+                            c->reset();
+                        }
+                    }
+                }
+
                 if (componentID == 33) {
                     if (auto* d = world.tryGet<Decal>(selected);
                         d && componentHeader<Decal>(world, selected, "Decal")) {
@@ -2406,6 +2484,10 @@ inline void drawInspector(World& world,
                     world.add(selected, CameraEffects{});
                 }
                 if (ImGui::BeginMenu("Cameras")) {
+                    if (!world.has<Recoil>(selected) && ImGui::MenuItem("Recoil")) {
+                        world.add(selected, Recoil{});
+                    }
+
                     if (!world.has<Camera>(selected) && ImGui::MenuItem("Camera")) {
                         if (!world.has<Transform>(selected)) {
                             world.add(selected, Transform{});
