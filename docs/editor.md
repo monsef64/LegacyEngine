@@ -731,3 +731,28 @@ Shared asset fields show **filename.extension** instead of the full path; hover
 for the full project-relative path. The stored reference is unchanged, so same-name
 assets in different folders remain distinct. Selection dialogs retain their path
 context. Prefab and AnimationClip script fields use the same filtered asset picker.
+
+### Header switch sizing and asset hover details
+
+Component header Enabled switches use the current font/style measurements, stay
+right-aligned inside the header, and are vertically centered. On narrow Inspector
+panels the label hides (hover the checkbox for **Enabled**) and long component names
+are clipped before the control. Clicking the switch does not also collapse the
+component. Only components that already support enabled/active state get a switch.
+
+Asset-browser hover details wait on the **current asset** for 1.5 seconds. Moving
+to another asset, changing projects, or leaving/re-entering the browser resets
+that delay. Shared detail-preview slots no longer return the previous asset's
+image, waveform or text while a new asset is waiting for the preview-generation
+budget; an empty/loading preview is preferable to unrelated information.
+
+### Orthographic transform dragging
+
+The level editor uses a gizmo-specific orthographic ray projection: it preserves
+the rendered screen positions while placing the drag ray's near origin in front
+of the active handle. This avoids reflected ray/plane intersections that could
+send a transform to very large positive/negative coordinates. The orthographic
+view, picking rays, scene Camera components and saved projection settings remain
+unchanged. The gizmo's virtual camera anchor stays fixed for the duration of the
+gesture. World/Local axes, snapping, hierarchy edits and undo retain their normal
+behavior.

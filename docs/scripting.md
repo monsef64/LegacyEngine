@@ -8,8 +8,8 @@ Existing `.lua` assets remain supported. Lifecycle callbacks are `onStart`,
 `onUpdate(deltaTime)`, `onFixedUpdate(deltaTime)` and `onDestroy`.
 
 ```lua
-expose GameObject target =
-expose float speed = 5
+global GameObject target =
+global float speed = 5
 
 function onStart()
     debug.log("Started", self:getName())
@@ -26,11 +26,25 @@ Define `Move` in Project → Input Settings first. Exported fields appear in the
 script's Inspector. Drag objects/components/assets into reference slots; **X**
 clears them. Supported values include number, boolean, string, GameObject, engine
 component types, Asset and AudioClip. Defaults are literals, not Lua expressions.
-Declarations use `expose Type name = default` at the beginning of a line and are
-preprocessed before Lua runs, preserving error line numbers. Old `@export` and
-`---@export` declarations remain readable for existing projects; use `expose`
+Declarations use `global Type name = default` at the beginning of a line and are
+preprocessed before Lua runs, preserving error line numbers. Old `expose` declarations remain readable for existing projects; use `global`
 for new scripts. Integers use Lua integer values; float, bool and string defaults
 are supported, as are `Prefab` and `AnimationClip` asset fields.
+In the script editor, type `global` for API completion; in VS Code, use the
+**Global Inspector field** snippet (update/reinstall the bundled extension if it
+still shows the old declaration keyword). For example:
+
+```lua
+global float speed = 5.0
+global int health = 100
+global bool canMove = true
+global string playerName = "Player"
+```
+
+These declarations become editable fields on the attached script in Inspector.
+They are a LegacyScript extension, not a standard Lua keyword. The supported
+ordering is `global type name = default`, never `global name type default`.
+
 Exports currently become globals in the attachment's state: do not shadow them
 with local declarations. Missing references bind as `nil` at script startup.
 
@@ -44,6 +58,9 @@ introspection library. The Console offers **Copy all** and right-click **Copy me
 Lua has bounded memory/instructions and no filesystem/process/module access.
 
 See also [Audio and input](audio-input.md), [materials](materials.md), and [skyboxes](skybox.md) for more component scripting examples.
+
+The old annotation syntax is no longer recognized. Migrate fields to
+`global Type name = defaultValue`; saved field values remain matched by name and type.
 
 ## File-backed Script Editor
 
@@ -155,7 +172,12 @@ keeps its variables and resumes rather than rerunning onStart.
 Waits are non-blocking and only supported inside lifecycle/object callbacks or their `task` blocks, not
 at file top-level, inside custom/level event listeners, or in onDestroy. Each
 callback can have one pending invocation; other callbacks still run. Seconds are
-playing-time seconds (0–86400, zero waits until the next update). Pause and
+playing-time seconds (0–86400, zero waits until the next update). Editor Play
+and exported games use the same double-precision wait clock, separate from the
+capped movement/physics delta: slow rendered frames do not discard wait time.
+Continuations resume on an update, not between frames; a loop of short waits can
+therefore still accumulate frame-quantization delay. Level-loading time before
+the new scripts begin is excluded. Pause and
 inactivity freeze waits; Stop/runtime reset cancels them. `wait(audio.onAudioFinished)`
 listens for the next occurrence after the wait is reached, not a past occurrence.
 Destroying/removing the source cancels its waiting continuation. Instruction and
@@ -568,15 +590,15 @@ Events fire when playback crosses their time, including loop crossings, not whil
 scrubbing the editor timeline. The target must have an active, enabled script
 attachment. Clips serialize their events alongside component/transform tracks.
 
-## Typed exposed fields and prefab assets
+## Global Inspector fields and prefab assets
 
 ```lua
-expose int score = 10
-expose float speed = 4.5
-expose bool canFire = true
-expose string title = "Player"
-expose Prefab enemy = "Prefabs/Enemy.prefab"
-expose AnimationClip walk = "Animations/Walk.leanim"
+global int score = 10
+global float speed = 4.5
+global bool canFire = true
+global string title = "Player"
+global Prefab enemy = "Prefabs/Enemy.prefab"
+global AnimationClip walk = "Animations/Walk.leanim"
 
 function onStart()
     if enemy ~= "" then spawn(enemy, {x=0,y=1,z=0}, {x=0,y=0,z=0}) end

@@ -467,6 +467,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 scripts.startPlay();
                 const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
                 componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
+                lastTicks = SDL_GetTicksNS();
                 if (!transition->name.empty()) {
                     audio.publishPreloaded(std::move(transition->audio), browser.assets.root);
                     animations.publishPreloaded(std::move(transition->clips), browser.assets.root);
@@ -960,6 +961,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 destination.root = assetRoot;
                 Terrains::saveAll(world, destination);
                 renderingSettings.save(destination);
+                gameExport.saveProjectSettings(browser.assets, destination);
                 inputSettings.save(destination, input);
                 if (!inputSettings.error.empty()) {
                     throw std::runtime_error(inputSettings.error);
@@ -1786,6 +1788,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     scripts.startPlay();
                     const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
                     componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
+                    lastTicks = SDL_GetTicksNS();
                     LuaConsole::postEvent("onLevelLoaded", {levels.current()});
                 }
             }
@@ -2607,8 +2610,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
             });
             Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
-            scripts.update(std::min(seconds, 0.25f));
-            componentScripts.update(std::min(seconds, 0.25f));
+            scripts.update(std::min(seconds, 0.25f), seconds);
+            componentScripts.update(std::min(seconds, 0.25f), seconds);
             animations.update(world, browser.assets, std::min(seconds, .25f));
             const auto animationEvents = animations.events;
             for (const auto& event : animationEvents) {

@@ -40,7 +40,7 @@
 component aliases (`object.particleSystem`) and typed script exports:
 
 ```lua
-@export effect ParticleSystem
+global ParticleSystem effect
 
 function onStart()
     local ps = self:getComponent(ParticleSystem)

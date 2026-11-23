@@ -26,7 +26,7 @@ Windows MinGW-w64. Compilation is not a high-poly performance benchmark.
   and expose AnimationClip walk = "Animations/Walk.leanim". Integers must reach Lua
   as integers. Check highlighting, completion and diagnostics in engine/VS Code.
 - Declarations inside quoted strings/block comments or mid-line must not become
-  fields. Old @export/---@export scripts must continue loading with saved values.
+  fields. Global declarations must continue loading with saved values.
 - Drop/select a prefab into its exposed asset field and spawn it. Scene-object
   reference fields remain scene references. Save/reload and duplicate scripts;
   defaults/overrides, undo and Play/Stop rollback must remain correct.

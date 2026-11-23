@@ -23,8 +23,8 @@ material files. Reset overrides to use shared values again. Old projects without
 materials keep their inline colors, checkerboard and specular.
 
 ```lua
-expose Texture albedo =
-expose Texture normals =
+global Texture albedo =
+global Texture normals =
 
 function onStart()
     local mesh = self:getComponent(MeshRenderer)

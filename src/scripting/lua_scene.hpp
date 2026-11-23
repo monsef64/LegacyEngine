@@ -36,7 +36,7 @@ class LuaScene {
         return !tasks_.empty();
     }
     void drawGUI();
-    void update(float dt);
+    void update(float dt, double waitDelta = -1);
     void fixedUpdate(float dt);
     void stop();
 
@@ -50,7 +50,7 @@ class LuaScene {
         lua_State* thread = nullptr;
         int reference = 0, objectReference = 0;
         std::string callback;
-        float seconds = 0;
+        double seconds = 0;
         Entity audioEntity;
         int audioEvent = -1;
         bool animationEvent = false;
@@ -62,7 +62,7 @@ class LuaScene {
     Task* currentTask_ = nullptr;
     Entity selfEntity_;
     void resume(Task& task, int arguments);
-    void advanceTasks(float dt);
+    void advanceTasks(double dt);
     static int waitAPI(lua_State* state);
     static int taskAPI(lua_State* state);
     lua_State* state_;

@@ -26,6 +26,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <imgui_internal.h>
 #include <map>
 
 // Keep file I/O and declaration parsing out of the per-frame Inspector path.
@@ -364,10 +365,48 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                           : !std::strcmp(name, "TPSCamera")     ? "TPS"
                           : !std::strcmp(name, "FPSCamera")     ? "FPS"
                                                                 : name;
-    const std::string title = std::string(display) + "###" + name;
+    constexpr bool hasSwitch = InspectorHasEnabled<T>::value || std::is_same_v<T, Camera>;
+    // Reserve a measured control region. A hidden header label lets us clip the
+    // visible title rather than drawing long names underneath the switch.
+    const std::string title = std::string(hasSwitch ? "" : display) + "###" + name;
+    const auto headerPadding = ImGui::GetStyle().FramePadding;
+    const float checkPadding = std::max(0.f, headerPadding.y * .5f);
+    const float checkSize = ImGui::GetFontSize() + checkPadding * 2;
+    const float textWidth = ImGui::CalcTextSize("Enabled").x;
+    const auto start = ImGui::GetCursorScreenPos();
+    const float outerExtend = std::trunc(ImGui::GetStyle().WindowPadding.x * .5f);
+    const float width = ImGui::GetContentRegionAvail().x + 2 * outerExtend;
+    const bool switchLabel = width > ImGui::GetFontSize() * 6 + checkSize + textWidth +
+                                         ImGui::GetStyle().ItemInnerSpacing.x + headerPadding.x * 2;
+    const float switchWidth =
+        checkSize + (switchLabel ? ImGui::GetStyle().ItemInnerSpacing.x + textWidth : 0.f);
+    const bool overSwitch =
+        hasSwitch && ImGui::IsMouseHoveringRect(
+                         {std::max(start.x - outerExtend,
+                                   start.x - outerExtend + width - headerPadding.x - switchWidth),
+                          start.y},
+                         {start.x - outerExtend + width, start.y + ImGui::GetFrameHeight()});
+    // Exclude this region from the collapse button, including a click on the
+    // very first hovered frame (AllowOverlap alone can toggle both controls).
+    if (overSwitch) {
+        ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+    }
     const bool open = ImGui::CollapsingHeader(
         title.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_AllowOverlap);
+    if (overSwitch) {
+        ImGui::PopItemFlag();
+    }
     const auto header = ImGui::GetItemRectMin(), end = ImGui::GetItemRectMax();
+    const float switchX = std::max(header.x, end.x - headerPadding.x - switchWidth);
+    if constexpr (hasSwitch) {
+        const ImVec2 textStart(header.x + outerExtend + ImGui::GetFontSize() + headerPadding.x * 3,
+                               header.y + headerPadding.y);
+        const float right = std::max(textStart.x, switchX - ImGui::GetStyle().ItemSpacing.x);
+        auto* draw = ImGui::GetWindowDrawList();
+        draw->PushClipRect(textStart, ImVec2(right, end.y), true);
+        draw->AddText(textStart, ImGui::GetColorU32(ImGuiCol_Text), display);
+        draw->PopClipRect();
+    }
     ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(header.x, header.y + 3),
                                               ImVec2(header.x + 3, end.y - 3),
                                               ImGui::GetColorU32(ImGuiCol_CheckMark),
@@ -612,14 +651,18 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         return false;
     }
     // Overlay the existing runtime switch on the header, even while collapsed.
-    if constexpr (InspectorHasEnabled<T>::value || std::is_same_v<T, Camera>) {
-        auto cursor = ImGui::GetCursorScreenPos();
-        ImGui::SetCursorScreenPos({std::max(header.x + 130.f, end.x - 94.f), header.y + 5.f});
+    if constexpr (hasSwitch) {
+        const auto cursor = ImGui::GetCursorScreenPos();
+        ImGui::SetCursorScreenPos(
+            {switchX, header.y + std::max(0.f, (end.y - header.y - checkSize) * .5f)});
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(checkPadding, checkPadding));
+        ImGui::PushClipRect(header, end, true);
         ImGui::PushID(name);
+        const char* switchText = switchLabel ? "Enabled" : "##Enabled";
         if constexpr (std::is_same_v<T, Camera>) {
             auto& camera = world.get<T>(entity);
             bool enabled = camera.active;
-            if (EditorValues::Checkbox("Enabled", &enabled)) {
+            if (EditorValues::Checkbox(switchText, &enabled)) {
                 if (enabled) {
                     activateCamera(world, entity);
                 } else {
@@ -627,11 +670,15 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                 }
             }
         } else {
-            EditorValues::Checkbox("Enabled", &world.get<T>(entity).enabled);
+            EditorValues::Checkbox(switchText, &world.get<T>(entity).enabled);
+        }
+        if (!switchLabel && ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Enabled");
         }
         ImGui::PopID();
+        ImGui::PopClipRect();
+        ImGui::PopStyleVar();
         ImGui::SetCursorScreenPos(cursor);
-        ImGui::Dummy({0, 0});
     }
     return open;
 }
