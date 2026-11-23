@@ -1,5 +1,6 @@
 #include "project/game_export.hpp"
 #include "monocypher.h"
+#include "project/export_dependencies.hpp"
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -435,7 +436,12 @@ void build(const Settings& s,
                 }
             }
         };
-        addTree(assets.root, "Assets");
+        const auto dependencies = exportDependencies(assets, scene, s.startLevel);
+        for (const auto& path : dependencies) {
+            const auto name = "Assets/" + path;
+            safeRelative(name);
+            files.push_back({assets.resolve(path), name, {}, false});
+        }
         const auto project =
             assets.root.filename() == "Assets" ? assets.root.parent_path() : assets.root;
         addTree(project / "Settings", "Settings");

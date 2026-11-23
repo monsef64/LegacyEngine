@@ -77,7 +77,7 @@ class TransformEditor {
     std::filesystem::path boundsRoot_;
     unsigned boundsRevision_ = 0;
     bool centerPivot_ = false;
-    float snap_ = 0.5f;
+    float snap_ = 0.5f, rotationSnap_ = 15.f;
     Vec3 pivotLocal_{};
     bool localSpace_ = false;
     TransformTool tool_ = TransformTool::Move;

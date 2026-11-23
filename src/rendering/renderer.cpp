@@ -161,6 +161,7 @@ bool Renderer::init() {
     litNormalTexture_ = glGetUniformLocation(litProgram_, "uNormalTexture");
     litHasTexture_ = glGetUniformLocation(litProgram_, "uHasMaterialTexture");
     litBumped_ = glGetUniformLocation(litProgram_, "uBumped");
+    litStochastic_ = glGetUniformLocation(litProgram_, "uStochastic");
     litStrength_ = glGetUniformLocation(litProgram_, "uNormalStrength");
     litTiling_ = glGetUniformLocation(litProgram_, "uTiling");
     // Small generated texture: no external asset paths, with mipmaps to reduce
@@ -825,7 +826,7 @@ void Renderer::draw(World& world,
             const auto texture =
                 materialTextures_.get(materialAssets_, material.texture, materialError);
             const auto normal =
-                material.shader == 1
+                (material.shader == 1 || material.shader == 4)
                     ? materialTextures_.get(materialAssets_, material.normalMap, materialError)
                     : 0;
             glActiveTexture(GL_TEXTURE2);
@@ -872,6 +873,7 @@ void Renderer::draw(World& world,
             glUniform1i(litNormalTexture_, 3);
             glUniform1i(litHasTexture_, texture != 0);
             glUniform1i(litBumped_, normal != 0);
+            glUniform1i(litStochastic_, material.shader == 4);
             glUniform1f(litStrength_, material.normalStrength);
             glUniform2f(litTiling_, material.tilingX, material.tilingY);
             glUniform1f(litSpecular_, material.specular);

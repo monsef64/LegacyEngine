@@ -75,12 +75,21 @@ inline bool drawSceneOrientation(OrbitCamera& camera, const EditorRect& scene, b
                         {centre.x + 5, centre.y + 5},
                         IM_COL32(215, 215, 215, 255),
                         1);
-    draw->AddText({rect.x + 35, rect.y + rect.height - 25}, IM_COL32(220, 220, 220, 255), "Persp");
+    draw->AddText({rect.x + 35, rect.y + rect.height - 25},
+                  IM_COL32(220, 220, 220, 255),
+                  camera.orthographic ? "Ortho" : "Persp");
     if (enabled && hovered) {
-        ImGui::SetTooltip("Drag to orbit; click X/Y/Z endpoints for aligned views");
+        const auto mouse = ImGui::GetIO().MousePos;
+        const bool centerHit =
+            std::abs(mouse.x - centre.x) <= 9 && std::abs(mouse.y - centre.y) <= 9;
+        ImGui::SetTooltip("Drag to orbit; click axes to align; click center cube for Ortho/Persp");
         if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) &&
-            !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left) && hit >= 0) {
-            camera.snapAxis(ends[hit].axis, ends[hit].sign);
+            !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left)) {
+            if (centerHit) {
+                camera.orthographic = !camera.orthographic;
+            } else if (hit >= 0) {
+                camera.snapAxis(ends[hit].axis, ends[hit].sign);
+            }
         }
     }
     if (enabled && active && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {

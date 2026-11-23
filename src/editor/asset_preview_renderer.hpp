@@ -694,8 +694,18 @@ class AssetPreviewRenderer {
             }
             if (changed || now - slot.checked > std::chrono::milliseconds(500)) {
                 slot.checked = now;
+                std::error_code ec;
                 const auto stamp =
-                    std::filesystem::last_write_time(assetContainerPath(assets.resolve(path)));
+                    std::filesystem::last_write_time(assetContainerPath(assets.resolve(path)), ec);
+                if (ec) {
+                    slot.key = key;
+                    slot.revision = modelAssetRevision;
+                    slot.world.reset();
+                    slot.streaming = slot.waitingBounds = false;
+                    slot.data = {};
+                    slot.data.error = "Preview unavailable: asset is missing or inaccessible.";
+                    return slot.data;
+                }
                 rebuild |= stamp != slot.modified;
                 slot.modified = stamp;
             }
@@ -781,7 +791,9 @@ class AssetPreviewRenderer {
             slot.world.reset();
             slot.streaming = false;
             slot.data = {};
-            slot.data.error = error.what();
+            slot.data.error = dynamic_cast<const std::filesystem::filesystem_error*>(&error)
+                                  ? "Preview unavailable: asset is missing or inaccessible."
+                                  : error.what();
             saveModelPreview(slot, assets, path, index == 2);
             slot.saved = true;
         }

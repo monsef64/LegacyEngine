@@ -2047,9 +2047,9 @@ component:setMaterialNormalMap("Textures/normal.png")
 
 ### MeshRenderer.setMaterialShader
 
-`setMaterialShader(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection`
+`setMaterialShader(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent, Diffuse Reflection or Stochastic Texture Sampling`
 
-- `mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')`
+- `mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection'|'Stochastic Texture Sampling')`
 
 ```lua
 local component = self:getComponent(MeshRenderer) or self:addComponent(MeshRenderer)

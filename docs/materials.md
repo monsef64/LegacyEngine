@@ -116,3 +116,19 @@ Static baked lighting retains mapped-normal diffuse detail by comparing mapped
 lighting with the geometric-normal lighting used by the atlas. This is an
 irradiance-weighted approximation for overlapping baked lights, not a directional
 lightmap format. Project save/load accepts both current PNG and older TGA lightmaps.
+
+## Stochastic Texture Sampling
+
+Select **Stochastic Texture Sampling** in a material's Shader dropdown (or call
+`mesh:setMaterialShader("Stochastic Texture Sampling")`). This opaque lit shader
+uses the same triangular-lattice stochastic sampling technique as terrain: three
+hashed, quarter-turn rotated/translated samples blend with smooth normalized
+weights to break obvious UV repetition. Explicit texture gradients keep mipmap
+selection stable. Albedo and normal maps share the random transforms; sampled
+normal XY vectors are counter-rotated before blending so lighting remains coherent.
+Color, tiling, normal strength, lighting, shadows, specular and lightmaps continue
+to work. Empty albedo/normal assignments retain the ordinary material fallback.
+
+This is UV-based anti-tiling, not triplanar projection. It does not fix bad mesh UVs
+and costs more texture fetches than Diffuse/Diffuse Bumped. Existing shader choices
+and saved materials keep their behavior; the new shader is a separate opt-in mode.

@@ -30,6 +30,16 @@
 
 // Keep file I/O and declaration parsing out of the per-frame Inspector path.
 // Cache declarations, never field values: Inspector edits and undo remain authoritative.
+// Keep native filesystem diagnostics (including absolute host paths) out of UI.
+inline std::string inspectorError(const std::exception& error) {
+    const std::string message = error.what();
+    if (dynamic_cast<const std::filesystem::filesystem_error*>(&error) ||
+        message.find("filesystem error") != message.npos ||
+        message.find("filesystem_error") != message.npos) {
+        return "Asset unavailable. Check its assignment in the asset picker.";
+    }
+    return error.what();
+}
 inline void syncInspectorScriptExports(const AssetManager& assets,
                                        const std::string& path,
                                        std::vector<ScriptField>& fields) {
@@ -51,7 +61,12 @@ inline void syncInspectorScriptExports(const AssetManager& assets,
     if (!entry.loaded || now - entry.checked >= std::chrono::milliseconds(500)) {
         entry.checked = now;
         try {
-            const auto stamp = std::filesystem::last_write_time(file);
+            std::error_code ec;
+            const auto stamp = std::filesystem::last_write_time(assetContainerPath(file), ec);
+            if (ec) {
+                throw std::runtime_error(
+                    "Script asset is missing or inaccessible. Reassign it with the asset picker.");
+            }
             if (!entry.loaded || stamp != entry.stamp || !entry.error.empty()) {
                 std::vector<ScriptField> declarations;
                 syncScriptExports(assets.readScript(path), declarations);
@@ -60,7 +75,7 @@ inline void syncInspectorScriptExports(const AssetManager& assets,
                 entry.error.clear();
             }
         } catch (const std::exception& error) {
-            entry.error = error.what();
+            entry.error = inspectorError(error);
         }
         entry.loaded = true;
     }
@@ -319,7 +334,7 @@ inline void drawParticleSettings(ParticleSystem& p, const AssetManager* assets) 
             }
             error.clear();
         } catch (const std::exception& e) {
-            error = e.what();
+            error = inspectorError(e);
         }
     }
     if (!error.empty()) {
@@ -721,7 +736,7 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
         changed |= EditorValues::Combo(
             "Shader",
             &edited.shader,
-            "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0");
+            "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0Stochastic Texture Sampling\0");
         changed |= EditorValues::ColorEdit3("Color", &edited.color.x);
         if (edited.shader == 2) {
             changed |= EditorValues::SliderFloat("Alpha", &edited.alpha, 0, 1);
@@ -743,7 +758,7 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
             return result;
         };
         changed |= texture("Texture", edited.texture);
-        if (edited.shader == 1) {
+        if (edited.shader == 1 || edited.shader == 4) {
             changed |= texture("Normal map", edited.normalMap);
             changed |= EditorValues::SliderFloat("Normal strength", &edited.normalStrength, 0, 4);
         }
@@ -761,7 +776,7 @@ inline void drawMaterialAssetInspector(const AssetManager& assets, const std::st
             cache.clear(); // reflect the saved edit on the very next frame
         }
     } catch (const std::exception& error) {
-        ImGui::TextWrapped("%s", error.what());
+        ImGui::TextWrapped("%s", inspectorError(error).c_str());
     }
 }
 
@@ -779,8 +794,13 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
         bool refresh = current != key || revision != modelAssetRevision;
         if (refresh || now - checked > std::chrono::milliseconds(500)) {
             checked = now;
+            std::error_code ec;
             const auto stamp =
-                std::filesystem::last_write_time(assetContainerPath(assets.resolve(path)));
+                std::filesystem::last_write_time(assetContainerPath(assets.resolve(path)), ec);
+            if (ec) {
+                ImGui::TextDisabled("Model asset is missing or inaccessible.");
+                return;
+            }
             refresh |= stamp != modified;
             modified = stamp;
         }
@@ -833,7 +853,7 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
                     });
                 error.clear();
             } catch (const std::exception& e) {
-                error = e.what();
+                error = inspectorError(e);
             }
         }
         if (partCount) {
@@ -848,7 +868,7 @@ drawModelImportInspector(World& world, const AssetManager& assets, const std::st
             ImGui::TextWrapped("%s", error.c_str());
         }
     } catch (const std::exception& error) {
-        ImGui::TextWrapped("%s", error.what());
+        ImGui::TextWrapped("%s", inspectorError(error).c_str());
     }
 }
 
@@ -1132,7 +1152,7 @@ inline void drawInspector(World& world,
                                 generateMeshLODs(*assets, r->model);
                                 lodStatus = "LODs generated. Switch distances: 20m / 50m.";
                             } catch (const std::exception& e) {
-                                lodStatus = e.what();
+                                lodStatus = inspectorError(e);
                             }
                         }
                         if (ImGui::IsItemHovered()) {
@@ -1286,7 +1306,7 @@ inline void drawInspector(World& world,
                                         materialError.clear();
                                         ImGui::CloseCurrentPopup();
                                     } catch (const std::exception& error) {
-                                        materialError = error.what();
+                                        materialError = inspectorError(error);
                                     }
                                 }
                                 ImGui::SameLine();
@@ -1318,7 +1338,7 @@ inline void drawInspector(World& world,
                                     changed |= EditorValues::Combo(
                                         "Shader",
                                         &edited.shader,
-                                        "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0");
+                                        "Diffuse\0Diffuse Bumped\0Diffuse Transparent\0Diffuse Reflection\0Stochastic Texture Sampling\0");
                                     changed |=
                                         EditorValues::ColorEdit3("Material color", &edited.color.x);
                                     if (edited.shader == 2) {
@@ -1348,7 +1368,7 @@ inline void drawInspector(World& world,
                                         return editedTexture;
                                     };
                                     changed |= textureField("Texture", edited.texture);
-                                    if (edited.shader == 1) {
+                                    if (edited.shader == 1 || edited.shader == 4) {
                                         changed |= textureField("Normal map", edited.normalMap);
                                         changed |= EditorValues::SliderFloat(
                                             "Normal strength", &edited.normalStrength, 0, 4);
@@ -1377,7 +1397,7 @@ inline void drawInspector(World& world,
                                             }
                                             materialError.clear();
                                         } catch (const std::exception& e) {
-                                            materialError = e.what();
+                                            materialError = inspectorError(e);
                                         }
                                     }
                                     if (r->materialOverrides) {
@@ -1390,7 +1410,7 @@ inline void drawInspector(World& world,
                                 }
                             }
                         } catch (const std::exception& e) {
-                            materialError = e.what();
+                            materialError = inspectorError(e);
                         }
                         if (!materialError.empty()) {
                             ImGui::TextWrapped("%s", materialError.c_str());
@@ -1630,7 +1650,7 @@ inline void drawInspector(World& world,
                                     ImGui::EndCombo();
                                 }
                             } catch (const std::exception& ex) {
-                                ImGui::TextWrapped("%s", ex.what());
+                                ImGui::TextWrapped("%s", inspectorError(ex).c_str());
                             }
                         }
                         editVector("Position offset", b->offset, .01f, -100000, 100000);
@@ -1811,7 +1831,7 @@ inline void drawInspector(World& world,
                                 edited.useBakedTexture = true;
                                 shaftError.clear();
                             } catch (const std::exception& e) {
-                                shaftError = e.what();
+                                shaftError = inspectorError(e);
                             }
                         }
                         ImGui::EndDisabled();
@@ -2139,7 +2159,7 @@ inline void drawInspector(World& world,
                             try {
                                 syncInspectorScriptExports(*assets, path, fields);
                             } catch (const std::exception& error) {
-                                ImGui::TextWrapped("%s", error.what());
+                                ImGui::TextWrapped("%s", inspectorError(error).c_str());
                             }
                         }
                         drawScriptExports(world, fields, assets);

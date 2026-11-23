@@ -3599,11 +3599,14 @@ int LuaScene::materialMethod(lua_State* L) {
         }
         if (std::strcmp(shader, "Diffuse") && std::strcmp(shader, "Diffuse Bumped") &&
             std::strcmp(shader, "Diffuse Transparent") &&
-            std::strcmp(shader, "Diffuse Reflection")) {
+            std::strcmp(shader, "Diffuse Reflection") &&
+            std::strcmp(shader, "Stochastic Texture Sampling")) {
             return luaL_error(
-                L, "Expected Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection");
+                L,
+                "Expected Diffuse, Diffuse Bumped, Diffuse Transparent, Diffuse Reflection or Stochastic Texture Sampling");
         }
-        edited.shader = !std::strcmp(shader, "Diffuse Reflection") ? 3
+        edited.shader = !std::strcmp(shader, "Stochastic Texture Sampling") ? 4
+                        : !std::strcmp(shader, "Diffuse Reflection")        ? 3
                         : !std::strcmp(shader, "Diffuse Transparent")
                             ? 2
                             : !std::strcmp(shader, "Diffuse Bumped");

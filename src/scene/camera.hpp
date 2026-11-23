@@ -11,6 +11,8 @@ struct OrbitCamera {
     float distance = 13.0f;             // metres from the target
     float fieldOfView = radians(45.0f); // the angle it sees from bottom to top
 
+    bool orthographic = false; // Editor navigation only; never changes scene Camera components.
+
     Vec3 position() const {
         const Vec3 direction = {
             std::cos(pitch) * std::sin(yaw), std::sin(pitch), std::cos(pitch) * std::cos(yaw)};
@@ -98,8 +100,23 @@ struct OrbitCamera {
 
     // Takes a point of the world to its place on the screen. `aspect` is the
     // width of the picture divided by its height.
+    float halfHeight() const {
+        return distance * std::tan(fieldOfView * .5f);
+    }
+    Mat4 projection(float aspect) const {
+        if (!orthographic) {
+            return perspective(fieldOfView, aspect, .1f, 200.f);
+        }
+        Mat4 result{};
+        result.m[0] = 1 / (halfHeight() * aspect);
+        result.m[5] = 1 / halfHeight();
+        result.m[10] = -2 / (200.f - .1f);
+        result.m[14] = -(200.f + .1f) / (200.f - .1f);
+        result.m[15] = 1;
+        return result;
+    }
     Mat4 viewProjection(float aspect) const {
-        const Mat4 projection = perspective(fieldOfView, aspect, 0.1f, 200.0f);
+        const Mat4 projection = this->projection(aspect);
         const Mat4 view = lookAt(position(), target, up());
         return multiply(projection, view);
     }
@@ -117,6 +134,11 @@ struct OrbitCamera {
 
         // Half the height of the picture, taken as a rectangle that stands
         // 1 m in front of the camera.
+        if (orthographic) {
+            return {eye + right * ((2 * x - 1) * halfHeight() * aspect) +
+                        up * ((1 - 2 * y) * halfHeight()),
+                    forward};
+        }
         const float halfHeight = std::tan(fieldOfView * 0.5f);
         const Vec3 direction = forward + right * ((2.0f * x - 1.0f) * halfHeight * aspect) +
                                up * ((1.0f - 2.0f * y) * halfHeight);

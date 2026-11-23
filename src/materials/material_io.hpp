@@ -13,7 +13,8 @@ inline Json materialJson(const MaterialProperties& p) {
     return {{"format", "LegacyEngineMaterial"},
             {"version", 1},
             {"shader",
-             p.shader == 3   ? "Diffuse Reflection"
+             p.shader == 4   ? "Stochastic Texture Sampling"
+             : p.shader == 3 ? "Diffuse Reflection"
              : p.shader == 2 ? "Diffuse Transparent"
              : p.shader == 1 ? "Diffuse Bumped"
                              : "Diffuse"},
@@ -35,12 +36,13 @@ inline MaterialProperties parseMaterial(const Json& json) {
         shader = "Diffuse Bumped";
     }
     if (shader != "Diffuse" && shader != "Diffuse Bumped" && shader != "Diffuse Transparent" &&
-        shader != "Diffuse Reflection") {
+        shader != "Diffuse Reflection" && shader != "Stochastic Texture Sampling") {
         throw std::runtime_error("Unknown material shader");
     }
-    p.shader = shader == "Diffuse Reflection"    ? 3
-               : shader == "Diffuse Transparent" ? 2
-                                                 : shader == "Diffuse Bumped";
+    p.shader = shader == "Stochastic Texture Sampling" ? 4
+               : shader == "Diffuse Reflection"        ? 3
+               : shader == "Diffuse Transparent"       ? 2
+                                                       : shader == "Diffuse Bumped";
     const auto& color = json.at("color");
     const auto& tiling = json.at("tiling");
     if (!color.is_array() || color.size() != 3 || !tiling.is_array() || tiling.size() != 2) {
@@ -107,8 +109,15 @@ class MaterialAssetCache {
             return entry.properties;
         }
         const auto file = assetContainerPath(assets.resolve(path));
-        const auto stamp = std::filesystem::last_write_time(file);
-        const auto bytes = std::filesystem::file_size(file);
+        std::error_code ec;
+        const auto stamp = std::filesystem::last_write_time(file, ec);
+        if (ec) {
+            throw std::runtime_error("Material asset is missing or inaccessible: " + path);
+        }
+        const auto bytes = std::filesystem::file_size(file, ec);
+        if (ec) {
+            throw std::runtime_error("Cannot read material asset: " + path);
+        }
         entry.checked = now;
         if (!entry.valid || entry.modified != stamp || entry.bytes != bytes) {
             entry.properties = loadMaterial(assets, path);

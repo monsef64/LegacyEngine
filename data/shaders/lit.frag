@@ -182,6 +182,21 @@ uniform sampler2D uIndirectLightmap;
 uniform bool uHasIndirectLightmap;
 uniform int uLightmapGrid;
 
+uniform bool uStochastic;
+vec2 stochasticHash(vec2 x){return fract(sin(vec2(dot(x,vec2(127.1,311.7)),dot(x,vec2(269.5,183.3))))*43758.5453);}
+vec3 stochasticTile(sampler2D tex,vec2 cell,vec2 p,vec2 dx,vec2 dy,bool normalMap){
+    vec2 h=stochasticHash(cell);float angle=floor(h.x*4.)*1.5707963;
+    mat2 r=mat2(cos(angle),-sin(angle),sin(angle),cos(angle));vec3 value=textureGrad(tex,r*p+h,r*dx,r*dy).rgb;
+    if(normalMap){value=value*2.-1.;value.xy=transpose(r)*value.xy;}return value;
+}
+vec3 stochasticSample(sampler2D tex,vec2 p,vec2 dx,vec2 dy,bool normalMap){
+    vec2 q=vec2(p.x-p.y*.57735027,p.y*1.15470054),cell=floor(q),f=fract(q),a=cell,b,c;vec3 w;
+    if(f.x+f.y<1.){b=cell+vec2(1,0);c=cell+vec2(0,1);w=vec3(1.-f.x-f.y,f.x,f.y);}
+    else{a=cell+vec2(1,1);b=cell+vec2(0,1);c=cell+vec2(1,0);w=vec3(f.x+f.y-1.,1.-f.x,1.-f.y);}
+    w=w*w*w;w/=max(dot(w,vec3(1)),.00001);
+    return stochasticTile(tex,a,p,dx,dy,normalMap)*w.x+stochasticTile(tex,b,p,dx,dy,normalMap)*w.y+stochasticTile(tex,c,p,dx,dy,normalMap)*w.z;
+}
+
 void main() {
     vec3 worldDx = dFdx(vWorldPosition), worldDy = dFdy(vWorldPosition);
     vec2 uv = vUV * uTiling;
@@ -196,7 +211,7 @@ void main() {
             if (dot(t, t) > 1e-10) {
                 t = normalize(t);
                 b = normalize(cross(normal, t)) * sign(dot(cross(normal, t), b));
-                vec3 mapped = textureGrad(uNormalTexture, uv, uvDx, uvDy).xyz * 2.0 - 1.0;
+                vec3 mapped = uStochastic ? stochasticSample(uNormalTexture,uv,uvDx,uvDy,true) : textureGrad(uNormalTexture, uv, uvDx, uvDy).xyz * 2.0 - 1.0;
                 mapped.xy *= uNormalStrength;
                 vec3 n = t * mapped.x + b * mapped.y + normal * mapped.z;
                 if (dot(n, n) > 1e-10) {
@@ -206,7 +221,7 @@ void main() {
         }
     }
     vec3 albedo = uColor;
-    vec4 texel = uHasMaterialTexture ? texture(uMaterialTexture, uv) : vec4(1);
+    vec4 texel = uHasMaterialTexture ? (uStochastic ? vec4(stochasticSample(uMaterialTexture,uv,uvDx,uvDy,false),1) : texture(uMaterialTexture, uv)) : vec4(1);
     albedo *= texel.rgb;
     float alpha = uTransparent ? texel.a * uMaterialAlpha : 1.0;
     if (alpha < 0.001) {

@@ -222,7 +222,7 @@ class Renderer {
     EditorLines editorLines_;
     int litTransparent_ = -1, litAlpha_ = -1;
     int litTexture_ = -1, litNormalTexture_ = -1, litHasTexture_ = -1, litBumped_ = -1,
-        litStrength_ = -1, litTiling_ = -1;
+        litStochastic_ = -1, litStrength_ = -1, litTiling_ = -1;
     void drawWire(const MeshData& wire,
                   const Transform& transform,
                   const Mat4& viewProjection,

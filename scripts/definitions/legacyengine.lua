@@ -68,7 +68,7 @@
 ---@field setMaterialColor fun(self:MeshRenderer,r:number,g:number,b:number)
 ---@field setMaterialTexture fun(self:MeshRenderer,texture:Texture|nil)
 ---@field setMaterialNormalMap fun(self:MeshRenderer,texture:Texture|nil)
----@field setMaterialShader fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection
+---@field setMaterialShader fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent, Diffuse Reflection or Stochastic Texture Sampling
 ---@field setMaterialNormalStrength fun(self:MeshRenderer,value:number)
 ---@field setMaterialTiling fun(self:MeshRenderer,x:number,y:number)
 ---@field setMaterialAlpha fun(self:MeshRenderer,value:number) 0..1 opacity for Diffuse Transparent
