@@ -283,6 +283,7 @@ inline std::string sceneSignature(World& world) {
             scalar(m.lightmapGrid);
             vec(m.color);
             scalar(m.checkerboard);
+            scalar(m.castShadow);
             scalar(m.specular);
             scalar(m.material.size());
             result += m.material;

@@ -60,7 +60,7 @@ This workflow does not publish to the VS Code Marketplace.
 
 ## Export declarations
 
-Use `@export target GameObject` or `@export speed number 5` at the beginning
+Use `expose GameObject target =` or `expose number speed = 5` at the beginning
 of a line to expose an Inspector field. The engine preprocesses this LegacyScript
 syntax before executing Lua; external plain-Lua runtimes cannot execute it as-is.
 Legacy `---@export` comments remain supported. The `export` snippet inserts the
@@ -72,7 +72,7 @@ preferred bare form, and both forms supply completion and hover information.
 Version 0.1.1 validates open `.lua` / `.ls` documents on open/save and shortly after edits.
 Errors appear inline and in **View → Problems** with source **LegacyScript**;
 fixed errors disappear automatically, and closed files clear their diagnostics.
-Syntax checking never executes scripts. It understands engine `@export` lines and
+Syntax checking never executes scripts. It understands engine `expose Type name = default` lines and
 reports malformed/duplicate declarations and unknown export types. Lua 5.4 local
 `<const>` / `<close>` annotations are accepted on top of the bundled Lua 5.3 syntax
 grammar, but attribute semantics are not checked. Validation pauses for documents

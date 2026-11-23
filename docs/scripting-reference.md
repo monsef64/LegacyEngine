@@ -1356,6 +1356,49 @@ function onStart()
 end
 ```
 
+### AnimationClip
+
+`AnimationClip(path:string):string - Checked .leanim asset path for Animation.playClip/crossFade.`
+
+- `param path string`
+- `return string clip Checked .leanim asset path value.`
+
+```lua
+local clip = AnimationClip("Animations/Walk.leanim")
+```
+
+### randomFloat
+
+`randomFloat(min:number,max:number):number - Uniform finite floating sample; min <= max.`
+
+```lua
+local value = Random.randomFloat(0, 1)
+```
+
+### randomInt
+
+`randomInt(min:integer,max:integer):integer - Inclusive uniform integer sample.`
+
+```lua
+local value = Random.randomInt(1, 6)
+```
+
+### randomBool
+
+`randomBool():boolean - Equally likely true or false.`
+
+```lua
+local value = Random.randomBool()
+```
+
+### randomString
+
+`randomString(length:integer):string - 0..4096 alphanumeric characters, not cryptographic.`
+
+```lua
+local value = Random.randomString(12)
+```
+
 ### print
 
 `print(...) - log tab-separated values`
@@ -3089,6 +3132,17 @@ component:setLayers({'Default'})
 ```lua
 local component = self:getComponent(Animation) or self:addComponent(Animation)
 component:play()
+```
+
+### Animation.playClip
+
+`playClip(self:Animation,clip:string) Play an AnimationClip path value; loads asynchronously if needed.`
+
+- `animation:playClip(AnimationClip(path)) - Plays a selected clip; decoding is asynchronous and Stop cancels pending playback.`
+
+```lua
+local animation = self:getComponent(Animation)
+animation:playClip(AnimationClip("Animations/Walk.leanim"))
 ```
 
 ### Animation.stop
@@ -4980,102 +5034,100 @@ Game.openURL("https://example.com")
 Game.quit()
 ```
 
-## SavingAPI
-
-### SavingAPI.saveString
+### GameAPI.saveString
 
 `saveString(key:string,value:string):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveString("example", "Player")
+local result, err = Game.saveString("example", "Player")
 ```
 
-### SavingAPI.loadString
+### GameAPI.loadString
 
 `loadString(key:string,default?:string):string|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadString("example", "Player")
+local result, err = Game.loadString("example", "Player")
 ```
 
-### SavingAPI.saveInt
+### GameAPI.saveInt
 
 `saveInt(key:string,value:integer):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveInt("example", 10)
+local result, err = Game.saveInt("example", 10)
 ```
 
-### SavingAPI.loadInt
+### GameAPI.loadInt
 
 `loadInt(key:string,default?:integer):integer|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadInt("example", 10)
+local result, err = Game.loadInt("example", 10)
 ```
 
-### SavingAPI.saveFloat
+### GameAPI.saveFloat
 
 `saveFloat(key:string,value:number):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveFloat("example", 0.5)
+local result, err = Game.saveFloat("example", 0.5)
 ```
 
-### SavingAPI.loadFloat
+### GameAPI.loadFloat
 
 `loadFloat(key:string,default?:number):number|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadFloat("example", 0.5)
+local result, err = Game.loadFloat("example", 0.5)
 ```
 
-### SavingAPI.saveBool
+### GameAPI.saveBool
 
 `saveBool(key:string,value:boolean):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveBool("example", true)
+local result, err = Game.saveBool("example", true)
 ```
 
-### SavingAPI.loadBool
+### GameAPI.loadBool
 
 `loadBool(key:string,default?:boolean):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadBool("example", true)
+local result, err = Game.loadBool("example", true)
 ```
 
-### SavingAPI.saveTable
+### GameAPI.saveTable
 
 `saveTable(key:string,value:table):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveTable("example", {score = 10})
+local result, err = Game.saveTable("example", {score = 10})
 ```
 
-### SavingAPI.loadTable
+### GameAPI.loadTable
 
 `loadTable(key:string,default?:table):table|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadTable("example", {score = 10})
+local result, err = Game.loadTable("example", {score = 10})
 ```
 
-### SavingAPI.saveVector3
+### GameAPI.saveVector3
 
 `saveVector3(key:string,value:Vec3):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveVector3("example", {x = 1, y = 2, z = 3})
+local result, err = Game.saveVector3("example", {x = 1, y = 2, z = 3})
 ```
 
-### SavingAPI.loadVector3
+### GameAPI.loadVector3
 
 `loadVector3(key:string,default?:Vec3):Vec3|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadVector3("example", {x = 1, y = 2, z = 3})
+local result, err = Game.loadVector3("example", {x = 1, y = 2, z = 3})
 ```
 
 ## FileAPI
@@ -5158,6 +5210,48 @@ File.rename("notes.txt", "old-notes.txt")
 File.remove("old-notes.txt")
 ```
 
+## RandomAPI
+
+### RandomAPI.randomFloat
+
+`randomFloat(min:number,max:number):number Finite bounds, min <= max; uniform floating sample.`
+
+- `randomFloat(min:number,max:number):number - Uniform finite floating sample; min <= max.`
+
+```lua
+local value = Random.randomFloat(0, 1)
+```
+
+### RandomAPI.randomInt
+
+`randomInt(min:integer,max:integer):integer Inclusive uniform bounds.`
+
+- `randomInt(min:integer,max:integer):integer - Inclusive uniform integer sample.`
+
+```lua
+local value = Random.randomInt(1, 6)
+```
+
+### RandomAPI.randomBool
+
+`randomBool():boolean Equally likely true/false.`
+
+- `randomBool():boolean - Equally likely true or false.`
+
+```lua
+local value = Random.randomBool()
+```
+
+### RandomAPI.randomString
+
+`randomString(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic.`
+
+- `randomString(length:integer):string - 0..4096 alphanumeric characters, not cryptographic.`
+
+```lua
+local value = Random.randomString(12)
+```
+
 ## Component fields and type tokens
 
 Component type names such as `Transform`, `Skybox`, `PointLight` and `AudioSource`
@@ -5229,6 +5323,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
+| `castShadow` | `boolean Cast realtime/baked shadows; default true. Rebake static lighting after changes.` |
 | `material` | `string Project-relative .mat asset path; empty uses inline Diffuse` |
 | `mesh` | `'Cube' / 'Sphere' / 'Capsule' / 'Cone' / 'Plane'` |
 | `color` | `Vec3` |
@@ -5334,7 +5429,6 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
-| `hdrCompression` | `boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged` |
 | `type` | `integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama` |
 | `enabled` | `boolean` |
 | `color` | `Vector3 Color tint` |

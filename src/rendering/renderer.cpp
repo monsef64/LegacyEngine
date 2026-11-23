@@ -327,6 +327,15 @@ void Renderer::pumpModels() {
             for (auto& document : result.documents) {
                 modelDocuments_.emplace(document.first, std::move(document.second));
             }
+            for (auto& source : result.skinSources) {
+                gpuSkinning_.publishSource(source.first, std::move(source.second));
+            }
+            for (auto& skeleton : result.skeletons) {
+                auto found = modelDocuments_.find(skeleton.first);
+                if (found != modelDocuments_.end()) {
+                    gpuSkinning_.publishSkeleton(&found->second, std::move(skeleton.second));
+                }
+            }
             failedModels_.erase(path);
         } catch (const std::exception& error) {
             modelError = path + ": " + error.what();
@@ -353,6 +362,28 @@ bool Renderer::requestModel(const std::string& path) {
     auto request = WorkerPool::shared().submit([assets = materialAssets_, path] {
         StreamedModel result;
         result.mesh = loadModelAsset(assets, path, 0, -1, 0, &result.documents);
+        // Prepare large vertex/weight streams and typed animation keys on the CPU
+        // worker while the model is loading, not on first Play/crossFade.
+        for (const auto& entry : result.documents) {
+            const auto& doc = entry.second;
+            if (doc.contains("nodes") && doc.contains("animations") && !doc.at("nodes").empty()) {
+                result.skeletons.emplace(entry.first, std::make_shared<const SkeletonPose>(doc));
+            }
+            if (doc.contains("bones") && doc.contains("weights") && doc.contains("vertices")) {
+                result.skinSources.emplace(entry.first, GpuSkinning::prepareSource(doc));
+            }
+            if (doc.contains("embeddedAssets")) {
+                for (auto child = doc.at("embeddedAssets").begin();
+                     child != doc.at("embeddedAssets").end();
+                     ++child) {
+                    if (child.value().contains("bones") && child.value().contains("weights") &&
+                        child.value().contains("vertices")) {
+                        result.skinSources.emplace(entry.first + "#" + child.key(),
+                                                   GpuSkinning::prepareSource(child.value()));
+                    }
+                }
+            }
+        }
         return result;
     });
     if (request) {
@@ -1299,8 +1330,8 @@ void Renderer::prepareLighting(World& world,
     if (needsShadows) {
         world.eachReadOnly<Transform, MeshRenderer>(
             [&](Entity e, const Transform& t, const MeshRenderer& r) {
-                if (!isActive(world, e) || world.has<Water>(e) || world.has<Camera>(e) ||
-                    r.mesh.id >= meshes_.size()) {
+                if (!r.castShadow || !isActive(world, e) || world.has<Water>(e) ||
+                    world.has<Camera>(e) || r.mesh.id >= meshes_.size()) {
                     return;
                 }
                 const auto& mesh = meshes_[r.mesh.id];

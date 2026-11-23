@@ -2,6 +2,114 @@
   "scope": "source.legacyscript - comment - string",
   "completions": [
     {
+      "trigger": "Screen",
+      "contents": "Screen",
+      "annotation": "LegacyEngine",
+      "details": "Screen.width/height/currentResolution (read-only), brightness (0..1), fullScreen; getResolutions(), getResolution(w,h), setResolution(w,h), takeScreenshot(relativePngPath)."
+    },
+    {
+      "trigger": "Game",
+      "contents": "Game",
+      "annotation": "LegacyEngine",
+      "details": "Game.companyName/getDataPath/isEditor/isFocused/userDataPath/engineVersion (read-only), targetFrameRate (-1 or 1..1000), blockGameKilling; openURL(httpUrl), quit()."
+    },
+    {
+      "trigger": "Game.save/load",
+      "contents": "Game.save/load",
+      "annotation": "LegacyEngine",
+      "details": "Game.saveString/Int/Float/Bool/Table/Vector3(key,value); Game.loadString/Int/Float/Bool/Table/Vector3(key,default). Persisted per game; replaces the former Saving namespace."
+    },
+    {
+      "trigger": "randomFloat",
+      "contents": "randomFloat",
+      "annotation": "LegacyEngine",
+      "details": "randomFloat(min:number,max:number):number - Uniform finite floating sample; min <= max."
+    },
+    {
+      "trigger": "randomInt",
+      "contents": "randomInt",
+      "annotation": "LegacyEngine",
+      "details": "randomInt(min:integer,max:integer):integer - Inclusive uniform integer sample."
+    },
+    {
+      "trigger": "randomBool",
+      "contents": "randomBool",
+      "annotation": "LegacyEngine",
+      "details": "randomBool():boolean - Equally likely true or false."
+    },
+    {
+      "trigger": "randomString",
+      "contents": "randomString",
+      "annotation": "LegacyEngine",
+      "details": "randomString(length:integer):string - 0..4096 alphanumeric characters, not cryptographic."
+    },
+    {
+      "trigger": "castShadow",
+      "contents": "castShadow",
+      "annotation": "LegacyEngine",
+      "details": "MeshRenderer.castShadow: boolean, default true. Controls realtime and baked shadow casting; rebake static lighting after changing."
+    },
+    {
+      "trigger": "Random",
+      "contents": "Random",
+      "annotation": "LegacyEngine",
+      "details": "Random.randomFloat(min,max), randomInt(min,max), randomBool(), randomString(length). Also available globally; non-cryptographic."
+    },
+    {
+      "trigger": "AnimationClip",
+      "contents": "AnimationClip",
+      "annotation": "LegacyEngine",
+      "details": "AnimationClip(path:string):string - Checked .leanim asset path for Animation.playClip/crossFade."
+    },
+    {
+      "trigger": "playClip",
+      "contents": "playClip",
+      "annotation": "LegacyEngine",
+      "details": "animation:playClip(AnimationClip(path)) - Plays a selected clip; decoding is asynchronous and Stop cancels pending playback."
+    },
+    {
+      "trigger": "expose",
+      "contents": "expose",
+      "annotation": "LegacyEngine",
+      "details": "expose Type name = default - Inspector fields; int, float, bool, string, Prefab, AnimationClip, Texture, AudioClip and component references."
+    },
+    {
+      "trigger": "File",
+      "contents": "File",
+      "annotation": "LegacyEngine",
+      "details": "File.open(relativePath,mode), read(handle,format), write(handle,text), close(handle), flush(handle), seek(handle,whence,offset), lines(handleOrPath), rename(old,new), remove(path). Sandboxed under Game.userDataPath."
+    },
+    {
+      "trigger": "OnResolutionChanged",
+      "contents": "OnResolutionChanged",
+      "annotation": "LegacyEngine",
+      "details": "OnResolutionChanged(resolution) - resolution has width, height, refreshRate. Also on(eventName, callback)."
+    },
+    {
+      "trigger": "OnFocusLost",
+      "contents": "OnFocusLost",
+      "annotation": "LegacyEngine",
+      "details": "OnFocusLost() - native game window lost focus."
+    },
+    {
+      "trigger": "OnFocus",
+      "contents": "OnFocus",
+      "annotation": "LegacyEngine",
+      "details": "OnFocus() - native game window gained focus."
+    },
+    {
+      "trigger": "OnUrlOpened",
+      "contents": "OnUrlOpened",
+      "annotation": "LegacyEngine",
+      "details": "OnUrlOpened(url) - OS accepted an HTTP/HTTPS launch request."
+    },
+    {
+      "trigger": "OnGamePreQuit",
+      "contents": "OnGamePreQuit",
+      "annotation": "LegacyEngine",
+      "details": "OnGamePreQuit() - start tasks or hold Game.blockGameKilling; graceful quit waits at most ten seconds."
+    },
+    {
       "trigger": "GUI.image",
       "contents": "GUI.image",
       "annotation": "LegacyEngine",
@@ -572,10 +680,16 @@
       "details": "GUI.getDisplaySize():number,number - Returns Game-surface pixel width,height."
     },
     {
+      "trigger": "Decal",
+      "contents": "Decal",
+      "annotation": "LegacyEngine",
+      "details": "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder. Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."
+    },
+    {
       "trigger": "UI",
       "contents": "UI",
       "annotation": "LegacyEngine",
-      "details": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or @export hud UI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
+      "details": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or expose UI hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
     },
     {
       "trigger": "Vector3",
@@ -1163,7 +1277,7 @@
       "trigger": "Texture",
       "contents": "Texture",
       "annotation": "LegacyEngine",
-      "details": "Texture - export-only image or HDR asset path; @export image Texture"
+      "details": "Texture - export-only image or HDR asset path; expose Texture image ="
     },
     {
       "trigger": "AudioListener",
@@ -1718,12 +1832,6 @@
       "details": "onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task."
     },
     {
-      "trigger": "hdrCompression",
-      "contents": "hdrCompression",
-      "annotation": "LegacyEngine",
-      "details": "Skybox.hdrCompression: boolean, default false. Packed RGB9_E5 GPU HDR storage (4 bytes/pixel instead of RGB16F 6); lower precision, source unchanged."
-    },
-    {
       "trigger": "onUpdate",
       "contents": "onUpdate",
       "annotation": "LegacyEngine",
@@ -1895,7 +2003,7 @@
       "trigger": "setMaterialShader",
       "contents": "setMaterialShader",
       "annotation": "LegacyEngine",
-      "details": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"
+      "details": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection'|'Stochastic Texture Sampling')"
     },
     {
       "trigger": "setMaterialNormalStrength",
@@ -2132,6 +2240,12 @@
       "details": "number"
     },
     {
+      "trigger": "getScript",
+      "contents": "getScript",
+      "annotation": "GameObject",
+      "details": "fun(name:string):NamedScriptComponent|nil"
+    },
+    {
       "trigger": "name",
       "contents": "name",
       "annotation": "GameObject",
@@ -2147,37 +2261,37 @@
       "trigger": "getComponent",
       "contents": "getComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "getComponentInParent",
       "contents": "getComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "getComponentInChildren",
       "contents": "getComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "findComponentInParent",
       "contents": "findComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "findComponentInChildren",
       "contents": "findComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "addComponent",
       "contents": "addComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal"
     },
     {
       "trigger": "removeComponent",
@@ -2660,6 +2774,12 @@
       "details": "Transform Collider owner transform"
     },
     {
+      "trigger": "castShadow",
+      "contents": "castShadow",
+      "annotation": "MeshRenderer",
+      "details": "boolean Cast realtime/baked shadows; default true. Rebake static lighting after changes."
+    },
+    {
       "trigger": "material",
       "contents": "material",
       "annotation": "MeshRenderer",
@@ -2693,7 +2813,7 @@
       "trigger": "setMaterialShader",
       "contents": "setMaterialShader",
       "annotation": "MeshRenderer",
-      "details": "fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection"
+      "details": "fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent, Diffuse Reflection or Stochastic Texture Sampling"
     },
     {
       "trigger": "setMaterialNormalStrength",
@@ -3410,12 +3530,6 @@
       "details": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
     },
     {
-      "trigger": "hdrCompression",
-      "contents": "hdrCompression",
-      "annotation": "Skybox",
-      "details": "boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged"
-    },
-    {
       "trigger": "type",
       "contents": "type",
       "annotation": "Skybox",
@@ -3936,6 +4050,12 @@
       "contents": "play",
       "annotation": "Animation",
       "details": "fun(self:Animation)"
+    },
+    {
+      "trigger": "playClip",
+      "contents": "playClip",
+      "annotation": "Animation",
+      "details": "fun(self:Animation,clip:string) Play an AnimationClip path value; loads asynchronously if needed."
     },
     {
       "trigger": "stop",
@@ -6516,6 +6636,336 @@
       "contents": "COUNT",
       "annotation": "GUIColors",
       "details": "integer"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Decal",
+      "details": "boolean"
+    },
+    {
+      "trigger": "texture",
+      "contents": "texture",
+      "annotation": "Decal",
+      "details": "string"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "Decal",
+      "details": "Vec3 Tint, read as a copy; assign the whole vector to update."
+    },
+    {
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "Decal",
+      "details": "number"
+    },
+    {
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "Decal",
+      "details": "number"
+    },
+    {
+      "trigger": "depth",
+      "contents": "depth",
+      "annotation": "Decal",
+      "details": "number"
+    },
+    {
+      "trigger": "opacity",
+      "contents": "opacity",
+      "annotation": "Decal",
+      "details": "number"
+    },
+    {
+      "trigger": "sortingOrder",
+      "contents": "sortingOrder",
+      "annotation": "Decal",
+      "details": "integer"
+    },
+    {
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "ScreenResolution",
+      "details": "integer"
+    },
+    {
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "ScreenResolution",
+      "details": "integer"
+    },
+    {
+      "trigger": "refreshRate",
+      "contents": "refreshRate",
+      "annotation": "ScreenResolution",
+      "details": "number"
+    },
+    {
+      "trigger": "brightness",
+      "contents": "brightness",
+      "annotation": "ScreenAPI",
+      "details": "number Rendered-game brightness, 0..1 (not monitor brightness)."
+    },
+    {
+      "trigger": "currentResolution",
+      "contents": "currentResolution",
+      "annotation": "ScreenAPI",
+      "details": "ScreenResolution Read-only display mode."
+    },
+    {
+      "trigger": "fullScreen",
+      "contents": "fullScreen",
+      "annotation": "ScreenAPI",
+      "details": "boolean Separate game/player windows only."
+    },
+    {
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "ScreenAPI",
+      "details": "integer Read-only game render width in pixels."
+    },
+    {
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "ScreenAPI",
+      "details": "integer Read-only game render height in pixels."
+    },
+    {
+      "trigger": "getResolutions",
+      "contents": "getResolutions",
+      "annotation": "ScreenAPI",
+      "details": "fun():ScreenResolution[]"
+    },
+    {
+      "trigger": "getResolution",
+      "contents": "getResolution",
+      "annotation": "ScreenAPI",
+      "details": "fun(width:integer,height:integer):boolean Checks availability."
+    },
+    {
+      "trigger": "setResolution",
+      "contents": "setResolution",
+      "annotation": "ScreenAPI",
+      "details": "fun(width:integer,height:integer):boolean|nil,error?:string Separate game/player windows only."
+    },
+    {
+      "trigger": "takeScreenshot",
+      "contents": "takeScreenshot",
+      "annotation": "ScreenAPI",
+      "details": "fun(path:string):boolean|nil,error?:string Queue a PNG under userDataPath."
+    },
+    {
+      "trigger": "companyName",
+      "contents": "companyName",
+      "annotation": "GameAPI",
+      "details": "string Read-only."
+    },
+    {
+      "trigger": "getDataPath",
+      "contents": "getDataPath",
+      "annotation": "GameAPI",
+      "details": "string Read-only mounted game asset directory (a property)."
+    },
+    {
+      "trigger": "isEditor",
+      "contents": "isEditor",
+      "annotation": "GameAPI",
+      "details": "boolean Read-only."
+    },
+    {
+      "trigger": "isFocused",
+      "contents": "isFocused",
+      "annotation": "GameAPI",
+      "details": "boolean Read-only native-window focus."
+    },
+    {
+      "trigger": "userDataPath",
+      "contents": "userDataPath",
+      "annotation": "GameAPI",
+      "details": "string Read-only per-game persistent directory."
+    },
+    {
+      "trigger": "engineVersion",
+      "contents": "engineVersion",
+      "annotation": "GameAPI",
+      "details": "string Read-only."
+    },
+    {
+      "trigger": "blockGameKilling",
+      "contents": "blockGameKilling",
+      "annotation": "GameAPI",
+      "details": "boolean Holds normal graceful quit until cleared or the ten-second timeout."
+    },
+    {
+      "trigger": "targetFrameRate",
+      "contents": "targetFrameRate",
+      "annotation": "GameAPI",
+      "details": "integer -1 uncapped, or 1..1000; VSync may cap further."
+    },
+    {
+      "trigger": "openURL",
+      "contents": "openURL",
+      "annotation": "GameAPI",
+      "details": "fun(url:string):boolean|nil,error?:string HTTP/HTTPS only; success means handed to OS."
+    },
+    {
+      "trigger": "quit",
+      "contents": "quit",
+      "annotation": "GameAPI",
+      "details": "fun() Deferred graceful quit; stops Play in editor."
+    },
+    {
+      "trigger": "saveString",
+      "contents": "saveString",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:string):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadString",
+      "contents": "loadString",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:string):string|nil,error?:string"
+    },
+    {
+      "trigger": "saveInt",
+      "contents": "saveInt",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:integer):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadInt",
+      "contents": "loadInt",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:integer):integer|nil,error?:string"
+    },
+    {
+      "trigger": "saveFloat",
+      "contents": "saveFloat",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:number):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadFloat",
+      "contents": "loadFloat",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:number):number|nil,error?:string"
+    },
+    {
+      "trigger": "saveBool",
+      "contents": "saveBool",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:boolean):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadBool",
+      "contents": "loadBool",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:boolean):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "saveTable",
+      "contents": "saveTable",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:table):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadTable",
+      "contents": "loadTable",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:table):table|nil,error?:string"
+    },
+    {
+      "trigger": "saveVector3",
+      "contents": "saveVector3",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:Vec3):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadVector3",
+      "contents": "loadVector3",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:Vec3):Vec3|nil,error?:string"
+    },
+    {
+      "trigger": "open",
+      "contents": "open",
+      "annotation": "FileAPI",
+      "details": "fun(path:string,mode:string):GameFile|nil,error?:string r/rb/w/wb/a/ab; sandboxed paths."
+    },
+    {
+      "trigger": "read",
+      "contents": "read",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile,format?:string|integer):string|nil,error?:string Default *l; also *a or byte count."
+    },
+    {
+      "trigger": "write",
+      "contents": "write",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile,data:string):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "close",
+      "contents": "close",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile)"
+    },
+    {
+      "trigger": "flush",
+      "contents": "flush",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile):boolean"
+    },
+    {
+      "trigger": "seek",
+      "contents": "seek",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile,whence?:string,offset?:integer):integer|nil,error?:string set/cur/end."
+    },
+    {
+      "trigger": "lines",
+      "contents": "lines",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile|string):fun():string|nil Path form auto-closes at EOF."
+    },
+    {
+      "trigger": "rename",
+      "contents": "rename",
+      "annotation": "FileAPI",
+      "details": "fun(oldPath:string,newPath:string):boolean|nil,error?:string Never overwrites."
+    },
+    {
+      "trigger": "remove",
+      "contents": "remove",
+      "annotation": "FileAPI",
+      "details": "fun(path:string):boolean|nil,error?:string Files only."
+    },
+    {
+      "trigger": "randomFloat",
+      "contents": "randomFloat",
+      "annotation": "RandomAPI",
+      "details": "fun(min:number,max:number):number Finite bounds, min <= max; uniform floating sample."
+    },
+    {
+      "trigger": "randomInt",
+      "contents": "randomInt",
+      "annotation": "RandomAPI",
+      "details": "fun(min:integer,max:integer):integer Inclusive uniform bounds."
+    },
+    {
+      "trigger": "randomBool",
+      "contents": "randomBool",
+      "annotation": "RandomAPI",
+      "details": "fun():boolean Equally likely true/false."
+    },
+    {
+      "trigger": "randomString",
+      "contents": "randomString",
+      "annotation": "RandomAPI",
+      "details": "fun(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic."
     }
   ]
 }

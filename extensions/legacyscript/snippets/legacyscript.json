@@ -41,11 +41,11 @@
     "description": "Set FOV on owning Camera"
   },
   "Export field": {
-    "prefix": "export",
+    "prefix": "expose",
     "body": [
-      "@export ${1:target} ${2|GameObject,ParticleSystem,AudioSource,AudioListener,Transform,RigidBody,Collider,Camera,Skybox,Texture,AudioClip,Asset,number,boolean,string|} ${3}"
+      "expose ${1|int,float,bool,string,Prefab,AnimationClip,GameObject,Texture,AudioClip,Asset,Transform,RigidBody,Collider,Camera|} ${2:value} = ${3:0}"
     ],
-    "description": "Declare an Inspector-assigned LegacyScript field"
+    "description": "Expose a typed field in the component Inspector"
   },
   "Independent waiting task": {
     "prefix": "task",

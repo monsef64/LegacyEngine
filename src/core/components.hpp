@@ -56,6 +56,7 @@ struct MeshRenderer {
     std::string model;    // project-relative baked .mesh; empty selects a built-in primitive
     std::string lightmap; // generated direct-light atlas, square-root RGB encoded in TGA
     int lightmapGrid = 0; // automatically generated per-triangle UV chart grid
+    bool castShadow = true;
 };
 
 enum class ColliderShape { Box, Sphere, Capsule, Cone, Mesh };

@@ -1,5 +1,5 @@
 const lua = require('luaparse');
-const types = new Set(('UI GameObject Transform RigidBody Collider MeshRenderer ObjectName LuaScript Camera AudioSource AudioListener DirectionalLight PointLight SpotLight Skybox CharacterController FPSCamera Raycast Animation ParticleSystem Laser LightShafts Asset AudioClip Texture number boolean string').split(' '));
+const types = new Set(('UI GameObject Transform RigidBody Collider MeshRenderer ObjectName LuaScript Camera AudioSource AudioListener DirectionalLight PointLight SpotLight Skybox CharacterController FPSCamera Raycast Animation ParticleSystem Laser LightShafts Asset AudioClip Texture Prefab AnimationClip int integer float bool number boolean string').split(' '));
 const reserved = new Set('self onStart onGUI onUpdate onFixedUpdate onDestroy onTriggerEnter onTriggerStay onTriggerExit onCollisionEnter onCollisionStay onCollisionExit'.split(' '));
 
 // Preserve UTF-16 offsets and line breaks when removing engine-only declarations.
@@ -11,11 +11,12 @@ function preprocess(text) {
   for (let i = 0; i < text.length;) {
     const start = i;
     const leading = atLineStart;
-    const bare = leading && text.startsWith('@export', i) && (!text[i + 7] || /\s/.test(text[i + 7]));
+    const typed=leading && text.startsWith('expose',i) && (!text[i+6] || /\s/.test(text[i+6]));
+    const bare = typed || leading && text.startsWith('@export', i) && (!text[i + 7] || /\s/.test(text[i + 7]));
     const annotation = leading && text.startsWith('---@export', i) && (!text[i + 10] || /\s/.test(text[i + 10]));
     if (bare || annotation) {
       let end = text.indexOf('\n', i); if (end < 0) end = text.length;
-      exports.push({start: i, end, body: text.slice(i + (bare ? 7 : 10), end)});
+      exports.push({start: i, end, typed, body: text.slice(i + (typed ? 6 : bare ? 7 : 10), end)});
       if (bare) for (let j = i; j < end; ++j) if (text[j] !== '\r') output[j] = ' ';
       atLineStart = false; i = end; continue;
     }
@@ -61,9 +62,13 @@ function diagnostics(doc) {
   const processed = preprocess(source);
   const names = new Set();
   for (const field of processed.exports) {
-    const declaration = field.body.trim().match(/^([A-Za-z_]\w*)\s+(\w+)(?:\s|$)/);
+    const declaration = field.typed
+      ? field.body.trim().match(/^(\w+)\s+([A-Za-z_]\w*)\s*(?:=\s*(.*))?$/)
+      : field.body.trim().match(/^([A-Za-z_]\w*)\s+(\w+)(?:\s|$)/);
+    if(field.typed && declaration){const type=declaration[1];declaration[1]=declaration[2];declaration[2]=type;}
+
     let message;
-    if (!declaration) message = 'Expected @export name Type [defaultValue].';
+    if (!declaration) message = 'Expected expose Type name = defaultValue.';
     else if (reserved.has(declaration[1]) || declaration[1].length > 128) message = `Invalid or reserved exported name '${declaration[1]}'.`;
     else if (!types.has(declaration[2])) message = `Unknown export type '${declaration[2]}'.`;
     else if (names.has(declaration[1])) message = `Duplicate exported field '${declaration[1]}'.`;

@@ -182,6 +182,7 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
         S(MeshRenderer, material);
         F(MeshRenderer, color, 0, 100);
         B(MeshRenderer, checkerboard);
+        B(MeshRenderer, castShadow);
         F(MeshRenderer, specular, 0, 1);
     }
     H(Collider) {
@@ -474,7 +475,6 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
         F(Skybox, type, 0, 1);
         F(Skybox, color, 0, 100);
         B(Skybox, affectEnvironment);
-        B(Skybox, hdrCompression);
         F(Skybox, environmentIntensity, 0, 5);
         S(Skybox, cubemap);
         S(Skybox, hdr);

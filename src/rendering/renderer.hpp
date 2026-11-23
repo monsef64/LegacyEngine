@@ -279,6 +279,8 @@ class Renderer {
     struct StreamedModel {
         MeshData mesh;
         std::map<std::string, Json> documents;
+        std::map<std::string, GpuSkinning::PreparedSource> skinSources;
+        std::map<std::string, std::shared_ptr<const SkeletonPose>> skeletons;
     };
     std::map<std::string, std::future<StreamedModel>> pendingModels_;
     std::map<std::string, std::chrono::steady_clock::time_point> failedModels_;
