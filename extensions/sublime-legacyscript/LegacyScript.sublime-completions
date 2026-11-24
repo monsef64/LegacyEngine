@@ -719,7 +719,7 @@
       "trigger": "NavMeshAgent",
       "contents": "NavMeshAgent",
       "annotation": "LegacyEngine",
-      "details": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(). Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Agent origin is at feet. No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
+      "details": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), heightOffset (-1000..1000 world units), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(), stop(), start(), setSpeed(speed), setHeightOffset(height). stop/start preserve the route. Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Use heightOffset to raise centered pivots above the navigation surface (default 0 for foot pivots). No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
     },
     {
       "trigger": "TPSCamera",
@@ -5340,6 +5340,36 @@
       "contents": "speed",
       "annotation": "NavMeshAgent",
       "details": "number Movement speed, 0..100 metres/second"
+    },
+    {
+      "trigger": "heightOffset",
+      "contents": "heightOffset",
+      "annotation": "NavMeshAgent",
+      "details": "number World-space pivot height above the navmesh, -1000..1000; default 0"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent) Pause movement and clear velocity, keeping the route"
+    },
+    {
+      "trigger": "start",
+      "contents": "start",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent) Resume the existing route without discarding it"
+    },
+    {
+      "trigger": "setSpeed",
+      "contents": "setSpeed",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent, speed:number) Set movement speed, 0..100"
+    },
+    {
+      "trigger": "setHeightOffset",
+      "contents": "setHeightOffset",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent, height:number) Set pivot height above the surface, -1000..1000"
     },
     {
       "trigger": "stoppingDistance",

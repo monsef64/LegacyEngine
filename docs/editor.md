@@ -756,3 +756,20 @@ view, picking rays, scene Camera components and saved projection settings remain
 unchanged. The gizmo's virtual camera anchor stays fixed for the duration of the
 gesture. World/Local axes, snapping, hierarchy edits and undo retain their normal
 behavior.
+
+### Attach scripts by dropping them into Inspector
+
+Select a GameObject and drag a project `.lua` or `.ls` script from Assets onto
+unused Inspector space or its component headers. A LegacyScript component is
+created if needed; otherwise the script is appended to the existing attachments.
+Dropping the same attachment again does not add a duplicate. Existing script
+asset fields still replace their own assignment. The attachment and its Inspector
+fields participate in normal undo/redo, save/load, and Play rollback.
+
+### Loading feedback inside Game
+
+Startup/Play preloading shows only centered `Loading..` text over the Game view,
+not a full-editor loading screen or progress bar. In a separate Game window and
+in exported games, the text is centered in that window. Level transitions show
+the same text in the rendered Game surface while staged assets load. Dependency
+preloading remains enabled; scripts still start only after required assets are ready.

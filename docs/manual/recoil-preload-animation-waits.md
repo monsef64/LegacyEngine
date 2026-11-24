@@ -46,10 +46,10 @@ OpenGL and Windows MinGW-w64, both editor Play and exported player.
   prefabs (including nested references and exposed overrides), audio and animation
   clips. Until the preload gate finishes, current world/scripts remain active.
   Destination onStart/onLevelLoaded occur only after cache publication.
-- Start the exported player and enter editor Play: a loading screen precedes
+- Start the exported player and enter editor Play: centered Game-only Loading.. text precedes
   scripts. Missing/invalid assets, a full worker queue and resource-budget failures
   must report an error and preserve the old level/editor world. Close during the
-  loading screen; the close event must remain available to normal quit handling.
+  loading text; the close event must remain available to normal quit handling.
 - Cancel by switching project/stopping runtime, then request a different level.
   No worker may publish an abandoned world. Prefab caches are keyed by canonical
   path, file metadata and built-in mesh handles; edit/reimport and load again.

@@ -103,6 +103,8 @@ for name in ('lockCursor', 'unlockCursor', 'hideCursor', 'showCursor', 'isCursor
 
 METHOD_ARGS = {
  'setDestination': 'Vector3(8, 0, 4)',
+ 'setSpeed': '4.5',
+ 'setHeightOffset': '1.0',
 'emit':'10', 'setPreset':'"Fire"',
 'getComponentInParent':'RigidBody', 'getComponentInChildren':'Camera',
 'findComponentInParent':'RigidBody', 'findComponentInChildren':'Camera',

@@ -3316,6 +3316,44 @@ fade:stop(1)
 
 ## NavMeshAgent
 
+### NavMeshAgent.stop
+
+`stop(self:NavMeshAgent) Pause movement and clear velocity, keeping the route`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:stop()
+```
+
+### NavMeshAgent.start
+
+`start(self:NavMeshAgent) Resume the existing route without discarding it`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:start()
+```
+
+### NavMeshAgent.setSpeed
+
+`setSpeed(self:NavMeshAgent, speed:number) Set movement speed, 0..100`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:setSpeed(4.5)
+```
+
+### NavMeshAgent.setHeightOffset
+
+`setHeightOffset(self:NavMeshAgent, height:number) Set pivot height above the surface, -1000..1000`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:setHeightOffset(1.0)
+```
+
 ### NavMeshAgent.setDestination
 
 `setDestination(self:NavMeshAgent, x:number|Vec3, y?:number, z?:number) Queue a path request; resumes movement`
@@ -5859,6 +5897,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | --- | --- |
 | `enabled` | `boolean` |
 | `speed` | `number Movement speed, 0..100 metres/second` |
+| `heightOffset` | `number World-space pivot height above the navmesh, -1000..1000; default 0` |
 | `stoppingDistance` | `number 0.01..10 metres` |
 | `stopped` | `boolean Pause movement without clearing the route` |
 | `destination` | `Vec3 Assign a complete world-space destination, or call setDestination` |

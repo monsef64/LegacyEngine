@@ -984,6 +984,11 @@ TPSCamera = nil
 ---@class NavMeshAgent
 ---@field enabled boolean
 ---@field speed number Movement speed, 0..100 metres/second
+---@field heightOffset number World-space pivot height above the navmesh, -1000..1000; default 0
+---@field stop fun(self:NavMeshAgent) Pause movement and clear velocity, keeping the route
+---@field start fun(self:NavMeshAgent) Resume the existing route without discarding it
+---@field setSpeed fun(self:NavMeshAgent, speed:number) Set movement speed, 0..100
+---@field setHeightOffset fun(self:NavMeshAgent, height:number) Set pivot height above the surface, -1000..1000
 ---@field stoppingDistance number 0.01..10 metres
 ---@field stopped boolean Pause movement without clearing the route
 ---@field destination Vec3 Assign a complete world-space destination, or call setDestination

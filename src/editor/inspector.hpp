@@ -2131,11 +2131,22 @@ inline void drawInspector(World& world,
                     componentHeader<NavMeshAgent>(world, selected, "NavMeshAgent")) {
 
                     EditorValues::SliderFloat("Speed", &a->speed, 0, 100);
+                    EditorValues::DragFloat("Height offset",
+                                            &a->heightOffset,
+                                            .01f,
+                                            -1000,
+                                            1000,
+                                            "%.3f",
+                                            ImGuiSliderFlags_AlwaysClamp);
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(
+                            "Pivot height above the navmesh in world units. For a centered model, use half its height.");
+                    }
                     EditorValues::Checkbox("Rotate toward movement", &a->updateRotation);
                     EditorValues::SliderFloat("Angular speed", &a->angularSpeed, 0, 3600);
                     EditorValues::SliderFloat("Stopping distance", &a->stoppingDistance, .01f, 10);
                     ImGui::TextWrapped(
-                        "Bake in Windows > Navigation. Transform origin is the agent's feet. Script: agent:setDestination(x,y,z). NavMeshObstacle boxes support bounded dynamic detours.");
+                        "Bake in Windows > Navigation. Height offset lifts a centered model above its navigation surface. Script: agent:setDestination(x,y,z). NavMeshObstacle boxes support bounded dynamic detours.");
                     ImGui::Text("Status: %s", a->status.c_str());
                     if (runtime) {
                         ImGui::Checkbox("Stopped", &a->stopped);
@@ -2498,6 +2509,46 @@ inline void drawInspector(World& world,
                 }
                 ImGui::TextDisabled(
                     "Author .leanim clips in Windows > Animation. Runtime controls require Play mode.");
+            }
+            // A window-wide fallback lets scripts be attached without first
+            // creating an empty component. Specific field targets take priority.
+            if (ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect,
+                                                 ImGui::GetID("AttachLegacyScript"))) {
+                if (const auto* drop = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                    const std::string path = static_cast<const char*>(drop->Data);
+                    if (assets && AssetManager::script(path)) {
+                        try {
+                            assets->validateScriptName(path);
+                            auto* scripts = world.tryGet<LuaScript>(selected);
+                            bool duplicate = false;
+                            if (scripts) {
+                                for (const auto& entry : scriptAttachments(*scripts)) {
+                                    duplicate |= entry.path == path;
+                                }
+                            }
+                            if (!duplicate) {
+                                std::vector<ScriptField> fields;
+                                syncScriptExports(assets->readScript(path), fields);
+                                if (!scripts) {
+                                    LuaScript script;
+                                    script.path = path;
+                                    script.fields = std::move(fields);
+                                    world.add(selected, std::move(script));
+                                } else if (scripts->path.empty()) {
+                                    scripts->path = path;
+                                    scripts->fields = std::move(fields);
+                                } else if (scripts->additional.size() < 63) {
+                                    scripts->additional.push_back({path, true, std::move(fields)});
+                                }
+                            }
+                        } catch (const std::exception& error) {
+                            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                        "Script attachment: %s",
+                                        error.what());
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
             }
             if (ImGui::Button("Add Component")) {
                 ImGui::OpenPopup("AddComponent");

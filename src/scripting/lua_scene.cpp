@@ -1638,7 +1638,9 @@ int LuaScene::componentIndex(lua_State* L) {
 
     if (c.type == 28) {
         auto& a = c.object.world->get<NavMeshAgent>(c.object.entity);
-        if (!std::strcmp(key, "setDestination") || !std::strcmp(key, "resetPath")) {
+        if (!std::strcmp(key, "setDestination") || !std::strcmp(key, "resetPath") ||
+            !std::strcmp(key, "stop") || !std::strcmp(key, "start") ||
+            !std::strcmp(key, "setSpeed") || !std::strcmp(key, "setHeightOffset")) {
             lua_pushstring(L, key);
             lua_pushcclosure(
                 L,
@@ -1649,7 +1651,29 @@ int LuaScene::componentIndex(lua_State* L) {
                         return luaL_error(L, "NavMeshAgent no longer exists");
                     }
                     auto& a = c.object.world->get<NavMeshAgent>(c.object.entity);
-                    if (!std::strcmp(lua_tostring(L, lua_upvalueindex(1)), "resetPath")) {
+                    const auto* method = lua_tostring(L, lua_upvalueindex(1));
+                    if (!std::strcmp(method, "stop") || !std::strcmp(method, "start")) {
+                        a.stopped = !std::strcmp(method, "stop");
+                        a.velocity = {};
+                        a.status = a.stopped ? "Stopped" : a.hasPath ? "Moving" : "Idle";
+                        return 0;
+                    }
+                    if (!std::strcmp(method, "setSpeed") ||
+                        !std::strcmp(method, "setHeightOffset")) {
+                        const float value = number(L, 2);
+                        const bool speed = !std::strcmp(method, "setSpeed");
+                        if ((speed && (value < 0 || value > 100)) ||
+                            (!speed && std::abs(value) > 1000)) {
+                            return luaL_error(L, "NavMeshAgent value outside supported range");
+                        }
+                        if (speed) {
+                            a.speed = value;
+                        } else {
+                            a.heightOffset = value;
+                        }
+                        return 0;
+                    }
+                    if (!std::strcmp(method, "resetPath")) {
                         a.destinationSet = false;
                         a.requested = a.pathPending = a.hasPath = false;
                         a.corners.clear();
@@ -2433,6 +2457,7 @@ int LuaScene::componentNewIndex(lua_State* L) {
         if (!std::strcmp(key, "stopped")) {
             luaL_checktype(L, 3, LUA_TBOOLEAN);
             a.stopped = bool(lua_toboolean(L, 3));
+            a.velocity = {};
             return 0;
         }
         auto j = Navigation::agentSettings(a);
@@ -2449,6 +2474,7 @@ int LuaScene::componentNewIndex(lua_State* L) {
             const auto next = Navigation::parseAgent(j);
             a.enabled = next.enabled;
             a.speed = next.speed;
+            a.heightOffset = next.heightOffset;
             a.stoppingDistance = next.stoppingDistance;
             a.updateRotation = next.updateRotation;
             a.angularSpeed = next.angularSpeed;

@@ -334,6 +334,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     };
     Entity mouseOver, mousePressedObject;
     ImVec2 gameImageOrigin{}, gameImageSize{};
+    bool playAfterGameFrame = false;
     bool tpsMouseOwned = false;
     bool showFPS = false, showGameColliders = false, showProfiler = false;
     FrameProfiler profiler;
@@ -1726,8 +1727,17 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         const float playbackWidth = 90 + 2 * ImGui::GetStyle().ItemSpacing.x;
         ImGui::SetCursorPosX((layout.toolbar.width - playbackWidth) * 0.5f);
         ImGui::BeginDisabled(prefabLevel || playMode.active() || levels.busy());
+        const bool beginPreparedPlay = playAfterGameFrame;
+        playAfterGameFrame = false;
         if (playbackButton("##Play", "Play (F5)", PlaybackIcon::Play, playMode.active()) ||
             (playKey && !prefabLevel && !playMode.active() && !levels.busy())) {
+            // Present Game once before blocking preload, so text has a valid
+            // Game-only rectangle even when the panel was previously hidden.
+            panelOpen[6] = true;
+            focusGame = true;
+            playAfterGameFrame = true;
+        }
+        if (beginPreparedPlay && !prefabLevel && !playMode.active() && !levels.busy()) {
             editor.finish(world);
             clicking = false;
             try {
@@ -1737,7 +1747,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 levels.error = e.what();
             }
             std::optional<LevelSystem::Transition> preloaded;
+            bool createdLoadingWindow = false;
             try {
+                if (separateGame && !gameWindow) {
+                    gameWindow = SDL_CreateWindow(
+                        "Game", 960, 540, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+                    if (!gameWindow) {
+                        throw std::runtime_error(SDL_GetError());
+                    }
+                    createdLoadingWindow = true;
+                }
                 renderer.setAssetRoot(browser.assets.root);
                 TextureQuality::lifecycle(true);
                 preloaded = preloadBeforePlay(
@@ -1745,9 +1764,19 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     projectMeshes,
                     ProjectIO::encode(world, embeddedLegacySource, camera, projectMeshes),
                     renderer,
-                    window);
+                    gameWindow ? gameWindow : window,
+                    gameWindow ? std::nullopt
+                               : std::optional<SDL_FRect>{
+                                     SDL_FRect{gameImageOrigin.x - ImGui::GetMainViewport()->Pos.x,
+                                               gameImageOrigin.y - ImGui::GetMainViewport()->Pos.y,
+                                               gameImageSize.x,
+                                               gameImageSize.y}});
             } catch (const std::exception& e) {
                 projectError = e.what();
+                if (createdLoadingWindow) {
+                    SDL_DestroyWindow(gameWindow);
+                    gameWindow = nullptr;
+                }
             }
             if (preloaded) {
                 editSelection = selectedEntity;
@@ -2441,6 +2470,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 ImGui::SetNextWindowFocus();
             }
             if (beginEditorPanel("Game")) {
+                gameImageOrigin = ImGui::GetCursorScreenPos();
+                gameImageSize = ImGui::GetContentRegionAvail();
                 gameHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
                 gameFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
                 const auto active = activeCamera(world);

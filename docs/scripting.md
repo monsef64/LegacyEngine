@@ -701,12 +701,42 @@ those assets explicitly. Newly created or edited assets may invalidate warm cach
 - Referenced audio is decoded before publication (256 MiB total PCM limit), and
   referenced clips are decoded/cached (64-clip limit). Over-budget preloads fail
   rather than silently over-allocating. Resource gates have a two-minute watchdog.
-- Exported-player startup and editor Play use a loading screen before scripts
-  start. It pumps close events; a failed editor preload leaves editing available.
+- Exported-player startup and editor Play show centered `Loading..` text inside
+  Game before scripts start. It pumps close events; a failed editor preload leaves editing available.
 
 This reduces known cold-cache stalls, **not a guarantee of zero lag spikes**.
 GPU-driver allocation/upload, shader work, physics cooking, terrain mesh building,
 UI document creation, cache eviction, runtime-created assets and dynamically
 constructed paths can still have first-use costs. Measure frame times with the
 actual target levels and exported player; preload memory budgets must fit the
-machine. The loading screen uses a simple animated indicator, not a percentage/progress API.
+machine. Loading feedback is text only, not a full-editor screen, progress bar, or percentage API.
+
+## NavMeshAgent height and movement control
+
+`heightOffset` is the world-space height of the Transform pivot above the navmesh.
+Leave it at `0` for foot-level pivots; for a centered two-unit-tall model, try `1`.
+It changes the object's navigation placement, not the baked navmesh clearance or
+agent dimensions. Set it in Inspector under **Navmesh Agent > Height offset**.
+Paths, remaining distance, and destination coordinates stay on the navigation surface.
+
+```lua
+local agent
+function onStart()
+    agent = self:getComponent(NavMeshAgent)
+    agent:setHeightOffset(1)
+    agent:setSpeed(4.5) -- same as agent.speed = 4.5
+    agent:setDestination(8, 0, 4)
+    task(function()
+        waitForSeconds(2)
+        agent:stop() -- keeps the route, clears velocity
+        waitForSeconds(1)
+        agent:start() -- resumes the retained route
+    end)
+end
+```
+
+Use `resetPath()` to discard the route, rather than pause it. Existing controls
+include `enabled`, `stopped`, `stoppingDistance`, `updateRotation`, `angularSpeed`,
+and the read-only `velocity`, `remainingDistance`, `hasPath`, `pathPending`, and
+`status` properties. Speed is limited to 0–100; height offset to -1000–1000.
+Do not combine NavMeshAgent with another physics/controller movement driver.
