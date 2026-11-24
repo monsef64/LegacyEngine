@@ -40,11 +40,11 @@ class ScriptComponents {
         }
         return false;
     }
-    void update(float dt) {
+    void update(float dt, double waitDelta = -1) {
         sync();
         for (auto& entry : entries_) {
             if (entry.console) {
-                entry.console->update(dt);
+                entry.console->update(dt, waitDelta);
             }
         }
     }

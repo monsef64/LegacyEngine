@@ -623,11 +623,13 @@ void System::update(World& world, float seconds) {
             a.status = "Remove competing physics/camera movement driver";
             return;
         }
+        // Detour works at foot level, independently of the object's pivot height.
+        Vec3 surfacePosition = t.position - Vec3{0, a.heightOffset, 0};
         if (a.requested || (a.navigationRevision != revision_ && a.destinationSet)) {
             a.pathPending = false;
             a.requested = false;
             a.navigationRevision = revision_;
-            a.hasPath = path(t.position, a.destination, a.corners);
+            a.hasPath = path(surfacePosition, a.destination, a.corners);
             a.corner = 0;
             a.status = a.hasPath ? "Moving" : "Unreachable destination";
         }
@@ -635,10 +637,10 @@ void System::update(World& world, float seconds) {
             return;
         }
         a.status = "Moving";
-        const auto before = t.position;
+        const auto before = surfacePosition;
         float budget = a.speed * dt;
         for (int steps = 0; steps < 16 && a.corner < a.corners.size(); ++steps) {
-            const auto goal = a.corners[a.corner], delta = goal - t.position;
+            const auto goal = a.corners[a.corner], delta = goal - surfacePosition;
             const float distance = std::sqrt(dot(delta, delta));
             const bool last = a.corner + 1 == a.corners.size();
             const float tolerance = last ? a.stoppingDistance : .03f;
@@ -651,23 +653,23 @@ void System::update(World& world, float seconds) {
             }
             const float travel = std::min(budget, std::max(0.f, distance - tolerance));
             Vec3 next;
-            if (!constrain(t.position, t.position + delta * (travel / distance), next)) {
+            if (!constrain(surfacePosition, surfacePosition + delta * (travel / distance), next)) {
                 a.hasPath = false;
                 a.status = "Blocked / agent left navmesh";
                 break;
             }
-            t.position = next;
+            surfacePosition = next;
             budget -= travel;
             if (travel < distance - tolerance - .001f) {
                 break;
             }
-            if (std::sqrt(dot(t.position - goal, t.position - goal)) > tolerance + .01f) {
+            if (std::sqrt(dot(surfacePosition - goal, surfacePosition - goal)) > tolerance + .01f) {
                 break;
             }
             ++a.corner;
         }
         if (dt > 0) {
-            a.velocity = (t.position - before) * (1 / dt);
+            a.velocity = (surfacePosition - before) * (1 / dt);
         }
         if (a.updateRotation && dot(a.velocity, a.velocity) > .00001f) {
             const float yaw = std::atan2(-a.velocity.x, -a.velocity.z) * 180 / kPi;
@@ -677,7 +679,7 @@ void System::update(World& world, float seconds) {
             t.rotation = rotationFromEuler(angles);
         }
         a.remainingDistance = 0;
-        Vec3 p = t.position;
+        Vec3 p = surfacePosition;
         for (auto i = a.corner; i < a.corners.size(); ++i) {
             const auto d = a.corners[i] - p;
             a.remainingDistance += std::sqrt(dot(d, d));
@@ -688,6 +690,7 @@ void System::update(World& world, float seconds) {
             a.status = "Arrived";
             a.remainingDistance = 0;
         }
+        t.position = surfacePosition + Vec3{0, a.heightOffset, 0};
         if (auto* parent = world.tryGet<Parent>(e);
             parent && world.has<Transform>(parent->entity)) {
             parent->previous = world.get<Transform>(parent->entity);

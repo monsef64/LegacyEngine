@@ -108,6 +108,10 @@
     "title": "Skybox component"
   },
   {
+    "file": "recoil.md",
+    "title": "Camera recoil"
+  },
+  {
     "file": "debug.md",
     "title": "Debug menu"
   },

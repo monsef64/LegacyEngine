@@ -121,6 +121,7 @@ inline std::string sceneSignature(World& world) {
                 fields(entry.fields);
             }
         });
+        component(e, Recoil{}, [&](const Recoil& c){result+=Recoils::settings(c).dump();});
         component(e, Decal{}, [&](const Decal& d) { result += Decals::settings(d).dump(); });
         component(
             e, LightShafts{}, [&](const LightShafts& s) { result += Shafts::settings(s).dump(); });
@@ -283,6 +284,7 @@ inline std::string sceneSignature(World& world) {
             scalar(m.lightmapGrid);
             vec(m.color);
             scalar(m.checkerboard);
+            scalar(m.castShadow);
             scalar(m.specular);
             scalar(m.material.size());
             result += m.material;

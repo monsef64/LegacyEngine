@@ -143,9 +143,7 @@ SkyboxDecoded decodeSkybox(const Skybox& sky, const AssetManager& assets, const 
             }
             image.floats.assign(pixels.get(), pixels.get() + std::size_t(w) * h * 3);
             for (auto& value : image.floats) {
-                value = std::isfinite(value)
-                            ? std::clamp(value, 0.f, sky.hdrCompression ? 65408.f : 65504.f)
-                            : 0.f;
+                value = std::isfinite(value) ? std::clamp(value, 0.f, 65408.f) : 0.f;
             }
             for (int y = 0; y < h; y += std::max(1, h / 32)) {
                 for (int x = 0; x < w; x += std::max(1, w / 64)) {
@@ -272,8 +270,8 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
         sky.type == 1 ? std::vector<std::string>{sky.hdr}
                       : std::vector<std::string>{
                             sky.right, sky.left, sky.top, sky.bottom, sky.back, sky.front};
-    std::string key = assets.root.generic_string() + '|' + std::to_string(sky.type) + '|' +
-                      std::to_string(sky.hdrCompression);
+    std::string key =
+        assets.root.generic_string() + '|' + std::to_string(sky.type) + '|' + "RGB9_E5";
     for (const auto& path : paths) {
         key += '|' + std::to_string(path.size()) + ':' + path;
     }
@@ -306,7 +304,7 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
                 if (sky.type == 1) {
                     glTexImage2D(target,
                                  0,
-                                 sky.hdrCompression ? GL_RGB9_E5 : GL_RGB16F,
+                                 GL_RGB9_E5,
                                  image.width,
                                  image.height,
                                  0,

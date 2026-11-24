@@ -41,7 +41,7 @@ end
 
 Scripting exposes enabled, texture, width, height, depth, color, opacity and sortingOrder. Color reads return a copy; assign the whole
 vector to update it. Values are validated and asset paths must stay
-project-relative. `@export mark Decal` references an existing component.
+project-relative. `global Decal mark =` references an existing component.
 
 The Decal texture field uses the shared filtered asset picker, including packed
 model textures. To make an editable standalone copy, right-click a packed texture

@@ -8,6 +8,7 @@
 #include "gameplay/first_person.hpp"
 #include "gameplay/third_person.hpp"
 #include "levels/level_system.hpp"
+#include "levels/preload_screen.hpp"
 #include "navigation/navigation.hpp"
 #include "particles/particle_update.hpp"
 #include "physics/physics.hpp"
@@ -135,7 +136,11 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
                             package.metadata.at("name").get<std::string>(),
                             package.root);
     GameServices::update(window, true);
+    auto preloaded = preloadBeforePlay(
+        assets, meshes, ProjectIO::encode(world, source, OrbitCamera{}, meshes), renderer, window);
     bindScripts();
+    audio.publishPreloaded(std::move(preloaded.audio), assets.root);
+    animations.publishPreloaded(std::move(preloaded.clips), assets.root);
     LuaConsole::postEvent("onLevelLoaded", {levels.current()});
     // Window icon on Linux uses the exported PNG. Windows shell/executable icons
     // and version resources are stamped during native export.
@@ -203,14 +208,15 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             last = SDL_GetTicksNS();
         }
         const auto now = SDL_GetTicksNS();
-        const float dt = std::clamp(float(double(now - last) / 1e9), 0.f, .25f);
+        double waitDelta = double(now - last) / 1e9;
+        float dt = std::clamp(float(waitDelta), 0.f, .25f);
         last = now;
         int width = 1, height = 1, logicalW = 1, logicalH = 1;
         SDL_GetWindowSizeInPixels(window, &width, &height);
         SDL_GetWindowSize(window, &logicalW, &logicalH);
         if (width <= 0 || height <= 0) {
             if (GameServices::pendingQuit()) {
-                scripts.update(dt);
+                scripts.update(dt, waitDelta);
                 LuaConsole::dispatchEvents();
             }
             SDL_Delay(20);
@@ -240,6 +246,10 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             }
         }
         input.synchronizeKeyboard();
+        levels.preload = [&](LevelSystem::Transition& prepared) {
+            renderer.setAssetRoot(assets.root);
+            return renderer.preloadAssets(prepared.assets);
+        };
         if (auto transition = levels.poll()) {
             scripts.stop();
             global.shutdown();
@@ -250,11 +260,17 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             ui.sync(world, false, assets.root, window);
             world.restore(transition->level->world);
             source = transition->level->source;
-            Prefabs::refreshAll(assets, world, meshes);
             physics.reset();
             animations.clear();
             levels.commit(transition->name, false);
             bindScripts();
+            // The replacement scripts did not exist during this loading frame.
+            // Do not charge their waits for either the old frame or loading time.
+            dt = 0;
+            waitDelta = 0;
+            last = SDL_GetTicksNS();
+            audio.publishPreloaded(std::move(transition->audio), assets.root);
+            animations.publishPreloaded(std::move(transition->clips), assets.root);
             LuaConsole::postEvent("onLevelLoaded", {transition->name});
             mouseOver = pressedObject = {};
         }
@@ -270,8 +286,8 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             }
         });
         Prefabs::updateDestroyTimers(world, dt);
-        global.update(dt);
-        scripts.update(dt);
+        global.update(dt, waitDelta);
+        scripts.update(dt, waitDelta);
         animations.update(world, assets, dt);
         const auto events = animations.events;
         for (const auto& call : events) {
@@ -313,6 +329,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         }
         updateFPSCameras(world, dt, input);
         updateTPSCameras(world, physics, dt, input);
+        updateRecoil(world, dt);
         BoneAttachments::update(world, assets);
         updateHierarchy(world);
         updateCameras(world, dt);
@@ -381,7 +398,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         if (camera != Entity{} && world.has<Transform>(camera)) {
             auto& c = world.get<Camera>(camera);
             c.aspect = float(width) / height;
-            const auto& pose = world.get<Transform>(camera);
+            const auto pose = recoilCameraPose(world, camera, world.get<Transform>(camera));
             renderer.draw(world,
                           cameraMatrix(pose, c),
                           std::max(1, int(width * c.viewportWidth)),

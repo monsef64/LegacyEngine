@@ -663,13 +663,11 @@ are checked at most once a second per skybox renderer. Project/asset changes dis
 stale jobs before they can upload. Crossfades wait for the requested textures to be
 ready. Until an image loads, the ordinary tinted fallback remains visible.
 
-For an HDR panorama, enable **Compress HDR (RGB9_E5)** in the Skybox Inspector.
-This packs GPU HDR storage into 4 bytes/pixel instead of RGB16F's 6 (about one-third
-less base-level texture memory). It trades color precision for memory/bandwidth,
-particularly for very differently sized RGB channels. It is not BC6H and does not
-rewrite/compress the original `.hdr` file on disk. Set `sky.hdrCompression` in Lua
-for a Play-time change. Old projects default to uncompressed RGB16F. The setting
-is included in scene/prefab serialization, undo and Stop rollback.
+HDR panoramas always use packed RGB9_E5 GPU storage (4 bytes/pixel rather than
+RGB16F's 6). This reduces base-level texture storage by about one-third at the
+cost of precision, especially for differently sized RGB channels. It is not BC6H
+and does not modify the original `.hdr` file. There is no Compress checkbox or
+runtime compression toggle; older serialized flags are consumed for compatibility.
 
 The shader reconstructs sky rays at the fullscreen triangle vertices rather than
 doing inverse-matrix transforms for every fragment. Performance gains depend on
@@ -720,3 +718,58 @@ polled without waiting; cache serialization and writes run on workers with bound
 backpressure. These changes remove synchronous GPU readback/disk writes from the
 normal preview save path. Very large prefab/model decoding and GPU uploads can
 still have costs; desktop performance needs manual verification on target hardware.
+
+### Component switches and asset labels
+
+Components that already support enabled/active state now expose **Enabled** on
+their collapsible header, including when collapsed. This does not add disabling
+to structural components such as Transform or Collider. Camera uses its existing
+active-camera selection rules. The primary script is controlled from the script
+component header; additional attachments keep individual switches.
+
+Shared asset fields show **filename.extension** instead of the full path; hover
+for the full project-relative path. The stored reference is unchanged, so same-name
+assets in different folders remain distinct. Selection dialogs retain their path
+context. Prefab and AnimationClip script fields use the same filtered asset picker.
+
+### Header switch sizing and asset hover details
+
+Component header Enabled switches use the current font/style measurements, stay
+right-aligned inside the header, and are vertically centered. On narrow Inspector
+panels the label hides (hover the checkbox for **Enabled**) and long component names
+are clipped before the control. Clicking the switch does not also collapse the
+component. Only components that already support enabled/active state get a switch.
+
+Asset-browser hover details wait on the **current asset** for 1.5 seconds. Moving
+to another asset, changing projects, or leaving/re-entering the browser resets
+that delay. Shared detail-preview slots no longer return the previous asset's
+image, waveform or text while a new asset is waiting for the preview-generation
+budget; an empty/loading preview is preferable to unrelated information.
+
+### Orthographic transform dragging
+
+The level editor uses a gizmo-specific orthographic ray projection: it preserves
+the rendered screen positions while placing the drag ray's near origin in front
+of the active handle. This avoids reflected ray/plane intersections that could
+send a transform to very large positive/negative coordinates. The orthographic
+view, picking rays, scene Camera components and saved projection settings remain
+unchanged. The gizmo's virtual camera anchor stays fixed for the duration of the
+gesture. World/Local axes, snapping, hierarchy edits and undo retain their normal
+behavior.
+
+### Attach scripts by dropping them into Inspector
+
+Select a GameObject and drag a project `.lua` or `.ls` script from Assets onto
+unused Inspector space or its component headers. A LegacyScript component is
+created if needed; otherwise the script is appended to the existing attachments.
+Dropping the same attachment again does not add a duplicate. Existing script
+asset fields still replace their own assignment. The attachment and its Inspector
+fields participate in normal undo/redo, save/load, and Play rollback.
+
+### Loading feedback inside Game
+
+Startup/Play preloading shows only centered `Loading..` text over the Game view,
+not a full-editor loading screen or progress bar. In a separate Game window and
+in exported games, the text is centered in that window. Level transitions show
+the same text in the rendered Game surface while staged assets load. Dependency
+preloading remains enabled; scripts still start only after required assets are ready.

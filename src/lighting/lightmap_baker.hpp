@@ -61,6 +61,7 @@ struct Result {
 struct Triangle {
     Vec3 p[3], n[3];
     Vec3 albedo{.8f, .8f, .8f};
+    bool castShadow = true;
 };
 struct Bounds {
     Vec3 low{1e30f, 1e30f, 1e30f}, high{-1e30f, -1e30f, -1e30f};
@@ -144,7 +145,7 @@ class Bvh {
         }
         for (std::size_t j = n.first; j < n.first + n.count; ++j) {
             auto i = indices_[j];
-            if (i == ignore) {
+            if (i == ignore || !triangles_[i].castShadow) {
                 continue;
             }
             const auto& t = triangles_[i];
@@ -513,6 +514,7 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
         for (std::size_t i = 0; i < count; ++i) {
             Triangle tri;
             tri.albedo = albedo;
+            tri.castShadow = o.renderer.castShadow;
             for (int c = 0; c < 3; ++c) {
                 const auto& v = data.vertices[i * 3 + c];
                 tri.p[c] = t.position + rotateVector(t.rotation, v.position * t.scale);

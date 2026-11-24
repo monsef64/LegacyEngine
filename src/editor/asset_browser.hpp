@@ -48,6 +48,9 @@ class AssetBrowser {
     std::string transientError_;
     double errorUntil_ = 0;
     unsigned thumbnailRevision_ = ~0u;
+    std::string hoveredPreviewKey_;
+    double hoveredPreviewSince_ = 0;
+    int hoveredPreviewFrame_ = -2;
 
   public:
     AssetBrowser() {
@@ -949,8 +952,18 @@ class AssetBrowser {
                                       thumbnailFlip);
                         }
                         const bool itemHovered = ImGui::IsMouseHoveringRect(itemMin, itemMax);
-                        if (itemHovered && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) &&
-                            GImGui->HoveredIdTimer >= 1.5f && ImGui::BeginTooltip()) {
+                        const bool tooltipHovered = itemHovered && ImGui::IsItemHovered();
+                        if (tooltipHovered) {
+                            const auto key = assets.root.generic_string() + "/" + file;
+                            if (hoveredPreviewKey_ != key ||
+                                hoveredPreviewFrame_ < ImGui::GetFrameCount() - 1) {
+                                hoveredPreviewKey_ = key;
+                                hoveredPreviewSince_ = ImGui::GetTime();
+                            }
+                            hoveredPreviewFrame_ = ImGui::GetFrameCount();
+                        }
+                        if (tooltipHovered && ImGui::GetTime() - hoveredPreviewSince_ >= 1.5 &&
+                            ImGui::BeginTooltip()) {
                             ImGui::TextUnformatted(fullName.c_str());
                             const std::string type = folderItem                   ? "Folder"
                                                      : modelAsset(file)           ? "3D Model"
