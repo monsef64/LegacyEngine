@@ -24,7 +24,7 @@ Decals do not write depth, cast shadows or change collision geometry.
 
 Scene/prefab saves, duplication, undo, reset/remove and Play/Stop rollback preserve
 Decal values. New saves use the version-37 legacy text schema; existing projects
-remain readable. The normal JSON/Zstandard project representation is retained.
+remain readable. Editor assets use JSON; legacy compressed assets remain readable. Exported package chunks use Zstandard.
 
 ```lua
 function onStart()

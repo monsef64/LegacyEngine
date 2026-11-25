@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <set>
 #include <sstream>
+#include <zstd.h>
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -72,7 +73,19 @@ void seal(const std::filesystem::path& path,
           const std::vector<unsigned char>& plain,
           const Footer& key,
           const std::string& label) {
-    std::vector<unsigned char> encrypted(40 + plain.size());
+    std::vector<unsigned char> compressed;
+    const std::vector<unsigned char>* payload = &plain;
+    if (label.compare(0, 6, "chunk/") == 0) {
+        compressed.resize(ZSTD_compressBound(plain.size()));
+        const auto size =
+            ZSTD_compress(compressed.data(), compressed.size(), plain.data(), plain.size(), 3);
+        if (ZSTD_isError(size)) {
+            throw std::runtime_error("Export Zstandard compression failed");
+        }
+        compressed.resize(size);
+        payload = &compressed;
+    }
+    std::vector<unsigned char> encrypted(40 + payload->size());
     randomBytes(encrypted.data(), 24);
     const auto ad = label + "/" + hex(key.id, sizeof(key.id));
     crypto_aead_lock(encrypted.data() + 40,
@@ -81,8 +94,8 @@ void seal(const std::filesystem::path& path,
                      encrypted.data(),
                      reinterpret_cast<const unsigned char*>(ad.data()),
                      ad.size(),
-                     plain.data(),
-                     plain.size());
+                     payload->data(),
+                     payload->size());
     std::ofstream output(path, std::ios::binary);
     output.write(reinterpret_cast<const char*>(encrypted.data()), encrypted.size());
     output.close();
@@ -90,9 +103,11 @@ void seal(const std::filesystem::path& path,
         throw std::runtime_error("Cannot write encrypted game chunk");
     }
 }
-std::vector<unsigned char>
-open(const std::filesystem::path& path, const Footer& key, const std::string& label) {
-    auto encrypted = readBytes(path, maxChunkSize + 40);
+std::vector<unsigned char> open(const std::filesystem::path& path,
+                                const Footer& key,
+                                const std::string& label,
+                                bool compressed = false) {
+    auto encrypted = readBytes(path, ZSTD_compressBound(maxChunkSize) + 40);
     if (encrypted.size() < 40) {
         throw std::runtime_error("Truncated encrypted game chunk");
     }
@@ -107,6 +122,20 @@ open(const std::filesystem::path& path, const Footer& key, const std::string& la
                            encrypted.data() + 40,
                            plain.size()) != 0) {
         throw std::runtime_error("Game package authentication failed");
+    }
+    if (compressed) {
+        const auto size = ZSTD_getFrameContentSize(plain.data(), plain.size());
+        if (size == ZSTD_CONTENTSIZE_ERROR || size == ZSTD_CONTENTSIZE_UNKNOWN ||
+            size > maxChunkSize) {
+            throw std::runtime_error("Invalid expanded game chunk size");
+        }
+        std::vector<unsigned char> expanded(static_cast<std::size_t>(size));
+        const auto actual =
+            ZSTD_decompress(expanded.data(), expanded.size(), plain.data(), plain.size());
+        if (ZSTD_isError(actual) || actual != size) {
+            throw std::runtime_error("Corrupt compressed game chunk");
+        }
+        return expanded;
     }
     return plain;
 }
@@ -478,7 +507,8 @@ void build(const Settings& s,
             }
         }
         files.push_back({s.icon, "Icon" + AssetManager::extension(s.icon), {}, false});
-        Json manifest{{"format", "LegacyGame1"},
+        Json manifest{{"format", "LegacyGame2"},
+                      {"compression", "zstd"},
                       {"chunkBytes", chunkSize},
                       {"name", s.name},
                       {"company", s.company},
@@ -624,7 +654,9 @@ void mount(const std::filesystem::path& executable, Mounted& mounted) {
     }
     const auto plain = open(data / "manifest.bin", footer, "manifest");
     const auto meta = parseJson(std::string(plain.begin(), plain.end()), manifestLimit);
-    if (meta.at("format") != "LegacyGame1" || !meta.at("files").is_array() ||
+    const bool compressed = meta.at("format") == "LegacyGame2";
+    if ((meta.at("format") != "LegacyGame1" && !compressed) ||
+        (compressed && meta.value("compression", "") != "zstd") || !meta.at("files").is_array() ||
         meta.at("files").size() > 20000) {
         throw std::runtime_error("Invalid game manifest");
     }
@@ -684,7 +716,8 @@ void mount(const std::filesystem::path& executable, Mounted& mounted) {
                 if (chunk >= chunks) {
                     throw std::runtime_error("Missing game chunk");
                 }
-                bytes = open(data / chunkName(chunk), footer, "chunk/" + std::to_string(chunk));
+                bytes = open(
+                    data / chunkName(chunk), footer, "chunk/" + std::to_string(chunk), compressed);
                 ++chunk;
                 offset = 0;
                 const auto expected =

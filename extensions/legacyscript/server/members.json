@@ -11,12 +11,12 @@
     "getScript": "fun(name:string):NamedScriptComponent|nil",
     "name": "string",
     "parent": "GameObject|nil",
-    "getComponent": "fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil",
-    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil",
-    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil",
-    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil",
-    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil",
-    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal",
+    "getComponent": "fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil",
+    "getComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil",
+    "getComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil",
+    "findComponentInParent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil",
+    "findComponentInChildren": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil",
+    "addComponent": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal",
     "removeComponent": "fun(componentType:ComponentType)",
     "onAnimationFinish": "fun()|nil",
     "onAnimationStart": "fun()|nil",
@@ -621,6 +621,14 @@
     "enabled": "boolean",
     "size": "Vec3 Local box dimensions, positive; assign a whole vector",
     "center": "Vec3 Local box center; assign a whole vector"
+  },
+  "Canvas": {
+    "enabled": "boolean Show this Canvas when its owner is active; defaults to true.",
+    "rml": "string Project-relative .rml asset; both rml and rcss must be assigned.",
+    "rcss": "string Project-relative .rcss asset; applied to this document.",
+    "isLoaded": "fun(self:Canvas):boolean Whether this component's document is loaded in Play.",
+    "setText": "fun(self:Canvas,id:string,plainText:string):boolean Set escaped plain text in this Canvas document.",
+    "onClick": "fun(self:Canvas,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart."
   },
   "UI": {
     "enabled": "boolean Show this UI when its owner is active; defaults to true.",

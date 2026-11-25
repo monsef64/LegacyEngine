@@ -1,20 +1,20 @@
 # In-game UI and GUI
 
 LegacyEngine uses **RmlUi 6.1** for in-game interfaces rendered with OpenGL 3.3.
-ImGui provides the editor and the separate scripted GUI system. Each GameObject's **UI** component owns a separate
+ImGui provides the editor and the separate scripted GUI system. Each GameObject's **Canvas** component owns a separate
 runtime document. Nothing is loaded automatically from an `UI` folder.
 
 ## Setup
 
 1. Import your `.rml` and `.rcss` files anywhere inside the project's Assets.
-2. Select a GameObject and choose **Add Component > UI**.
+2. Select a GameObject and choose **Add Component > Canvas**.
 3. Assign **RML asset** and **RCSS asset** in its Inspector. **Both are required.**
    Keep **Enabled** checked and the owner/its parents active.
 4. Press Play and focus Game. Unlock the player cursor to click controls.
 
 UI is a screen-space Game overlay, independent of the owner's Transform. No
-Camera is required. Multiple UI components can display simultaneously; ids are
-scoped to each document, so separate UI components may use the same element ids. Documents
+Camera is required. Multiple Canvas components can display simultaneously; ids are
+scoped to each document, so separate Canvas components may use the same element ids. Documents
 are shown in creation order, with newly shown documents in front. There is no
 explicit layer-order control yet. Scene view and camera previews do not show UI.
 
@@ -32,18 +32,18 @@ Get the component on the attached object:
 ```lua
 local gui
 function onStart()
-    gui = self:getComponent(UI)
+    gui = self:getComponent(Canvas)
     if not gui then return end
     gui:onClick("buy", function()
         gui:setText("message", "Purchased!")
 end
 ```
 
-Or expose an Inspector slot and drag a UI component (or an object with UI)
+Or expose an Inspector slot and drag a Canvas component (or an object with UI)
 onto it. The script and UI can be on different objects:
 
 ```lua
-global UI HUD =
+global Canvas HUD =
 
 function onStart()
     if HUD then
@@ -151,7 +151,7 @@ Manual verification (no automated tests):
 
 ## GUI: scripted Dear ImGui
 
-**UI** is the RML/RCSS component described above. **GUI** is a separate Lua
+**Canvas** is the RML/RCSS component described above. **GUI** is a separate Lua
 namespace, not a component or export-reference type. It needs no RML/RCSS assets.
 Attach a LegacyScript to an active GameObject and define `onGUI()`:
 
@@ -227,12 +227,12 @@ script/object. Limits: 4096 API calls per callback, 32 nested scopes, 256-byte
 labels, 4096-byte text (4095 for input content), and finite numbers within
 +/-10000000. Embedded NULs and raw ImGui/GL handles are not allowed.
 
-### Migrating the previous GUI component
+### Migrating the previous GCanvas component
 
-Saved RML/RCSS **GUI** components and exported reference fields load as **UI**;
+Saved RML/RCSS **GUI** components and exported reference fields load as **Canvas**;
 new JSON saves use `UI` and format version 26. Binary component identity is
 unchanged. Update scripts explicitly: `getComponent(GUI)` / `global GUI HUD =`
-become `getComponent(UI)` / `global UI HUD =`. Source files are not rewritten
+become `getComponent(UI)` / `global Canvas HUD =`. Source files are not rewritten
 automatically because `GUI` now names the ImGui namespace.
 
 ### Manual GUI verification
@@ -248,3 +248,8 @@ automatically because `GUI` now names the ImGui namespace.
    Verify old subscriptions disappear and gameplay input never gets stuck.
 7. Raise an error inside an open window/child/disabled scope. Other scripts and
    the editor must remain usable without ImGui assertions.
+
+## Visual authoring
+
+Use [Canvas — Visual UI Maker](visual-ui-maker.md) for drag-and-drop RML/RCSS editing.
+Older UI/GUI serialized components and the UI Lua token remain compatible.

@@ -607,7 +607,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "NavMeshAgent",
                                 "NavMeshObstacle",
                                 "Animator",
-                                "UI",
+                                "Canvas",
                                 "Decal",
                                 "Recoil"};
             for (int i = 0; i < 35; ++i) {
@@ -727,7 +727,7 @@ inline void drawScriptExports(World& world,
                                  "NavMeshAgent",
                                  "NavMeshObstacle",
                                  "Animator",
-                                 "UI",
+                                 "Canvas",
                                  "Decal",
                                  "Recoil"};
     for (auto& field : fields) {
@@ -1303,7 +1303,7 @@ inline void drawInspector(World& world,
                 }
                 if (componentID == 32) {
                     if (auto* g = world.tryGet<UI>(selected);
-                        g && componentHeader<UI>(world, selected, "UI")) {
+                        g && componentHeader<UI>(world, selected, "Canvas")) {
 
                         assetPicker("RML asset", g->rml, assets, [](const std::string& file) {
                             return AssetManager::extension(file) == ".rml";
@@ -1312,7 +1312,7 @@ inline void drawInspector(World& world,
                             return AssetManager::extension(file) == ".rcss";
                         });
                         ImGui::TextWrapped(
-                            "Assign both assets to show this UI in Game during Play. Paths may be anywhere in Assets. Scripts: self:getComponent(UI), or export a UI reference.");
+                            "Assign both assets to show this Canvas in Game during Play. Open Windows > Visual UI Maker to edit. Scripts: self:getComponent(Canvas), or global Canvas hud = nil.");
                     }
                 }
 
@@ -2652,7 +2652,7 @@ inline void drawInspector(World& world,
                     }
                     world.add(selected, BoneAttachment{});
                 }
-                if (!world.has<UI>(selected) && ImGui::MenuItem("UI")) {
+                if (!world.has<UI>(selected) && ImGui::MenuItem("Canvas")) {
                     world.add(selected, UI{});
                 }
                 if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("Camera Effects")) {

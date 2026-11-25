@@ -23,8 +23,8 @@ No automated tests are included or run for this feature.
    ±10000m elevation. New Flat replaces the current terrain grid.
 6. Save the terrain explicitly, or save the project, level or prefab. New assets
    go to `Assets/Terrains/Terrain-N.terrain`. They contain all heights, normalized
-   four-channel paint weights, layer references and settings in CBOR + Zstandard
-   (`TERZ0001` header). Scenes reference the asset, not embedded height arrays.
+   four-channel paint weights, layer references and settings in uncompressed JSON.
+   Older `TERZ0001` CBOR/Zstandard terrain assets remain readable. Scenes reference the asset, not embedded height arrays.
 
 Brush units and height are terrain-local; use unit Transform scale for metre-based
 editing. This is a single-valued heightfield: cliffs can be steep, but overhangs,

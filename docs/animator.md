@@ -135,3 +135,18 @@ existing scene schema compatibility without reviving AnimatorSheet.
 
 See `data/examples/animator/` for a self-contained controller, three property clips
 and a script exercising Bool/Int/Float conditions and fades.
+
+## Graph navigation and history
+
+Use the mouse wheel for pointer-anchored zoom (25–250%), middle-drag or
+**Alt + right-drag** to pan, and plain right-click for context actions. Existing
+toolbar buttons remain. Undo/Redo buttons and Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z edit
+the focused controller rather than the level. History includes nodes, positions,
+parameters, transitions and conditions, coalesces a drag, and is bounded to 100
+controller snapshots. Opening another controller resets its history.
+
+Transitions use node-aware orthogonal routing, distinct endpoint ports and a
+shared-segment penalty to separate reciprocal/parallel connections. Click any
+drawn segment to select its transition; self-transitions route around their node.
+Route geometry is cached and is unaffected by pan/zoom. Dense non-planar graphs
+can still require crossings, and overlapping nodes should be moved apart.

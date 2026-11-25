@@ -60,3 +60,5 @@ check that the committed reference is current.
 - [Camera recoil: springs, timed bursts and sequences](recoil.md)
 
 - [Animator state-machine controllers](animator.md): graph authoring, parameters, transitions and fades.
+
+- [Canvas — Visual UI Maker](visual-ui-maker.md): drag-and-drop RmlUi authoring.

@@ -64,6 +64,10 @@
     "title": "In-game UI (RmlUi)"
   },
   {
+    "file": "visual-ui-maker.md",
+    "title": "Canvas — Visual UI Maker"
+  },
+  {
     "file": "first-person.md",
     "title": "Character controller and FPS camera"
   },

@@ -236,6 +236,7 @@ class GameExportWindow {
             ImGui::InputText("Native player template", player_, sizeof(player_));
             browse(3, "Browse##Player");
             ImGui::SliderInt("Chunk size (MiB)", &chunkMiB_, 1, 64);
+            ImGui::TextWrapped("Assets are Zstandard-compressed on export, then authenticated/encrypted. Chunk size is before compression. Editor source assets are not changed. Use an updated native player template.");
             if (ImGui::Button("Export Game")) {
                 try {
                     persistEdits(true);
