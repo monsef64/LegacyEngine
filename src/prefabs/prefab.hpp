@@ -84,6 +84,9 @@ inline Entity clone(World& source, Entity root, World& destination, Entity exist
         if (auto* r = destination.tryGet<Recoil>(target)) {
             *r = Recoils::parse(Recoils::settings(*r));
         }
+        if (auto* a = destination.tryGet<Animator>(target)) {
+            *a = Animators::parse(Animators::settings(*a));
+        }
         if (auto* a = destination.tryGet<Animation>(target)) {
             const auto clip = a->clip;
             const bool loop = a->loop, autoplay = a->playOnStart;

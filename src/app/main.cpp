@@ -21,6 +21,8 @@
 #include "core/components.hpp"
 #include "core/ecs.hpp"
 #include "editor/animation_window.hpp"
+#include "editor/animator_requests.hpp"
+#include "editor/animator_window.hpp"
 #include "editor/asset_browser.hpp"
 #include "editor/asset_preview_renderer.hpp"
 #include "editor/component_gizmos.hpp"
@@ -267,6 +269,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     AudioSystem audio;
     AnimationSystem animations;
     AnimationWindow animationWindow;
+    AnimatorWindow animatorWindow;
     GameExportWindow gameExport;
     LightmappingWindow lightmappingWindow;
     OcclusionWindow occlusionWindow;
@@ -914,6 +917,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 if (ImGui::MenuItem("Save Level", nullptr, false, projectEnabled)) {
                     try {
+                        if (!animatorWindow.saveIfDirty(browser.assets, &world)) {
+                            throw std::runtime_error(animatorWindow.error());
+                        }
                         if (!animationWindow.saveIfDirty(browser.assets)) {
                             throw std::runtime_error(animationWindow.error());
                         }
@@ -952,6 +958,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             try {
                 if (browser.importing()) {
                     throw std::runtime_error("Wait for the asset import to finish before saving");
+                }
+                if (!animatorWindow.saveIfDirty(browser.assets, &world)) {
+                    throw std::runtime_error(animatorWindow.error());
                 }
                 if (!animationWindow.saveIfDirty(browser.assets)) {
                     throw std::runtime_error(animationWindow.error());
@@ -1002,6 +1011,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (openProject) {
                     projectDirty = currentProject.empty() || scripts.hasUnsavedChanges() ||
                                    animationWindow.hasUnsavedChanges() ||
+                                   animatorWindow.hasUnsavedChanges() ||
                                    projectContentState(world, embeddedLegacySource, camera) !=
                                        savedProjectState;
                 }
@@ -1228,6 +1238,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     ImGui::MenuItem(panelNames[i], nullptr, &panelOpen[i]);
                 }
                 ImGui::MenuItem("Animation", nullptr, &animationWindow.visible);
+                ImGui::MenuItem("Animator", nullptr, &animatorWindow.visible);
                 ImGui::MenuItem("Lighting", nullptr, &lightmappingWindow.visible);
                 ImGui::MenuItem("Occlusion Culling", nullptr, &occlusionWindow.visible);
                 ImGui::MenuItem("Navigation", nullptr, &navigationWindow.visible);
@@ -1741,15 +1752,26 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (beginPreparedPlay && !prefabLevel && !playMode.active() && !levels.busy()) {
             editor.finish(world);
             clicking = false;
+            bool preflightReady = true;
             try {
+                if (!animatorWindow.saveIfDirty(browser.assets, &world)) {
+                    throw std::runtime_error(animatorWindow.error());
+                }
+                if (!animationWindow.saveIfDirty(browser.assets)) {
+                    throw std::runtime_error(animationWindow.error());
+                }
                 scripts.saveFile(browser.assets);
                 levels.saveCurrent(world, embeddedLegacySource, camera);
             } catch (const std::exception& e) {
                 levels.error = e.what();
+                preflightReady = false;
             }
             std::optional<LevelSystem::Transition> preloaded;
             bool createdLoadingWindow = false;
             try {
+                if (!preflightReady) {
+                    throw std::runtime_error(levels.error);
+                }
                 if (separateGame && !gameWindow) {
                     gameWindow = SDL_CreateWindow(
                         "Game", 960, 540, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
@@ -1985,6 +2007,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (!browser.movedAsset.first.empty()) {
             const auto moved = std::exchange(browser.movedAsset, {});
             animationWindow.remapAssetPaths(moved.first, moved.second);
+            animatorWindow.remapAssetPaths(moved.first, moved.second);
             modelPreviewWindow.visible = false;
         }
 
@@ -2011,6 +2034,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                 history,
                                 editAllowed && !playMode.active() && !prefabLevel,
                                 levels.current());
+        if (animatorOpenRequested) {
+            animatorOpenRequested = false;
+            animatorWindow.open(browser.assets, animatorRequestedPath, animatorRequestedOwner);
+        }
+        if (!browser.editAnimatorRequest.empty()) {
+            animatorWindow.open(
+                browser.assets, std::exchange(browser.editAnimatorRequest, {}), selectedEntity);
+        }
+        animatorWindow.draw(world, selectedEntity, browser.assets, playMode.active());
         if (!browser.editAnimationRequest.empty()) {
             animationWindow.open(browser.assets, std::exchange(browser.editAnimationRequest, {}));
         }
@@ -3117,7 +3149,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             lastDirtyCheck = std::chrono::steady_clock::now();
             projectDirty =
                 currentProject.empty() || scripts.hasUnsavedChanges() ||
-                animationWindow.hasUnsavedChanges() ||
+                animationWindow.hasUnsavedChanges() || animatorWindow.hasUnsavedChanges() ||
                 projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
         }
         if (projectEnabled && !currentProject.empty() && projectDirty &&
@@ -3170,7 +3202,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 selectedEntity = world.alive(editSelection) ? editSelection : Entity{};
                 projectDirty =
                     currentProject.empty() || scripts.hasUnsavedChanges() ||
-                    animationWindow.hasUnsavedChanges() ||
+                    animationWindow.hasUnsavedChanges() || animatorWindow.hasUnsavedChanges() ||
                     projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
             }
             if (browser.importing() || prefabLevel || levels.busy() || projectDialog.pending()) {

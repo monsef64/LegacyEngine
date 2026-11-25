@@ -740,3 +740,9 @@ include `enabled`, `stopped`, `stoppingDistance`, `updateRotation`, `angularSpee
 and the read-only `velocity`, `remainingDistance`, `hasPath`, `pathPending`, and
 `status` properties. Speed is limited to 0–100; height offset to -1000–1000.
 Do not combine NavMeshAgent with another physics/controller movement driver.
+
+## Animator controllers
+
+Use the [Animator state-machine component](animator.md) for controller assets with
+Bool/Int/Float parameters, animation states, per-state looping and conditional
+transitions with fade durations. The existing Animation clip player remains available.

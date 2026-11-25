@@ -448,9 +448,10 @@ also detected (and the standard macOS Sublime application is recognized).
 Install native Sublime syntax highlighting, API/member completions and hover help
 by copying `extensions/sublime-legacyscript` into Sublime's Packages directory as
 `LegacyScript`. See that folder's README for installation details and limitations.
-The existing Animation player and cross-fades remain; the recently introduced
-Animator/AnimatorSheet state-machine system and its asset creation/editor UI have
-been removed. Old serialized Animator components are ignored when loading a scene.
+The Animation clip player and cross-fades remain. The new controller-backed
+[Animator state machine](animator.md) uses `.controller` assets and is available
+through Add Component > Animator and Windows > Animator. Old removed
+Animator/AnimatorSheet settings are not migrated into this new controller format.
 
 ### Focus suspension, primitives and terrain tabs
 

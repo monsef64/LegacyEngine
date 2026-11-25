@@ -1,5 +1,6 @@
 #pragma once
 #include "animation/animation_clip.hpp"
+#include "animation/animator_system.hpp"
 #include "core/worker_pool.hpp"
 #include <map>
 
@@ -168,6 +169,7 @@ class AnimationSystem {
             root_ = assets.root;
         }
         seconds = std::isfinite(seconds) ? std::clamp(seconds, 0.f, .25f) : 0;
+        Animators::update(world, assets, seconds);
         world.each<Animation>([&](Entity owner, Animation& animation) {
             auto& state = states_[{owner.index, owner.generation}];
             if (!animation.started) {
@@ -256,6 +258,9 @@ class AnimationSystem {
                         animation.blendFrozenPose = std::move(frozen);
                         state.sourceDuration = state.loaded ? state.clip.duration : 1;
                         state.sourceLoop = animation.loop;
+                        if (command.loop >= 0) {
+                            animation.loop = command.loop != 0;
+                        }
                         if (state.recapture) {
                             state.originals.clear();
                         }
@@ -408,6 +413,7 @@ class AnimationSystem {
                     cancelFade(animation, state);
                 }
             }
+            animation.duration = state.loaded ? state.clip.duration : 0;
             animation.isPlaying = state.phase == Phase::Playing;
             animation.paused = state.phase == Phase::Paused;
         });

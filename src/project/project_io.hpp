@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/animator_controller.hpp"
 #include "core/hierarchy.hpp"
 #include "effects/camera_effects_io.hpp"
 #include "effects/laser_io.hpp"
@@ -117,6 +118,7 @@ inline std::string encodeLegacy(World& world,
             (world.has<TPSCamera>(e) ? 4294967296ull : 0ull) |
             (world.has<NavMeshAgent>(e) ? 8589934592ull : 0ull) |
             (world.has<NavMeshObstacle>(e) ? 17179869184ull : 0ull) |
+            (world.has<Animator>(e) ? 34359738368ull : 0ull) |
             (world.has<UI>(e) ? 68719476736ull : 0ull) |
             (world.has<Decal>(e) ? 137438953472ull : 0ull) |
             (world.has<Recoil>(e) ? 274877906944ull : 0ull);
@@ -357,6 +359,10 @@ inline std::string encodeLegacy(World& world,
             out << std::quoted(Navigation::obstacleSettings(*o).dump()) << ' ';
         }
 
+        if (const auto* animator = world.tryGet<Animator>(e)) {
+            (void)Animators::parse(Animators::settings(*animator));
+            out << std::quoted(Animators::settings(*animator).dump()) << ' ';
+        }
         if (const auto* g = world.tryGet<UI>(e)) {
             require(exportAssetPath(g->rml) && exportAssetPath(g->rcss));
             out << g->enabled << ' ' << std::quoted(g->rml) << ' ' << std::quoted(g->rcss) << ' ';
@@ -428,9 +434,6 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                     (exportType(field.type) || field.type == "Animator") &&
                     field.text.size() <= 4096 && field.text.find('\0') == std::string::npos &&
                     target >= -1 && target < count);
-            if (field.type == "Animator") {
-                continue; // drop removed legacy component references
-            }
             if (exportAssetType(field.type)) {
                 require(!std::filesystem::path(field.text).is_absolute());
                 for (const auto& part : std::filesystem::path(field.text)) {
@@ -791,8 +794,6 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                         std::find(seen.begin(), seen.end(), id) == seen.end());
                 seen.push_back(id);
             }
-            types.erase(std::remove(types.begin(), types.end(), 31),
-                        types.end()); // removed Animator inspector slot
             result.world.add(e, InspectorOrder{types});
         }
         if (mask & 524288) {
@@ -914,8 +915,11 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             require(text.size() <= 16384);
-            // Animator was removed. Consume legacy settings without recreating the component.
-            (void)parseJson(text);
+            // Old removed Animator documents used a different settings schema.
+            const auto settings = parseJson(text);
+            if (settings.contains("controller")) {
+                result.world.add(e, Animators::parse(settings));
+            }
         }
         if (mask & 68719476736ull) {
             UI g;
