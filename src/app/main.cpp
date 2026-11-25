@@ -23,6 +23,7 @@
 #include "editor/animation_window.hpp"
 #include "editor/asset_browser.hpp"
 #include "editor/asset_preview_renderer.hpp"
+#include "editor/component_gizmos.hpp"
 #include "editor/create_menu.hpp"
 #include "editor/dock_workspace.hpp"
 #include "editor/editor_history.hpp"
@@ -1118,7 +1119,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                 : std::filesystem::absolute(result->path).parent_path() /
                                       assetDirectory);
                         try {
-                            Prefabs::refreshAll(browser.assets, world, projectMeshes);
+                            Prefabs::validateLinks(browser.assets, world, projectMeshes);
                         } catch (const std::exception& e) {
                             browser.assets.error = e.what();
                         }
@@ -1936,6 +1937,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             lastInspectedEntity = selectedEntity;
         }
         const MeshHandle meshOptions[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh};
+        Entity savePrefabRequest;
         drawInspector(world,
                       selectedEntity,
                       layout.inspector,
@@ -1944,7 +1946,24 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                       &browser.assets,
                       5,
                       browser.selected,
-                      playMode.active());
+                      playMode.active(),
+                      &savePrefabRequest);
+        if (world.alive(savePrefabRequest) && !playMode.active()) {
+            try {
+                editor.finish(world);
+                history.commit(world, selectedEntity);
+                const auto path = world.get<PrefabInstance>(savePrefabRequest).asset;
+                Prefabs::save(browser.assets, path, world, savePrefabRequest, projectMeshes);
+                Prefabs::refreshSavedLevels(browser.assets, path, projectMeshes);
+                Prefabs::refresh(browser.assets, path, world, projectMeshes);
+                selectedEntity = savePrefabRequest;
+                hierarchySelection = {selectedEntity};
+                history.commit(world, selectedEntity);
+                scripts.console().message("Saved prefab including all added children");
+            } catch (const std::exception& error) {
+                browser.assets.error = error.what();
+            }
+        }
         terrainEditor.draw(
             world, selectedEntity, browser.assets, history, editAllowed, !playMode.active());
         scripts.componentOutput = componentScripts.messages();
@@ -2116,6 +2135,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     throw std::runtime_error("Model placement exceeds scene/model limits");
                 }
                 editor.finish(world);
+                const auto prefabParent = prefabLevel ? Prefabs::root(world) : Entity{};
                 const auto root = world.create();
                 world.add(root, ObjectName{std::filesystem::path(path).stem().string()});
                 world.add(root,
@@ -2130,7 +2150,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     world.add(root, animation);
                 }
                 if (prefabLevel) {
-                    setParent(world, root, Prefabs::root(world));
+                    setParent(world, root, prefabParent);
                 }
                 for (const auto& part : parts) {
                     const auto child = world.create();
@@ -2399,6 +2419,23 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     camera,
                     sceneRect,
                     editAllowed && !playbackHovered && !cameraLooking && !editor.dragging());
+                Entity clickedBadge;
+                const bool componentBadgeHovered = drawSceneComponentGizmos(
+                    world,
+                    camera,
+                    sceneRect,
+                    selectedEntity,
+                    editAllowed && sceneHovered && !cameraLooking && !orientationInteracting &&
+                        !editor.dragging() && !ImGui::IsAnyItemActive() &&
+                        !cameraModifiersHeld(SDL_GetModState()),
+                    clickedBadge);
+                if (world.alive(clickedBadge)) {
+                    editor.finish(world);
+                    selectedEntity = clickedBadge;
+                    hierarchySelection = {selectedEntity};
+                    clicking = false;
+                    browser.selected.clear();
+                }
                 const auto* sceneRiver = world.tryGet<River>(selectedEntity);
                 bool curveEditing = sceneRiver && sceneRiver->editCurve;
                 bool curveInteracting =
@@ -2416,7 +2453,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 editor.draw(world,
                             selectedEntity,
                             !projectDialog.pending() && !browser.dialog.pending() &&
-                                !orientationInteracting && !playbackHovered && !cameraLooking &&
+                                !orientationInteracting && !playbackHovered &&
+                                !componentBadgeHovered && !cameraLooking &&
                                 !terrainEditor.active(world, selectedEntity) && !curveEditing &&
                                 (!world.has<BoneAttachment>(selectedEntity) ||
                                  !world.get<BoneAttachment>(selectedEntity).enabled) &&

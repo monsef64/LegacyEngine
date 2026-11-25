@@ -1068,7 +1068,8 @@ inline void drawInspector(World& world,
                           const AssetManager* assets = nullptr,
                           int meshCount = 4,
                           const std::string& selectedAsset = {},
-                          bool runtime = false) {
+                          bool runtime = false,
+                          Entity* savePrefabRequest = nullptr) {
     if (dockedEditor && !panelOpen[1]) {
         return;
     }
@@ -1119,6 +1120,24 @@ inline void drawInspector(World& world,
                     }
                 }
                 ImGui::EndCombo();
+            }
+            Entity prefabRoot = selected;
+            for (std::size_t depth = 0; depth < world.entities().size() && world.alive(prefabRoot);
+                 ++depth) {
+                if (const auto* link = world.tryGet<PrefabInstance>(prefabRoot)) {
+                    ImGui::TextWrapped("Prefab: %s", link->asset.c_str());
+                    ImGui::BeginDisabled(runtime || !savePrefabRequest);
+                    if (ImGui::Button("Save to Prefab") && savePrefabRequest) {
+                        *savePrefabRequest = prefabRoot;
+                    }
+                    ImGui::EndDisabled();
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(
+                            "Save this instance and all its children to the linked prefab asset.");
+                    }
+                    break;
+                }
+                prefabRoot = getParent(world, prefabRoot);
             }
             ImGui::Separator();
             auto ordered = world.has<InspectorOrder>(selected)
@@ -2581,7 +2600,7 @@ inline void drawInspector(World& world,
                 if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("Camera Effects")) {
                     world.add(selected, CameraEffects{});
                 }
-                if (ImGui::BeginMenu("Cameras")) {
+                if (ImGui::BeginMenu("Camera")) {
                     if (!world.has<Recoil>(selected) && ImGui::MenuItem("Recoil")) {
                         world.add(selected, Recoil{});
                     }

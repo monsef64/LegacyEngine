@@ -773,3 +773,29 @@ not a full-editor loading screen or progress bar. In a separate Game window and
 in exported games, the text is centered in that window. Level transitions show
 the same text in the rendered Game surface while staged assets load. Dependency
 preloading remains enabled; scripts still start only after required assets are ready.
+
+### Scene component gizmos
+
+Scene view shows one component icon per active GameObject at its world-space
+origin. The first attached component in Inspector order supplies the icon;
+Transform, ObjectName and editor metadata never produce an icon. Parents are
+visited before children, so a parent wins when icons overlap at the same screen
+location. Click an unselected object's icon to select it; selected objects keep
+normal transform-handle interaction. Icons are editor-only and do not appear in
+Game or exported builds. Camera preview and orientation-cube areas remain clear.
+
+### Saving added prefab children and keeping instance assignments
+
+On a linked prefab instance (or one of its children), **Inspector > Save to Prefab**
+writes the instance root and its full current child hierarchy to the linked
+`.prefab` file and refreshes linked instances/saved levels. Use this explicitly
+when you want instance-added children to become part of the reusable asset.
+In Prefab Mode, **Save Prefab** also includes children added through model drops.
+Prefab asset writes are file saves, not undoable scene-only edits.
+
+Project opening, player startup and level preloading keep the complete saved
+instance hierarchy and script-field assignments instead of rebuilding it from
+prefab defaults. This preserves assigned `global Prefab` assets and instance-only
+children across reopening. Prefab links are still validated, so missing or corrupt
+templates can be reported. Explicit prefab saves remain the propagation point;
+loading a scene no longer silently replaces its saved instance state.

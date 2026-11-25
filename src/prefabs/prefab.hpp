@@ -2,6 +2,7 @@
 #include "project/project_io.hpp"
 #include <map>
 #include <mutex>
+#include <set>
 namespace Prefabs {
 inline void updateDestroyTimers(World& world, float dt) {
     if (!std::isfinite(dt) || dt < 0) {
@@ -261,6 +262,18 @@ refreshSavedLevels(AssetManager& assets, const std::string& path, const ProjectI
         writeJsonFile(file, document);
     }
 }
+// Scenes already serialize complete instance trees and Inspector overrides.
+// Opening/preloading must validate links, not replace those saved entities with
+// template defaults (which erased added children and assigned Prefab fields).
+inline void validateLinks(AssetManager& assets, World& world, const ProjectIO::Meshes& meshes) {
+    std::set<std::string> paths;
+    world.each<PrefabInstance>(
+        [&](Entity, const PrefabInstance& link) { paths.insert(link.asset); });
+    for (const auto& path : paths) {
+        (void)load(assets, path, meshes);
+    }
+}
+
 inline void refreshAll(AssetManager& assets, World& world, const ProjectIO::Meshes& meshes) {
     std::vector<std::string> paths;
     world.each<PrefabInstance>([&](Entity, const PrefabInstance& link) {

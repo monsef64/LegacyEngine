@@ -77,7 +77,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
     }
     AssetManager assets;
     assets.root = package.root / "Assets";
-    Prefabs::refreshAll(assets, world, meshes);
+    Prefabs::validateLinks(assets, world, meshes);
     updateHierarchy(world);
     LayerSettings layers;
     layers.load(assets);

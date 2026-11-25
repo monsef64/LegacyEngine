@@ -277,7 +277,7 @@ LevelSystem::Transition LevelSystem::prepare(AssetManager assets,
     result.name = std::move(name);
     result.level = std::make_unique<ProjectIO::Loaded>();
     ProjectIO::decode(bytes, *result.level, meshes);
-    Prefabs::refreshAll(assets, result.level->world, meshes);
+    Prefabs::validateLinks(assets, result.level->world, meshes);
     result.level->world.each<Terrain>([&](Entity, Terrain& t) {
         if (!t.asset.empty()) {
             Terrains::load(t, assets);
