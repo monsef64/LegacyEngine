@@ -224,7 +224,7 @@ inline std::set<std::string> exportDependencies(const AssetManager& assets,
         const bool json = ext == ".json" || ext == ".mat" || ext == ".model" || ext == ".mesh" ||
                           ext == ".lemesh" || ext == ".terrain" || ext == ".prefab" ||
                           ext == ".level" || ext == ".legacy" || ext == ".leanim" ||
-                          ext == ".cubemap" || ext == ".gltf";
+                          ext == ".cubemap" || ext == ".controller" || ext == ".gltf";
         const bool text = ext == ".ls" || ext == ".lua" || ext == ".rml" || ext == ".rcss" ||
                           ext == ".css" || ext == ".obj" || ext == ".mtl";
         if (json) {

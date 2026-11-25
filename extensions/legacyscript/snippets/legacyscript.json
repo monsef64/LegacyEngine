@@ -66,7 +66,7 @@
   "Global Inspector field": {
     "prefix": "global",
     "body": [
-      "global ${1|int,float,bool,string,Prefab,AnimationClip,GameObject,Texture,AudioClip,Asset,Transform,RigidBody,Collider,Camera|} ${2:value} = ${3:0}"
+      "global ${1|int,float,bool,string,Prefab,AnimationClip,GameObject,Texture,AudioClip,Asset,Transform,RigidBody,Collider,Camera,Animation,Animator|} ${2:value} = ${3:0}"
     ],
     "description": "Declare a typed global field editable in the Inspector"
   }

@@ -1,9 +1,11 @@
 #pragma once
 #include "animation/animation_clip.hpp"
+#include "animation/animator_controller.hpp"
 #include "animation/bone_attachment_system.hpp"
 #include "assets/cubemap.hpp"
 #include "assets/texture_preview.hpp"
 #include "audio/audio_clip.hpp"
+#include "editor/animator_requests.hpp"
 #include "editor/asset_picker.hpp"
 #include "editor/asset_preview_ui.hpp"
 #include "editor/component_clipboard.hpp"
@@ -534,6 +536,9 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
             type = 30;
         }
 
+        if constexpr (std::is_same_v<T, Animator>) {
+            type = 31;
+        }
         if constexpr (std::is_same_v<T, NavMeshAgent>) {
             type = 29;
         }
@@ -601,7 +606,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "TPSCamera",
                                 "NavMeshAgent",
                                 "NavMeshObstacle",
-                                "RemovedAnimator",
+                                "Animator",
                                 "UI",
                                 "Decal",
                                 "Recoil"};
@@ -643,6 +648,11 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         ImGui::EndDragDropTarget();
     }
     if (remove) {
+        if constexpr (std::is_same_v<T, Animator>) {
+            if (auto* animation = world.tryGet<Animation>(entity)) {
+                animation->request(AnimationAction::Stop);
+            }
+        }
         if constexpr (std::is_base_of_v<LightSettings, T>) {
             detachLightBake(world, world.get<T>(entity));
         }
@@ -716,7 +726,7 @@ inline void drawScriptExports(World& world,
                                  "TPSCamera",
                                  "NavMeshAgent",
                                  "NavMeshObstacle",
-                                 "RemovedAnimator",
+                                 "Animator",
                                  "UI",
                                  "Decal",
                                  "Recoil"};
@@ -1142,16 +1152,50 @@ inline void drawInspector(World& world,
             ImGui::Separator();
             auto ordered = world.has<InspectorOrder>(selected)
                                ? world.get<InspectorOrder>(selected).types
-                               : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,
-                                                  5,  13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
-                                                  23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34};
+                               : std::vector<int>{0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,
+                                                  13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+                                                  25, 26, 27, 28, 29, 30, 31, 32, 33, 34};
             for (int id : {0,  3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15, 16, 17,
-                           18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34}) {
+                           18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34}) {
                 if (std::find(ordered.begin(), ordered.end(), id) == ordered.end()) {
                     ordered.push_back(id);
                 }
             }
             for (int componentID : ordered) {
+                if (componentID == 31) {
+                    if (auto* a = world.tryGet<Animator>(selected);
+                        a && componentHeader<Animator>(world, selected, "Animator")) {
+                        assetPicker("Controller", a->controller, assets, [](const std::string& p) {
+                            return Animators::controllerAsset(p);
+                        });
+                        if (ImGui::BeginDragDropTarget()) {
+                            if (const auto* p = ImGui::AcceptDragDropPayload("ASSET_PATH")) {
+                                const std::string path = static_cast<const char*>(p->Data);
+                                if (Animators::controllerAsset(path)) {
+                                    a->controller = path;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
+                        }
+                        EditorValues::Checkbox("Play on start", &a->playOnStart);
+                        if (ImGui::Button(a->controller.empty() ? "Create controller"
+                                                                : "Edit controller")) {
+                            animatorOpenRequested = true;
+                            animatorRequestedPath = a->controller;
+                            animatorRequestedOwner = selected;
+                        }
+                        const auto* state = a->definition
+                                                ? Animators::findState(*a->definition, a->state)
+                                                : nullptr;
+                        ImGui::Text("State: %s", state ? state->name.c_str() : "None");
+                        if (!a->error.empty()) {
+                            ImGui::TextWrapped("%s", a->error.c_str());
+                        }
+                        ImGui::TextWrapped(
+                            "State-machine controller. Add .leanim states, link transitions and edit fade/conditions in the controller graph. Animator owns this object's Animation playback during Play.");
+                    }
+                }
+
                 if (componentID == 34) {
                     if (auto* c = world.tryGet<Recoil>(selected);
                         c && componentHeader<Recoil>(world, selected, "Recoil")) {
@@ -2478,7 +2522,8 @@ inline void drawInspector(World& world,
                 }
             }
             if (auto* a = world.tryGet<Animation>(selected);
-                a && componentHeader<Animation>(world, selected, "Animation")) {
+                a && !world.has<Animator>(selected) &&
+                componentHeader<Animation>(world, selected, "Animation")) {
                 assetPicker("Animation clip", a->clip, assets, [](const std::string& path) {
                     return animationAsset(path);
                 });
@@ -2573,6 +2618,9 @@ inline void drawInspector(World& world,
                 ImGui::OpenPopup("AddComponent");
             }
             if (ImGui::BeginPopup("AddComponent")) {
+                if (!world.has<Animator>(selected) && ImGui::MenuItem("Animator")) {
+                    world.add(selected, Animator{});
+                }
                 if (!world.has<Animation>(selected) && ImGui::MenuItem("Animation")) {
                     world.add(selected, Animation{});
                 }

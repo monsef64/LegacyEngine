@@ -1,5 +1,6 @@
 #include "scripting/lua_scene.hpp"
 #include "animation/animation_clip.hpp"
+#include "animation/animator_controller.hpp"
 #include "assets/cubemap.hpp"
 #include "core/hierarchy.hpp"
 #include "editor/rotation_editor.hpp"
@@ -80,7 +81,8 @@ const char* types[]{"Transform",
                     "NavMeshObstacle",
                     "UI",
                     "Decal",
-                    "Recoil"};
+                    "Recoil",
+                    "Animator"};
 int componentType(lua_State* L, int index) {
     if (auto* type = static_cast<int*>(luaL_testudata(L, index, "ComponentType"))) {
         return *type;
@@ -145,6 +147,8 @@ bool has(const Handle& h, int type) {
         return h.world->has<Water>(h.entity);
     case 26:
         return h.world->has<BoneAttachment>(h.entity);
+    case 33:
+        return h.world->has<Animator>(h.entity);
     case 32:
         return h.world->has<Recoil>(h.entity);
     case 31:
@@ -823,6 +827,9 @@ int LuaScene::api(lua_State* L) {
         case 17:
             self.world_.each<ParticleSystem>([&](Entity e, ParticleSystem&) { collect(e); });
             break;
+        case 33:
+            self.world_.each<Animator>([&](Entity e, Animator&) { collect(e); });
+            break;
         case 16:
             self.world_.each<Animation>([&](Entity e, Animation&) { collect(e); });
             break;
@@ -1039,6 +1046,12 @@ int LuaScene::api(lua_State* L) {
         case 17:
             self.world_.remove<ParticleSystem>(h.entity);
             break;
+        case 33:
+            if (auto* animation = self.world_.tryGet<Animation>(h.entity)) {
+                animation->request(AnimationAction::Stop);
+            }
+            self.world_.remove<Animator>(h.entity);
+            break;
         case 16:
             self.world_.remove<Animation>(h.entity);
             break;
@@ -1211,6 +1224,9 @@ int LuaScene::api(lua_State* L) {
                 self.world_.add(h.entity, Transform{});
             }
             self.world_.add(h.entity, ParticleSystem{});
+            break;
+        case 33:
+            self.world_.add(h.entity, Animator{});
             break;
         case 16:
             self.world_.add(h.entity, Animation{});
@@ -2020,6 +2036,156 @@ int LuaScene::componentIndex(lua_State* L) {
         }
         return 1;
     }
+    if (c.type == 33) {
+        auto& a = c.object.world->get<Animator>(c.object.entity);
+        if (!std::strcmp(key, "controller")) {
+            lua_pushstring(L, a.controller.c_str());
+            return 1;
+        }
+        if (!std::strcmp(key, "enabled")) {
+            lua_pushboolean(L, a.enabled);
+            return 1;
+        }
+        if (!std::strcmp(key, "playOnStart")) {
+            lua_pushboolean(L, a.playOnStart);
+            return 1;
+        }
+        if (!std::strcmp(key, "currentState")) {
+            const auto* state =
+                a.definition ? Animators::findState(*a.definition, a.state) : nullptr;
+            lua_pushstring(L, state ? state->name.c_str() : "");
+            return 1;
+        }
+        if (!std::strcmp(key, "isPlaying")) {
+            lua_pushboolean(L,
+                            a.playing && !a.paused && a.enabled &&
+                                isActive(*c.object.world, c.object.entity));
+            return 1;
+        }
+        if (!std::strcmp(key, "paused")) {
+            lua_pushboolean(L, a.paused);
+            return 1;
+        }
+        if (!std::strcmp(key, "stateTime")) {
+            lua_pushnumber(L, a.stateTime);
+            return 1;
+        }
+        if (!std::strcmp(key, "error")) {
+            lua_pushstring(L, a.error.c_str());
+            return 1;
+        }
+        const char* methods[]{"setBool",
+                              "setInt",
+                              "setFloat",
+                              "getBool",
+                              "getInt",
+                              "getFloat",
+                              "play",
+                              "crossFade",
+                              "stop",
+                              "pause",
+                              "resume",
+                              "hasState"};
+        for (int i = 0; i < 12; ++i) {
+            if (!std::strcmp(key, methods[i])) {
+                lua_pushvalue(L, 1);
+                lua_pushinteger(L, i);
+                lua_pushcclosure(
+                    L,
+                    [](lua_State* L) -> int {
+                        const auto c = *static_cast<Component*>(
+                            luaL_checkudata(L, lua_upvalueindex(1), "Component"));
+                        if (!c.object.world->alive(c.object.entity) ||
+                            !c.object.world->has<Animator>(c.object.entity)) {
+                            return luaL_error(L, "Animator no longer exists");
+                        }
+                        if (auto* receiver =
+                                static_cast<Component*>(luaL_testudata(L, 1, "Component"))) {
+                            if (receiver->type == 33 && receiver->object.world == c.object.world &&
+                                receiver->object.entity == c.object.entity) {
+                                lua_remove(L, 1);
+                            }
+                        }
+                        auto& a = c.object.world->get<Animator>(c.object.entity);
+                        const int op = int(lua_tointeger(L, lua_upvalueindex(2)));
+                        // Validate Lua arguments before creating C++ owned strings.
+                        const char* name = (op <= 7 || op == 11) ? objectName(L, 1) : "";
+                        double value = 0;
+                        float fade = .2f;
+                        if (op == 0) {
+                            luaL_checktype(L, 2, LUA_TBOOLEAN);
+                            value = lua_toboolean(L, 2);
+                        } else if (op == 1) {
+                            value = double(luaL_checkinteger(L, 2));
+                        } else if (op == 2) {
+                            value = luaL_checknumber(L, 2);
+                        }
+                        if (op == 7 && !lua_isnoneornil(L, 2)) {
+                            fade = number(L, 2);
+                        }
+                        bool failed = false;
+                        try {
+                            Animators::prepare(a, c.object.scene->assets_);
+                            if (op <= 2) {
+                                Animators::setParameter(a,
+                                                        name,
+                                                        op == 0   ? AnimatorParameterType::Bool
+                                                        : op == 1 ? AnimatorParameterType::Int
+                                                                  : AnimatorParameterType::Float,
+                                                        value);
+                            } else if (op <= 5) {
+                                const auto found = a.values.find(name);
+                                const auto type = op == 3   ? AnimatorParameterType::Bool
+                                                  : op == 4 ? AnimatorParameterType::Int
+                                                            : AnimatorParameterType::Float;
+                                if (found == a.values.end() || found->second.type != type) {
+                                    throw std::runtime_error(
+                                        "Animator parameter missing or type mismatch");
+                                }
+                                if (op == 3) {
+                                    lua_pushboolean(L, found->second.number != 0);
+                                } else if (op == 4) {
+                                    lua_pushinteger(L, lua_Integer(found->second.number));
+                                } else {
+                                    lua_pushnumber(L, found->second.number);
+                                }
+                                return 1;
+                            } else if (op == 11) {
+                                lua_pushboolean(
+                                    L, Animators::findState(*a.definition, name) != nullptr);
+                                return 1;
+                            } else {
+                                if ((op == 6 || op == 7) &&
+                                    !Animators::findState(*a.definition, name)) {
+                                    throw std::runtime_error("Unknown Animator state");
+                                }
+                                if (!std::isfinite(fade) || fade < 0 || fade > 3600) {
+                                    throw std::runtime_error("Fade must be 0..3600 seconds");
+                                }
+                                const auto action = op == 6   ? AnimatorAction::Play
+                                                    : op == 7 ? AnimatorAction::CrossFade
+                                                    : op == 8 ? AnimatorAction::Stop
+                                                    : op == 9 ? AnimatorAction::Pause
+                                                              : AnimatorAction::Resume;
+                                if (!a.request(action, name, fade)) {
+                                    throw std::runtime_error("Animator command queue is full");
+                                }
+                            }
+                        } catch (const std::exception& e) {
+                            a.error = e.what();
+                            failed = true;
+                        }
+                        if (failed) {
+                            return luaL_error(L, "%s", a.error.c_str());
+                        }
+                        return 0;
+                    },
+                    2);
+                return 1;
+            }
+        }
+        return luaL_error(L, "Unknown Animator property: %s", key);
+    }
     if (c.type == 16) {
         const auto& a = c.object.world->get<Animation>(c.object.entity);
         for (int i = 0; i < 6; ++i) {
@@ -2310,6 +2476,33 @@ int LuaScene::componentIndex(lua_State* L) {
 }
 int LuaScene::componentNewIndex(lua_State* L) {
     const auto c = *static_cast<Component*>(luaL_checkudata(L, 1, "Component"));
+    if (c.type == 33) {
+        if (!c.object.world->alive(c.object.entity) || !has(c.object, 33)) {
+            return luaL_error(L, "Animator no longer exists");
+        }
+        auto& a = c.object.world->get<Animator>(c.object.entity);
+        const char* key = luaL_checkstring(L, 2);
+        if (!std::strcmp(key, "controller")) {
+            const char* path = luaL_checkstring(L, 3);
+            if (!Animators::controllerAsset(path)) {
+                return luaL_error(L, "Expected project-relative .controller asset");
+            }
+            a.controller = path;
+            a.definition.reset();
+            a.loadedKey.clear();
+            return 0;
+        }
+        if (!std::strcmp(key, "enabled") || !std::strcmp(key, "playOnStart")) {
+            luaL_checktype(L, 3, LUA_TBOOLEAN);
+            if (!std::strcmp(key, "enabled")) {
+                a.enabled = lua_toboolean(L, 3);
+            } else {
+                a.playOnStart = lua_toboolean(L, 3);
+            }
+            return 0;
+        }
+        return luaL_error(L, "Unknown or read-only Animator property");
+    }
     if (c.type == 31) {
         if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
             return luaL_error(L, "Decal no longer exists");

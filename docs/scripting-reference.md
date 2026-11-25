@@ -191,7 +191,7 @@ Use getComponent(Type) for attached self, getComponent(object, Type) for an expl
 - `overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil`
 - `overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil`
 - `overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil`
-- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
 - `overload fun(componentType:ComponentType):any`
 
 ```lua
@@ -1420,7 +1420,7 @@ if health then debug.log(health.health) end
 
 ### GameObject.getComponent
 
-`getComponent(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`getComponent(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
 
 - `getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
 
@@ -1431,7 +1431,7 @@ object:getComponent(Transform)
 
 ### GameObject.getComponentInParent
 
-`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
 
 - `getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent`
 
@@ -1442,7 +1442,7 @@ object:getComponentInParent(RigidBody)
 
 ### GameObject.getComponentInChildren
 
-`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
 
 - `getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants`
 
@@ -1453,7 +1453,7 @@ object:getComponentInChildren(Camera)
 
 ### GameObject.findComponentInParent
 
-`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
 
 - `findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent`
 
@@ -1464,7 +1464,7 @@ object:findComponentInParent(RigidBody)
 
 ### GameObject.findComponentInChildren
 
-`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
 
 - `findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren`
 
@@ -1475,7 +1475,7 @@ object:findComponentInChildren(Camera)
 
 ### GameObject.addComponent
 
-`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal`
+`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal`
 
 - `addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner`
 
@@ -5360,6 +5360,124 @@ local recoil = self:getComponent(Recoil)
 if recoil then recoil:setSequence({{time=0,strength=1},{time=0.1,strength=0.8}}) end
 ```
 
+## Animator
+
+### Animator.setBool
+
+`setBool(self:Animator, name:string, value:boolean) Set a declared Bool parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:setBool("Grounded", true)
+```
+
+### Animator.setInt
+
+`setInt(self:Animator, name:string, value:integer) Set a declared Int parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:setInt("Mode", 1)
+```
+
+### Animator.setFloat
+
+`setFloat(self:Animator, name:string, value:number) Set a declared Float parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:setFloat("Speed", 2.5)
+```
+
+### Animator.getBool
+
+`getBool(self:Animator, name:string):boolean Read a declared Bool parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:getBool("Grounded")
+```
+
+### Animator.getInt
+
+`getInt(self:Animator, name:string):integer Read a declared Int parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:getInt("Mode")
+```
+
+### Animator.getFloat
+
+`getFloat(self:Animator, name:string):number Read a declared Float parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:getFloat("Speed")
+```
+
+### Animator.play
+
+`play(self:Animator, state:string) Enter/restart a state with no fade`
+
+- `audio:play() - restart assigned clip`
+
+```lua
+local animator = self:getComponent(Animator)
+animator:play("Idle")
+```
+
+### Animator.crossFade
+
+`crossFade(self:Animator, state:string, seconds?:number) Enter/restart a state with a fade; default 0.2 seconds`
+
+```lua
+local animator = self:getComponent(Animator)
+animator:crossFade("Idle", 0.2)
+```
+
+### Animator.stop
+
+`stop(self:Animator) Stop state evaluation and rewind backend to its first pose`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:stop()
+```
+
+### Animator.pause
+
+`pause(self:Animator) Pause state evaluation and playback`
+
+- `audio:pause()`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:pause()
+```
+
+### Animator.resume
+
+`resume(self:Animator) Resume a paused state machine`
+
+- `audio:resume()`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:resume()
+```
+
+### Animator.hasState
+
+`hasState(self:Animator, state:string):boolean Test a controller state name or ID`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:hasState("Idle")
+```
+
 ## Component fields and type tokens
 
 Component type names such as `Transform`, `Skybox`, `PointLight` and `AudioSource`
@@ -6142,6 +6260,19 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | --- | --- |
 | `time` | `number Seconds from sequence start, 0..3600; sorted ascending.` |
 | `strength` | `number Optional impulse multiplier, 0..10; default 1.` |
+
+### Animator fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `controller` | `string Project-relative .controller file` |
+| `enabled` | `boolean Pause/resume the state machine and its backend` |
+| `playOnStart` | `boolean Enter the controller entry state automatically; default true` |
+| `currentState` | `string Read-only current state name` |
+| `stateTime` | `number Read-only elapsed playback seconds in the current state` |
+| `isPlaying` | `boolean Read-only; state machine is running, enabled and unpaused (it may hold a finished nonlooping state)` |
+| `paused` | `boolean Read-only paused flag` |
+| `error` | `string Read-only controller/playback diagnostic` |
 
 ## Skybox1 to Skybox2 transition
 

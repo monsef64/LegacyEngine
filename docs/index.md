@@ -58,3 +58,5 @@ tests and HTML builder above. Use `python3 docs/generate_reference.py --check` t
 check that the committed reference is current.
 
 - [Camera recoil: springs, timed bursts and sequences](recoil.md)
+
+- [Animator state-machine controllers](animator.md): graph authoring, parameters, transitions and fades.

@@ -102,6 +102,9 @@ for name in ('lockCursor', 'unlockCursor', 'hideCursor', 'showCursor', 'isCursor
     GLOBALS[name] = f'local result = {name}()\ndebug.log(result)'
 
 METHOD_ARGS = {
+ 'setBool': '"Grounded", true', 'setInt': '"Mode", 1', 'setFloat': '"Speed", 2.5',
+ 'getBool': '"Grounded"', 'getInt': '"Mode"', 'getFloat': '"Speed"', 'hasState': '"Idle"',
+
  'setDestination': 'Vector3(8, 0, 4)',
  'setSpeed': '4.5',
  'setHeightOffset': '1.0',
@@ -289,6 +292,9 @@ def example(entry):
             prefix += '\ncomponent.clip = AudioClip("Audio/example.wav")'
     if owner=='GameObject' and name in ('onTriggerEnter','onTriggerStay','onTriggerExit','onCollisionEnter','onCollisionStay','onCollisionExit'):
         return f'self.{name} = function(collider)\n    if collider then debug.log(collider.gameObject:getName()) end\nend'
+    if owner == 'Animator' and name in ('play', 'crossFade'):
+        args = '"Idle", 0.2' if name == 'crossFade' else '"Idle"'
+        return f'local animator = self:getComponent(Animator)\nanimator:{name}({args})'
     if owner == 'Animation' and name == 'crossFade':
         return 'local animation = self:getComponent(Animation)\nanimation:crossFade("Character_data/Animation_1.leanim", 0.3)'
     if name == 'linkToCharacter':

@@ -1,0 +1,111 @@
+{
+  "format": "LegacyAnimator",
+  "version": 1,
+  "entry": "idle",
+  "parameters": [
+    {
+      "name": "Grounded",
+      "type": "Bool",
+      "default": 1
+    },
+    {
+      "name": "Speed",
+      "type": "Float",
+      "default": 0
+    },
+    {
+      "name": "Mode",
+      "type": "Int",
+      "default": 0
+    }
+  ],
+  "states": [
+    {
+      "id": "idle",
+      "name": "Idle",
+      "clip": "AnimatorDemo/Idle.leanim",
+      "loop": true,
+      "x": 100,
+      "y": 0
+    },
+    {
+      "id": "move",
+      "name": "Move",
+      "clip": "AnimatorDemo/Move.leanim",
+      "loop": true,
+      "x": 390,
+      "y": 0
+    },
+    {
+      "id": "jump",
+      "name": "Jump",
+      "clip": "AnimatorDemo/Jump.leanim",
+      "loop": false,
+      "x": 250,
+      "y": 180
+    }
+  ],
+  "transitions": [
+    {
+      "from": "*",
+      "to": "jump",
+      "fade": 0.12,
+      "hasExitTime": false,
+      "exitTime": 1,
+      "conditions": [
+        {
+          "parameter": "Grounded",
+          "comparison": "==",
+          "value": 0
+        },
+        {
+          "parameter": "Mode",
+          "comparison": "==",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "from": "idle",
+      "to": "move",
+      "fade": 0.2,
+      "hasExitTime": false,
+      "exitTime": 1,
+      "conditions": [
+        {
+          "parameter": "Speed",
+          "comparison": ">",
+          "value": 0.1
+        }
+      ]
+    },
+    {
+      "from": "move",
+      "to": "idle",
+      "fade": 0.2,
+      "hasExitTime": false,
+      "exitTime": 1,
+      "conditions": [
+        {
+          "parameter": "Speed",
+          "comparison": "<=",
+          "value": 0.1
+        }
+      ]
+    },
+    {
+      "from": "jump",
+      "to": "idle",
+      "fade": 0.15,
+      "hasExitTime": true,
+      "exitTime": 1,
+      "conditions": [
+        {
+          "parameter": "Grounded",
+          "comparison": "==",
+          "value": 1
+        }
+      ]
+    }
+  ]
+}

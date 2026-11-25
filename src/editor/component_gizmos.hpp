@@ -49,6 +49,7 @@ inline SceneComponentBadge sceneComponentBadge(World& world, Entity entity) {
             BADGE(28, TPSCamera, "\xef\x80\xbd");
             BADGE(29, NavMeshAgent, "\xef\x80\x93");
             BADGE(30, NavMeshObstacle, "\xef\x86\xb2");
+            BADGE(31, Animator, "\xef\x80\x88");
             BADGE(32, UI, "\xef\x80\x93");
             BADGE(33, Decal, "\xef\x87\x85");
             BADGE(34, Recoil, "\xef\x80\xbd");
@@ -66,8 +67,8 @@ inline SceneComponentBadge sceneComponentBadge(World& world, Entity entity) {
             }
         }
     }
-    for (int id : {3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15, 16, 17,
-                   18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34}) {
+    for (int id : {3,  2,  1,  6,  9,  10, 11, 12, 8,  7,  5,  13, 14, 15, 16, 17, 18,
+                   19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34}) {
         auto result = badge(id);
         if (result.name) {
             return result;

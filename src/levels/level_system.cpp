@@ -283,7 +283,7 @@ LevelSystem::Transition LevelSystem::prepare(AssetManager assets,
             Terrains::load(t, assets);
         }
     });
-    // Serialize after prefab refresh so child assets and exposed overrides are included.
+    // Follow the serialized instance tree, including saved child assets and overrides.
     const auto scene =
         ProjectIO::encode(result.level->world, result.level->source, result.level->camera, meshes);
     std::set<std::string> members;
@@ -291,6 +291,9 @@ LevelSystem::Transition LevelSystem::prepare(AssetManager assets,
     result.assets.insert(members.begin(), members.end());
     std::size_t audioBytes = 0;
     for (const auto& path : result.assets) {
+        if (Animators::controllerAsset(path)) {
+            (void)Animators::loadController(assets, path);
+        }
         if (Prefabs::asset(path)) {
             (void)Prefabs::load(assets, path, meshes);
         }

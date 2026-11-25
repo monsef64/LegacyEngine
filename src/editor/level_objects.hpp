@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/animator_controller.hpp"
 
 #include "assets/assets.hpp"
 #include "core/components.hpp"
@@ -120,6 +121,9 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
         world.add(copy, Navigation::parseAgent(Navigation::agentSettings(*a)));
     }
     component(Raycast{});
+    if (const auto* a = sourceWorld.tryGet<Animator>(source)) {
+        world.add(copy, Animators::parse(Animators::settings(*a)));
+    }
     component(Animation{});
     component(ParticleSystem{});
     component(LightShafts{});

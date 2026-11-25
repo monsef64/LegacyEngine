@@ -1,0 +1,38 @@
+{
+  "format": "LegacyEngineAnimation",
+  "version": 1,
+  "duration": 0.6,
+  "tracks": [
+    {
+      "target": "",
+      "property": "Transform.scale",
+      "keys": [
+        {
+          "time": 0.0,
+          "value": [
+            1.08,
+            0.95,
+            1
+          ]
+        },
+        {
+          "time": 0.3,
+          "value": [
+            0.95,
+            1.08,
+            1
+          ]
+        },
+        {
+          "time": 0.6,
+          "value": [
+            1.08,
+            0.95,
+            1
+          ]
+        }
+      ]
+    }
+  ],
+  "events": []
+}

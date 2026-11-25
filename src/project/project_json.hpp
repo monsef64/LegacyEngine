@@ -248,7 +248,7 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"TPSCamera", {{"settings", 'j'}, {"target", 'i'}}},
     {"NavMeshAgent", {{"settings", 'j'}}},
     {"NavMeshObstacle", {{"settings", 'j'}}},
-    // Reserved legacy slot: consumed on load only; no Animator runtime/editor remains.
+    // Controller-backed Animator reuses the reserved slot; old settings are ignored.
     {"Animator", {{"settings", 'j'}}},
     {"UI", {{"enabled", 'b'}, {"rml", 's'}, {"rcss", 's'}}},
     {"Decal", {{"settings", 'j'}}},
