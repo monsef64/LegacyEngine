@@ -301,6 +301,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         renderer.updateSkyboxFades(world, dt);
         updateHierarchy(world);
         navigation.update(world, dt);
+            for (const auto& event : navigation.events) notify(event.first,event.second.c_str());
         updateHierarchy(world);
         Terrains::update(world, assets);
         physics.update(world, dt, [&](float fixed) {
@@ -451,6 +452,7 @@ int main(int, char**) {
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
         window = SDL_CreateWindow(package.metadata.at("name").get<std::string>().c_str(),
                                   1280,
                                   720,

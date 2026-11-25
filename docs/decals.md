@@ -49,3 +49,12 @@ in the Asset browser and choose **Copy texture to Assets folder...**, then selec
 a folder inside the project's Assets directory. Existing files are not replaced.
 The selected Decal's projector box is shown in the editor; an opaque surface must
 intersect that box to receive the projected texture.
+
+## Receiver layers
+
+**Receiver layers** in the Decal Inspector selects which opaque surfaces receive
+the projection. Unchecked layers do not receive it; they still occlude surfaces
+behind them. All layers are selected by default for older scenes. Meshes, terrain
+and terrain foliage use their effective GameObject layer. The mask is saved with
+the component and is available to scripts as `decal.layerMask` (32-bit unsigned
+bitmask). Transparent surfaces remain unsupported receivers.

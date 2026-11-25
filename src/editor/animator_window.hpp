@@ -12,7 +12,7 @@ class AnimatorWindow {
     Entity owner_;
     bool dirty_ = false, assign_ = false;
     int state_ = -1, transition_ = -1;
-    ImVec2 pan_{220, 80};
+    ImVec2 pan_{220, 80}, contextPosition_{};
     static bool text(const char* label, std::string& value, std::size_t capacity = 129) {
         std::vector<char> buffer(capacity);
         std::snprintf(buffer.data(), buffer.size(), "%s", value.c_str());
@@ -398,12 +398,19 @@ class AnimatorWindow {
             auto& s = graph_.states[i];
             const auto low = point(s.x, s.y), high = point(s.x + 170, s.y + 60);
             const bool active = live && live->state == s.id && live->playing;
-            draw->AddRectFilled(low,
-                                high,
-                                active                 ? IM_COL32(35, 155, 85, 255)
-                                : s.id == graph_.entry ? IM_COL32(190, 125, 30, 255)
-                                                       : IM_COL32(100, 105, 112, 255),
-                                6);
+            draw->AddRectFilled(
+                {low.x + 4, low.y + 5}, {high.x + 4, high.y + 5}, IM_COL32(0, 0, 0, 95), 7);
+            const ImU32 top = active                 ? IM_COL32(65, 145, 115, 255)
+                              : s.id == graph_.entry ? IM_COL32(180, 124, 62, 255)
+                                                     : IM_COL32(100, 119, 148, 255);
+            const ImU32 bottom = active                 ? IM_COL32(28, 76, 65, 255)
+                                 : s.id == graph_.entry ? IM_COL32(101, 65, 33, 255)
+                                                        : IM_COL32(48, 60, 80, 255);
+            draw->AddRectFilledMultiColor(low, high, top, top, bottom, bottom);
+            draw->AddLine(
+                {low.x + 2, low.y + 2}, {high.x - 2, low.y + 2}, IM_COL32(255, 255, 255, 65), 1);
+            draw->AddLine(
+                {low.x + 1, low.y + 28}, {high.x - 1, low.y + 28}, IM_COL32(0, 0, 0, 70), 1);
             draw->AddRect(low,
                           high,
                           int(i) == state_ ? IM_COL32(255, 210, 70, 255)
@@ -459,9 +466,38 @@ class AnimatorWindow {
             pan_.x += ImGui::GetIO().MouseDelta.x;
             pan_.y += ImGui::GetIO().MouseDelta.y;
         }
-        if (background && edgeHit >= 0 && ImGui::IsMouseClicked(0)) {
+        if (background && ImGui::IsMouseClicked(0)) {
             transition_ = edgeHit;
             state_ = -1;
+            if (edgeHit < 0) {
+                linking_.clear();
+            }
+        }
+        if (background && ImGui::IsMouseReleased(ImGuiMouseButton_Right) &&
+            !ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+            contextPosition_ = {mouse.x - origin.x - pan_.x, mouse.y - origin.y - pan_.y};
+            ImGui::OpenPopup("Graph actions");
+        }
+        if (ImGui::BeginPopup("Graph actions")) {
+            ImGui::BeginDisabled(runtime);
+            if (ImGui::MenuItem("Add animation state")) {
+                addState("", contextPosition_);
+            }
+            if (ImGui::MenuItem("Link from Any State")) {
+                linking_ = "*";
+            }
+            ImGui::EndDisabled();
+            if (ImGui::MenuItem("Unselect")) {
+                state_ = transition_ = -1;
+                linking_.clear();
+            }
+            if (ImGui::MenuItem("Reset graph view")) {
+                pan_ = {220, 80};
+            }
+            if (ImGui::MenuItem("Cancel transition", nullptr, false, !linking_.empty())) {
+                linking_.clear();
+            }
+            ImGui::EndPopup();
         }
         if (ImGui::BeginDragDropTarget()) {
             if (!runtime) {

@@ -25,7 +25,6 @@
 #include "editor/animator_window.hpp"
 #include "editor/asset_browser.hpp"
 #include "editor/asset_preview_renderer.hpp"
-#include "editor/component_gizmos.hpp"
 #include "editor/create_menu.hpp"
 #include "editor/dock_workspace.hpp"
 #include "editor/editor_history.hpp"
@@ -195,6 +194,7 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, multisamples > 0 ? 1 : 0);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, multisamples);
 
@@ -1999,6 +1999,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                      editAllowed && !playMode.active(),
                      &history);
         ImGui::EndDisabled();
+        if (scripts.clearComponentOutputRequested) {
+            scripts.clearComponentOutputRequested = false;
+            componentScripts.clearMessages();
+        }
         browser.projectFolder = currentProject.empty()
                                     ? browser.assets.root
                                     : std::filesystem::absolute(currentProject).parent_path();
@@ -2451,23 +2455,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     camera,
                     sceneRect,
                     editAllowed && !playbackHovered && !cameraLooking && !editor.dragging());
-                Entity clickedBadge;
-                const bool componentBadgeHovered = drawSceneComponentGizmos(
-                    world,
-                    camera,
-                    sceneRect,
-                    selectedEntity,
-                    editAllowed && sceneHovered && !cameraLooking && !orientationInteracting &&
-                        !editor.dragging() && !ImGui::IsAnyItemActive() &&
-                        !cameraModifiersHeld(SDL_GetModState()),
-                    clickedBadge);
-                if (world.alive(clickedBadge)) {
-                    editor.finish(world);
-                    selectedEntity = clickedBadge;
-                    hierarchySelection = {selectedEntity};
-                    clicking = false;
-                    browser.selected.clear();
-                }
                 const auto* sceneRiver = world.tryGet<River>(selectedEntity);
                 bool curveEditing = sceneRiver && sceneRiver->editCurve;
                 bool curveInteracting =
@@ -2486,7 +2473,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                             selectedEntity,
                             !projectDialog.pending() && !browser.dialog.pending() &&
                                 !orientationInteracting && !playbackHovered &&
-                                !componentBadgeHovered && !cameraLooking &&
+                                !cameraLooking &&
                                 !terrainEditor.active(world, selectedEntity) && !curveEditing &&
                                 (!world.has<BoneAttachment>(selectedEntity) ||
                                  !world.get<BoneAttachment>(selectedEntity).enabled) &&
@@ -2738,6 +2725,12 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         updateHierarchy(world);
         if (playMode.playing()) {
             navigationWindow.system.update(world, seconds);
+            for (const auto& event : navigationWindow.system.events) {
+                if (isActive(world,event.first)) {
+                    componentScripts.objectEvent(event.first,event.second.c_str());
+                    scripts.console().objectEvent(event.first,event.second.c_str());
+                }
+            }
             updateHierarchy(world);
         }
         profiler.checkpoint(ProfilePart::Hierarchy);

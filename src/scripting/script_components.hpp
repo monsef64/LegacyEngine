@@ -65,6 +65,12 @@ class ScriptComponents {
         entries_.clear();
         world_ = nullptr;
     }
+    void clearMessages() {
+        for (auto& entry : entries_) {
+            entry.error.clear();
+            if (entry.console) entry.console->clear();
+        }
+    }
     std::vector<std::string> messages() const {
         std::vector<std::string> lines;
         for (const auto& e : entries_) {

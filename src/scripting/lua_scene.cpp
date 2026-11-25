@@ -1464,6 +1464,8 @@ int LuaScene::componentIndex(lua_State* L) {
             lua_pushnumber(L, d.height);
         } else if (!std::strcmp(key, "depth")) {
             lua_pushnumber(L, d.depth);
+        } else if (!std::strcmp(key, "layerMask")) {
+            lua_pushinteger(L,d.layerMask);
         } else if (!std::strcmp(key, "sortingOrder")) {
             lua_pushinteger(L, d.sortingOrder);
         } else {
@@ -2515,7 +2517,7 @@ int LuaScene::componentNewIndex(lua_State* L) {
         }
         const char* path = texture ? luaL_checkstring(L, 3) : nullptr;
         const Vec3 tint = color ? vectorArgument(L, 3) : Vec3{};
-        float value = (!enabled && !texture && !color) ? float(luaL_checknumber(L, 3)) : 0;
+        double value = (!enabled && !texture && !color) ? luaL_checknumber(L, 3) : 0;
         bool ok = true;
         {
             auto d = c.object.world->get<Decal>(c.object.entity);
@@ -2533,6 +2535,8 @@ int LuaScene::componentNewIndex(lua_State* L) {
                 d.opacity = value;
             } else if (!std::strcmp(key, "depth")) {
                 d.depth = value;
+            } else if (!std::strcmp(key,"layerMask") && std::isfinite(value) && value >= 0 && double(value) <= 4294967295.0 && std::floor(value) == value) {
+                d.layerMask = static_cast<std::uint32_t>(luaL_checkinteger(L,3));
             } else if (!std::strcmp(key, "sortingOrder") && std::isfinite(value) &&
                        value >= -10000 && value <= 10000) {
                 d.sortingOrder = int(value);

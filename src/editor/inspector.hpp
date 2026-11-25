@@ -1278,13 +1278,23 @@ inline void drawInspector(World& world,
                         assetPicker("Texture", edited.texture, assets, [](const std::string& path) {
                             return materialTexturePath(path);
                         });
-                        ImGui::ColorEdit3("Tint", &edited.color.x);
+                        EditorValues::ColorEdit3("Tint", &edited.color.x);
                         EditorValues::SliderFloat("Opacity", &edited.opacity, 0, 1);
                         EditorValues::DragFloat("Width", &edited.width, .01f, .001f, 1000);
                         EditorValues::DragFloat("Height", &edited.height, .01f, .001f, 1000);
                         EditorValues::DragFloat(
                             "Projection depth", &edited.depth, .01f, .001f, 1000);
                         ImGui::InputInt("Sorting order", &edited.sortingOrder);
+                        if (ImGui::TreeNode("Receiver layers")) {
+                            for (int i=0;i<32;++i) if (!LayerSettings::names[i].empty()) {
+                                bool receive = (edited.layerMask & (1u<<i)) != 0;
+                                if (ImGui::Checkbox(LayerSettings::names[i].c_str(),&receive)) {
+                                    if (receive) edited.layerMask |= 1u<<i;
+                                    else edited.layerMask &= ~(1u<<i);
+                                }
+                            }
+                            ImGui::TreePop();
+                        }
                         try {
                             *d = Decals::parse(Decals::settings(edited));
                         } catch (...) {

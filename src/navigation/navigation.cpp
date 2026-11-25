@@ -565,6 +565,7 @@ void System::rebuildDebug() {
     }
 }
 void System::update(World& world, float seconds) {
+    events.clear();
     const float dt = std::clamp(seconds, 0.f, .1f);
     obstacles_.clear();
     std::ostringstream obstacleState;
@@ -601,6 +602,27 @@ void System::update(World& world, float seconds) {
         ++revision_;
     }
     world.each<NavMeshAgent, Transform>([&](Entity e, NavMeshAgent& a, Transform& t) {
+        struct StatusEvent {
+            Entity entity;
+            NavMeshAgent& agent;
+            std::string before;
+            std::vector<std::pair<Entity, std::string>>& events;
+            ~StatusEvent() {
+                if (agent.status == before) {
+                    return;
+                }
+                events.emplace_back(entity, "onNavMeshAgentStatusChanged");
+                const char* event = agent.status == "Moving"        ? "onNavMeshAgentMoving"
+                                    : agent.status == "Arrived"     ? "onNavMeshAgentArrived"
+                                    : agent.status == "Blocked / agent left navmesh" ? "onNavMeshAgentBlocked"
+                                    : agent.status == "Unreachable destination" ? "onNavMeshAgentUnreachable"
+                                    : agent.status == "Stopped"     ? "onNavMeshAgentStopped"
+                                                                    : nullptr;
+                if (event) {
+                    events.emplace_back(entity, event);
+                }
+            }
+        } changed{e, a, a.status, events};
         a.velocity = {};
         if (!a.enabled || !isActive(world, e)) {
             a.status = "Disabled";

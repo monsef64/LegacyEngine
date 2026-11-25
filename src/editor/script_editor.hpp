@@ -19,6 +19,7 @@ class ScriptEditor {
   public:
     ScriptEditor();
     std::vector<std::string> componentOutput;
+    bool clearComponentOutputRequested = false;
     void draw(const EditorLayout* layout = nullptr,
               bool executionEnabled = true,
               AssetManager* assets = nullptr,

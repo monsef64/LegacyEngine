@@ -1,4 +1,5 @@
 #include "rendering/renderer.hpp"
+#include "project/layers.hpp"
 #include "audio/audio_gizmo.hpp"
 #include "core/profiler.hpp"
 #include "core/worker_pool.hpp"
@@ -627,7 +628,9 @@ void Renderer::draw(World& world,
     glDisable(GL_SCISSOR_TEST);
     glViewport(x, y, width, height);
     glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glStencilMask(0xff);
+    glClearStencil(0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     {
         ProfileScope scope(ProfilePart::Lights);
@@ -800,6 +803,9 @@ void Renderer::draw(World& world,
     RenderVisibility::Scope visibilityScope(visibilityPreview ? &world : nullptr,
                                             visibilityPreview ? &hiddenEntities : nullptr,
                                             visibilityPreview ? &visibleBounds : nullptr);
+    glEnable(GL_STENCIL_TEST);
+    glStencilMask(0xff);
+    glStencilOp(GL_KEEP,GL_KEEP,GL_REPLACE);
     terrainRenderer_.draw(
         world, materialAssets_, viewProjection, cameraPosition, litProgram_, lights_, &occlusion);
     glUseProgram(litProgram_);
@@ -969,12 +975,16 @@ void Renderer::draw(World& world,
                 transparent.push_back(
                     {t, &r, std::move(material), dot(delta, delta), transparent.size()});
             } else {
+                glStencilFunc(GL_ALWAYS,LayerSettings::effective(world,e),0xff);
                 drawMesh(t, r, material);
             }
         });
     // Explicit insertion order preserves equal-depth behavior without stable_sort's temporary
     // buffer.
     foliage_.draw(world, materialAssets_, viewProjection, cameraPosition, skyAmbient);
+    glDisable(GL_STENCIL_TEST);
+    glStencilMask(0xff);
+    glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP);
     decals_.draw(world, materialAssets_, viewProjection);
     std::sort(transparent.begin(), transparent.end(), [](const auto& a, const auto& b) {
         return a.distance == b.distance ? a.order < b.order : a.distance > b.distance;

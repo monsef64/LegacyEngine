@@ -775,16 +775,6 @@ in exported games, the text is centered in that window. Level transitions show
 the same text in the rendered Game surface while staged assets load. Dependency
 preloading remains enabled; scripts still start only after required assets are ready.
 
-### Scene component gizmos
-
-Scene view shows one component icon per active GameObject at its world-space
-origin. The first attached component in Inspector order supplies the icon;
-Transform, ObjectName and editor metadata never produce an icon. Parents are
-visited before children, so a parent wins when icons overlap at the same screen
-location. Click an unselected object's icon to select it; selected objects keep
-normal transform-handle interaction. Icons are editor-only and do not appear in
-Game or exported builds. Camera preview and orientation-cube areas remain clear.
-
 ### Saving added prefab children and keeping instance assignments
 
 On a linked prefab instance (or one of its children), **Inspector > Save to Prefab**

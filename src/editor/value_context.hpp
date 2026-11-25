@@ -208,12 +208,26 @@ inline bool Checkbox(const char* l, bool* v) {
     return context(v, 1) || c;
 }
 inline bool ColorEdit3(const char* l, float* v, ImGuiColorEditFlags flags = 0) {
-    bool c = ImGui::ColorEdit3(l, v, flags | ImGuiColorEditFlags_NoOptions);
-    return context(v,
-                   3,
-                   0.f,
-                   (flags & ImGuiColorEditFlags_HDR) ? std::numeric_limits<float>::max() : 1.f) ||
-           c;
+    ImGui::PushID(l);
+    bool changed = ImGui::ColorEdit3(l, v, flags | ImGuiColorEditFlags_NoOptions);
+    changed |= context(v,
+                       3,
+                       0.f,
+                       (flags & ImGuiColorEditFlags_HDR) ? std::numeric_limits<float>::max() : 1.f,
+                       "WholeColor");
+    ImGui::PopID();
+    return changed;
+}
+inline bool ColorEdit4(const char* l, float* v, ImGuiColorEditFlags flags = 0) {
+    ImGui::PushID(l);
+    bool changed = ImGui::ColorEdit4(l, v, flags | ImGuiColorEditFlags_NoOptions);
+    changed |= context(v,
+                       4,
+                       0.f,
+                       (flags & ImGuiColorEditFlags_HDR) ? std::numeric_limits<float>::max() : 1.f,
+                       "WholeColor");
+    ImGui::PopID();
+    return changed;
 }
 inline bool Combo(const char* l, int* v, const char* items, int height = -1) {
     bool c = ImGui::Combo(l, v, items, height);
