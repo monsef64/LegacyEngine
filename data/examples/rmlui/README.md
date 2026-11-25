@@ -1,12 +1,12 @@
-# UI component HUD example
+# Canvas component HUD example
 
 1. Import `main.rml`, `hud.rcss` and `hud.lua` into any folder inside your
    project's Assets. There is **no required UI folder or automatic entry point**.
-2. Create/select a GameObject. Choose **Add Component > UI** and assign
+2. Create/select a GameObject. Choose **Add Component > Canvas** and assign
    `main.rml` to **RML asset** and `hud.rcss` to **RCSS asset**. Both are required.
 3. Attach `hud.lua` to that object's **LegacyScript** component. Alternatively,
-   attach it to another object and drag the UI header (or the UI's GameObject)
-   onto the script's exported **HUD (UI)** slot. Use only one HUD driver.
+   attach it to another object and drag the Canvas header (or the Canvas's GameObject)
+   onto the script's exported **HUD (Canvas)** slot. Use only one HUD driver.
 4. Press Play, focus Game and unlock the mouse if your player script locks it.
    No Camera or mesh is required for the overlay.
 5. Click **Collect supply**, press **H**, then **Use supply**. The example uses
@@ -24,7 +24,7 @@ browser: no JavaScript or full DOM Lua binding is provided.
 
 API:
 
-- `local gui = self:getComponent(UI)` or `@export HUD UI`.
+- `local gui = self:getComponent(Canvas)` or `global Canvas HUD =`.
 - `gui:isLoaded()` returns a boolean (loading may finish after first onStart).
 - `gui:setText(id, plainText)` returns success and escapes markup.
 - `local token = gui:onClick(id, function() ... end)` registers once; `off(token)`

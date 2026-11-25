@@ -247,7 +247,7 @@ target_link_libraries(legacy_json PRIVATE legacy_simdjson zlibstatic libzstd_sta
 # Level storage/transitions have no dependency on Lua or the editor.
 add_library(legacy_levels STATIC src/levels/level_system.cpp)
 target_include_directories(legacy_levels PUBLIC src)
-target_link_libraries(legacy_levels PUBLIC legacy_json Threads::Threads)
+target_link_libraries(legacy_levels PUBLIC legacy_json legacy_audio Threads::Threads)
 target_link_libraries(lua_console PUBLIC legacy_levels)
 target_link_libraries(legacy_imgui PUBLIC legacy_json)
 
@@ -258,7 +258,7 @@ target_link_libraries(legacy_material_textures PUBLIC legacy_thumbnails)
 # Authenticated game data packages (Monocypher 4.0.2, BSD-2-Clause).
 add_library(legacy_game_export STATIC src/project/game_export.cpp third_party/monocypher/monocypher.c)
 target_include_directories(legacy_game_export PUBLIC src PRIVATE third_party/monocypher)
-target_link_libraries(legacy_game_export PUBLIC legacy_json)
+target_link_libraries(legacy_game_export PUBLIC legacy_json PRIVATE libzstd_static)
 if(WIN32)
   target_link_libraries(legacy_game_export PRIVATE bcrypt)
 endif()

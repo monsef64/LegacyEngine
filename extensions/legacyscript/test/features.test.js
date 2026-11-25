@@ -26,7 +26,7 @@ test('audio methods and creation completion',()=>{
 });
 
 test('Inspector exported field completion and hover',()=>{
- const text='@export target GameObject\n---@export speed number 5\n';
+ const text='global GameObject target\nglobal number speed = 5\n';
  const result=f.completion(...input(text));assert(result.some(x=>x.label==='target' && x.detail.includes('GameObject')));assert(result.some(x=>x.label==='speed'));
  assert.match(f.hover(...input(text+'target')).contents.value,/GameObject/);
 });
@@ -57,7 +57,7 @@ test('material methods and export-only Texture completion',()=>{
  const result=f.completion(...input('local mesh = self:getComponent(MeshRenderer)\nmesh:'));
  for(const name of ['setMaterial','setMaterialColor','setMaterialTexture','setMaterialNormalMap','setMaterialShader','setMaterialTiling','resetMaterialOverrides'])assert(result.some(x=>x.label===name));
  assert.match(f.hover(...input('mesh:setMaterialColor')).contents.value,/r:number/);
- const exported=f.completion(...input('@export albedo Texture\n'));
+ const exported=f.completion(...input('global Texture albedo\n'));
  assert(exported.some(x=>x.label==='albedo'));
 });
 
@@ -65,7 +65,7 @@ test('Skybox component scripting and HDR Texture export',()=>{
  const result=f.completion(...input('local sky=self:getComponent(Skybox)\nsky:'));
  for(const name of ['setType','setColor','setEnabled','setHDR','setFace','setTextures'])assert(result.some(x=>x.label===name));
  assert.match(f.hover(...input('sky:setTextures')).contents.value,/right:Texture/);
- assert(f.completion(...input('@export panorama Texture\n')).some(x=>x.label==='panorama'));
+ assert(f.completion(...input('global Texture panorama\n')).some(x=>x.label==='panorama'));
 });
 test('level transition globals have completion and hover',()=>{
  const result=f.completion(...input(''));

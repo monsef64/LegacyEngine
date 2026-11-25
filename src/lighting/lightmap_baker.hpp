@@ -61,6 +61,7 @@ struct Result {
 struct Triangle {
     Vec3 p[3], n[3];
     Vec3 albedo{.8f, .8f, .8f};
+    bool castShadow = true;
 };
 struct Bounds {
     Vec3 low{1e30f, 1e30f, 1e30f}, high{-1e30f, -1e30f, -1e30f};
@@ -71,7 +72,8 @@ struct Bounds {
     bool hit(Vec3 p, Vec3 d, float distance) const {
         const float origin[]{p.x, p.y, p.z}, dir[]{d.x, d.y, d.z};
         const float lo[]{low.x, low.y, low.z}, hi[]{high.x, high.y, high.z};
-        float near = 0, far = distance;
+        // Avoid the legacy near/far macros defined by Windows headers.
+        float entryDistance = 0, exitDistance = distance;
         for (int a = 0; a < 3; ++a) {
             if (std::abs(dir[a]) < 1e-12f) {
                 if (origin[a] < lo[a] || origin[a] > hi[a]) {
@@ -82,9 +84,9 @@ struct Bounds {
                 if (l > h) {
                     std::swap(l, h);
                 }
-                near = std::max(near, l);
-                far = std::min(far, h);
-                if (near > far) {
+                entryDistance = std::max(entryDistance, l);
+                exitDistance = std::min(exitDistance, h);
+                if (entryDistance > exitDistance) {
                     return false;
                 }
             }
@@ -144,7 +146,7 @@ class Bvh {
         }
         for (std::size_t j = n.first; j < n.first + n.count; ++j) {
             auto i = indices_[j];
-            if (i == ignore) {
+            if (i == ignore || !triangles_[i].castShadow) {
                 continue;
             }
             const auto& t = triangles_[i];
@@ -513,6 +515,7 @@ inline std::shared_ptr<Result> bake(const std::vector<Object>& objects,
         for (std::size_t i = 0; i < count; ++i) {
             Triangle tri;
             tri.albedo = albedo;
+            tri.castShadow = o.renderer.castShadow;
             for (int c = 0; c < 3; ++c) {
                 const auto& v = data.vertices[i * 3 + c];
                 tri.p[c] = t.position + rotateVector(t.rotation, v.position * t.scale);

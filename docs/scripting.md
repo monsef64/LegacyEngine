@@ -8,8 +8,8 @@ Existing `.lua` assets remain supported. Lifecycle callbacks are `onStart`,
 `onUpdate(deltaTime)`, `onFixedUpdate(deltaTime)` and `onDestroy`.
 
 ```lua
-@export target GameObject
-@export speed number 5
+global GameObject target =
+global float speed = 5
 
 function onStart()
     debug.log("Started", self:getName())
@@ -26,8 +26,25 @@ Define `Move` in Project → Input Settings first. Exported fields appear in the
 script's Inspector. Drag objects/components/assets into reference slots; **X**
 clears them. Supported values include number, boolean, string, GameObject, engine
 component types, Asset and AudioClip. Defaults are literals, not Lua expressions.
-Declarations must lead a line; `---@export` comments remain compatible. Bare
-`@export` is preprocessed before Lua runs, preserving error line numbers.
+Declarations use `global Type name = default` at the beginning of a line and are
+preprocessed before Lua runs, preserving error line numbers. Old `expose` declarations remain readable for existing projects; use `global`
+for new scripts. Integers use Lua integer values; float, bool and string defaults
+are supported, as are `Prefab` and `AnimationClip` asset fields.
+In the script editor, type `global` for API completion; in VS Code, use the
+**Global Inspector field** snippet (update/reinstall the bundled extension if it
+still shows the old declaration keyword). For example:
+
+```lua
+global float speed = 5.0
+global int health = 100
+global bool canMove = true
+global string playerName = "Player"
+```
+
+These declarations become editable fields on the attached script in Inspector.
+They are a LegacyScript extension, not a standard Lua keyword. The supported
+ordering is `global type name = default`, never `global name type default`.
+
 Exports currently become globals in the attachment's state: do not shadow them
 with local declarations. Missing references bind as `nil` at script startup.
 
@@ -41,6 +58,9 @@ introspection library. The Console offers **Copy all** and right-click **Copy me
 Lua has bounded memory/instructions and no filesystem/process/module access.
 
 See also [Audio and input](audio-input.md), [materials](materials.md), and [skyboxes](skybox.md) for more component scripting examples.
+
+The old annotation syntax is no longer recognized. Migrate fields to
+`global Type name = defaultValue`; saved field values remain matched by name and type.
 
 ## File-backed Script Editor
 
@@ -152,7 +172,12 @@ keeps its variables and resumes rather than rerunning onStart.
 Waits are non-blocking and only supported inside lifecycle/object callbacks or their `task` blocks, not
 at file top-level, inside custom/level event listeners, or in onDestroy. Each
 callback can have one pending invocation; other callbacks still run. Seconds are
-playing-time seconds (0–86400, zero waits until the next update). Pause and
+playing-time seconds (0–86400, zero waits until the next update). Editor Play
+and exported games use the same double-precision wait clock, separate from the
+capped movement/physics delta: slow rendered frames do not discard wait time.
+Continuations resume on an update, not between frames; a loop of short waits can
+therefore still accumulate frame-quantization delay. Level-loading time before
+the new scripts begin is excluded. Pause and
 inactivity freeze waits; Stop/runtime reset cancels them. `wait(audio.onAudioFinished)`
 listens for the next occurrence after the wait is reached, not a past occurrence.
 Destroying/removing the source cancels its waiting continuation. Instruction and
@@ -564,3 +589,160 @@ end
 Events fire when playback crosses their time, including loop crossings, not while
 scrubbing the editor timeline. The target must have an active, enabled script
 attachment. Clips serialize their events alongside component/transform tracks.
+
+## Global Inspector fields and prefab assets
+
+```lua
+global int score = 10
+global float speed = 4.5
+global bool canFire = true
+global string title = "Player"
+global Prefab enemy = "Prefabs/Enemy.prefab"
+global AnimationClip walk = "Animations/Walk.leanim"
+
+function onStart()
+    if enemy ~= "" then spawn(enemy, {x=0,y=1,z=0}, {x=0,y=0,z=0}) end
+    local animation = self:getComponent(Animation)
+    if animation and walk ~= "" then animation:playClip(walk) end
+end
+```
+
+Asset fields use the shared filtered picker and accept Asset browser drops.
+`Prefab` fields hold project-relative `.prefab` paths (not instantiated scene
+objects); pass them to `spawn`. `AnimationClip` fields hold `.leanim` path values,
+which can also be made with `AnimationClip("Animations/Walk.leanim")`.
+`animation:playClip(clip)` selects and restarts that clip without cross-fading.
+The existing `play()` uses the assigned clip; `crossFade(clip, seconds)` transitions
+from the current pose. First-time clip decoding runs on a worker; a new clip starts
+when ready while the outgoing animation can continue. Stop/Reset cancel pending
+playback and retain existing rewind/restore semantics. `animation.error` reports
+load errors. Clip caches live for the animation session and clear on Stop Play.
+
+`int`/`integer` fields become Lua integer values; `float`/`number` fields become
+Lua numbers; `bool`/`boolean` and `string` are also supported. Numeric Inspector
+fields/defaults retain the engine's ±1,000,000 limit. Defaults are literal values,
+not expressions or function calls. Scene-component types continue to hold scene
+references and are assigned separately from prefab asset paths.
+
+## Random helpers
+
+Use `Random.randomFloat(min, max)`, `Random.randomInt(min, max)`,
+`Random.randomBool()`, and `Random.randomString(length)`. The same functions are
+available globally as `randomFloat`, `randomInt`, `randomBool`, and `randomString`;
+Integer bounds are inclusive. Floating bounds must be finite with min ≤ max.
+Booleans are equally likely. Strings contain ASCII letters/digits, with a length
+of 0–4096. These helpers are for gameplay randomness, not passwords, encryption,
+or deterministic multiplayer/replays.
+
+## Animation wait events
+
+Animation exposes opaque next-occurrence tokens, just like AudioSource:
+
+```lua
+function onStart()
+    local animation = self:getComponent(Animation)
+    if not animation then return end
+    animation.loop = false
+    animation:play()
+    wait(animation.onStarted)
+    debug.log("Clip is loaded and playing")
+    wait(animation.onFinished)
+    debug.log("Natural end reached")
+end
+```
+
+Tokens: `onStarted`, `onFinished`, `onRestarted`, `onStopped`, `onPaused`, and
+`onResumed`. Use the exact capitalization **onFinished**, not `onFInished`.
+`onFinished` is natural **nonlooping** completion only. Stop/Reset while active
+emits `onStopped`, not Finished. Loop wrap and explicit replay emit `onRestarted`;
+explicit replay also emits Started. Switching to a different clip emits Started
+when ready. Several very short loops in one update coalesce to one Restarted
+notification. These events also retain the existing owner callback names
+`onAnimationStart`, `onAnimationFinish`, `onAnimationStopped`,
+`onAnimationPause`, `onAnimationResume`, plus `onAnimationRestarted`.
+
+`wait` subscribes when called, not when the token was first read, so an event that
+already happened is not latched. Subscribe immediately after issuing a playback
+command, or use an independent `task` for concurrent waits. Invalid clip loads set
+`animation.error` and do not emit Started/Finished; interruption does not finish a
+clip. Weapon logic should explicitly cancel/recover its waiting state on failure
+or interruption rather than assume every started clip finishes.
+
+Waits require a running lifecycle/object callback or owned task, not top-level
+code, GUI frames or global event listeners. Pause/inactivity freeze script tasks.
+Removing the watched Animation, replacing it on the same owner, deleting an owner,
+Stop Play, or replacing the runtime cancels the continuation. Audio waits retain
+their existing behavior.
+
+See [Camera recoil](recoil.md) for scripted impulses, timed bursts and sequences.
+
+## Asset preloading before level publication
+
+Both level-load APIs now stage decoding and dependency preloading before replacing
+the live world. `loadLevelAsync` also defers the initial level-file read. Scripts
+continue against the outgoing level until the destination preload gate succeeds;
+destination scripts and `onLevelLoaded` run afterward. Failures preserve the old
+level and report `onLevelFailedToLoad`/the level error. Project changes cancel the
+publication of outstanding worker results.
+
+The dependency walker follows level component assets, script literals, exposed
+asset overrides, assigned prefab assets and their dependencies, material/model
+references (including packed members), UI references and explicit
+`Settings/ExportAssets.json` includes. Unlike export packaging, this mode does not
+preload every registered level. Computed runtime paths cannot be inferred; include
+those assets explicitly. Newly created or edited assets may invalidate warm caches.
+
+- CPU level/prefab decode and prefab refresh run on workers. Prefab templates are
+  cached by file metadata, root and built-in mesh handles (64 entries / 64 MiB of
+  source files), so first spawn avoids repeated JSON decode. Instantiation still
+  copies ECS entities and can cost time for a large hierarchy.
+- Meshes and textures are warmed through existing bounded worker/upload caches
+  before the world swap. Workers never call OpenGL. Uploads remain on the GL thread.
+- Referenced audio is decoded before publication (256 MiB total PCM limit), and
+  referenced clips are decoded/cached (64-clip limit). Over-budget preloads fail
+  rather than silently over-allocating. Resource gates have a two-minute watchdog.
+- Exported-player startup and editor Play show centered `Loading..` text inside
+  Game before scripts start. It pumps close events; a failed editor preload leaves editing available.
+
+This reduces known cold-cache stalls, **not a guarantee of zero lag spikes**.
+GPU-driver allocation/upload, shader work, physics cooking, terrain mesh building,
+UI document creation, cache eviction, runtime-created assets and dynamically
+constructed paths can still have first-use costs. Measure frame times with the
+actual target levels and exported player; preload memory budgets must fit the
+machine. Loading feedback is text only, not a full-editor screen, progress bar, or percentage API.
+
+## NavMeshAgent height and movement control
+
+`heightOffset` is the world-space height of the Transform pivot above the navmesh.
+Leave it at `0` for foot-level pivots; for a centered two-unit-tall model, try `1`.
+It changes the object's navigation placement, not the baked navmesh clearance or
+agent dimensions. Set it in Inspector under **Navmesh Agent > Height offset**.
+Paths, remaining distance, and destination coordinates stay on the navigation surface.
+
+```lua
+local agent
+function onStart()
+    agent = self:getComponent(NavMeshAgent)
+    agent:setHeightOffset(1)
+    agent:setSpeed(4.5) -- same as agent.speed = 4.5
+    agent:setDestination(8, 0, 4)
+    task(function()
+        waitForSeconds(2)
+        agent:stop() -- keeps the route, clears velocity
+        waitForSeconds(1)
+        agent:start() -- resumes the retained route
+    end)
+end
+```
+
+Use `resetPath()` to discard the route, rather than pause it. Existing controls
+include `enabled`, `stopped`, `stoppingDistance`, `updateRotation`, `angularSpeed`,
+and the read-only `velocity`, `remainingDistance`, `hasPath`, `pathPending`, and
+`status` properties. Speed is limited to 0–100; height offset to -1000–1000.
+Do not combine NavMeshAgent with another physics/controller movement driver.
+
+## Animator controllers
+
+Use the [Animator state-machine component](animator.md) for controller assets with
+Bool/Int/Float parameters, animation states, per-state looping and conditional
+transitions with fade durations. The existing Animation clip player remains available.
