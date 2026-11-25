@@ -1312,7 +1312,7 @@ inline void drawInspector(World& world,
                             return AssetManager::extension(file) == ".rcss";
                         });
                         ImGui::TextWrapped(
-                            "Assign both assets to show this Canvas in Game during Play. Open Windows > Visual UI Maker to edit. Scripts: self:getComponent(Canvas), or global Canvas hud = nil.");
+                            "Assign both assets to show this Canvas in Game during Play. Open Windows > Canvas - Visual UI Editor to edit. Scripts: self:getComponent(Canvas), or global Canvas hud = nil.");
                     }
                 }
 

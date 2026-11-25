@@ -1,31 +1,59 @@
-# Canvas — Visual UI Maker
+# Canvas — Visual UI Editor
 
-Open **Windows > Visual UI Maker**. The preview uses RmlUi's actual OpenGL renderer,
+Open **Windows > Canvas - Visual UI Editor**. The preview uses RmlUi's actual OpenGL renderer,
 embedded Roboto font and runtime image loader. It is an editor-only context: preview
 controls never call gameplay click listeners. Canvas editing is disabled during Play.
 
 ## Create and assign a Canvas
 
 1. Add **Canvas** to a GameObject (previously called UI).
-2. Open the maker, choose **New Canvas**, and choose project-relative `.rml` and
+2. Open the editor, choose **New Canvas**, and choose project-relative `.rml` and
    `.rcss` filenames. The initial draft is a screen-space 1280 × 720 Canvas.
-3. Drag **button, Image, Text, List, Dropdown, input, or Panel** from the palette
+3. Drag **Button, Image, Text, List, Dropdown, Input, or Panel** from the palette
    onto the preview, or click a palette button to add one near the top left.
-4. Click an element in the preview or hierarchy. Drag it to position it. Edit
-   `left`, `top`, `width`, `height`, colors, font size, ID, classes, image source
-   and inner RML in the property panel. Size/position values accept RCSS units.
-   Dragging converts position to absolute pixel coordinates relative to its parent.
+4. Select an element in the preview or hierarchy. Drag its body to position it,
+   or drag any of its **eight rectangle handles** to resize it. X/Y are numeric
+   pixel inputs. Width, Height and Font Size are sliders; **double-click** a slider
+   to type a number (no `px` suffix). Text and Background Color use the standard
+   color picker with alpha. ID, classes and image source remain editable.
 5. Edit stylesheet rules under **RCSS source**, then **Apply RCSS preview**.
 6. **Save RML + RCSS**, then **Assign to selected**. Assign requires a selected
    GameObject with Canvas. The standard Inspector asset fields also work.
 7. Press Play and focus Game to interact with the UI using scripts.
 
-Palette elements are children of the Canvas. Loaded documents can retain nested
-panels/elements, which are selectable in the hierarchy. This initial editor does
-not provide visual reparenting, multi-selection, element undo, or automatic
-responsive constraints. Use RML/RCSS for advanced layouts and RmlUi features.
-Lists/dropdowns start with example entries; edit their Content RML to change them.
-An image needs its `src` set; paths are relative to the RML document.
+## Parents, children and text
+
+Palette clicks and preview drops create Canvas children. Drag a palette element
+onto a hierarchy row to create it as that container's child. Right-click a row for
+**Create Child**, **Create Parent (Panel)**, **Move to Canvas**, and sibling
+**Move Up/Down** actions. Drag existing hierarchy rows onto containers to reparent
+them. Self-parenting and cycles are rejected. Reparenting preserves the element's
+screen position and resolves its content size to pixels in its new parent.
+Reparenting/wrapping is an explicit layout edit; percentage sizing becomes numeric.
+Images, inputs, dropdowns and options are not general-purpose containers.
+
+Leaf elements have an escaped plain **Text** editor; input/dropdown controls have
+an editable **Value**. For nested text, select the text-bearing child. Under
+**Advanced Properties / Content RML**, edit markup and additional RCSS properties.
+Replacing Content RML replaces the child hierarchy, so save first if experimenting.
+Lists/dropdowns start with example entries; edit their child text/options or markup.
+An image needs its `src` set; image paths are relative to the RML document.
+
+## Fonts from Assets
+
+Use the **Font** asset picker to choose `.ttf` or `.otf` files inside Assets.
+The override is stored in the element's `data-canvas-font` attribute as a
+project-relative path. Editor preview and runtime load the same font and apply
+its generated family name, and export follows the font reference into the package.
+Clearing the picker removes the override and inherits the parent's font (Roboto
+by default). Font size remains independent of font selection. Loaded font data
+is retained until shutdown, as required by RmlUi: at most 64 fonts / 64 MiB total,
+with a 16 MiB per-file limit. External font changes take effect on preview reload
+or the next Play load. Invalid/missing fonts are reported rather than silently
+substituted. Only use fonts licensed for redistribution when exporting.
+
+Multi-selection, element undo and automatic responsive constraints remain outside
+this editor's current scope. RCSS/source editing is available for advanced layouts.
 
 ## Load existing files
 
@@ -38,7 +66,7 @@ features should be edited as source; keep a backup before round-tripping them.
 RCSS edits are saved as ordinary source, not generated from the visual layout.
 Inline element edits override stylesheet rules just as they do at runtime.
 
-The preview Width/Height controls set the authoring resolution, not the runtime
+The Canvas Width/Height sliders set the authoring resolution, not the runtime
 window size. Runtime layout uses the actual Game viewport. Preview changes are
 explicitly applied; external file changes require Load. Save and project/Play
 preflight preserve or report unsaved drafts, including when the window is closed.

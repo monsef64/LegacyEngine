@@ -1252,7 +1252,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 ImGui::MenuItem("Animation", nullptr, &animationWindow.visible);
                 ImGui::MenuItem("Animator", nullptr, &animatorWindow.visible);
-                ImGui::MenuItem("Visual UI Maker", nullptr, &canvasEditor.visible);
+                ImGui::MenuItem("Canvas - Visual UI Editor", nullptr, &canvasEditor.visible);
                 ImGui::MenuItem("Lighting", nullptr, &lightmappingWindow.visible);
                 ImGui::MenuItem("Occlusion Culling", nullptr, &occlusionWindow.visible);
                 ImGui::MenuItem("Navigation", nullptr, &navigationWindow.visible);

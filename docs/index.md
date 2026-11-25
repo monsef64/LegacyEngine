@@ -61,4 +61,4 @@ check that the committed reference is current.
 
 - [Animator state-machine controllers](animator.md): graph authoring, parameters, transitions and fades.
 
-- [Canvas — Visual UI Maker](visual-ui-maker.md): drag-and-drop RmlUi authoring.
+- [Canvas — Visual UI Editor](visual-ui-maker.md): drag-and-drop RmlUi authoring.

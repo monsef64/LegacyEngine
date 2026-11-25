@@ -251,5 +251,5 @@ automatically because `GUI` now names the ImGui namespace.
 
 ## Visual authoring
 
-Use [Canvas — Visual UI Maker](visual-ui-maker.md) for drag-and-drop RML/RCSS editing.
+Use [Canvas — Visual UI Editor](visual-ui-maker.md) for drag-and-drop RML/RCSS editing.
 Older UI/GUI serialized components and the UI Lua token remain compatible.

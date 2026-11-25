@@ -33,3 +33,26 @@ No automated tests were added or run for this change.
   truncated, authenticated-but-oversized frames must fail without oversized allocation.
 - Compare project load duration on the same representative scene before/after;
   loading avoids JSON dump/reparse and redundant component-pool deep copies.
+
+## Canvas controls, handles, hierarchy and fonts
+
+- Check the window/menu name is Canvas - Visual UI Editor and palette labels all
+  start uppercase. X/Y numeric fields and size sliders must not require unit suffixes.
+- Change Width/Height and Font Size by slider and by double-click typing. Enter,
+  focus changes and selection changes should exit typed mode without affecting
+  another element. Check finite/positive size limits and Canvas resolution sliders.
+- Select Text/Button/List Item, edit plain text containing <, > and &, save/reload
+  and verify it stays literal. Edit input/dropdown Value and verify persistence.
+  Nested markup must remain untouched unless Content RML is explicitly edited.
+- Test text/background color pickers, transparency, save/reload and Play.
+- Drag every corner and edge handle, including past the opposite edge, outside
+  the preview, on nested panels with margins/padding, and on a scaled preview.
+  Geometry must stay positive and moving a node must not also resize it.
+- Create Child, wrap in Create Parent, drag rows to reparent, reject self/cycles,
+  move to Canvas and reorder siblings (including loaded formatted RML). Confirm
+  the preview, hierarchy, saved markup and Play agree.
+- Choose two asset fonts (including a path with spaces), clear one to inherit,
+  change font size and reload. Test missing/corrupt/oversized fonts. Verify fonts
+  in Play, Stop/Play and an exported player; no reliance on installed system fonts.
+- Confirm the Windows near/far macro build fix remains present; UI header changes
+  must not regress UCRT64/MSVCRT builds. No automated tests added/run.

@@ -25,7 +25,10 @@ class GameUI {
                                       const std::string& css,
                                       const std::string& url,
                                       const std::string& cssUrl,
-                                      SDL_Window* window);
+                                      SDL_Window* window,
+                                      const std::filesystem::path& assetRoot);
+    // Loads a bounded project font; memory remains owned until RmlUi shutdown.
+    std::string canvasFont(const std::filesystem::path& file);
     void previewRender(int width, int height);
     void previewClose();
     static GameUI* current();

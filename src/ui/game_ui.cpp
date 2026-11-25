@@ -77,6 +77,50 @@ struct GameUI::Impl : Rml::EventListener {
     Rml::Context* context = nullptr;
     Rml::Context* previewContext = nullptr;
     bool initialized = false;
+    std::map<std::string, std::vector<unsigned char>> fontData;
+    std::size_t fontBytes = 0;
+    std::string font(const std::filesystem::path& path) {
+        initialize();
+        const auto ext = AssetManager::extension(path);
+        if (ext != ".ttf" && ext != ".otf") {
+            throw std::runtime_error("Canvas fonts must be TTF or OTF");
+        }
+        auto bytes = readAssetBytes(path, 16 * 1024 * 1024);
+        std::uint64_t hash = 14695981039346656037ull;
+        for (auto byte : bytes) {
+            hash ^= byte;
+            hash *= 1099511628211ull;
+        }
+        const auto family = "canvas-font-" + std::to_string(hash);
+        if (fontData.count(family)) {
+            return family;
+        }
+        if (fontData.size() >= 64 || fontBytes + bytes.size() > 64 * 1024 * 1024) {
+            throw std::runtime_error(
+                "Canvas font cache is full (64 fonts / 64 MiB); restart to release fonts");
+        }
+        auto inserted = fontData.emplace(family, std::move(bytes));
+        auto& retained = inserted.first->second;
+        if (!Rml::LoadFontFace(
+                {retained.data(), retained.size()}, family, Rml::Style::FontStyle::Normal)) {
+            fontData.erase(inserted.first);
+            throw std::runtime_error("Cannot load Canvas font");
+        }
+        fontBytes += retained.size();
+        return family;
+    }
+    void fonts(Rml::Element* element, const AssetManager& assets, int depth = 0) {
+        if (depth > 128) {
+            throw std::runtime_error("Canvas hierarchy exceeds 128 levels");
+        }
+        const auto path = element->GetAttribute<Rml::String>("data-canvas-font", "");
+        if (!path.empty()) {
+            element->SetProperty("font-family", font(assets.resolve(path)));
+        }
+        for (int i = 0; i < element->GetNumChildren(); ++i) {
+            fonts(element->GetChild(i), assets, depth + 1);
+        }
+    }
     std::filesystem::path root;
     std::map<std::uint64_t, Document> documents;
     float x = 0, y = 0, w = 1, h = 1;
@@ -236,6 +280,7 @@ void GameUI::sync(World& world,
                 style = existing->CombineStyleSheetContainer(*style);
             }
             d.document->SetStyleSheetContainer(style);
+            ui.fonts(d.document, assets);
             d.document->AddEventListener("click", &ui);
             d.document->Show();
         } catch (const std::exception& error) {
@@ -389,7 +434,8 @@ Rml::ElementDocument* GameUI::previewLoad(const std::string& source,
                                           const std::string& css,
                                           const std::string& url,
                                           const std::string& cssUrl,
-                                          SDL_Window* window) {
+                                          SDL_Window* window,
+                                          const std::filesystem::path& assetRoot) {
     auto& ui = *impl_;
     ui.system.SetWindow(window);
     ui.initialize();
@@ -412,6 +458,14 @@ Rml::ElementDocument* GameUI::previewLoad(const std::string& source,
             style = original->CombineStyleSheetContainer(*style);
         }
         doc->SetStyleSheetContainer(style);
+    }
+    try {
+        AssetManager assets;
+        assets.root = assetRoot;
+        ui.fonts(doc, assets);
+    } catch (...) {
+        ui.previewContext->UnloadDocument(doc);
+        throw;
     }
     // Keep the existing preview if parsing fails; replace only after success.
     const int count = ui.previewContext->GetNumDocuments();
@@ -442,4 +496,8 @@ void GameUI::previewClose() {
         Rml::RemoveContext("legacy-canvas-editor");
     }
     impl_->previewContext = nullptr;
+}
+
+std::string GameUI::canvasFont(const std::filesystem::path& file) {
+    return impl_->font(file);
 }
