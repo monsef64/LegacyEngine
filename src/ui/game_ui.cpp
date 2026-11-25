@@ -6,6 +6,7 @@
 #include "editor_font.hpp"
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/EventListener.h>
+#include <RmlUi/Core/StreamMemory.h>
 #include <algorithm>
 #include <filesystem>
 #include <map>
@@ -74,6 +75,7 @@ struct GameUI::Impl : Rml::EventListener {
     SystemInterface_SDL system;
     std::unique_ptr<GameRenderer> renderer;
     Rml::Context* context = nullptr;
+    Rml::Context* previewContext = nullptr;
     bool initialized = false;
     std::filesystem::path root;
     std::map<std::uint64_t, Document> documents;
@@ -110,6 +112,25 @@ struct GameUI::Impl : Rml::EventListener {
             d.document = nullptr;
         }
     }
+    void initialize() {
+        if (!initialized) {
+            renderer = std::make_unique<GameRenderer>();
+            if (!*renderer) {
+                throw std::runtime_error("RmlUi OpenGL initialization failed");
+            }
+            Rml::SetSystemInterface(&system);
+            Rml::SetRenderInterface(renderer.get());
+            if (!Rml::Initialise()) {
+                throw std::runtime_error("RmlUi initialization failed");
+            }
+            initialized = true;
+            if (!Rml::LoadFontFace({editorFontData, sizeof(editorFontData)},
+                                   "Roboto",
+                                   Rml::Style::FontStyle::Normal)) {
+                throw std::runtime_error("RmlUi embedded font could not load");
+            }
+        }
+    }
     void close() {
         for (auto& entry : documents) {
             unload(entry.second);
@@ -117,7 +138,9 @@ struct GameUI::Impl : Rml::EventListener {
         documents.clear();
         if (context) {
             Rml::RemoveContext("legacy-game");
-            Rml::ReleaseTextures();
+            if (!previewContext) {
+                Rml::ReleaseTextures();
+            }
         }
         context = nullptr;
     }
@@ -128,6 +151,7 @@ GameUI::GameUI() : impl_(std::make_unique<Impl>()) {
 }
 GameUI::~GameUI() {
     impl_->system.SetWindow(nullptr);
+    previewClose();
     impl_->close();
     if (impl_->initialized) {
         Rml::Shutdown();
@@ -191,23 +215,7 @@ void GameUI::sync(World& world,
                 std::filesystem::file_size(rcss) > 4 * 1024 * 1024) {
                 throw std::runtime_error("UI asset missing or larger than 4 MiB");
             }
-            if (!ui.initialized) {
-                ui.renderer = std::make_unique<GameRenderer>();
-                if (!*ui.renderer) {
-                    throw std::runtime_error("RmlUi OpenGL initialization failed");
-                }
-                Rml::SetSystemInterface(&ui.system);
-                Rml::SetRenderInterface(ui.renderer.get());
-                if (!Rml::Initialise()) {
-                    throw std::runtime_error("RmlUi initialization failed");
-                }
-                ui.initialized = true;
-                if (!Rml::LoadFontFace({editorFontData, sizeof(editorFontData)},
-                                       "Roboto",
-                                       Rml::Style::FontStyle::Normal)) {
-                    throw std::runtime_error("RmlUi embedded font could not load");
-                }
-            }
+            ui.initialize();
             if (!ui.context) {
                 ui.context = Rml::CreateContext("legacy-game", {ui.pw, ui.ph});
                 if (!ui.context) {
@@ -375,4 +383,63 @@ bool GameUI::capturesKeyboard() const {
 
 bool GameUI::capturesMouse() const {
     return impl_->context && !impl_->documents.empty() && impl_->context->IsMouseInteracting();
+}
+
+Rml::ElementDocument* GameUI::previewLoad(const std::string& source,
+                                          const std::string& css,
+                                          const std::string& url,
+                                          const std::string& cssUrl,
+                                          SDL_Window* window) {
+    auto& ui = *impl_;
+    ui.system.SetWindow(window);
+    ui.initialize();
+    if (!ui.previewContext) {
+        ui.previewContext = Rml::CreateContext("legacy-canvas-editor", {1280, 720});
+    }
+    if (!ui.previewContext) {
+        throw std::runtime_error("Cannot create Canvas editor context");
+    }
+    Rml::Factory::ClearStyleSheetCache();
+    auto* doc = ui.previewContext->LoadDocumentFromMemory(source, url);
+    if (!doc) {
+        throw std::runtime_error("Cannot parse Canvas RML");
+    }
+    Rml::StreamMemory cssStream(reinterpret_cast<const Rml::byte*>(css.data()), css.size());
+    cssStream.SetSourceURL(Rml::URL(cssUrl));
+    auto style = Rml::Factory::InstanceStyleSheetStream(&cssStream);
+    if (style) {
+        if (auto* original = doc->GetStyleSheetContainer()) {
+            style = original->CombineStyleSheetContainer(*style);
+        }
+        doc->SetStyleSheetContainer(style);
+    }
+    // Keep the existing preview if parsing fails; replace only after success.
+    const int count = ui.previewContext->GetNumDocuments();
+    for (int i = count - 1; i >= 0; --i) {
+        auto* old = ui.previewContext->GetDocument(i);
+        if (old != doc) {
+            ui.previewContext->UnloadDocument(old);
+        }
+    }
+    doc->Show();
+    ui.previewContext->Update();
+    return doc;
+}
+void GameUI::previewRender(int width, int height) {
+    auto& ui = *impl_;
+    if (!ui.previewContext) {
+        return;
+    }
+    ui.previewContext->SetDimensions({width, height});
+    ui.previewContext->Update();
+    ui.renderer->SetViewport(width, height);
+    ui.renderer->BeginFrame();
+    ui.previewContext->Render();
+    ui.renderer->EndFrame();
+}
+void GameUI::previewClose() {
+    if (impl_->previewContext) {
+        Rml::RemoveContext("legacy-canvas-editor");
+    }
+    impl_->previewContext = nullptr;
 }

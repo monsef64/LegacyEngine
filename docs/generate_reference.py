@@ -55,6 +55,8 @@ GLOBALS = {
 for name in ('onAnimationFinish','onAnimationStart','onAnimationStopped','onAnimationPause','onAnimationResume','onMouseDown','onMouseUp','onMouseEnter','onMouseExit','onMouseOver','onAudioStarted','onAudioFinished','onAudioPaused','onAudioResumed','onAudioStopped'):
     GLOBALS[name] = f'function {name}()\n    debug.log("{name}", self:getName())\nend'
 GLOBALS['waitForSeconds'] = 'function onStart()\n    debug.log("Before wait")\n    waitForSeconds(5)\n    debug.log("Five playing seconds later")\nend'
+GLOBALS['Recoil'] = 'local recoil = self:getComponent(Recoil) or self:addComponent(Recoil)\nrecoil:trigger(1)'
+GLOBALS['onAnimationRestarted'] = 'function onAnimationRestarted()\n    debug.log("Animation replayed or looped")\nend'
 GLOBALS['Animation'] = 'local animation = self:addComponent(Animation)\nanimation.clip = "Animations/example.leanim"\nanimation.loop = true\nanimation:play()'
 GLOBALS['wait'] = 'function onStart()\n    local audio = createAudioSource(self, AudioClip("Audio/example.wav"))\n    audio:play()\n    wait(audio.onAudioFinished)\n    debug.log("Audio finished")\nend'
 GLOBALS['spawn'] = 'local copy = spawn(self, {x=0, y=2, z=0}, {x=0, y=90, z=0})\ndebug.log(copy:getName())'
@@ -100,7 +102,12 @@ for name in ('lockCursor', 'unlockCursor', 'hideCursor', 'showCursor', 'isCursor
     GLOBALS[name] = f'local result = {name}()\ndebug.log(result)'
 
 METHOD_ARGS = {
+ 'setBool': '"Grounded", true', 'setInt': '"Mode", 1', 'setFloat': '"Speed", 2.5',
+ 'getBool': '"Grounded"', 'getInt': '"Mode"', 'getFloat': '"Speed"', 'hasState': '"Idle"',
+
  'setDestination': 'Vector3(8, 0, 4)',
+ 'setSpeed': '4.5',
+ 'setHeightOffset': '1.0',
 'emit':'10', 'setPreset':'"Fire"',
 'getComponentInParent':'RigidBody', 'getComponentInChildren':'Camera',
 'findComponentInParent':'RigidBody', 'findComponentInChildren':'Camera',
@@ -170,10 +177,19 @@ def example(entry):
             'takeScreenshot': 'Screen.takeScreenshot("Screenshots/view.png")',
         }[name]
     if owner == 'GameAPI':
-        return {'openURL': 'Game.openURL("https://example.com")', 'quit': 'Game.quit()'}[name]
-    if owner == 'SavingAPI':
+        if name in ('openURL','quit'): return {'openURL': 'Game.openURL("https://example.com")', 'quit': 'Game.quit()'}[name]
         value = {'String': '"Player"', 'Int': '10', 'Float': '0.5', 'Bool': 'true', 'Table': '{score = 10}', 'Vector3': '{x = 1, y = 2, z = 3}'}[name[4:]]
-        return f'local result, err = Saving.{name}("example", {value})'
+        return f'local result, err = Game.{name}("example", {value})'
+    if owner == 'Recoil':
+        args={'trigger':'1','start':'','stop':'','reset':'','playSequence':'','setSequence':'{{time=0,strength=1},{time=0.1,strength=0.8}}'}
+        if name in args: return f'local recoil = self:getComponent(Recoil)\nif recoil then recoil:{name}({args[name]}) end'
+    if owner == 'Animation' and name in ('onFinished','onRestarted','onStopped','onStarted','onPaused','onResumed'):
+        return f'function onStart()\n    local animation = self:getComponent(Animation)\n    if animation then wait(animation.{name}) end\nend'
+    if owner == 'RandomAPI' or (not owner and name in ('randomFloat','randomInt','randomBool','randomString')):
+        args={'randomFloat':'0, 1','randomInt':'1, 6','randomBool':'','randomString':'12'}[name]
+        return f'local value = Random.{name}({args})'
+    if name == 'AnimationClip': return 'local clip = AnimationClip("Animations/Walk.leanim")'
+    if owner == 'Animation' and name == 'playClip': return 'local animation = self:getComponent(Animation)\nanimation:playClip(AnimationClip("Animations/Walk.leanim"))'
     if owner == 'FileAPI':
         if name == 'lines': return 'for line in File.lines("notes.txt") do debug.log(line) end'
         if name == 'rename': return 'File.rename("notes.txt", "old-notes.txt")'
@@ -255,12 +271,12 @@ def example(entry):
         before = '        GUI.setNextWindowPos(20, 20)\n' if name == 'setNextWindowPos' else '        GUI.setNextWindowSize(300, 200)\n' if name == 'setNextWindowSize' else ''
         body = '\n'.join('        ' + line for line in calls[name].splitlines())
         return setup + 'function onGUI()\n' + before + '        GUI.beginWindow(\"HUD\")\n' + body + '\n        GUI.endWindow()\nend'
-    if owner == 'UI':
+    if owner in ('Canvas', 'UI'):
         return {
             'isLoaded': 'local gui = self:getComponent(UI)\nif gui and gui:isLoaded() then debug.log("UI ready") end',
             'setText': 'local gui = self:getComponent(UI)\nif gui then gui:setText("health", "100 / 100") end',
             'onClick': 'function onStart()\n    local gui = self:getComponent(UI)\n    if gui then gui:onClick("collect", function() gui:setText("status", "Collected!") end) end\nend',
-        }[name]
+        }[name].replace('getComponent(UI)', f'getComponent({owner})')
     if owner == 'ColorFade':
         return f'local fade = fadeToColor(color.black)\nfade:{name}(1)'
     if owner == 'LegacyDebug':
@@ -276,6 +292,9 @@ def example(entry):
             prefix += '\ncomponent.clip = AudioClip("Audio/example.wav")'
     if owner=='GameObject' and name in ('onTriggerEnter','onTriggerStay','onTriggerExit','onCollisionEnter','onCollisionStay','onCollisionExit'):
         return f'self.{name} = function(collider)\n    if collider then debug.log(collider.gameObject:getName()) end\nend'
+    if owner == 'Animator' and name in ('play', 'crossFade'):
+        args = '"Idle", 0.2' if name == 'crossFade' else '"Idle"'
+        return f'local animator = self:getComponent(Animator)\nanimator:{name}({args})'
     if owner == 'Animation' and name == 'crossFade':
         return 'local animation = self:getComponent(Animation)\nanimation:crossFade("Character_data/Animation_1.leanim", 0.3)'
     if name == 'linkToCharacter':
@@ -318,7 +337,7 @@ CALLABLE_DETAILS = {
     'onAudioResumed': 'Runs on the AudioSource owner when resume changes Paused to Playing. Resuming continues from the existing playback cursor.',
     'onAudioStopped': 'Runs on the AudioSource owner when a playing/paused primary source is explicitly stopped, including fade-out stop or playback failure. It is distinct from natural Finished.',
     'waitForSeconds': 'Suspends the current lifecycle/object callback for finite playing-time seconds in [0, 86400]. Zero resumes no earlier than the next update. Other callbacks continue; this does not block the engine.',
-    'wait': 'Takes an opaque AudioEvent token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the AudioSource cancels its continuation.',
+    'wait': 'Takes an opaque audio or animation component event token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the watched component cancels its continuation.',
     'GameObject.setActive': 'Sets local activity; omitted enabled defaults to true. Inactive parents make descendants effectively inactive without changing their local flags. Inactive objects are hidden, excluded from physics, silent, and their attached script updates/events/waits pause. Another active script or Inspector can reactivate them.',
     'GameObject.isActive': 'Returns effective activity, including all parents. It can be false even if this object is locally enabled. Destroyed handles raise a script error rather than returning false.',
 }
@@ -362,7 +381,7 @@ independent spring/damper contacts. Anti-roll strength has been removed;
 `centerOfMassX/Y/Z` remain available without locking chassis pitch/roll.
 
 
-See [In-game UI](game-ui.md) for RML/RCSS setup and the `UI` component example.
+See [In-game UI](game-ui.md) for RML/RCSS setup and the `Canvas` component example.
 """
 
 def render_reference():
@@ -406,7 +425,7 @@ def render_reference():
              '  Up targets the object that received Down, even if released outside it.',
              '- Audio callbacks target scripts attached to the AudioSource owner. Finished means natural',
              '  primary-clip completion, not pause, explicit stop, fade-out stop or one-shot completion.',
-             '- `waitForSeconds` and `wait(audio.onAudioFinished)` suspend lifecycle/object callbacks only.',
+             '- `waitForSeconds`, `wait(audio.onAudioFinished)` and `wait(animation.onFinished)` suspend lifecycle/object callbacks only.',
              '  Do not use them at file top-level, in custom event listeners or onDestroy. Each callback',
              '  has at most one pending invocation. Other callbacks keep running; Play pause or object',
              '  deactivation freezes timers, and Stop cancels waits. Audio waits observe the next event,',

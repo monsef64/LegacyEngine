@@ -56,8 +56,16 @@
     "title": "LegacyScript"
   },
   {
+    "file": "animator.md",
+    "title": "Animator state machines"
+  },
+  {
     "file": "game-ui.md",
     "title": "In-game UI (RmlUi)"
+  },
+  {
+    "file": "visual-ui-maker.md",
+    "title": "Canvas — Visual UI Maker"
   },
   {
     "file": "first-person.md",
@@ -106,6 +114,10 @@
   {
     "file": "skybox.md",
     "title": "Skybox component"
+  },
+  {
+    "file": "recoil.md",
+    "title": "Camera recoil"
   },
   {
     "file": "debug.md",

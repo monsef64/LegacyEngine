@@ -3,7 +3,7 @@
   "patterns": [
     {
       "name": "keyword.other.export.legacyscript",
-      "match": "^\\s*@export\\b"
+      "match": "^\\s*(?:global|expose)\\b"
     },
     {
       "name": "comment.block.lua",
@@ -55,7 +55,7 @@
     },
     {
       "name": "support.class.legacyscript",
-      "match": "\\b(UI|GameObject|Camera|Transform|RigidBody|Collider|MeshRenderer|LuaScript|ParticleSystem)\\b"
+      "match": "\\b(Canvas|UI|GameObject|Camera|Transform|RigidBody|Collider|MeshRenderer|LuaScript|ParticleSystem)\\b"
     },
     {
       "name": "constant.numeric.lua",

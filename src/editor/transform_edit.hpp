@@ -1,10 +1,40 @@
 #pragma once
 
 #include "core/components.hpp"
+#include "scene/camera.hpp"
 #include <algorithm>
 #include <cmath>
 
 enum class TransformTool { Move, Rotate, Scale };
+
+// ImGuizmo unprojects Z=0..1, whereas scene rendering uses OpenGL Z=-1..1.
+// In orthographic mode Z=0 used to start the mouse ray halfway through the
+// frustum, often behind the gizmo. Its absolute ray/plane distance then reflected
+// the intersection and could launch an object hundreds of metres on each frame.
+// Keep scene projection unchanged. Recenter a virtual gizmo eye on the gesture's
+// pivot and compensate XY in projection: identical on-screen positions, parallel
+// rays, a stable axis constraint plane and a near origin in front of the handle.
+struct GizmoCameraMatrices {
+    Mat4 view, projection;
+};
+inline GizmoCameraMatrices
+gizmoCameraMatrices(const OrbitCamera& camera, float aspect, Vec3 anchor) {
+    GizmoCameraMatrices result{lookAt(camera.position(), camera.target, camera.up()),
+                               camera.projection(aspect)};
+    if (!camera.orthographic) {
+        return result;
+    }
+    const auto eye = camera.position(), forward = normalize(camera.target - eye);
+    const auto right = camera.right(), up = camera.up();
+    const auto offset = anchor - eye;
+    const auto virtualEye = anchor - forward * std::clamp(camera.distance, 1.f, 100.f);
+    result.view = lookAt(virtualEye, anchor, up);
+    result.projection.m[12] += result.projection.m[0] * dot(right, offset);
+    result.projection.m[13] += result.projection.m[5] * dot(up, offset);
+    result.projection.m[10] *= .5f;
+    result.projection.m[14] = result.projection.m[14] * .5f + .5f;
+    return result;
+}
 
 // Read a positive-scale TRS matrix from the gizmo. Only change the active
 // channel, so moving an object never perturbs its rotation or dimensions.

@@ -1,5 +1,6 @@
 #include "ui/script_gui.hpp"
 #include "assets/assets.hpp"
+#include "levels/level_system.hpp"
 #include "rendering/material_textures.hpp"
 #include "scripting/lua_console.hpp"
 #include <algorithm>
@@ -313,6 +314,13 @@ void ScriptGUI::render(
     rendering = true;
     LuaConsole::drawGUI();
     rendering = false;
+    if (LevelSystem::active && LevelSystem::active->busy()) {
+        const auto size = ImGui::CalcTextSize("Loading..");
+        const ImVec2 pos{(width - size.x) * .5f, (height - size.y) * .5f};
+        auto* overlay = ImGui::GetForegroundDrawList();
+        overlay->AddText({pos.x + 1, pos.y + 1}, IM_COL32(0, 0, 0, 255), "Loading..");
+        overlay->AddText(pos, IM_COL32(255, 255, 255, 255), "Loading..");
+    }
     ImGui::Render();
     keyboard_ = io.WantCaptureKeyboard;
     mouse_ = io.WantCaptureMouse;

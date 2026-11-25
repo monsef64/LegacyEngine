@@ -77,11 +77,18 @@ inline bool assetPicker(const char* label,
     static std::string inspected;
     static std::filesystem::path root;
     const auto id = ImGui::GetID("Asset selection");
-    if (ImGui::Button(value.empty() ? "None - select asset" : value.c_str(), ImVec2(-1, 0))) {
+    const auto display =
+        value.empty() ? std::string("None - select asset")
+                      : (embeddedAsset(value) ? embeddedAssetName(value)
+                                              : std::filesystem::path(value).filename().string());
+    if (ImGui::Button((display + "###AssignedAsset").c_str(), ImVec2(-1, 0))) {
         active = id;
         search.Clear();
         inspected = value;
         root = assets ? assets->root : std::filesystem::path{};
+    }
+    if (ImGui::IsItemHovered() && !value.empty()) {
+        ImGui::SetTooltip("%s", value.c_str());
     }
     {
         char path[4097];
