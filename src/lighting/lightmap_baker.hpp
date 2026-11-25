@@ -72,7 +72,8 @@ struct Bounds {
     bool hit(Vec3 p, Vec3 d, float distance) const {
         const float origin[]{p.x, p.y, p.z}, dir[]{d.x, d.y, d.z};
         const float lo[]{low.x, low.y, low.z}, hi[]{high.x, high.y, high.z};
-        float near = 0, far = distance;
+        // Avoid the legacy near/far macros defined by Windows headers.
+        float entryDistance = 0, exitDistance = distance;
         for (int a = 0; a < 3; ++a) {
             if (std::abs(dir[a]) < 1e-12f) {
                 if (origin[a] < lo[a] || origin[a] > hi[a]) {
@@ -83,9 +84,9 @@ struct Bounds {
                 if (l > h) {
                     std::swap(l, h);
                 }
-                near = std::max(near, l);
-                far = std::min(far, h);
-                if (near > far) {
+                entryDistance = std::max(entryDistance, l);
+                exitDistance = std::min(exitDistance, h);
+                if (entryDistance > exitDistance) {
                     return false;
                 }
             }
