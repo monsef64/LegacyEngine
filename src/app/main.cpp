@@ -23,6 +23,7 @@
 #include "editor/animation_window.hpp"
 #include "editor/asset_browser.hpp"
 #include "editor/asset_preview_renderer.hpp"
+#include "editor/component_gizmos.hpp"
 #include "editor/create_menu.hpp"
 #include "editor/dock_workspace.hpp"
 #include "editor/editor_history.hpp"
@@ -49,6 +50,7 @@
 #include "gameplay/raycast.hpp"
 #include "gameplay/third_person.hpp"
 #include "levels/level_system.hpp"
+#include "levels/preload_screen.hpp"
 #include "models/collider_source.hpp"
 #include "particles/particle_update.hpp"
 #include "physics/collider_debug.hpp"
@@ -333,6 +335,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     };
     Entity mouseOver, mousePressedObject;
     ImVec2 gameImageOrigin{}, gameImageSize{};
+    bool playAfterGameFrame = false;
     bool tpsMouseOwned = false;
     bool showFPS = false, showGameColliders = false, showProfiler = false;
     FrameProfiler profiler;
@@ -426,10 +429,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (levels.root() != browser.assets.root) {
             levels.setRoot(browser.assets.root);
         }
+        levels.preload = [&](LevelSystem::Transition& prepared) {
+            renderer.setAssetRoot(browser.assets.root);
+            return renderer.preloadAssets(prepared.assets);
+        };
         if (auto transition = levels.poll()) {
             levels.suspended = true;
             editor.finish(world);
             audio.clear();
+            animations.clear();
             componentScripts.stop();
             scripts.shutdown();
             input.releaseMouse();
@@ -438,11 +446,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             gameUI.sync(world, false, browser.assets.root, window);
             world.restore(transition->level->world);
             resetHierarchyExpansion();
-            try {
-                Prefabs::refreshAll(browser.assets, world, projectMeshes);
-            } catch (const std::exception& e) {
-                browser.assets.error = e.what();
-            }
             embeddedLegacySource = transition->level->source;
             camera = transition->level->camera;
             scripts.resetRuntime();
@@ -466,7 +469,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 scripts.startPlay();
                 const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
                 componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
+                lastTicks = SDL_GetTicksNS();
                 if (!transition->name.empty()) {
+                    audio.publishPreloaded(std::move(transition->audio), browser.assets.root);
+                    animations.publishPreloaded(std::move(transition->clips), browser.assets.root);
                     LuaConsole::postEvent("onLevelLoaded", {transition->name});
                 }
             }
@@ -957,6 +963,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 destination.root = assetRoot;
                 Terrains::saveAll(world, destination);
                 renderingSettings.save(destination);
+                gameExport.saveProjectSettings(browser.assets, destination);
                 inputSettings.save(destination, input);
                 if (!inputSettings.error.empty()) {
                     throw std::runtime_error(inputSettings.error);
@@ -1112,7 +1119,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                 : std::filesystem::absolute(result->path).parent_path() /
                                       assetDirectory);
                         try {
-                            Prefabs::refreshAll(browser.assets, world, projectMeshes);
+                            Prefabs::validateLinks(browser.assets, world, projectMeshes);
                         } catch (const std::exception& e) {
                             browser.assets.error = e.what();
                         }
@@ -1721,8 +1728,17 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         const float playbackWidth = 90 + 2 * ImGui::GetStyle().ItemSpacing.x;
         ImGui::SetCursorPosX((layout.toolbar.width - playbackWidth) * 0.5f);
         ImGui::BeginDisabled(prefabLevel || playMode.active() || levels.busy());
+        const bool beginPreparedPlay = playAfterGameFrame;
+        playAfterGameFrame = false;
         if (playbackButton("##Play", "Play (F5)", PlaybackIcon::Play, playMode.active()) ||
             (playKey && !prefabLevel && !playMode.active() && !levels.busy())) {
+            // Present Game once before blocking preload, so text has a valid
+            // Game-only rectangle even when the panel was previously hidden.
+            panelOpen[6] = true;
+            focusGame = true;
+            playAfterGameFrame = true;
+        }
+        if (beginPreparedPlay && !prefabLevel && !playMode.active() && !levels.busy()) {
             editor.finish(world);
             clicking = false;
             try {
@@ -1731,43 +1747,80 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             } catch (const std::exception& e) {
                 levels.error = e.what();
             }
-            editSelection = selectedEntity;
-            editLevelName = levels.current();
-            editSource = scripts.source();
-            editScriptPath = browser.openedScript;
-            editLegacySource = embeddedLegacySource;
-            editCamera = camera;
-            history.commit(world, selectedEntity);
-            editHistory = std::move(history);
-            history = EditorHistory(world, selectedEntity);
-            if (playMode.play(world)) {
-                TextureQuality::lifecycle(true);
-                Particles::reset(world);
-                lightmappingWindow.cancelBake(); // do not compete with gameplay for CPU time
-                focusGame = true;
+            std::optional<LevelSystem::Transition> preloaded;
+            bool createdLoadingWindow = false;
+            try {
                 if (separateGame && !gameWindow) {
                     gameWindow = SDL_CreateWindow(
                         "Game", 960, 540, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
                     if (!gameWindow) {
-                        projectError = SDL_GetError();
+                        throw std::runtime_error(SDL_GetError());
                     }
+                    createdLoadingWindow = true;
                 }
-                GameServices::configure(gameWindow ? gameWindow : window,
-                                        true,
-                                        "",
-                                        browser.assets.root.parent_path().filename().string(),
-                                        browser.assets.root,
-                                        gameWindow == nullptr);
-                GameServices::update(gameWindow ? gameWindow : window, true);
-                panelOpen[6] = true;
-                physics.reset();
-                audio.start(world);
-                scripts.setAssetContext(browser.openedScript, selectedEntity);
-                scripts.console().setAssetRoot(browser.assets.root);
-                scripts.startPlay();
-                const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
-                componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
-                LuaConsole::postEvent("onLevelLoaded", {levels.current()});
+                renderer.setAssetRoot(browser.assets.root);
+                TextureQuality::lifecycle(true);
+                preloaded = preloadBeforePlay(
+                    browser.assets,
+                    projectMeshes,
+                    ProjectIO::encode(world, embeddedLegacySource, camera, projectMeshes),
+                    renderer,
+                    gameWindow ? gameWindow : window,
+                    gameWindow ? std::nullopt
+                               : std::optional<SDL_FRect>{
+                                     SDL_FRect{gameImageOrigin.x - ImGui::GetMainViewport()->Pos.x,
+                                               gameImageOrigin.y - ImGui::GetMainViewport()->Pos.y,
+                                               gameImageSize.x,
+                                               gameImageSize.y}});
+            } catch (const std::exception& e) {
+                projectError = e.what();
+                if (createdLoadingWindow) {
+                    SDL_DestroyWindow(gameWindow);
+                    gameWindow = nullptr;
+                }
+            }
+            if (preloaded) {
+                editSelection = selectedEntity;
+                editLevelName = levels.current();
+                editSource = scripts.source();
+                editScriptPath = browser.openedScript;
+                editLegacySource = embeddedLegacySource;
+                editCamera = camera;
+                history.commit(world, selectedEntity);
+                editHistory = std::move(history);
+                history = EditorHistory(world, selectedEntity);
+                if (playMode.play(world)) {
+                    TextureQuality::lifecycle(true);
+                    Particles::reset(world);
+                    lightmappingWindow.cancelBake(); // do not compete with gameplay for CPU time
+                    focusGame = true;
+                    if (separateGame && !gameWindow) {
+                        gameWindow = SDL_CreateWindow(
+                            "Game", 960, 540, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+                        if (!gameWindow) {
+                            projectError = SDL_GetError();
+                        }
+                    }
+                    GameServices::configure(gameWindow ? gameWindow : window,
+                                            true,
+                                            "",
+                                            browser.assets.root.parent_path().filename().string(),
+                                            browser.assets.root,
+                                            gameWindow == nullptr);
+                    GameServices::update(gameWindow ? gameWindow : window, true);
+                    panelOpen[6] = true;
+                    physics.reset();
+                    audio.start(world);
+                    audio.publishPreloaded(std::move(preloaded->audio), browser.assets.root);
+                    animations.publishPreloaded(std::move(preloaded->clips), browser.assets.root);
+                    scripts.setAssetContext(browser.openedScript, selectedEntity);
+                    scripts.console().setAssetRoot(browser.assets.root);
+                    scripts.startPlay();
+                    const MeshHandle runtimeMeshes[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh};
+                    componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
+                    lastTicks = SDL_GetTicksNS();
+                    LuaConsole::postEvent("onLevelLoaded", {levels.current()});
+                }
             }
         }
         ImGui::EndDisabled();
@@ -1884,6 +1937,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             lastInspectedEntity = selectedEntity;
         }
         const MeshHandle meshOptions[]{cubeMesh, sphereMesh, capsuleMesh, coneMesh, planeMesh};
+        Entity savePrefabRequest;
         drawInspector(world,
                       selectedEntity,
                       layout.inspector,
@@ -1892,7 +1946,24 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                       &browser.assets,
                       5,
                       browser.selected,
-                      playMode.active());
+                      playMode.active(),
+                      &savePrefabRequest);
+        if (world.alive(savePrefabRequest) && !playMode.active()) {
+            try {
+                editor.finish(world);
+                history.commit(world, selectedEntity);
+                const auto path = world.get<PrefabInstance>(savePrefabRequest).asset;
+                Prefabs::save(browser.assets, path, world, savePrefabRequest, projectMeshes);
+                Prefabs::refreshSavedLevels(browser.assets, path, projectMeshes);
+                Prefabs::refresh(browser.assets, path, world, projectMeshes);
+                selectedEntity = savePrefabRequest;
+                hierarchySelection = {selectedEntity};
+                history.commit(world, selectedEntity);
+                scripts.console().message("Saved prefab including all added children");
+            } catch (const std::exception& error) {
+                browser.assets.error = error.what();
+            }
+        }
         terrainEditor.draw(
             world, selectedEntity, browser.assets, history, editAllowed, !playMode.active());
         scripts.componentOutput = componentScripts.messages();
@@ -2064,6 +2135,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     throw std::runtime_error("Model placement exceeds scene/model limits");
                 }
                 editor.finish(world);
+                const auto prefabParent = prefabLevel ? Prefabs::root(world) : Entity{};
                 const auto root = world.create();
                 world.add(root, ObjectName{std::filesystem::path(path).stem().string()});
                 world.add(root,
@@ -2078,7 +2150,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     world.add(root, animation);
                 }
                 if (prefabLevel) {
-                    setParent(world, root, Prefabs::root(world));
+                    setParent(world, root, prefabParent);
                 }
                 for (const auto& part : parts) {
                     const auto child = world.create();
@@ -2347,6 +2419,23 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     camera,
                     sceneRect,
                     editAllowed && !playbackHovered && !cameraLooking && !editor.dragging());
+                Entity clickedBadge;
+                const bool componentBadgeHovered = drawSceneComponentGizmos(
+                    world,
+                    camera,
+                    sceneRect,
+                    selectedEntity,
+                    editAllowed && sceneHovered && !cameraLooking && !orientationInteracting &&
+                        !editor.dragging() && !ImGui::IsAnyItemActive() &&
+                        !cameraModifiersHeld(SDL_GetModState()),
+                    clickedBadge);
+                if (world.alive(clickedBadge)) {
+                    editor.finish(world);
+                    selectedEntity = clickedBadge;
+                    hierarchySelection = {selectedEntity};
+                    clicking = false;
+                    browser.selected.clear();
+                }
                 const auto* sceneRiver = world.tryGet<River>(selectedEntity);
                 bool curveEditing = sceneRiver && sceneRiver->editCurve;
                 bool curveInteracting =
@@ -2364,7 +2453,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 editor.draw(world,
                             selectedEntity,
                             !projectDialog.pending() && !browser.dialog.pending() &&
-                                !orientationInteracting && !playbackHovered && !cameraLooking &&
+                                !orientationInteracting && !playbackHovered &&
+                                !componentBadgeHovered && !cameraLooking &&
                                 !terrainEditor.active(world, selectedEntity) && !curveEditing &&
                                 (!world.has<BoneAttachment>(selectedEntity) ||
                                  !world.get<BoneAttachment>(selectedEntity).enabled) &&
@@ -2418,6 +2508,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 ImGui::SetNextWindowFocus();
             }
             if (beginEditorPanel("Game")) {
+                gameImageOrigin = ImGui::GetCursorScreenPos();
+                gameImageSize = ImGui::GetContentRegionAvail();
                 gameHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
                 gameFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
                 const auto active = activeCamera(world);
@@ -2587,8 +2679,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
             });
             Prefabs::updateDestroyTimers(world, std::min(seconds, .25f));
-            scripts.update(std::min(seconds, 0.25f));
-            componentScripts.update(std::min(seconds, 0.25f));
+            scripts.update(std::min(seconds, 0.25f), seconds);
+            componentScripts.update(std::min(seconds, 0.25f), seconds);
             animations.update(world, browser.assets, std::min(seconds, .25f));
             const auto animationEvents = animations.events;
             for (const auto& event : animationEvents) {
@@ -2674,6 +2766,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (playMode.playing()) {
             updateFPSCameras(world, std::min(seconds, .25f), input);
             updateTPSCameras(world, physics, std::min(seconds, .25f), input);
+            updateRecoil(world, std::min(seconds, .25f));
         }
         BoneAttachments::update(world, browser.assets);
         updateHierarchy(world);
@@ -2901,7 +2994,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (gameVisible && activeCamera(world) != Entity{}) {
                 const auto e = activeCamera(world);
                 const auto& c = world.get<Camera>(e);
-                const auto& t = world.get<Transform>(e);
+                const auto t = recoilCameraPose(world, e, world.get<Transform>(e));
                 glBindFramebuffer(GL_FRAMEBUFFER, gameSurface.framebuffer);
                 try {
                     const int x = static_cast<int>(c.viewportX * gameSurface.width),

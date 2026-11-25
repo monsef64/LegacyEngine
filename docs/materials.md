@@ -23,8 +23,8 @@ material files. Reset overrides to use shared values again. Old projects without
 materials keep their inline colors, checkerboard and specular.
 
 ```lua
-@export albedo Texture
-@export normals Texture
+global Texture albedo =
+global Texture normals =
 
 function onStart()
     local mesh = self:getComponent(MeshRenderer)
@@ -132,3 +132,13 @@ to work. Empty albedo/normal assignments retain the ordinary material fallback.
 This is UV-based anti-tiling, not triplanar projection. It does not fix bad mesh UVs
 and costs more texture fetches than Diffuse/Diffuse Bumped. Existing shader choices
 and saved materials keep their behavior; the new shader is a separate opt-in mode.
+
+### Mesh shadow casting
+
+**MeshRenderer → Cast shadow** (or `mesh.castShadow` in scripts) controls whether
+that mesh casts realtime shadows and direct-light bake shadows. Default is true,
+including older scenes/prefabs. It does not hide the mesh or stop it receiving
+lighting/shadows. Rebake static lighting after changing this setting; existing
+baked shadow pixels cannot be erased by toggling a runtime flag. Terrain shadow
+casting is unaffected. The setting participates in copy/reset, multi-edit, scene
+undo, serialization and Play/Stop rollback.

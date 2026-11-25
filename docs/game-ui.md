@@ -43,7 +43,7 @@ Or expose an Inspector slot and drag a UI component (or an object with UI)
 onto it. The script and UI can be on different objects:
 
 ```lua
-@export HUD UI
+global UI HUD =
 
 function onStart()
     if HUD then
@@ -231,8 +231,8 @@ labels, 4096-byte text (4095 for input content), and finite numbers within
 
 Saved RML/RCSS **GUI** components and exported reference fields load as **UI**;
 new JSON saves use `UI` and format version 26. Binary component identity is
-unchanged. Update scripts explicitly: `getComponent(GUI)` / `@export HUD GUI`
-become `getComponent(UI)` / `@export HUD UI`. Source files are not rewritten
+unchanged. Update scripts explicitly: `getComponent(GUI)` / `global GUI HUD =`
+become `getComponent(UI)` / `global UI HUD =`. Source files are not rewritten
 automatically because `GUI` now names the ImGui namespace.
 
 ### Manual GUI verification

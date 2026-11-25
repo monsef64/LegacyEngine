@@ -10,6 +10,7 @@
 #include "core/ecs.hpp"
 #include "core/math.hpp"
 #include "effects/camera_effects.hpp"
+#include "effects/recoil.hpp"
 #include "effects/decal.hpp"
 #include "effects/environment.hpp"
 #include "effects/fog.hpp"
@@ -56,6 +57,7 @@ struct MeshRenderer {
     std::string model;    // project-relative baked .mesh; empty selects a built-in primitive
     std::string lightmap; // generated direct-light atlas, square-root RGB encoded in TGA
     int lightmapGrid = 0; // automatically generated per-triangle UV chart grid
+    bool castShadow = true;
 };
 
 enum class ColliderShape { Box, Sphere, Capsule, Cone, Mesh };

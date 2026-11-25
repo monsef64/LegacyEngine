@@ -56,3 +56,5 @@ The scripting reference is generated from engine-owned definitions. After changi
 an API or its examples, run `python3 docs/generate_reference.py`, then the docs
 tests and HTML builder above. Use `python3 docs/generate_reference.py --check` to
 check that the committed reference is current.
+
+- [Camera recoil: springs, timed bursts and sequences](recoil.md)

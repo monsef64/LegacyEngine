@@ -73,7 +73,7 @@ inline std::string encodeLegacy(World& world,
         return index;
     };
     std::ostringstream out;
-    out << std::setprecision(9) << "LegacyEngineProject 37\n";
+    out << std::setprecision(9) << "LegacyEngineProject 39\n";
     out << std::quoted(std::string(source)) << '\n'
         << std::quoted(std::string(assetDirectory)) << '\n';
     writeVec(out, camera.target);
@@ -118,7 +118,8 @@ inline std::string encodeLegacy(World& world,
             (world.has<NavMeshAgent>(e) ? 8589934592ull : 0ull) |
             (world.has<NavMeshObstacle>(e) ? 17179869184ull : 0ull) |
             (world.has<UI>(e) ? 68719476736ull : 0ull) |
-            (world.has<Decal>(e) ? 137438953472ull : 0ull);
+            (world.has<Decal>(e) ? 137438953472ull : 0ull) |
+            (world.has<Recoil>(e) ? 274877906944ull : 0ull);
         int parent = -1;
         const Entity p = getParent(world, e);
         for (std::size_t i = 0; i < entities.size(); ++i) {
@@ -162,7 +163,7 @@ inline std::string encodeLegacy(World& world,
             out << std::quoted(m->material) << ' ' << m->materialOverrides << ' '
                 << std::quoted(materialJson(m->materialValues).dump()) << ' '
                 << std::quoted(m->model) << ' ' << std::quoted(m->lightmap) << ' '
-                << m->lightmapGrid << ' ';
+                << m->lightmapGrid << ' ' << m->castShadow << ' ';
         }
         if (auto* c = world.tryGet<Collider>(e)) {
             writeVec(out, c->size);
@@ -254,7 +255,7 @@ inline std::string encodeLegacy(World& world,
         }
         if (const auto* sky = world.tryGet<Skybox>(e)) {
             out << std::quoted(sky->cubemap) << ' ' << sky->affectEnvironment << ' '
-                << sky->environmentIntensity << ' ' << sky->hdrCompression << ' ';
+                << sky->environmentIntensity << ' ' << true << ' ';
         }
         if (const auto* activity = world.tryGet<ObjectActivity>(e)) {
             out << activity->enabled << " ";
@@ -365,6 +366,10 @@ inline std::string encodeLegacy(World& world,
             require(world.has<Transform>(e));
             out << std::quoted(Decals::settings(*d).dump()) << ' ';
         }
+        if (const auto* c = world.tryGet<Recoil>(e)) {
+            (void)Recoils::parse(Recoils::settings(*c));
+            out << std::quoted(Recoils::settings(*c).dump()) << ' ';
+        }
         out << '\n';
     }
     auto text = out.str();
@@ -382,7 +387,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
     std::string magic;
     int version = 0;
     in >> magic >> version;
-    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 37));
+    require(magic == "LegacyEngineProject" && (version >= 1 && version <= 39));
     in >> std::quoted(result.source);
     require(result.source.size() <= maxScript && result.source.find('\0') == std::string::npos);
     if (version >= 4) {
@@ -443,32 +448,33 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
         int parent = -1;
         in >> mask >> parent;
         require(bool(in) &&
-                mask <= (version == 1   ? 31u
-                         : version == 2 ? 63u
-                         : version < 6  ? 127u
-                         : version < 7  ? 255u
-                         : version < 9  ? 511u
-                         : version < 12 ? 4095u
-                         : version < 13 ? 8191u
-                         : version < 14 ? 16383u
-                         : version < 15 ? 32767u
-                         : version < 16 ? 131071u
-                         : version < 20 ? 1048575u
-                         : version < 22 ? 2097151u
-                         : version < 23 ? 4194303u
-                         : version < 24 ? 8388607u
-                         : version < 25 ? 16777215u
-                         : version < 26 ? 33554431u
-                         : version < 27 ? 67108863u
-                         : version < 28 ? 134217727u
-                         : version < 30 ? 536870911u
-                         : version < 31 ? 1073741823u
-                         : version < 32 ? std::uint64_t(UINT32_MAX)
-                         : version < 33 ? 8589934591ull
-                         : version < 34 ? 17179869183ull
-                         : version < 35 ? 68719476735ull
-                         : version < 37 ? 137438953471ull
-                                        : 274877906943ull) &&
+                mask <= (version == 1    ? 31u
+                         : version == 2  ? 63u
+                         : version < 6   ? 127u
+                         : version < 7   ? 255u
+                         : version < 9   ? 511u
+                         : version < 12  ? 4095u
+                         : version < 13  ? 8191u
+                         : version < 14  ? 16383u
+                         : version < 15  ? 32767u
+                         : version < 16  ? 131071u
+                         : version < 20  ? 1048575u
+                         : version < 22  ? 2097151u
+                         : version < 23  ? 4194303u
+                         : version < 24  ? 8388607u
+                         : version < 25  ? 16777215u
+                         : version < 26  ? 33554431u
+                         : version < 27  ? 67108863u
+                         : version < 28  ? 134217727u
+                         : version < 30  ? 536870911u
+                         : version < 31  ? 1073741823u
+                         : version < 32  ? std::uint64_t(UINT32_MAX)
+                         : version < 33  ? 8589934591ull
+                         : version < 34  ? 17179869183ull
+                         : version < 35  ? 68719476735ull
+                         : version < 37  ? 137438953471ull
+                         : version >= 39 ? 549755813887ull
+                                         : 274877906943ull) &&
                 parent >= -1 && parent < count && parent != i);
         const Entity e = result.world.create();
         entities.push_back(e);
@@ -517,6 +523,9 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
                         (m.lightmap.empty() || (materialPathValid(m.lightmap) &&
                                                 (AssetManager::extension(m.lightmap) == ".tga" ||
                                                  AssetManager::extension(m.lightmap) == ".png"))));
+            }
+            if (version >= 38) {
+                in >> m.castShadow;
             }
             result.world.add(e, m);
         }
@@ -702,6 +711,7 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             if (version >= 36) {
                 in >> sky.hdrCompression;
             }
+            sky.hdrCompression = true; // Old serialized flags are consumed for compatibility only.
             require(validSkybox(sky));
             result.world.add(e, sky);
         }
@@ -745,7 +755,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::string text;
             in >> std::quoted(text);
             auto types = parseJson(text).get<std::vector<int>>();
-            require(types.size() <= (version >= 37   ? 34u
+            require(types.size() <= (version >= 39   ? 35u
+                                     : version >= 37 ? 34u
                                      : version >= 35 ? 33u
                                      : version >= 34 ? 32u
                                      : version >= 33 ? 30u
@@ -762,7 +773,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             std::vector<int> seen;
             for (int id : types) {
                 require(id >= 0 &&
-                        id < (version >= 37   ? 34
+                        id < (version >= 39   ? 35
+                              : version >= 37 ? 34
                               : version >= 35 ? 33
                               : version >= 34 ? 32
                               : version >= 33 ? 30
@@ -916,6 +928,12 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> std::quoted(data);
             require(data.size() <= 16384 && (mask & 2));
             result.world.add(e, Decals::parse(parseJson(data)));
+        }
+        if (mask & 274877906944ull) {
+            std::string data;
+            in >> std::quoted(data);
+            require(data.size() <= 32768);
+            result.world.add(e, Recoils::parse(parseJson(data)));
         }
         require(bool(in));
     }

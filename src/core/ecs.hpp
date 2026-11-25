@@ -1,3 +1,4 @@
+#include <atomic>
 #include <stdexcept>
 // A small entity-component system (ECS).
 //
@@ -335,8 +336,10 @@ class World {
     // Every component type gets a number the first time it is used; that
     // number is the position of its pool in `pools_`.
     static std::size_t nextTypeId() {
-        static std::size_t next = 0;
-        return next++;
+        // Different private Worlds may first encounter distinct component types
+        // concurrently during worker-side level/prefab decoding.
+        static std::atomic<std::size_t> next{0};
+        return next.fetch_add(1, std::memory_order_relaxed);
     }
 
     template <typename T> static std::size_t typeId() {

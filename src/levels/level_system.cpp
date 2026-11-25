@@ -1,4 +1,8 @@
 #include "levels/level_system.hpp"
+#include "audio/audio_clip.hpp"
+#include "core/worker_pool.hpp"
+#include "prefabs/prefab.hpp"
+#include "project/export_dependencies.hpp"
 
 std::string LevelSystem::read(const std::filesystem::path& file) {
     if (std::filesystem::file_size(file) > ProjectIO::maxBytes) {
@@ -22,9 +26,10 @@ void LevelSystem::manifest() {
 
 void LevelSystem::cancel() {
     if (reader_.valid()) {
-        reader_ = std::future<std::string>{};
+        reader_ = std::future<Transition>{};
     }
     pending_ = false;
+    prepared_.reset();
     failure_.reset();
     bytes_.clear();
     requested_.clear();
@@ -170,13 +175,23 @@ bool LevelSystem::load(std::string name, bool async) {
     }
     try {
         auto file = assets_.resolve(path(name));
-        if (async) {
-            reader_ = std::async(std::launch::async, [file] { return read(file); });
-        } else {
-            bytes_ = read(file);
+        // Both APIs stage decoding/preloading off-thread. The ordinary API may
+        // read its small level file now; neither publishes a partially loaded world.
+        auto bytes = async ? std::string{} : read(file);
+        auto job = WorkerPool::shared().submit(
+            [assets = assets_, meshes = meshes_, name, file, bytes = std::move(bytes)]() mutable {
+                if (bytes.empty()) {
+                    bytes = read(file);
+                }
+                return prepare(assets, meshes, name, std::move(bytes));
+            });
+        if (!job) {
+            throw std::runtime_error("Level preload worker queue is full");
         }
+        reader_ = std::move(*job);
         requested_ = name;
         pending_ = true;
+        preloadStarted_ = std::chrono::steady_clock::now();
         unload_ = false;
         error.clear();
         return true;
@@ -218,27 +233,83 @@ std::optional<LevelSystem::Transition> LevelSystem::poll() {
     if (!pending_) {
         return {};
     }
-    if (reader_.valid() && reader_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-        return {};
-    }
-    pending_ = false;
     try {
+        if (!unload_ &&
+            std::chrono::steady_clock::now() - preloadStarted_ > std::chrono::seconds(120)) {
+            throw std::runtime_error("Asset preloading timed out");
+        }
+        if (reader_.valid() &&
+            reader_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            return {};
+        }
         if (reader_.valid()) {
-            bytes_ = reader_.get();
+            prepared_ = reader_.get();
         }
-        auto loaded = std::make_unique<ProjectIO::Loaded>();
-        if (!unload_) {
-            ProjectIO::decode(bytes_, *loaded, meshes_);
+        if (unload_) {
+            auto loaded = std::make_unique<ProjectIO::Loaded>();
+            prepared_ = Transition{requested_, std::move(loaded)};
         }
-        bytes_.clear();
+        if (!prepared_) {
+            return {};
+        }
+        if (preload && !unload_ && !preload(*prepared_)) {
+            return {};
+        }
+        pending_ = false;
         error.clear();
-        return Transition{requested_, std::move(loaded)};
+        auto result = std::move(prepared_);
+        prepared_.reset();
+        return result;
     } catch (const std::exception& e) {
-        bytes_.clear();
+        pending_ = false;
+        prepared_.reset();
         error = e.what();
         failure_ = Failure{requested_, error};
         return {};
     }
+}
+
+LevelSystem::Transition LevelSystem::prepare(AssetManager assets,
+                                             ProjectIO::Meshes meshes,
+                                             std::string name,
+                                             std::string bytes) {
+    Transition result;
+    result.name = std::move(name);
+    result.level = std::make_unique<ProjectIO::Loaded>();
+    ProjectIO::decode(bytes, *result.level, meshes);
+    Prefabs::validateLinks(assets, result.level->world, meshes);
+    result.level->world.each<Terrain>([&](Entity, Terrain& t) {
+        if (!t.asset.empty()) {
+            Terrains::load(t, assets);
+        }
+    });
+    // Serialize after prefab refresh so child assets and exposed overrides are included.
+    const auto scene =
+        ProjectIO::encode(result.level->world, result.level->source, result.level->camera, meshes);
+    std::set<std::string> members;
+    result.assets = GameExport::exportDependencies(assets, scene, "", false, &members);
+    result.assets.insert(members.begin(), members.end());
+    std::size_t audioBytes = 0;
+    for (const auto& path : result.assets) {
+        if (Prefabs::asset(path)) {
+            (void)Prefabs::load(assets, path, meshes);
+        }
+        if (audioAsset(path)) {
+            auto samples = decodeAudioClip(assets, path);
+            audioBytes += samples.size() * sizeof(float);
+            if (audioBytes > 256 * 1024 * 1024) {
+                throw std::runtime_error("Level audio preload exceeds 256 MiB");
+            }
+            result.audio.emplace(path, std::move(samples));
+        }
+        if (animationAsset(path)) {
+            if (result.clips.size() >= 64) {
+                throw std::runtime_error("Level animation preload exceeds 64 clips");
+            }
+            result.clips.emplace(path, loadAnimationClip(assets, path));
+        }
+    }
+    return result;
 }
 
 void LevelSystem::commit(const std::string& name, bool persist) {
