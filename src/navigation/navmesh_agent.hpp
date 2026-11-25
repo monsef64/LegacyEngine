@@ -7,6 +7,7 @@
 struct NavMeshAgent {
     bool enabled = true, stopped = false;
     float speed = 3.5f, stoppingDistance = .15f;
+    float heightOffset = 0; // World-space pivot height above the navigation surface.
     bool updateRotation = true;
     float angularSpeed = 360;
     // Runtime request/status; not saved. All travel is constrained by Detour.
@@ -23,6 +24,7 @@ namespace Navigation {
 inline Json agentSettings(const NavMeshAgent& a) {
     return {{"enabled", a.enabled},
             {"speed", a.speed},
+            {"heightOffset", a.heightOffset},
             {"stoppingDistance", a.stoppingDistance},
             {"updateRotation", a.updateRotation},
             {"angularSpeed", a.angularSpeed}};
@@ -34,6 +36,10 @@ inline NavMeshAgent parseAgent(const Json& j) {
     a.angularSpeed = j.value("angularSpeed", 360.f);
     if (!std::isfinite(a.angularSpeed) || a.angularSpeed < 0 || a.angularSpeed > 3600) {
         throw std::runtime_error("Invalid angular speed");
+    }
+    a.heightOffset = j.value("heightOffset", 0.f);
+    if (!std::isfinite(a.heightOffset) || std::abs(a.heightOffset) > 1000) {
+        throw std::runtime_error("Invalid NavMeshAgent height offset");
     }
     a.speed = j.value("speed", 3.5f);
     a.stoppingDistance = j.value("stoppingDistance", .15f);

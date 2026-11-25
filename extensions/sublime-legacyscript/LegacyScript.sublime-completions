@@ -2,6 +2,126 @@
   "scope": "source.legacyscript - comment - string",
   "completions": [
     {
+      "trigger": "Screen",
+      "contents": "Screen",
+      "annotation": "LegacyEngine",
+      "details": "Screen.width/height/currentResolution (read-only), brightness (0..1), fullScreen; getResolutions(), getResolution(w,h), setResolution(w,h), takeScreenshot(relativePngPath)."
+    },
+    {
+      "trigger": "Game",
+      "contents": "Game",
+      "annotation": "LegacyEngine",
+      "details": "Game.companyName/getDataPath/isEditor/isFocused/userDataPath/engineVersion (read-only), targetFrameRate (-1 or 1..1000), blockGameKilling; openURL(httpUrl), quit()."
+    },
+    {
+      "trigger": "Game.save/load",
+      "contents": "Game.save/load",
+      "annotation": "LegacyEngine",
+      "details": "Game.saveString/Int/Float/Bool/Table/Vector3(key,value); Game.loadString/Int/Float/Bool/Table/Vector3(key,default). Persisted per game; replaces the former Saving namespace."
+    },
+    {
+      "trigger": "randomFloat",
+      "contents": "randomFloat",
+      "annotation": "LegacyEngine",
+      "details": "randomFloat(min:number,max:number):number - Uniform finite floating sample; min <= max."
+    },
+    {
+      "trigger": "randomInt",
+      "contents": "randomInt",
+      "annotation": "LegacyEngine",
+      "details": "randomInt(min:integer,max:integer):integer - Inclusive uniform integer sample."
+    },
+    {
+      "trigger": "randomBool",
+      "contents": "randomBool",
+      "annotation": "LegacyEngine",
+      "details": "randomBool():boolean - Equally likely true or false."
+    },
+    {
+      "trigger": "randomString",
+      "contents": "randomString",
+      "annotation": "LegacyEngine",
+      "details": "randomString(length:integer):string - 0..4096 alphanumeric characters, not cryptographic."
+    },
+    {
+      "trigger": "castShadow",
+      "contents": "castShadow",
+      "annotation": "LegacyEngine",
+      "details": "MeshRenderer.castShadow: boolean, default true. Controls realtime and baked shadow casting; rebake static lighting after changing."
+    },
+    {
+      "trigger": "Recoil",
+      "contents": "Recoil",
+      "annotation": "LegacyEngine",
+      "details": "Recoil - Camera > Recoil. Render-only six-axis damped spring, bounded stacking, seeded variation, timed bursts and scheduled sequences. trigger(strength=1), start(), stop(), reset(), playSequence(), setSequence(keys)."
+    },
+    {
+      "trigger": "onAnimationRestarted",
+      "contents": "onAnimationRestarted",
+      "annotation": "LegacyEngine",
+      "details": "onAnimationRestarted() - Owner callback on replay or loop wrap. Animation.onRestarted is the corresponding wait token."
+    },
+    {
+      "trigger": "Random",
+      "contents": "Random",
+      "annotation": "LegacyEngine",
+      "details": "Random.randomFloat(min,max), randomInt(min,max), randomBool(), randomString(length). Also available globally; non-cryptographic."
+    },
+    {
+      "trigger": "AnimationClip",
+      "contents": "AnimationClip",
+      "annotation": "LegacyEngine",
+      "details": "AnimationClip(path:string):string - Checked .leanim asset path for Animation.playClip/crossFade."
+    },
+    {
+      "trigger": "playClip",
+      "contents": "playClip",
+      "annotation": "LegacyEngine",
+      "details": "animation:playClip(AnimationClip(path)) - Plays a selected clip; decoding is asynchronous and Stop cancels pending playback."
+    },
+    {
+      "trigger": "global",
+      "contents": "global",
+      "annotation": "LegacyEngine",
+      "details": "global Type name = default - Inspector fields; int, float, bool, string, Prefab, AnimationClip, Texture, AudioClip and component references."
+    },
+    {
+      "trigger": "File",
+      "contents": "File",
+      "annotation": "LegacyEngine",
+      "details": "File.open(relativePath,mode), read(handle,format), write(handle,text), close(handle), flush(handle), seek(handle,whence,offset), lines(handleOrPath), rename(old,new), remove(path). Sandboxed under Game.userDataPath."
+    },
+    {
+      "trigger": "OnResolutionChanged",
+      "contents": "OnResolutionChanged",
+      "annotation": "LegacyEngine",
+      "details": "OnResolutionChanged(resolution) - resolution has width, height, refreshRate. Also on(eventName, callback)."
+    },
+    {
+      "trigger": "OnFocusLost",
+      "contents": "OnFocusLost",
+      "annotation": "LegacyEngine",
+      "details": "OnFocusLost() - native game window lost focus."
+    },
+    {
+      "trigger": "OnFocus",
+      "contents": "OnFocus",
+      "annotation": "LegacyEngine",
+      "details": "OnFocus() - native game window gained focus."
+    },
+    {
+      "trigger": "OnUrlOpened",
+      "contents": "OnUrlOpened",
+      "annotation": "LegacyEngine",
+      "details": "OnUrlOpened(url) - OS accepted an HTTP/HTTPS launch request."
+    },
+    {
+      "trigger": "OnGamePreQuit",
+      "contents": "OnGamePreQuit",
+      "annotation": "LegacyEngine",
+      "details": "OnGamePreQuit() - start tasks or hold Game.blockGameKilling; graceful quit waits at most ten seconds."
+    },
+    {
       "trigger": "GUI.image",
       "contents": "GUI.image",
       "annotation": "LegacyEngine",
@@ -572,10 +692,16 @@
       "details": "GUI.getDisplaySize():number,number - Returns Game-surface pixel width,height."
     },
     {
+      "trigger": "Decal",
+      "contents": "Decal",
+      "annotation": "LegacyEngine",
+      "details": "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder. Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."
+    },
+    {
       "trigger": "UI",
       "contents": "UI",
       "annotation": "LegacyEngine",
-      "details": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or @export hud UI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
+      "details": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or global UI hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
     },
     {
       "trigger": "Vector3",
@@ -593,7 +719,7 @@
       "trigger": "NavMeshAgent",
       "contents": "NavMeshAgent",
       "annotation": "LegacyEngine",
-      "details": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(). Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Agent origin is at feet. No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
+      "details": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), heightOffset (-1000..1000 world units), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(), stop(), start(), setSpeed(speed), setHeightOffset(height). stop/start preserve the route. Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Use heightOffset to raise centered pivots above the navigation surface (default 0 for foot pivots). No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
     },
     {
       "trigger": "TPSCamera",
@@ -740,10 +866,16 @@
       "details": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles/Blood/Explosion); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"
     },
     {
+      "trigger": "Animator",
+      "contents": "Animator",
+      "annotation": "LegacyEngine",
+      "details": "Animator - controller-backed state machine. Fields controller (.controller asset), enabled, playOnStart; read-only currentState, stateTime, isPlaying, paused, error. Methods setBool(name,value), setInt(name,value), setFloat(name,value), getBool(name), getInt(name), getFloat(name), play(state), crossFade(state,seconds=0.2), stop(), pause(), resume(), hasState(name). States reference .leanim clips with per-state loop. Ordered transitions combine typed conditions, normalized exit time and fade seconds. Edit graph in Windows > Animator. Animator owns the object's Animation backend while running."
+    },
+    {
       "trigger": "Animation",
       "contents": "Animation",
       "annotation": "LegacyEngine",
-      "details": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"
+      "details": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25), playClip(clip); onFinished/onStarted/onRestarted/onStopped/onPaused/onResumed wait tokens; isPlaying is read-only"
     },
     {
       "trigger": "onAnimationFinish",
@@ -1031,7 +1163,7 @@
       "trigger": "wait",
       "contents": "wait",
       "annotation": "LegacyEngine",
-      "details": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event"
+      "details": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio/animation component event"
     },
     {
       "trigger": "isActive",
@@ -1091,7 +1223,7 @@
       "trigger": "loadLevelAsync",
       "contents": "loadLevelAsync",
       "annotation": "LegacyEngine",
-      "details": "loadLevelAsync(name=nil) -> accepted, error; background file read"
+      "details": "loadLevelAsync(name=nil) -> accepted, error; background decoding and asset preloading"
     },
     {
       "trigger": "unloadLevel",
@@ -1163,7 +1295,7 @@
       "trigger": "Texture",
       "contents": "Texture",
       "annotation": "LegacyEngine",
-      "details": "Texture - export-only image or HDR asset path; @export image Texture"
+      "details": "Texture - export-only image or HDR asset path; global Texture image ="
     },
     {
       "trigger": "AudioListener",
@@ -1718,12 +1850,6 @@
       "details": "onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task."
     },
     {
-      "trigger": "hdrCompression",
-      "contents": "hdrCompression",
-      "annotation": "LegacyEngine",
-      "details": "Skybox.hdrCompression: boolean, default false. Packed RGB9_E5 GPU HDR storage (4 bytes/pixel instead of RGB16F 6); lower precision, source unchanged."
-    },
-    {
       "trigger": "onUpdate",
       "contents": "onUpdate",
       "annotation": "LegacyEngine",
@@ -1895,7 +2021,7 @@
       "trigger": "setMaterialShader",
       "contents": "setMaterialShader",
       "annotation": "LegacyEngine",
-      "details": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"
+      "details": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection'|'Stochastic Texture Sampling')"
     },
     {
       "trigger": "setMaterialNormalStrength",
@@ -2132,6 +2258,12 @@
       "details": "number"
     },
     {
+      "trigger": "getScript",
+      "contents": "getScript",
+      "annotation": "GameObject",
+      "details": "fun(name:string):NamedScriptComponent|nil"
+    },
+    {
       "trigger": "name",
       "contents": "name",
       "annotation": "GameObject",
@@ -2147,37 +2279,37 @@
       "trigger": "getComponent",
       "contents": "getComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "getComponentInParent",
       "contents": "getComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "getComponentInChildren",
       "contents": "getComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "findComponentInParent",
       "contents": "findComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "findComponentInChildren",
       "contents": "findComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil"
     },
     {
       "trigger": "addComponent",
       "contents": "addComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal"
     },
     {
       "trigger": "removeComponent",
@@ -2212,6 +2344,12 @@
     {
       "trigger": "onAnimationResume",
       "contents": "onAnimationResume",
+      "annotation": "GameObject",
+      "details": "fun()|nil"
+    },
+    {
+      "trigger": "onAnimationRestarted",
+      "contents": "onAnimationRestarted",
       "annotation": "GameObject",
       "details": "fun()|nil"
     },
@@ -2660,6 +2798,12 @@
       "details": "Transform Collider owner transform"
     },
     {
+      "trigger": "castShadow",
+      "contents": "castShadow",
+      "annotation": "MeshRenderer",
+      "details": "boolean Cast realtime/baked shadows; default true. Rebake static lighting after changes."
+    },
+    {
       "trigger": "material",
       "contents": "material",
       "annotation": "MeshRenderer",
@@ -2693,7 +2837,7 @@
       "trigger": "setMaterialShader",
       "contents": "setMaterialShader",
       "annotation": "MeshRenderer",
-      "details": "fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection"
+      "details": "fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent, Diffuse Reflection or Stochastic Texture Sampling"
     },
     {
       "trigger": "setMaterialNormalStrength",
@@ -3410,12 +3554,6 @@
       "details": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
     },
     {
-      "trigger": "hdrCompression",
-      "contents": "hdrCompression",
-      "annotation": "Skybox",
-      "details": "boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged"
-    },
-    {
       "trigger": "type",
       "contents": "type",
       "annotation": "Skybox",
@@ -3884,6 +4022,42 @@
       "details": "integer"
     },
     {
+      "trigger": "onFinished",
+      "contents": "onFinished",
+      "annotation": "Animation",
+      "details": "ComponentEvent Natural nonloop completion, not Stop."
+    },
+    {
+      "trigger": "onRestarted",
+      "contents": "onRestarted",
+      "annotation": "Animation",
+      "details": "ComponentEvent Explicit restart or loop wrap."
+    },
+    {
+      "trigger": "onStopped",
+      "contents": "onStopped",
+      "annotation": "Animation",
+      "details": "ComponentEvent Stop or Reset while active."
+    },
+    {
+      "trigger": "onStarted",
+      "contents": "onStarted",
+      "annotation": "Animation",
+      "details": "ComponentEvent Playback starts after the clip is ready."
+    },
+    {
+      "trigger": "onPaused",
+      "contents": "onPaused",
+      "annotation": "Animation",
+      "details": "ComponentEvent Playback paused."
+    },
+    {
+      "trigger": "onResumed",
+      "contents": "onResumed",
+      "annotation": "Animation",
+      "details": "ComponentEvent Playback resumed."
+    },
+    {
       "trigger": "gameObject",
       "contents": "gameObject",
       "annotation": "Animation",
@@ -3936,6 +4110,12 @@
       "contents": "play",
       "annotation": "Animation",
       "details": "fun(self:Animation)"
+    },
+    {
+      "trigger": "playClip",
+      "contents": "playClip",
+      "annotation": "Animation",
+      "details": "fun(self:Animation,clip:string) Play an AnimationClip path value; loads asynchronously if needed."
     },
     {
       "trigger": "stop",
@@ -5166,6 +5346,36 @@
       "contents": "speed",
       "annotation": "NavMeshAgent",
       "details": "number Movement speed, 0..100 metres/second"
+    },
+    {
+      "trigger": "heightOffset",
+      "contents": "heightOffset",
+      "annotation": "NavMeshAgent",
+      "details": "number World-space pivot height above the navmesh, -1000..1000; default 0"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent) Pause movement and clear velocity, keeping the route"
+    },
+    {
+      "trigger": "start",
+      "contents": "start",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent) Resume the existing route without discarding it"
+    },
+    {
+      "trigger": "setSpeed",
+      "contents": "setSpeed",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent, speed:number) Set movement speed, 0..100"
+    },
+    {
+      "trigger": "setHeightOffset",
+      "contents": "setHeightOffset",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent, height:number) Set pivot height above the surface, -1000..1000"
     },
     {
       "trigger": "stoppingDistance",
@@ -6516,6 +6726,654 @@
       "contents": "COUNT",
       "annotation": "GUIColors",
       "details": "integer"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Decal",
+      "details": "boolean"
+    },
+    {
+      "trigger": "texture",
+      "contents": "texture",
+      "annotation": "Decal",
+      "details": "string"
+    },
+    {
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "Decal",
+      "details": "Vec3 Tint, read as a copy; assign the whole vector to update."
+    },
+    {
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "Decal",
+      "details": "number"
+    },
+    {
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "Decal",
+      "details": "number"
+    },
+    {
+      "trigger": "depth",
+      "contents": "depth",
+      "annotation": "Decal",
+      "details": "number"
+    },
+    {
+      "trigger": "opacity",
+      "contents": "opacity",
+      "annotation": "Decal",
+      "details": "number"
+    },
+    {
+      "trigger": "sortingOrder",
+      "contents": "sortingOrder",
+      "annotation": "Decal",
+      "details": "integer"
+    },
+    {
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "ScreenResolution",
+      "details": "integer"
+    },
+    {
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "ScreenResolution",
+      "details": "integer"
+    },
+    {
+      "trigger": "refreshRate",
+      "contents": "refreshRate",
+      "annotation": "ScreenResolution",
+      "details": "number"
+    },
+    {
+      "trigger": "brightness",
+      "contents": "brightness",
+      "annotation": "ScreenAPI",
+      "details": "number Rendered-game brightness, 0..1 (not monitor brightness)."
+    },
+    {
+      "trigger": "currentResolution",
+      "contents": "currentResolution",
+      "annotation": "ScreenAPI",
+      "details": "ScreenResolution Read-only display mode."
+    },
+    {
+      "trigger": "fullScreen",
+      "contents": "fullScreen",
+      "annotation": "ScreenAPI",
+      "details": "boolean Separate game/player windows only."
+    },
+    {
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "ScreenAPI",
+      "details": "integer Read-only game render width in pixels."
+    },
+    {
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "ScreenAPI",
+      "details": "integer Read-only game render height in pixels."
+    },
+    {
+      "trigger": "getResolutions",
+      "contents": "getResolutions",
+      "annotation": "ScreenAPI",
+      "details": "fun():ScreenResolution[]"
+    },
+    {
+      "trigger": "getResolution",
+      "contents": "getResolution",
+      "annotation": "ScreenAPI",
+      "details": "fun(width:integer,height:integer):boolean Checks availability."
+    },
+    {
+      "trigger": "setResolution",
+      "contents": "setResolution",
+      "annotation": "ScreenAPI",
+      "details": "fun(width:integer,height:integer):boolean|nil,error?:string Separate game/player windows only."
+    },
+    {
+      "trigger": "takeScreenshot",
+      "contents": "takeScreenshot",
+      "annotation": "ScreenAPI",
+      "details": "fun(path:string):boolean|nil,error?:string Queue a PNG under userDataPath."
+    },
+    {
+      "trigger": "companyName",
+      "contents": "companyName",
+      "annotation": "GameAPI",
+      "details": "string Read-only."
+    },
+    {
+      "trigger": "getDataPath",
+      "contents": "getDataPath",
+      "annotation": "GameAPI",
+      "details": "string Read-only mounted game asset directory (a property)."
+    },
+    {
+      "trigger": "isEditor",
+      "contents": "isEditor",
+      "annotation": "GameAPI",
+      "details": "boolean Read-only."
+    },
+    {
+      "trigger": "isFocused",
+      "contents": "isFocused",
+      "annotation": "GameAPI",
+      "details": "boolean Read-only native-window focus."
+    },
+    {
+      "trigger": "userDataPath",
+      "contents": "userDataPath",
+      "annotation": "GameAPI",
+      "details": "string Read-only per-game persistent directory."
+    },
+    {
+      "trigger": "engineVersion",
+      "contents": "engineVersion",
+      "annotation": "GameAPI",
+      "details": "string Read-only."
+    },
+    {
+      "trigger": "blockGameKilling",
+      "contents": "blockGameKilling",
+      "annotation": "GameAPI",
+      "details": "boolean Holds normal graceful quit until cleared or the ten-second timeout."
+    },
+    {
+      "trigger": "targetFrameRate",
+      "contents": "targetFrameRate",
+      "annotation": "GameAPI",
+      "details": "integer -1 uncapped, or 1..1000; VSync may cap further."
+    },
+    {
+      "trigger": "openURL",
+      "contents": "openURL",
+      "annotation": "GameAPI",
+      "details": "fun(url:string):boolean|nil,error?:string HTTP/HTTPS only; success means handed to OS."
+    },
+    {
+      "trigger": "quit",
+      "contents": "quit",
+      "annotation": "GameAPI",
+      "details": "fun() Deferred graceful quit; stops Play in editor."
+    },
+    {
+      "trigger": "saveString",
+      "contents": "saveString",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:string):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadString",
+      "contents": "loadString",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:string):string|nil,error?:string"
+    },
+    {
+      "trigger": "saveInt",
+      "contents": "saveInt",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:integer):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadInt",
+      "contents": "loadInt",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:integer):integer|nil,error?:string"
+    },
+    {
+      "trigger": "saveFloat",
+      "contents": "saveFloat",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:number):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadFloat",
+      "contents": "loadFloat",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:number):number|nil,error?:string"
+    },
+    {
+      "trigger": "saveBool",
+      "contents": "saveBool",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:boolean):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadBool",
+      "contents": "loadBool",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:boolean):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "saveTable",
+      "contents": "saveTable",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:table):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadTable",
+      "contents": "loadTable",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:table):table|nil,error?:string"
+    },
+    {
+      "trigger": "saveVector3",
+      "contents": "saveVector3",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:Vec3):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "loadVector3",
+      "contents": "loadVector3",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:Vec3):Vec3|nil,error?:string"
+    },
+    {
+      "trigger": "open",
+      "contents": "open",
+      "annotation": "FileAPI",
+      "details": "fun(path:string,mode:string):GameFile|nil,error?:string r/rb/w/wb/a/ab; sandboxed paths."
+    },
+    {
+      "trigger": "read",
+      "contents": "read",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile,format?:string|integer):string|nil,error?:string Default *l; also *a or byte count."
+    },
+    {
+      "trigger": "write",
+      "contents": "write",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile,data:string):boolean|nil,error?:string"
+    },
+    {
+      "trigger": "close",
+      "contents": "close",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile)"
+    },
+    {
+      "trigger": "flush",
+      "contents": "flush",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile):boolean"
+    },
+    {
+      "trigger": "seek",
+      "contents": "seek",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile,whence?:string,offset?:integer):integer|nil,error?:string set/cur/end."
+    },
+    {
+      "trigger": "lines",
+      "contents": "lines",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile|string):fun():string|nil Path form auto-closes at EOF."
+    },
+    {
+      "trigger": "rename",
+      "contents": "rename",
+      "annotation": "FileAPI",
+      "details": "fun(oldPath:string,newPath:string):boolean|nil,error?:string Never overwrites."
+    },
+    {
+      "trigger": "remove",
+      "contents": "remove",
+      "annotation": "FileAPI",
+      "details": "fun(path:string):boolean|nil,error?:string Files only."
+    },
+    {
+      "trigger": "randomFloat",
+      "contents": "randomFloat",
+      "annotation": "RandomAPI",
+      "details": "fun(min:number,max:number):number Finite bounds, min <= max; uniform floating sample."
+    },
+    {
+      "trigger": "randomInt",
+      "contents": "randomInt",
+      "annotation": "RandomAPI",
+      "details": "fun(min:integer,max:integer):integer Inclusive uniform bounds."
+    },
+    {
+      "trigger": "randomBool",
+      "contents": "randomBool",
+      "annotation": "RandomAPI",
+      "details": "fun():boolean Equally likely true/false."
+    },
+    {
+      "trigger": "randomString",
+      "contents": "randomString",
+      "annotation": "RandomAPI",
+      "details": "fun(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic."
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Recoil",
+      "details": "boolean Render-only local camera recoil, independent of FPS/TPS Transform."
+    },
+    {
+      "trigger": "playOnStart",
+      "contents": "playOnStart",
+      "annotation": "Recoil",
+      "details": "boolean Start burst, or sequence if keys exist."
+    },
+    {
+      "trigger": "sequenceLoop",
+      "contents": "sequenceLoop",
+      "annotation": "Recoil",
+      "details": "boolean Repeat the scheduled sequence."
+    },
+    {
+      "trigger": "burstCount",
+      "contents": "burstCount",
+      "annotation": "Recoil",
+      "details": "integer Zero repeats until stopped or duration expires."
+    },
+    {
+      "trigger": "seed",
+      "contents": "seed",
+      "annotation": "Recoil",
+      "details": "integer Nonnegative pseudorandom seed."
+    },
+    {
+      "trigger": "isFiring",
+      "contents": "isFiring",
+      "annotation": "Recoil",
+      "details": "boolean Read-only burst/sequence activity, not recovery state."
+    },
+    {
+      "trigger": "trigger",
+      "contents": "trigger",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil,strength?:number) One impulse; multiplier 0..10, default 1."
+    },
+    {
+      "trigger": "start",
+      "contents": "start",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Start/restart timed burst after delay."
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Stop future impulses; let the spring recover."
+    },
+    {
+      "trigger": "reset",
+      "contents": "reset",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Stop and zero offsets immediately."
+    },
+    {
+      "trigger": "playSequence",
+      "contents": "playSequence",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Start the authored sequence after delay."
+    },
+    {
+      "trigger": "setSequence",
+      "contents": "setSequence",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil,keys:RecoilKey[]) Replace sorted keys; stops firing."
+    },
+    {
+      "trigger": "pitch",
+      "contents": "pitch",
+      "annotation": "Recoil",
+      "details": "number Degrees, -45..45. Positive lifts the view."
+    },
+    {
+      "trigger": "yaw",
+      "contents": "yaw",
+      "annotation": "Recoil",
+      "details": "number Degrees, -45..45."
+    },
+    {
+      "trigger": "roll",
+      "contents": "roll",
+      "annotation": "Recoil",
+      "details": "number Degrees, -45..45."
+    },
+    {
+      "trigger": "back",
+      "contents": "back",
+      "annotation": "Recoil",
+      "details": "number Metres, -1..1; positive local Z kicks backward."
+    },
+    {
+      "trigger": "up",
+      "contents": "up",
+      "annotation": "Recoil",
+      "details": "number Metres, -1..1."
+    },
+    {
+      "trigger": "side",
+      "contents": "side",
+      "annotation": "Recoil",
+      "details": "number Metres, -1..1."
+    },
+    {
+      "trigger": "rotationRandom",
+      "contents": "rotationRandom",
+      "annotation": "Recoil",
+      "details": "number Independent random angle amplitude, 0..45 degrees."
+    },
+    {
+      "trigger": "positionRandom",
+      "contents": "positionRandom",
+      "annotation": "Recoil",
+      "details": "number Fraction of absolute back displacement, 0..2."
+    },
+    {
+      "trigger": "frequency",
+      "contents": "frequency",
+      "annotation": "Recoil",
+      "details": "number Angular spring frequency, 0.1..40 Hz."
+    },
+    {
+      "trigger": "damping",
+      "contents": "damping",
+      "annotation": "Recoil",
+      "details": "number Angular damping ratio, 0.1..3; one is critical damping."
+    },
+    {
+      "trigger": "positionFrequency",
+      "contents": "positionFrequency",
+      "annotation": "Recoil",
+      "details": "number Position spring frequency, 0.1..40 Hz."
+    },
+    {
+      "trigger": "positionDamping",
+      "contents": "positionDamping",
+      "annotation": "Recoil",
+      "details": "number Position damping ratio, 0.1..3."
+    },
+    {
+      "trigger": "maxAngle",
+      "contents": "maxAngle",
+      "annotation": "Recoil",
+      "details": "number Combined angular displacement cap, 0..89 degrees."
+    },
+    {
+      "trigger": "maxDistance",
+      "contents": "maxDistance",
+      "annotation": "Recoil",
+      "details": "number Combined positional displacement cap, 0..2 metres."
+    },
+    {
+      "trigger": "interval",
+      "contents": "interval",
+      "annotation": "Recoil",
+      "details": "number Timed shot spacing / sequence loop gap, 0.01..60 seconds."
+    },
+    {
+      "trigger": "duration",
+      "contents": "duration",
+      "annotation": "Recoil",
+      "details": "number Burst duration after delay, 0..3600; zero unlimited."
+    },
+    {
+      "trigger": "delay",
+      "contents": "delay",
+      "annotation": "Recoil",
+      "details": "number Start delay, 0..3600 seconds."
+    },
+    {
+      "trigger": "strength",
+      "contents": "strength",
+      "annotation": "Recoil",
+      "details": "number Global impulse multiplier, 0..10."
+    },
+    {
+      "trigger": "recovery",
+      "contents": "recovery",
+      "annotation": "Recoil",
+      "details": "number Spring frequency multiplier, 0.1..4."
+    },
+    {
+      "trigger": "time",
+      "contents": "time",
+      "annotation": "RecoilKey",
+      "details": "number Seconds from sequence start, 0..3600; sorted ascending."
+    },
+    {
+      "trigger": "strength",
+      "contents": "strength",
+      "annotation": "RecoilKey",
+      "details": "number Optional impulse multiplier, 0..10; default 1."
+    },
+    {
+      "trigger": "controller",
+      "contents": "controller",
+      "annotation": "Animator",
+      "details": "string Project-relative .controller file"
+    },
+    {
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Animator",
+      "details": "boolean Pause/resume the state machine and its backend"
+    },
+    {
+      "trigger": "playOnStart",
+      "contents": "playOnStart",
+      "annotation": "Animator",
+      "details": "boolean Enter the controller entry state automatically; default true"
+    },
+    {
+      "trigger": "currentState",
+      "contents": "currentState",
+      "annotation": "Animator",
+      "details": "string Read-only current state name"
+    },
+    {
+      "trigger": "stateTime",
+      "contents": "stateTime",
+      "annotation": "Animator",
+      "details": "number Read-only elapsed playback seconds in the current state"
+    },
+    {
+      "trigger": "isPlaying",
+      "contents": "isPlaying",
+      "annotation": "Animator",
+      "details": "boolean Read-only; state machine is running, enabled and unpaused (it may hold a finished nonlooping state)"
+    },
+    {
+      "trigger": "paused",
+      "contents": "paused",
+      "annotation": "Animator",
+      "details": "boolean Read-only paused flag"
+    },
+    {
+      "trigger": "error",
+      "contents": "error",
+      "annotation": "Animator",
+      "details": "string Read-only controller/playback diagnostic"
+    },
+    {
+      "trigger": "setBool",
+      "contents": "setBool",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string, value:boolean) Set a declared Bool parameter"
+    },
+    {
+      "trigger": "setInt",
+      "contents": "setInt",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string, value:integer) Set a declared Int parameter"
+    },
+    {
+      "trigger": "setFloat",
+      "contents": "setFloat",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string, value:number) Set a declared Float parameter"
+    },
+    {
+      "trigger": "getBool",
+      "contents": "getBool",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string):boolean Read a declared Bool parameter"
+    },
+    {
+      "trigger": "getInt",
+      "contents": "getInt",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string):integer Read a declared Int parameter"
+    },
+    {
+      "trigger": "getFloat",
+      "contents": "getFloat",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string):number Read a declared Float parameter"
+    },
+    {
+      "trigger": "play",
+      "contents": "play",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, state:string) Enter/restart a state with no fade"
+    },
+    {
+      "trigger": "crossFade",
+      "contents": "crossFade",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, state:string, seconds?:number) Enter/restart a state with a fade; default 0.2 seconds"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "Animator",
+      "details": "fun(self:Animator) Stop state evaluation and rewind backend to its first pose"
+    },
+    {
+      "trigger": "pause",
+      "contents": "pause",
+      "annotation": "Animator",
+      "details": "fun(self:Animator) Pause state evaluation and playback"
+    },
+    {
+      "trigger": "resume",
+      "contents": "resume",
+      "annotation": "Animator",
+      "details": "fun(self:Animator) Resume a paused state machine"
+    },
+    {
+      "trigger": "hasState",
+      "contents": "hasState",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, state:string):boolean Test a controller state name or ID"
     }
   ]
 }

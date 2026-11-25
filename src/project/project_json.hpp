@@ -104,7 +104,8 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
       {"materialValues", 'j'},
       {"model", 's'},
       {"lightmap", 's'},
-      {"lightmapGrid", 'i'}}},
+      {"lightmapGrid", 'i'},
+      {"castShadow", 'b'}}},
     {"Collider",
      {{"size", 'f', 3},
       {"center", 'f', 3},
@@ -247,10 +248,11 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"TPSCamera", {{"settings", 'j'}, {"target", 'i'}}},
     {"NavMeshAgent", {{"settings", 'j'}}},
     {"NavMeshObstacle", {{"settings", 'j'}}},
-    // Reserved legacy slot: consumed on load only; no Animator runtime/editor remains.
+    // Controller-backed Animator reuses the reserved slot; old settings are ignored.
     {"Animator", {{"settings", 'j'}}},
     {"UI", {{"enabled", 'b'}, {"rml", 's'}, {"rcss", 's'}}},
-    {"Decal", {{"settings", 'j'}}}};
+    {"Decal", {{"settings", 'j'}}},
+    {"Recoil", {{"settings", 'j'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
 inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
     Json result = Json::object();
@@ -263,7 +265,7 @@ inline Json readSchema(std::istream& in, const std::vector<Field>& fields) {
 inline void writeSchema(std::ostream& out, const Json& original, const std::vector<Field>& fields) {
     Json object = original;
     if (!object.contains("hdrCompression")) {
-        object["hdrCompression"] = false;
+        object["hdrCompression"] = true;
     }
     if (!object.contains("affectEnvironment")) {
         object["affectEnvironment"] = false;
@@ -294,6 +296,10 @@ inline void writeSchema(std::ostream& out, const Json& original, const std::vect
         }
         if (!object.contains(name) && name == "lightmap") {
             out << std::quoted(std::string{}) << ' ';
+            continue;
+        }
+        if (!object.contains(name) && name == "castShadow") {
+            out << true << ' ';
             continue;
         }
         if (!object.contains(name) && name == "lightmapGrid") {
@@ -430,7 +436,7 @@ inline std::string toLegacy(const Json& doc) {
         throw std::runtime_error("Invalid JSON project format");
     }
     std::ostringstream out;
-    out << std::setprecision(17) << "LegacyEngineProject 37\n";
+    out << std::setprecision(17) << "LegacyEngineProject 39\n";
     write(out, doc, {{"script", 's'}, {"assets", 's'}});
     write(out,
           doc.at("editorCamera"),

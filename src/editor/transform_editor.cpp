@@ -88,8 +88,12 @@ void TransformEditor::draw(World& world,
     const auto pivot =
         transform.position + rotateVector(transform.rotation, pivotLocal_ * transform.scale);
     Mat4 model = transformMatrix(pivot, transform.rotation, transform.scale);
-    const Mat4 view = lookAt(camera.position(), camera.target, camera.up());
-    const Mat4 projection = camera.projection(aspect);
+    if (!dragging_) {
+        gizmoAnchor_ = pivot;
+    }
+    const auto gizmoCamera = gizmoCameraMatrices(camera, aspect, gizmoAnchor_);
+    const auto& view = gizmoCamera.view;
+    const auto& projection = gizmoCamera.projection;
     const ImGuizmo::OPERATION operations[]{ImGuizmo::TRANSLATE, ImGuizmo::ROTATE, ImGuizmo::SCALE};
     ImGuizmo::Enable(!navigationOnly);
     ImGuizmo::SetOrthographic(camera.orthographic);

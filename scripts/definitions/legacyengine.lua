@@ -7,25 +7,26 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'|'UI'|'Decal'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'Animator'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'|'UI'|'Decal'|'Recoil'
 ---Live named script proxy. Public globals accept scalar values/functions; see scripting guide.
 ---@class NamedScriptComponent
 ---@class GameObject
 ---@field getScript fun(name:string):NamedScriptComponent|nil
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal
+---@field getComponent fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onAnimationFinish fun()|nil
 ---@field onAnimationStart fun()|nil
 ---@field onAnimationStopped fun()|nil
 ---@field onAnimationPause fun()|nil
 ---@field onAnimationResume fun()|nil
+---@field onAnimationRestarted fun()|nil
 ---@field onGUI fun()|nil Draw GUI once per rendered Game frame; no wait/task
 ---@field onStart fun()|nil
 ---@field onUpdate fun(deltaTime:number)|nil
@@ -63,6 +64,7 @@
 -- Texture exports are project-relative PNG/JPEG/BMP/TGA/HDR asset paths, not loaders.
 ---@alias Texture string
 ---@class MeshRenderer
+---@field castShadow boolean Cast realtime/baked shadows; default true. Rebake static lighting after changes.
 ---@field material string Project-relative .mat asset path; empty uses inline Diffuse
 ---@field setMaterial fun(self:MeshRenderer,path:string) Assign an asset, reset instance overrides
 ---@field setMaterialColor fun(self:MeshRenderer,r:number,g:number,b:number)
@@ -101,7 +103,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -438,7 +440,6 @@ function isCursorVisible() end
 function isCursorLocked() end
 
 ---@class Skybox
----@field hdrCompression boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged
 ---@field type integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama
 ---@field enabled boolean
 ---@field color Vector3 Color tint
@@ -542,8 +543,8 @@ function task(block) end
 ---Suspend this lifecycle callback/task without blocking the engine. Not supported at top-level/onDestroy/custom event listeners.
 ---@param seconds number Finite seconds from 0 to 86400; zero resumes on next update
 function waitForSeconds(seconds) end
----Wait for playing-time seconds or the next AudioSource event; past events do not count.
----@param secondsOrEvent number|AudioEvent Finite 0..86400 seconds or a live audio event token
+---Wait for playing-time seconds or the next audio/animation event; past events do not count.
+---@param secondsOrEvent number|AudioEvent|ComponentEvent Finite 0..86400 seconds or a live audio/animation event token
 function wait(secondsOrEvent) end
 
 ---Instantiate a prefab asset or copy a GameObject subtree. Returns the new root.
@@ -705,6 +706,12 @@ function findComponentInParent(gameObject,componentType) end
 function findComponentInChildren(gameObject,componentType) end
 
 ---@class Animation
+---@field onFinished ComponentEvent Natural nonloop completion, not Stop.
+---@field onRestarted ComponentEvent Explicit restart or loop wrap.
+---@field onStopped ComponentEvent Stop or Reset while active.
+---@field onStarted ComponentEvent Playback starts after the clip is ready.
+---@field onPaused ComponentEvent Playback paused.
+---@field onResumed ComponentEvent Playback resumed.
 ---@field gameObject GameObject
 ---@field clip string
 ---@field loop boolean
@@ -714,6 +721,7 @@ function findComponentInChildren(gameObject,componentType) end
 ---@field time number Read-only seconds
 ---@field error string Read-only loading error
 ---@field play fun(self:Animation)
+---@field playClip fun(self:Animation,clip:string) Play an AnimationClip path value; loads asynchronously if needed.
 ---@field stop fun(self:Animation) Stops and rewinds to frame zero
 ---@field pause fun(self:Animation)
 ---@field resume fun(self:Animation)
@@ -976,6 +984,11 @@ TPSCamera = nil
 ---@class NavMeshAgent
 ---@field enabled boolean
 ---@field speed number Movement speed, 0..100 metres/second
+---@field heightOffset number World-space pivot height above the navmesh, -1000..1000; default 0
+---@field stop fun(self:NavMeshAgent) Pause movement and clear velocity, keeping the route
+---@field start fun(self:NavMeshAgent) Resume the existing route without discarding it
+---@field setSpeed fun(self:NavMeshAgent, speed:number) Set movement speed, 0..100
+---@field setHeightOffset fun(self:NavMeshAgent, height:number) Set pivot height above the surface, -1000..1000
 ---@field stoppingDistance number 0.01..10 metres
 ---@field stopped boolean Pause movement without clearing the route
 ---@field destination Vec3 Assign a complete world-space destination, or call setDestination
@@ -1275,9 +1288,6 @@ Screen = {}
 ---@field targetFrameRate integer -1 uncapped, or 1..1000; VSync may cap further.
 ---@field openURL fun(url:string):boolean|nil,error?:string HTTP/HTTPS only; success means handed to OS.
 ---@field quit fun() Deferred graceful quit; stops Play in editor.
----@type GameAPI
-Game = {}
----@class SavingAPI
 ---@field saveString fun(key:string,value:string):boolean|nil,error?:string
 ---@field loadString fun(key:string,default?:string):string|nil,error?:string
 ---@field saveInt fun(key:string,value:integer):boolean|nil,error?:string
@@ -1290,8 +1300,8 @@ Game = {}
 ---@field loadTable fun(key:string,default?:table):table|nil,error?:string
 ---@field saveVector3 fun(key:string,value:Vec3):boolean|nil,error?:string
 ---@field loadVector3 fun(key:string,default?:Vec3):Vec3|nil,error?:string
----@type SavingAPI
-Saving = {}
+---@type GameAPI
+Game = {}
 ---@class GameFile Opaque file handle; use File functions, not io.
 ---@class FileAPI
 ---@field open fun(path:string,mode:string):GameFile|nil,error?:string r/rb/w/wb/a/ab; sandboxed paths.
@@ -1308,16 +1318,82 @@ File = {}
 -- Built-in events may be global functions or registered using on(name, callback):
 -- OnResolutionChanged(resolution), OnFocusLost(), OnFocus(), OnUrlOpened(url), OnGamePreQuit().
 
--- Compatibility aliases for the typed Saving API.
-saveString = Saving.saveString
-loadString = Saving.loadString
-saveInt = Saving.saveInt
-loadInt = Saving.loadInt
-saveFloat = Saving.saveFloat
-loadFloat = Saving.loadFloat
-saveBool = Saving.saveBool
-loadBool = Saving.loadBool
-saveTable = Saving.saveTable
-loadTable = Saving.loadTable
-saveVector3 = Saving.saveVector3
-loadVector3 = Saving.loadVector3
+
+---@param path string
+---@return string clip Checked .leanim asset path value.
+function AnimationClip(path) end
+---@class RandomAPI
+---@field randomFloat fun(min:number,max:number):number Finite bounds, min <= max; uniform floating sample.
+---@field randomInt fun(min:integer,max:integer):integer Inclusive uniform bounds.
+---@field randomBool fun():boolean Equally likely true/false.
+---@field randomString fun(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic.
+---@type RandomAPI
+Random = {}
+-- The same Random functions are also available globally.
+function randomFloat(min,max) end
+function randomInt(min,max) end
+function randomBool() end
+function randomString(length) end
+
+---@class ComponentEvent
+---Opaque next-occurrence event for wait(); read it from a live component.
+---@class Recoil
+---@field enabled boolean Render-only local camera recoil, independent of FPS/TPS Transform.
+---@field playOnStart boolean Start burst, or sequence if keys exist.
+---@field sequenceLoop boolean Repeat the scheduled sequence.
+---@field burstCount integer Zero repeats until stopped or duration expires.
+---@field seed integer Nonnegative pseudorandom seed.
+---@field isFiring boolean Read-only burst/sequence activity, not recovery state.
+---@field trigger fun(self:Recoil,strength?:number) One impulse; multiplier 0..10, default 1.
+---@field start fun(self:Recoil) Start/restart timed burst after delay.
+---@field stop fun(self:Recoil) Stop future impulses; let the spring recover.
+---@field reset fun(self:Recoil) Stop and zero offsets immediately.
+---@field playSequence fun(self:Recoil) Start the authored sequence after delay.
+---@field setSequence fun(self:Recoil,keys:RecoilKey[]) Replace sorted keys; stops firing.
+---@field pitch number Degrees, -45..45. Positive lifts the view.
+---@field yaw number Degrees, -45..45.
+---@field roll number Degrees, -45..45.
+---@field back number Metres, -1..1; positive local Z kicks backward.
+---@field up number Metres, -1..1.
+---@field side number Metres, -1..1.
+---@field rotationRandom number Independent random angle amplitude, 0..45 degrees.
+---@field positionRandom number Fraction of absolute back displacement, 0..2.
+---@field frequency number Angular spring frequency, 0.1..40 Hz.
+---@field damping number Angular damping ratio, 0.1..3; one is critical damping.
+---@field positionFrequency number Position spring frequency, 0.1..40 Hz.
+---@field positionDamping number Position damping ratio, 0.1..3.
+---@field maxAngle number Combined angular displacement cap, 0..89 degrees.
+---@field maxDistance number Combined positional displacement cap, 0..2 metres.
+---@field interval number Timed shot spacing / sequence loop gap, 0.01..60 seconds.
+---@field duration number Burst duration after delay, 0..3600; zero unlimited.
+---@field delay number Start delay, 0..3600 seconds.
+---@field strength number Global impulse multiplier, 0..10.
+---@field recovery number Spring frequency multiplier, 0.1..4.
+---@type ComponentToken
+Recoil = {}
+---@class RecoilKey
+---@field time number Seconds from sequence start, 0..3600; sorted ascending.
+---@field strength number Optional impulse multiplier, 0..10; default 1.
+
+---@class Animator
+---@field controller string Project-relative .controller file
+---@field enabled boolean Pause/resume the state machine and its backend
+---@field playOnStart boolean Enter the controller entry state automatically; default true
+---@field currentState string Read-only current state name
+---@field stateTime number Read-only elapsed playback seconds in the current state
+---@field isPlaying boolean Read-only; state machine is running, enabled and unpaused (it may hold a finished nonlooping state)
+---@field paused boolean Read-only paused flag
+---@field error string Read-only controller/playback diagnostic
+---@field setBool fun(self:Animator, name:string, value:boolean) Set a declared Bool parameter
+---@field setInt fun(self:Animator, name:string, value:integer) Set a declared Int parameter
+---@field setFloat fun(self:Animator, name:string, value:number) Set a declared Float parameter
+---@field getBool fun(self:Animator, name:string):boolean Read a declared Bool parameter
+---@field getInt fun(self:Animator, name:string):integer Read a declared Int parameter
+---@field getFloat fun(self:Animator, name:string):number Read a declared Float parameter
+---@field play fun(self:Animator, state:string) Enter/restart a state with no fade
+---@field crossFade fun(self:Animator, state:string, seconds?:number) Enter/restart a state with a fade; default 0.2 seconds
+---@field stop fun(self:Animator) Stop state evaluation and rewind backend to its first pose
+---@field pause fun(self:Animator) Pause state evaluation and playback
+---@field resume fun(self:Animator) Resume a paused state machine
+---@field hasState fun(self:Animator, state:string):boolean Test a controller state name or ID
+Animator = nil

@@ -10,6 +10,7 @@ struct Decal {
     Vec3 color{1, 1, 1};
     float opacity = 1, width = 1, height = 1, depth = .2f;
     int sortingOrder = 0;
+    std::uint32_t layerMask = ~0u;
 };
 namespace Decals {
 inline Json settings(const Decal& d) {
@@ -20,7 +21,8 @@ inline Json settings(const Decal& d) {
             {"width", d.width},
             {"height", d.height},
             {"depth", d.depth},
-            {"sortingOrder", d.sortingOrder}};
+            {"sortingOrder", d.sortingOrder},
+            {"layerMask", d.layerMask}};
 }
 inline Decal parse(const Json& j) {
     Decal d;
@@ -31,6 +33,7 @@ inline Decal parse(const Json& j) {
     d.height = j.value("height", 1.f);
     d.depth = j.value("depth", .2f);
     d.sortingOrder = j.value("sortingOrder", 0);
+    d.layerMask = j.value("layerMask", std::uint32_t(~0u));
     if (j.contains("color")) {
         const auto& c = j.at("color");
         if (!c.is_array() || c.size() != 3) {

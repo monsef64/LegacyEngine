@@ -72,6 +72,9 @@ class AudioSystem {
     }
 
   public:
+    void publishPreloaded(std::map<std::string,std::vector<float>> clips,const std::filesystem::path& assetRoot){
+        cache=std::move(clips);root=assetRoot;cachedBytes=0;for(const auto& clip:cache)cachedBytes+=clip.second.size()*sizeof(float);
+    }
     void suspend(bool paused) {
         output.suspend(paused);
     }

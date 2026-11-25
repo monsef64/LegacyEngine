@@ -3,6 +3,7 @@
 struct ExportDeclaration {
     std::size_t begin, end, body;
     bool bare;
+    bool typed = false;
 };
 // Only line-leading declarations outside Lua strings and block comments count.
 inline std::vector<ExportDeclaration> exportDeclarations(std::string_view source) {
@@ -12,13 +13,14 @@ inline std::vector<ExportDeclaration> exportDeclarations(std::string_view source
         if (token.begin < consumed) {
             continue;
         }
-        const bool bare = token.kind == LuaToken::Api && source.substr(token.begin, 7) == "@export";
-        const bool comment =
-            token.kind == LuaToken::Comment && source.substr(token.begin, 10) == "---@export";
-        if (!bare && !comment) {
+        const bool typed =
+            token.kind == LuaToken::Api && (source.substr(token.begin, 6) == "global" ||
+                                            source.substr(token.begin, 6) == "expose");
+        const bool bare = typed;
+        if (!typed) {
             continue;
         }
-        const auto body = token.begin + (bare ? 7 : 10);
+        const auto body = token.begin + 6;
         if (body < source.size() && !std::isspace(static_cast<unsigned char>(source[body]))) {
             continue;
         }
@@ -37,7 +39,7 @@ inline std::vector<ExportDeclaration> exportDeclarations(std::string_view source
         if (end == source.npos) {
             end = source.size();
         }
-        declarations.push_back({token.begin, end, body, bare});
+        declarations.push_back({token.begin, end, body, bare, typed});
         consumed = end;
     }
     return declarations;

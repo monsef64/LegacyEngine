@@ -83,7 +83,7 @@ and over-budget input still produces an error.
   unmatched delimiter, or invalid expression. Verify squiggles and Problems entries.
 - Correct the error, save, close/reopen, and edit an untitled LegacyScript document.
   Verify diagnostics update and stale entries disappear.
-- Verify `@export` and `---@export` declarations work; malformed declarations,
+- Verify `global` declarations work; malformed declarations,
   duplicate field names and unknown types should produce useful errors.
 - Put export examples inside quoted/long strings and comments; these must remain text.
 - Verify valid Lua 5.4 local attributes do not produce spurious syntax errors.

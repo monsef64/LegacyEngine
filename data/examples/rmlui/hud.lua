@@ -1,7 +1,7 @@
 -- Add UI to this object and assign main.rml + hud.rcss (any Assets subfolder).
 -- Optional: export a UI reference and drag a different object's UI onto HUD.
 -- Attach this script to one object only. Keep the Game cursor unlocked.
-@export HUD UI
+global UI HUD =
 local gui
 local health, supplies = 100, 0
 

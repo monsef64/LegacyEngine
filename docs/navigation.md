@@ -169,3 +169,12 @@ Add **NavMeshObstacle** before baking so its mesh is excluded from static geomet
   non-ASCII characters. In Sublime verify `.ls` highlighting, completions and hovers.
 - Open a previously saved scene containing the removed Animator component: other
   components and the existing Animation player must still load normally.
+
+## Agent callbacks
+
+Attached scripts can define `onNavMeshAgentStatusChanged()` for every status
+change, plus `onNavMeshAgentMoving()`, `onNavMeshAgentArrived()`,
+`onNavMeshAgentBlocked()`, `onNavMeshAgentUnreachable()` and
+`onNavMeshAgentStopped()`. Events fire once when entering that status, not every
+frame. Read the agent's `status` inside the callback. Delivery happens after all
+agents update in both editor Play and exported games.

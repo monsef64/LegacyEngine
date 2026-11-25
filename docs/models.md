@@ -46,8 +46,8 @@ and fall back to material color. This is **not full PBR conversion**: metallic,
 roughness, opacity/blending, special shaders, layered/procedural textures and other
 source-specific material features are not reproduced. Edit virtual `.mat` subassets
 in Inspector. Source cameras/lights are not instantiated. Imported clips use the
-Animation component and existing cross-fades; no Animator/AnimatorSheet or additive
-blending is introduced. GoldSrc game-specific sequence events, bodygroup switching,
+Animation component and existing cross-fades. The controller-backed Animator can
+drive this player; AnimatorSheet and additive blending are not supported. GoldSrc game-specific sequence events, bodygroup switching,
 blend controllers, attachments and hitboxes are not converted to gameplay behavior.
 
 Drop a bundle into Scene, double-click it, or use **Instantiate in level**. This
