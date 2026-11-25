@@ -23,6 +23,7 @@
 #include "editor/animation_window.hpp"
 #include "editor/animator_requests.hpp"
 #include "editor/animator_window.hpp"
+#include "editor/canvas_editor.hpp"
 #include "editor/asset_browser.hpp"
 #include "editor/asset_preview_renderer.hpp"
 #include "editor/create_menu.hpp"
@@ -277,6 +278,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
     GameUI gameUI;
+    CanvasEditor canvasEditor;
     ScriptGUI scriptGUI;
     gameUI.clicked = [](Entity owner, const std::string& id) {
         LuaConsole::postEvent(GameUI::clickEvent(owner, id));
@@ -917,6 +919,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 if (ImGui::MenuItem("Save Level", nullptr, false, projectEnabled)) {
                     try {
+                        if (!canvasEditor.saveIfDirty(browser.assets)) {
+                            throw std::runtime_error(canvasEditor.error());
+                        }
                         if (!animatorWindow.saveIfDirty(browser.assets, &world)) {
                             throw std::runtime_error(animatorWindow.error());
                         }
@@ -958,6 +963,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             try {
                 if (browser.importing()) {
                     throw std::runtime_error("Wait for the asset import to finish before saving");
+                }
+                if (!canvasEditor.saveIfDirty(browser.assets)) {
+                    throw std::runtime_error(canvasEditor.error());
                 }
                 if (!animatorWindow.saveIfDirty(browser.assets, &world)) {
                     throw std::runtime_error(animatorWindow.error());
@@ -1012,6 +1020,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     projectDirty = currentProject.empty() || scripts.hasUnsavedChanges() ||
                                    animationWindow.hasUnsavedChanges() ||
                                    animatorWindow.hasUnsavedChanges() ||
+                                   canvasEditor.hasUnsavedChanges() ||
                                    projectContentState(world, embeddedLegacySource, camera) !=
                                        savedProjectState;
                 }
@@ -1120,7 +1129,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         audio.clear();
                         componentScripts.stop();
                         scripts.shutdown();
-                        world.restore(loadedWorld);
+                        world.adopt(std::move(loadedWorld));
                         resetHierarchyExpansion();
                         camera = loadedCamera;
                         browser.setRoot(
@@ -1213,12 +1222,16 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     ImGui::MenuItem("Undo",
                                     "Ctrl+Z",
                                     false,
-                                    editAllowed && !playMode.active() && history.canUndo());
+                                    editAllowed && !playMode.active() &&
+                                        (animatorWindow.focused ? animatorWindow.canUndo()
+                                                                : history.canUndo()));
                 redoRequested =
                     ImGui::MenuItem("Redo",
                                     "Ctrl+Y / Ctrl+Shift+Z",
                                     false,
-                                    editAllowed && !playMode.active() && history.canRedo());
+                                    editAllowed && !playMode.active() &&
+                                        (animatorWindow.focused ? animatorWindow.canRedo()
+                                                                : history.canRedo()));
                 ImGui::Separator();
                 duplicateRequested =
                     ImGui::MenuItem("Duplicate", "Ctrl+D", false, editAllowed && objectSelected);
@@ -1239,6 +1252,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 ImGui::MenuItem("Animation", nullptr, &animationWindow.visible);
                 ImGui::MenuItem("Animator", nullptr, &animatorWindow.visible);
+                ImGui::MenuItem("Visual UI Maker", nullptr, &canvasEditor.visible);
                 ImGui::MenuItem("Lighting", nullptr, &lightmappingWindow.visible);
                 ImGui::MenuItem("Occlusion Culling", nullptr, &occlusionWindow.visible);
                 ImGui::MenuItem("Navigation", nullptr, &navigationWindow.visible);
@@ -1713,6 +1727,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
             ImGui::EndPopup();
         }
+        if ((undoRequested || redoRequested) && !playMode.active() && animatorWindow.focused) {
+            animatorWindow.undoGraph(redoRequested);
+            undoRequested = redoRequested = false;
+        }
         if ((undoRequested || redoRequested) && !playMode.active()) {
             editor.finish(world);
             clicking = false;
@@ -1754,6 +1772,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             clicking = false;
             bool preflightReady = true;
             try {
+                if (!canvasEditor.saveIfDirty(browser.assets)) {
+                    throw std::runtime_error(canvasEditor.error());
+                }
                 if (!animatorWindow.saveIfDirty(browser.assets, &world)) {
                     throw std::runtime_error(animatorWindow.error());
                 }
@@ -2047,6 +2068,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 browser.assets, std::exchange(browser.editAnimatorRequest, {}), selectedEntity);
         }
         animatorWindow.draw(world, selectedEntity, browser.assets, playMode.active());
+        canvasEditor.draw(
+            browser.assets, gameUI, window, world, selectedEntity, playMode.active());
         if (!browser.editAnimationRequest.empty()) {
             animationWindow.open(browser.assets, std::exchange(browser.editAnimationRequest, {}));
         }
@@ -3143,6 +3166,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             projectDirty =
                 currentProject.empty() || scripts.hasUnsavedChanges() ||
                 animationWindow.hasUnsavedChanges() || animatorWindow.hasUnsavedChanges() ||
+                                   canvasEditor.hasUnsavedChanges() ||
                 projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
         }
         if (projectEnabled && !currentProject.empty() && projectDirty &&
@@ -3196,6 +3220,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 projectDirty =
                     currentProject.empty() || scripts.hasUnsavedChanges() ||
                     animationWindow.hasUnsavedChanges() || animatorWindow.hasUnsavedChanges() ||
+                                   canvasEditor.hasUnsavedChanges() ||
                     projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
             }
             if (browser.importing() || prefabLevel || levels.busy() || projectDialog.pending()) {

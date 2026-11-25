@@ -293,7 +293,7 @@
   },
   {
     "name": "GUI",
-    "signature": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window. UI is the RML/RCSS component."
+    "signature": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window. Canvas is the RML/RCSS component."
   },
   {
     "name": "GUI.beginWindow",
@@ -461,11 +461,15 @@
   },
   {
     "name": "Decal",
-    "signature": "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder. Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."
+    "signature": "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder, layerMask (unsigned receiver layers). Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."
   },
   {
     "name": "UI",
-    "signature": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or global UI hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
+    "signature": "UI - Compatibility alias for Canvas."
+  },
+  {
+    "name": "Canvas",
+    "signature": "Canvas - RmlUi Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(Canvas) or global Canvas hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
   },
   {
     "name": "Vector3",
@@ -1190,6 +1194,30 @@
   {
     "name": "onMouseUp",
     "signature": "onMouseUp() - targeted GameObject callback"
+  },
+  {
+    "name": "onNavMeshAgentStatusChanged",
+    "signature": "onNavMeshAgentStatusChanged() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentMoving",
+    "signature": "onNavMeshAgentMoving() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentArrived",
+    "signature": "onNavMeshAgentArrived() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentBlocked",
+    "signature": "onNavMeshAgentBlocked() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentUnreachable",
+    "signature": "onNavMeshAgentUnreachable() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentStopped",
+    "signature": "onNavMeshAgentStopped() - NavMeshAgent status edge callback"
   },
   {
     "name": "onMouseEnter",

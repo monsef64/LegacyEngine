@@ -191,7 +191,7 @@ Use getComponent(Type) for attached self, getComponent(object, Type) for an expl
 - `overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil`
 - `overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil`
 - `overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil`
-- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil`
 - `overload fun(componentType:ComponentType):any`
 
 ```lua
@@ -1420,7 +1420,7 @@ if health then debug.log(health.health) end
 
 ### GameObject.getComponent
 
-`getComponent(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`getComponent(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil`
 
 - `getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
 
@@ -1431,7 +1431,7 @@ object:getComponent(Transform)
 
 ### GameObject.getComponentInParent
 
-`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil`
 
 - `getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent`
 
@@ -1442,7 +1442,7 @@ object:getComponentInParent(RigidBody)
 
 ### GameObject.getComponentInChildren
 
-`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil`
 
 - `getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants`
 
@@ -1453,7 +1453,7 @@ object:getComponentInChildren(Camera)
 
 ### GameObject.findComponentInParent
 
-`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil`
 
 - `findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent`
 
@@ -1464,7 +1464,7 @@ object:findComponentInParent(RigidBody)
 
 ### GameObject.findComponentInChildren
 
-`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil`
 
 - `findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren`
 
@@ -1475,7 +1475,7 @@ object:findComponentInChildren(Camera)
 
 ### GameObject.addComponent
 
-`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal`
+`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal`
 
 - `addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner`
 
@@ -3370,6 +3370,37 @@ component:setDestination(Vector3(8, 0, 4))
 ```lua
 local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
 component:resetPath()
+```
+
+## Canvas
+
+### Canvas.isLoaded
+
+`isLoaded(self:Canvas):boolean Whether this component's document is loaded in Play.`
+
+```lua
+local gui = self:getComponent(Canvas)
+if gui and gui:isLoaded() then debug.log("UI ready") end
+```
+
+### Canvas.setText
+
+`setText(self:Canvas,id:string,plainText:string):boolean Set escaped plain text in this Canvas document.`
+
+```lua
+local gui = self:getComponent(Canvas)
+if gui then gui:setText("health", "100 / 100") end
+```
+
+### Canvas.onClick
+
+`onClick(self:Canvas,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart.`
+
+```lua
+function onStart()
+    local gui = self:getComponent(Canvas)
+    if gui then gui:onClick("collect", function() gui:setText("status", "Collected!") end) end
+end
 ```
 
 ## UI
@@ -6035,6 +6066,14 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `size` | `Vec3 Local box dimensions, positive; assign a whole vector` |
 | `center` | `Vec3 Local box center; assign a whole vector` |
 
+### Canvas fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean Show this Canvas when its owner is active; defaults to true.` |
+| `rml` | `string Project-relative .rml asset; both rml and rcss must be assigned.` |
+| `rcss` | `string Project-relative .rcss asset; applied to this document.` |
+
 ### UI fields
 
 | Field | Type / meaning |
@@ -6327,4 +6366,4 @@ independent spring/damper contacts. Anti-roll strength has been removed;
 `centerOfMassX/Y/Z` remain available without locking chassis pitch/roll.
 
 
-See [In-game UI](game-ui.md) for RML/RCSS setup and the `UI` component example.
+See [In-game UI](game-ui.md) for RML/RCSS setup and the `Canvas` component example.

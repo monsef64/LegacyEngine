@@ -30,7 +30,7 @@ F11 toggles fullscreen.
 ## Packaging and encryption limitations
 
 Project assets/settings, the chosen scene and engine runtime data are packed into
-**user-sized authenticated encrypted chunks**, with an encrypted manifest and a fresh
+**user-sized Zstandard-compressed, authenticated encrypted chunks**, with an encrypted manifest and a fresh
 per-export key/identifier. The player authenticates package contents before use.
 Plaintext license notices are also supplied as `GameName_Data/LICENSES.txt`; keep
 them in your distribution. Current package limits include 2 GiB total plaintext.
@@ -125,3 +125,19 @@ project cannot overwrite the newly opened project's fields when its result arriv
 `Export.json` is editor-only and is excluded from the exported runtime package so
 local workstation paths are not shipped. Runtime settings and the explicit
 `Settings/ExportAssets.json` dependency list keep their existing behavior.
+
+## Compression policy
+
+Editor saves/imports keep mesh/model/terrain assets as uncompressed compact JSON;
+older Zstandard/zlib assets remain readable and are rewritten uncompressed only
+when saved/reimported. Export does not modify source assets. Exported package
+chunks use Zstandard level 3 before authenticated encryption, including assets,
+settings and engine data. Chunk size and the 2 GiB limit describe **expanded**
+data; disk size depends on content (already-compressed images may not shrink).
+The LegacyGame2 manifest records the codec. The updated player still reads old
+LegacyGame1 packages, but new exports require an updated native player template.
+Compressed frame size/content and expanded chunk lengths are bounded and checked.
+
+Project loading also avoids an intermediate JSON serialization/reparse and transfers
+fully staged ECS pools instead of cloning them twice. These remove redundant work;
+no fixed load-time speedup is promised without measuring a representative project.

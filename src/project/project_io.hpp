@@ -1066,6 +1066,7 @@ inline bool load(const std::string& path,
         std::string text(static_cast<std::size_t>(size), '\0');
         in.read(text.data(), size);
         require(bool(in));
+        Loaded loaded;
         if (text.find_first_not_of(" \t\r\n") != text.npos &&
             text[text.find_first_not_of(" \t\r\n")] == '{') {
             auto document = parseJson(text);
@@ -1077,11 +1078,11 @@ inline bool load(const std::string& path,
                 require(settings.at("version") == 1);
                 document["editorCamera"] = settings.at("editorCamera");
             }
-            text = document.dump();
+            decodeLegacy(ProjectJson::toLegacy(document), loaded, meshes);
+        } else {
+            decode(text, loaded, meshes);
         }
-        Loaded loaded;
-        decode(text, loaded, meshes);
-        world.restore(loaded.world);
+        world.adopt(std::move(loaded.world));
         source = std::move(loaded.source);
         camera = loaded.camera;
         if (assetDirectory) {

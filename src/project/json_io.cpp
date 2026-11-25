@@ -89,25 +89,6 @@ Json readCompressedMesh(std::istream& stream, std::size_t limit, bool zstandard)
     }
     return Json::from_cbor(plain, true, true);
 }
-void writeCompressedMesh(std::ostream& stream, const Json& document, const char* magic) {
-    auto plain = Json::to_cbor(document);
-    if (plain.size() > 256ull * 1024 * 1024) {
-        throw std::runtime_error("Expanded mesh exceeds 256 MiB");
-    }
-    std::vector<unsigned char> packed(ZSTD_compressBound(plain.size()));
-    const auto count = ZSTD_compress(packed.data(), packed.size(), plain.data(), plain.size(), 3);
-    if (ZSTD_isError(count)) {
-        throw std::runtime_error("Zstandard mesh compression failed");
-    }
-    stream.write(magic, 8);
-    unsigned char size[8]{};
-    for (int i = 0; i < 8; ++i) {
-        size[i] = static_cast<unsigned char>(std::uint64_t(plain.size()) >> (8 * i));
-    }
-    stream.write(reinterpret_cast<const char*>(size), 8);
-    stream.write(reinterpret_cast<const char*>(packed.data()), std::streamsize(count));
-}
-
 // One retained container across all workers, rather than one large DOM per
 // embedded member or per thread. Callers keep immutable snapshots while in use.
 #include <atomic>

@@ -79,7 +79,7 @@ const char* types[]{"Transform",
                     "TPSCamera",
                     "NavMeshAgent",
                     "NavMeshObstacle",
-                    "UI",
+                    "Canvas",
                     "Decal",
                     "Recoil",
                     "Animator"};
@@ -88,6 +88,7 @@ int componentType(lua_State* L, int index) {
         return *type;
     }
     const char* name = luaL_checkstring(L, index);
+    if (!std::strcmp(name,"UI") || !std::strcmp(name,"GUI")) name="Canvas";
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
@@ -549,6 +550,7 @@ LuaScene::LuaScene(lua_State* L,
             lua_pushvalue(L, -1);
             lua_setglobal(L, "BoxCollider");
         }
+        if (!std::strcmp(types[i],"Canvas")) { lua_pushvalue(L,-1); lua_setglobal(L,"UI"); }
         lua_setglobal(L, types[i]);
     }
     lua_pushcclosure(
@@ -4339,7 +4341,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
             } else {
                 int type = 0;
                 for (; type < int(std::size(types)); ++type) {
-                    if (field.type == types[type]) {
+                    if (field.type == types[type] || (field.type == "UI" && !std::strcmp(types[type],"Canvas"))) {
                         break;
                     }
                 }

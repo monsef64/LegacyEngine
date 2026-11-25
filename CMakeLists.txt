@@ -258,7 +258,7 @@ target_link_libraries(legacy_material_textures PUBLIC legacy_thumbnails)
 # Authenticated game data packages (Monocypher 4.0.2, BSD-2-Clause).
 add_library(legacy_game_export STATIC src/project/game_export.cpp third_party/monocypher/monocypher.c)
 target_include_directories(legacy_game_export PUBLIC src PRIVATE third_party/monocypher)
-target_link_libraries(legacy_game_export PUBLIC legacy_json)
+target_link_libraries(legacy_game_export PUBLIC legacy_json PRIVATE libzstd_static)
 if(WIN32)
   target_link_libraries(legacy_game_export PRIVATE bcrypt)
 endif()

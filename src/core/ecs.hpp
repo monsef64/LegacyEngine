@@ -61,6 +61,17 @@ class World {
     World(const World&) = delete;
     World& operator=(const World&) = delete;
 
+    // Transfer a fully staged load without cloning every component a second time.
+    // Unlike restore(), the source is consumed. Existing references are invalidated.
+    void adopt(World&& source) noexcept {
+        if (&source == this) {
+            return;
+        }
+        generations_ = std::move(source.generations_);
+        freeSlots_ = std::move(source.freeSlots_);
+        pools_ = std::move(source.pools_);
+    }
+
     // Explicit deep snapshots include every registered component pool and IDs.
     std::unique_ptr<World> snapshot() const {
         auto result = std::make_unique<World>();
