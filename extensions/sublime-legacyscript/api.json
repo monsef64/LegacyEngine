@@ -1,5 +1,85 @@
 [
   {
+    "name": "Screen",
+    "signature": "Screen.width/height/currentResolution (read-only), brightness (0..1), fullScreen; getResolutions(), getResolution(w,h), setResolution(w,h), takeScreenshot(relativePngPath)."
+  },
+  {
+    "name": "Game",
+    "signature": "Game.companyName/getDataPath/isEditor/isFocused/userDataPath/engineVersion (read-only), targetFrameRate (-1 or 1..1000), blockGameKilling; openURL(httpUrl), quit()."
+  },
+  {
+    "name": "Game.save/load",
+    "signature": "Game.saveString/Int/Float/Bool/Table/Vector3(key,value); Game.loadString/Int/Float/Bool/Table/Vector3(key,default). Persisted per game; replaces the former Saving namespace."
+  },
+  {
+    "name": "randomFloat",
+    "signature": "randomFloat(min:number,max:number):number - Uniform finite floating sample; min <= max."
+  },
+  {
+    "name": "randomInt",
+    "signature": "randomInt(min:integer,max:integer):integer - Inclusive uniform integer sample."
+  },
+  {
+    "name": "randomBool",
+    "signature": "randomBool():boolean - Equally likely true or false."
+  },
+  {
+    "name": "randomString",
+    "signature": "randomString(length:integer):string - 0..4096 alphanumeric characters, not cryptographic."
+  },
+  {
+    "name": "castShadow",
+    "signature": "MeshRenderer.castShadow: boolean, default true. Controls realtime and baked shadow casting; rebake static lighting after changing."
+  },
+  {
+    "name": "Recoil",
+    "signature": "Recoil - Camera > Recoil. Render-only six-axis damped spring, bounded stacking, seeded variation, timed bursts and scheduled sequences. trigger(strength=1), start(), stop(), reset(), playSequence(), setSequence(keys)."
+  },
+  {
+    "name": "onAnimationRestarted",
+    "signature": "onAnimationRestarted() - Owner callback on replay or loop wrap. Animation.onRestarted is the corresponding wait token."
+  },
+  {
+    "name": "Random",
+    "signature": "Random.randomFloat(min,max), randomInt(min,max), randomBool(), randomString(length). Also available globally; non-cryptographic."
+  },
+  {
+    "name": "AnimationClip",
+    "signature": "AnimationClip(path:string):string - Checked .leanim asset path for Animation.playClip/crossFade."
+  },
+  {
+    "name": "playClip",
+    "signature": "animation:playClip(AnimationClip(path)) - Plays a selected clip; decoding is asynchronous and Stop cancels pending playback."
+  },
+  {
+    "name": "global",
+    "signature": "global Type name = default - Inspector fields; int, float, bool, string, Prefab, AnimationClip, Texture, AudioClip and component references."
+  },
+  {
+    "name": "File",
+    "signature": "File.open(relativePath,mode), read(handle,format), write(handle,text), close(handle), flush(handle), seek(handle,whence,offset), lines(handleOrPath), rename(old,new), remove(path). Sandboxed under Game.userDataPath."
+  },
+  {
+    "name": "OnResolutionChanged",
+    "signature": "OnResolutionChanged(resolution) - resolution has width, height, refreshRate. Also on(eventName, callback)."
+  },
+  {
+    "name": "OnFocusLost",
+    "signature": "OnFocusLost() - native game window lost focus."
+  },
+  {
+    "name": "OnFocus",
+    "signature": "OnFocus() - native game window gained focus."
+  },
+  {
+    "name": "OnUrlOpened",
+    "signature": "OnUrlOpened(url) - OS accepted an HTTP/HTTPS launch request."
+  },
+  {
+    "name": "OnGamePreQuit",
+    "signature": "OnGamePreQuit() - start tasks or hold Game.blockGameKilling; graceful quit waits at most ten seconds."
+  },
+  {
     "name": "GUI.image",
     "signature": "GUI.image(path:string,width?:number,height?:number):boolean - Full-resolution project image; returns loaded."
   },
@@ -213,7 +293,7 @@
   },
   {
     "name": "GUI",
-    "signature": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window. UI is the RML/RCSS component."
+    "signature": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window."
   },
   {
     "name": "GUI.beginWindow",
@@ -380,8 +460,8 @@
     "signature": "GUI.getDisplaySize():number,number - Returns Game-surface pixel width,height."
   },
   {
-    "name": "UI",
-    "signature": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or @export hud UI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
+    "name": "Decal",
+    "signature": "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder, layerMask (unsigned receiver layers). Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."
   },
   {
     "name": "Vector3",
@@ -393,7 +473,7 @@
   },
   {
     "name": "NavMeshAgent",
-    "signature": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(). Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Agent origin is at feet. No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
+    "signature": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), heightOffset (-1000..1000 world units), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(), stop(), start(), setSpeed(speed), setHeightOffset(height). stop/start preserve the route. Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Use heightOffset to raise centered pivots above the navigation surface (default 0 for foot pivots). No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
   },
   {
     "name": "TPSCamera",
@@ -492,8 +572,12 @@
     "signature": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles/Blood/Explosion); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"
   },
   {
+    "name": "Animator",
+    "signature": "Animator - controller-backed state machine. Fields controller (.controller asset), enabled, playOnStart; read-only currentState, stateTime, isPlaying, paused, error. Methods setBool(name,value), setInt(name,value), setFloat(name,value), getBool(name), getInt(name), getFloat(name), play(state), crossFade(state,seconds=0.2), stop(), pause(), resume(), hasState(name). States reference .leanim clips with per-state loop. Ordered transitions combine typed conditions, normalized exit time and fade seconds. Edit graph in Windows > Animator. Animator owns the object's Animation backend while running."
+  },
+  {
     "name": "Animation",
-    "signature": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"
+    "signature": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25), playClip(clip); onFinished/onStarted/onRestarted/onStopped/onPaused/onResumed wait tokens; isPlaying is read-only"
   },
   {
     "name": "onAnimationFinish",
@@ -685,7 +769,7 @@
   },
   {
     "name": "wait",
-    "signature": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event"
+    "signature": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio/animation component event"
   },
   {
     "name": "isActive",
@@ -725,7 +809,7 @@
   },
   {
     "name": "loadLevelAsync",
-    "signature": "loadLevelAsync(name=nil) -> accepted, error; background file read"
+    "signature": "loadLevelAsync(name=nil) -> accepted, error; background decoding and asset preloading"
   },
   {
     "name": "unloadLevel",
@@ -773,7 +857,7 @@
   },
   {
     "name": "Texture",
-    "signature": "Texture - export-only image or HDR asset path; @export image Texture"
+    "signature": "Texture - export-only image or HDR asset path; global Texture image ="
   },
   {
     "name": "AudioListener",
@@ -1104,6 +1188,30 @@
     "signature": "onMouseUp() - targeted GameObject callback"
   },
   {
+    "name": "onNavMeshAgentStatusChanged",
+    "signature": "onNavMeshAgentStatusChanged() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentMoving",
+    "signature": "onNavMeshAgentMoving() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentArrived",
+    "signature": "onNavMeshAgentArrived() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentBlocked",
+    "signature": "onNavMeshAgentBlocked() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentUnreachable",
+    "signature": "onNavMeshAgentUnreachable() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentStopped",
+    "signature": "onNavMeshAgentStopped() - NavMeshAgent status edge callback"
+  },
+  {
     "name": "onMouseEnter",
     "signature": "onMouseEnter() - targeted GameObject callback"
   },
@@ -1142,10 +1250,6 @@
   {
     "name": "onGUI",
     "signature": "onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task."
-  },
-  {
-    "name": "hdrCompression",
-    "signature": "Skybox.hdrCompression: boolean, default false. Packed RGB9_E5 GPU HDR storage (4 bytes/pixel instead of RGB16F 6); lower precision, source unchanged."
   },
   {
     "name": "onUpdate",
@@ -1261,7 +1365,7 @@
   },
   {
     "name": "setMaterialShader",
-    "signature": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"
+    "signature": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection'|'Stochastic Texture Sampling')"
   },
   {
     "name": "setMaterialNormalStrength",

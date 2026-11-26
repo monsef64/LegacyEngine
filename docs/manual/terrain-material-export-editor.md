@@ -47,7 +47,7 @@ repeat exported-player checks on Linux and Windows MinGW-w64.
 ## Export closure
 
 - Reference a material -> texture/normal, prefab -> model -> embedded material,
-  terrain -> layers/foliage/lightmap, audio and RML -> RCSS -> relative image.
+  terrain -> layers/foliage/lightmap, audio and literal script asset paths.
   Leave unrelated images/models/audio/levels in Assets and export. Exercise all
   registered levels and runtime objects/UI in a clean exported player without the
   source project present. Unused project files should not be packaged.

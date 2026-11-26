@@ -30,7 +30,7 @@ F11 toggles fullscreen.
 ## Packaging and encryption limitations
 
 Project assets/settings, the chosen scene and engine runtime data are packed into
-**user-sized authenticated encrypted chunks**, with an encrypted manifest and a fresh
+**user-sized Zstandard-compressed, authenticated encrypted chunks**, with an encrypted manifest and a fresh
 per-export key/identifier. The player authenticates package contents before use.
 Plaintext license notices are also supplied as `GameName_Data/LICENSES.txt`; keep
 them in your distribution. Current package limits include 2 GiB total plaintext.
@@ -80,7 +80,7 @@ cause renderer initialization errors; inspect the player log for the failing sta
 Exports collect a dependency closure from the exported scene and every level in
 `Assets/Levels/levels.json` (registered levels are runtime-addressable roots).
 Referenced materials, model containers, animations, prefabs, terrain layers,
-foliage, images, audio, lightmaps and RML/RCSS dependencies are followed recursively.
+foliage, images, audio, lightmaps and script dependencies are followed recursively.
 Unused files and unregistered, unreferenced levels are left out. Packed model
 members travel with their model container; exports do not rewrite those containers
 or remove individual embedded members. Engine runtime resources and project
@@ -104,3 +104,40 @@ Keep this list specific instead of including all of Assets. Test every level,
 spawn path and UI screen in the exported player, especially when paths are built
 from save data, downloaded configuration or script variables. Referenced symlinks
 are rejected; dependency cycles are handled without packaging duplicate files.
+
+## Remembered export information
+
+The Export Game window stores its fields per project in `Settings/Export.json`:
+game name, company, version, description, copyright, icon, output folder, native
+player template, start-scene selection and chunk size. Edits save automatically
+(after a short typing delay or when editing ends), including when the window is
+closed. You do not need to export successfully just to retain this information.
+Project Save/Save As also carries the export fields to the destination project.
+Opening another project loads its own settings rather than retaining the previous
+project's metadata.
+
+Icon/output/player paths are machine-local paths: check them when moving a project
+between machines or operating systems. Existing output folders still cannot be
+overwritten; choose a fresh destination for another export. `Current Scene` stays
+a relative selection, not a frozen scene name. A file chooser opened for an old
+project cannot overwrite the newly opened project's fields when its result arrives.
+
+`Export.json` is editor-only and is excluded from the exported runtime package so
+local workstation paths are not shipped. Runtime settings and the explicit
+`Settings/ExportAssets.json` dependency list keep their existing behavior.
+
+## Compression policy
+
+Editor saves/imports keep mesh/model/terrain assets as uncompressed compact JSON;
+older Zstandard/zlib assets remain readable and are rewritten uncompressed only
+when saved/reimported. Export does not modify source assets. Exported package
+chunks use Zstandard level 3 before authenticated encryption, including assets,
+settings and engine data. Chunk size and the 2 GiB limit describe **expanded**
+data; disk size depends on content (already-compressed images may not shrink).
+The LegacyGame2 manifest records the codec. The updated player still reads old
+LegacyGame1 packages, but new exports require an updated native player template.
+Compressed frame size/content and expanded chunk lengths are bounded and checked.
+
+Project loading also avoids an intermediate JSON serialization/reparse and transfers
+fully staged ECS pools instead of cloning them twice. These remove redundant work;
+no fixed load-time speedup is promised without measuring a representative project.

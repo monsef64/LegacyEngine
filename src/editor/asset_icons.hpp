@@ -15,6 +15,9 @@ inline const char* assetIcon(const std::string& path, bool folder = false) {
     if (ext == ".terrain") {
         return "\xef\x9b\xbc";
     }
+    if (ext == ".controller") {
+        return "\xef\x80\x88"; // Animator controller
+    }
     if (ext == ".prefab") {
         return "\xef\x86\xb2";
     }

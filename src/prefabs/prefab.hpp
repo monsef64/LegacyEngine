@@ -1,6 +1,8 @@
 #pragma once
 #include "project/project_io.hpp"
 #include <map>
+#include <mutex>
+#include <set>
 namespace Prefabs {
 inline void updateDestroyTimers(World& world, float dt) {
     if (!std::isfinite(dt) || dt < 0) {
@@ -79,6 +81,12 @@ inline Entity clone(World& source, Entity root, World& destination, Entity exist
         if (auto* c = destination.tryGet<Camera>(target)) {
             c->targetEntity = remap(c->targetEntity);
         }
+        if (auto* r = destination.tryGet<Recoil>(target)) {
+            *r = Recoils::parse(Recoils::settings(*r));
+        }
+        if (auto* a = destination.tryGet<Animator>(target)) {
+            *a = Animators::parse(Animators::settings(*a));
+        }
         if (auto* a = destination.tryGet<Animation>(target)) {
             const auto clip = a->clip;
             const bool loop = a->loop, autoplay = a->playOnStart;
@@ -127,13 +135,48 @@ load(AssetManager& assets, const std::string& path, const ProjectIO::Meshes& mes
     if (!asset(path)) {
         throw std::runtime_error("Expected project-relative .prefab asset");
     }
+    struct Cached {
+        std::filesystem::file_time_type stamp;
+        std::uintmax_t bytes;
+        std::shared_ptr<const World> world;
+    };
+    static std::mutex mutex;
+    static std::map<std::string, Cached> cache;
+    const auto file = assets.resolve(path);
+    const auto stamp = std::filesystem::last_write_time(file);
+    const auto bytes = std::filesystem::file_size(file);
+    std::string key = file.generic_string();
+    for (auto mesh : meshes) {
+        key += '|' + std::to_string(mesh.id);
+    }
+    {
+        std::lock_guard<std::mutex> guard(mutex);
+        auto found = cache.find(key);
+        if (found != cache.end() && found->second.stamp == stamp && found->second.bytes == bytes) {
+            return found->second.world->snapshot();
+        }
+    }
     ProjectIO::Loaded result;
-    const auto data = readJsonFile(assets.resolve(path), ProjectIO::maxBytes);
+    const auto data = readJsonFile(file, ProjectIO::maxBytes);
     if (data.at("format") != "LegacyEnginePrefab" || data.at("version") != 1) {
         throw std::runtime_error("Invalid prefab asset");
     }
     ProjectIO::decode(data.at("scene").dump(), result, meshes);
     root(result.world);
+    auto snapshot = result.world.snapshot();
+    if (bytes <= 16 * 1024 * 1024) {
+        std::lock_guard<std::mutex> guard(mutex);
+        std::uintmax_t total = bytes;
+        for (const auto& item : cache) {
+            total += item.second.bytes;
+        }
+        while (!cache.empty() && (total > 64 * 1024 * 1024 || cache.size() >= 64)) {
+            total -= cache.begin()->second.bytes;
+            cache.erase(cache.begin());
+        }
+        cache.insert_or_assign(
+            key, Cached{stamp, bytes, std::shared_ptr<const World>(std::move(snapshot))});
+    }
     return result.world.snapshot();
 }
 inline void save(AssetManager& assets,
@@ -222,6 +265,18 @@ refreshSavedLevels(AssetManager& assets, const std::string& path, const ProjectI
         writeJsonFile(file, document);
     }
 }
+// Scenes already serialize complete instance trees and Inspector overrides.
+// Opening/preloading must validate links, not replace those saved entities with
+// template defaults (which erased added children and assigned Prefab fields).
+inline void validateLinks(AssetManager& assets, World& world, const ProjectIO::Meshes& meshes) {
+    std::set<std::string> paths;
+    world.each<PrefabInstance>(
+        [&](Entity, const PrefabInstance& link) { paths.insert(link.asset); });
+    for (const auto& path : paths) {
+        (void)load(assets, path, meshes);
+    }
+}
+
 inline void refreshAll(AssetManager& assets, World& world, const ProjectIO::Meshes& meshes) {
     std::vector<std::string> paths;
     world.each<PrefabInstance>([&](Entity, const PrefabInstance& link) {

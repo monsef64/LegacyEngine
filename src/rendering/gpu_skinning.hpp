@@ -9,6 +9,90 @@
 // OpenGL 3.3 transform feedback skins once into the ordinary mesh VBO. All
 // subsequent passes (including cascaded shadows) consume the same GPU result.
 class GpuSkinning {
+  public:
+    struct PreparedSource {
+        std::vector<Vertex> data;
+        std::vector<unsigned> ranges;
+        std::vector<float> influences;
+        Vec3 low{}, high{};
+    };
+    static PreparedSource prepareSource(const Json& part) {
+        const auto boneCount = part.at("bones").size();
+        const auto& vertices = part.at("vertices");
+        const auto& weights = part.at("weights");
+        if (!vertices.is_array() || vertices.empty() || vertices.size() > maxModelVertices ||
+            !weights.is_array() || weights.size() != vertices.size()) {
+            throw std::runtime_error("Invalid GPU skin data");
+        }
+        PreparedSource result;
+        auto& data = result.data;
+        auto& ranges = result.ranges;
+        auto& influences = result.influences;
+        data.reserve(vertices.size());
+        ranges.reserve(vertices.size() * 2);
+        for (std::size_t i = 0; i < vertices.size(); ++i) {
+            const auto& v = vertices[i];
+            if (!v.is_array() || v.size() != 8) {
+                throw std::runtime_error("Invalid vertex");
+            }
+            Vertex vertex{{v[0], v[1], v[2]}, {v[3], v[4], v[5]}, v[6], v[7]};
+            if (!validModelVertex(vertex)) {
+                throw std::runtime_error("Invalid GPU vertex");
+            }
+            if (data.empty()) {
+                result.low = result.high = vertex.position;
+            } else {
+                result.low = {std::min(result.low.x, vertex.position.x),
+                              std::min(result.low.y, vertex.position.y),
+                              std::min(result.low.z, vertex.position.z)};
+                result.high = {std::max(result.high.x, vertex.position.x),
+                               std::max(result.high.y, vertex.position.y),
+                               std::max(result.high.z, vertex.position.z)};
+            }
+            data.push_back(vertex);
+            unsigned start = unsigned(influences.size() / 2);
+            float total = 0;
+            if (!weights[i].is_array() || weights[i].size() > 4096) {
+                throw std::runtime_error("Invalid influences");
+            }
+            for (const auto& w : weights[i]) {
+                int b = w.at(0);
+                float value = w.at(1);
+                if (b < 0 || std::size_t(b) >= boneCount || !std::isfinite(value) || value < 0) {
+                    throw std::runtime_error("Invalid bone weight");
+                }
+                if (value > 0) {
+                    influences.push_back(float(b));
+                    influences.push_back(value);
+                    total += value;
+                    if (!std::isfinite(total)) {
+                        throw std::runtime_error("Bone weight sum overflow");
+                    }
+                }
+            }
+            if (total <= 0) {
+                influences.push_back(float(boneCount));
+                influences.push_back(1);
+            }
+            if (influences.size() > 32 * 1024 * 1024) {
+                throw std::runtime_error("Skin influences exceed 128 MiB");
+            }
+            ranges.push_back(start);
+            ranges.push_back(unsigned(influences.size() / 2) - start);
+        }
+        return result;
+    }
+    void publishSource(const std::string& path, PreparedSource source) {
+        if (!sources_.count(path)) {
+            preparedSources_.insert_or_assign(path, std::move(source));
+        }
+    }
+    void publishSkeleton(const Json* root, std::shared_ptr<const SkeletonPose> pose) {
+        skeletons_.insert_or_assign(root, std::move(pose));
+    }
+
+  private:
+    std::map<std::string, PreparedSource> preparedSources_;
     static_assert(sizeof(Vertex) == 8 * sizeof(float),
                   "Transform feedback requires tightly packed Vertex");
     struct Source {
@@ -17,7 +101,7 @@ class GpuSkinning {
         Vec3 low{}, high{};
     };
     std::map<std::string, Source> sources_;
-    std::map<const Json*, SkeletonPose> skeletons_;
+    std::map<const Json*, std::shared_ptr<const SkeletonPose>> skeletons_;
     struct Binding {
         int node;
         std::vector<std::pair<int, Mat4>> bones;
@@ -84,6 +168,7 @@ class GpuSkinning {
             glDeleteTextures(1, &s.weightTexture);
         }
         sources_.clear();
+        preparedSources_.clear();
         skeletons_.clear();
         bindings_.clear();
         poses_.clear();
@@ -111,9 +196,10 @@ class GpuSkinning {
         if (pose == poses_.end()) {
             auto skeleton = skeletons_.find(&root);
             if (skeleton == skeletons_.end()) {
-                skeleton = skeletons_.emplace(&root, SkeletonPose(root)).first;
+                skeleton =
+                    skeletons_.emplace(&root, std::make_shared<const SkeletonPose>(root)).first;
             }
-            pose = poses_.emplace(poseKey, skeleton->second.evaluate(animation)).first;
+            pose = poses_.emplace(poseKey, skeleton->second->evaluate(animation)).first;
         }
         const auto& global = pose->second;
         const auto& bones = part.at("bones");
@@ -143,53 +229,15 @@ class GpuSkinning {
         palette.push_back(global[binding->second.node]);
         auto found = sources_.find(key);
         if (found == sources_.end()) {
-            const auto& vertices = part.at("vertices");
-            const auto& weights = part.at("weights");
-            if (!vertices.is_array() || vertices.empty() || vertices.size() > maxModelVertices ||
-                !weights.is_array() || weights.size() != vertices.size()) {
-                throw std::runtime_error("Invalid GPU skin data");
+            auto prepared = preparedSources_.find(key);
+            PreparedSource fallback;
+            if (prepared == preparedSources_.end()) {
+                fallback = prepareSource(part);
             }
-            std::vector<Vertex> data;
-            std::vector<unsigned> ranges;
-            std::vector<float> influences;
-            for (std::size_t i = 0; i < vertices.size(); ++i) {
-                const auto& v = vertices[i];
-                if (!v.is_array() || v.size() != 8) {
-                    throw std::runtime_error("Invalid vertex");
-                }
-                Vertex vertex{{v[0], v[1], v[2]}, {v[3], v[4], v[5]}, v[6], v[7]};
-                if (!validModelVertex(vertex)) {
-                    throw std::runtime_error("Invalid GPU vertex");
-                }
-                data.push_back(vertex);
-                unsigned start = unsigned(influences.size() / 2);
-                float total = 0;
-                if (!weights[i].is_array() || weights[i].size() > 4096) {
-                    throw std::runtime_error("Invalid influences");
-                }
-                for (const auto& w : weights[i]) {
-                    int b = w.at(0);
-                    float value = w.at(1);
-                    if (b < 0 || std::size_t(b) >= bones.size() || !std::isfinite(value) ||
-                        value < 0) {
-                        throw std::runtime_error("Invalid bone weight");
-                    }
-                    if (value > 0) {
-                        influences.push_back(float(b));
-                        influences.push_back(value);
-                        total += value;
-                        if (!std::isfinite(total)) {
-                            throw std::runtime_error("Bone weight sum overflow");
-                        }
-                    }
-                }
-                if (total <= 0) {
-                    influences.push_back(float(bones.size()));
-                    influences.push_back(1);
-                }
-                ranges.push_back(start);
-                ranges.push_back(unsigned(influences.size() / 2) - start);
-            }
+            auto& decoded = prepared == preparedSources_.end() ? fallback : prepared->second;
+            const auto& data = decoded.data;
+            const auto& ranges = decoded.ranges;
+            const auto& influences = decoded.influences;
             GLint limit = 0;
             glGetIntegerv(GL_MAX_TEXTURE_BUFFER_SIZE, &limit);
             if (influences.size() / 2 > std::size_t(limit) ||
@@ -198,15 +246,8 @@ class GpuSkinning {
             }
             Source s;
             s.count = data.size();
-            s.low = s.high = data.front().position;
-            for (const auto& v : data) {
-                s.low = {std::min(s.low.x, v.position.x),
-                         std::min(s.low.y, v.position.y),
-                         std::min(s.low.z, v.position.z)};
-                s.high = {std::max(s.high.x, v.position.x),
-                          std::max(s.high.y, v.position.y),
-                          std::max(s.high.z, v.position.z)};
-            }
+            s.low = decoded.low;
+            s.high = decoded.high;
             glGenVertexArrays(1, &s.vao);
             glBindVertexArray(s.vao);
             glGenBuffers(1, &s.vertices);
@@ -244,6 +285,9 @@ class GpuSkinning {
             glBindTexture(GL_TEXTURE_BUFFER, s.weightTexture);
             glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, s.weights);
             found = sources_.emplace(key, s).first;
+            if (prepared != preparedSources_.end()) {
+                preparedSources_.erase(prepared);
+            }
         }
         const auto& source = found->second;
         float scale = modelImportScale(root) * modelImportScale(part);
