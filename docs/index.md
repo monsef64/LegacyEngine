@@ -45,7 +45,7 @@ the source tree. Repository-source links point to the revision used for the buil
 
 ## New editor and runtime workflows
 
-- [In-game UI with RmlUi and interactive HUD example](game-ui.md)
+- [In-game GUI with Dear ImGui](game-ui.md)
 
 - [Settings history, Game window and asset controls](editor.md#settings-history-and-play-destination)
 - [Mouse picking and AudioSource event setup](audio-input.md#gameobject-mouse-callbacks)
@@ -56,3 +56,7 @@ The scripting reference is generated from engine-owned definitions. After changi
 an API or its examples, run `python3 docs/generate_reference.py`, then the docs
 tests and HTML builder above. Use `python3 docs/generate_reference.py --check` to
 check that the committed reference is current.
+
+- [Camera recoil: springs, timed bursts and sequences](recoil.md)
+
+- [Animator state-machine controllers](animator.md): graph authoring, parameters, transitions and fades.

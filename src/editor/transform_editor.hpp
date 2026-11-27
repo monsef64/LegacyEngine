@@ -79,6 +79,7 @@ class TransformEditor {
     bool centerPivot_ = false;
     float snap_ = 0.5f, rotationSnap_ = 15.f;
     Vec3 pivotLocal_{};
+    Vec3 gizmoAnchor_{};
     bool localSpace_ = false;
     TransformTool tool_ = TransformTool::Move;
     bool hovered_ = false, dragging_ = false, heldBody_ = false;

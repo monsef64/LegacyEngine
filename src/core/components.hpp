@@ -5,6 +5,7 @@
 #pragma once
 
 #include "animation/animation_component.hpp"
+#include "animation/animator_component.hpp"
 #include "animation/bone_attachment.hpp"
 #include "audio/audio_source.hpp"
 #include "core/ecs.hpp"
@@ -15,6 +16,7 @@
 #include "effects/fog.hpp"
 #include "effects/laser.hpp"
 #include "effects/light_shafts.hpp"
+#include "effects/recoil.hpp"
 #include "gameplay/tps_camera.hpp"
 #include "lighting/light.hpp"
 #include "materials/material.hpp"
@@ -25,7 +27,6 @@
 #include "rendering/mesh.hpp"
 #include "rendering/skybox.hpp"
 #include "terrain/terrain.hpp"
-#include "ui/ui.hpp"
 #include <functional>
 #include <string>
 #include <unordered_set>
@@ -56,6 +57,7 @@ struct MeshRenderer {
     std::string model;    // project-relative baked .mesh; empty selects a built-in primitive
     std::string lightmap; // generated direct-light atlas, square-root RGB encoded in TGA
     int lightmapGrid = 0; // automatically generated per-triangle UV chart grid
+    bool castShadow = true;
 };
 
 enum class ColliderShape { Box, Sphere, Capsule, Cone, Mesh };

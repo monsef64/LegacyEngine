@@ -151,7 +151,25 @@ void main(){
              depth = glIsEnabled(GL_DEPTH_TEST), scissor = glIsEnabled(GL_SCISSOR_TEST);
         GLboolean write;
         glGetBooleanv(GL_DEPTH_WRITEMASK, &write);
+        const bool stencil = glIsEnabled(GL_STENCIL_TEST);
+        GLint stencilFunc, stencilRef, stencilValueMask, stencilWriteMask;
+        GLint stencilFail, stencilDepthFail, stencilPass;
+        glGetIntegerv(GL_STENCIL_FUNC, &stencilFunc);
+        glGetIntegerv(GL_STENCIL_REF, &stencilRef);
+        glGetIntegerv(GL_STENCIL_VALUE_MASK, &stencilValueMask);
+        glGetIntegerv(GL_STENCIL_WRITEMASK, &stencilWriteMask);
+        glGetIntegerv(GL_STENCIL_FAIL, &stencilFail);
+        glGetIntegerv(GL_STENCIL_PASS_DEPTH_FAIL, &stencilDepthFail);
+        glGetIntegerv(GL_STENCIL_PASS_DEPTH_PASS, &stencilPass);
         auto restore = [&] {
+            if (stencil) {
+                glEnable(GL_STENCIL_TEST);
+            } else {
+                glDisable(GL_STENCIL_TEST);
+            }
+            glStencilFunc(stencilFunc, stencilRef, stencilValueMask);
+            glStencilMask(stencilWriteMask);
+            glStencilOp(stencilFail, stencilDepthFail, stencilPass);
             glDepthMask(write);
             if (depth) {
                 glEnable(GL_DEPTH_TEST);
@@ -255,7 +273,23 @@ void main(){
                             d.color.z,
                             d.opacity);
                 glBindTexture(GL_TEXTURE_2D, texture);
-                glDrawArrays(GL_TRIANGLES, 0, 3);
+                if (d.layerMask == ~0u) {
+                    glDisable(GL_STENCIL_TEST);
+                    glDrawArrays(GL_TRIANGLES, 0, 3);
+                } else {
+                    glEnable(GL_STENCIL_TEST);
+                    glStencilMask(0);
+                    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
+                    for (int layer = 0; layer < 32; ++layer) {
+                        if (!(d.layerMask & (1u << layer))) {
+                            continue;
+                        }
+                        glStencilFunc(GL_EQUAL, layer, 0xff);
+                        glDrawArrays(GL_TRIANGLES, 0, 3);
+                    }
+                }
+                glDisable(GL_STENCIL_TEST);
+                glStencilMask(0xff);
             }
         } catch (const std::exception& e) {
             SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Decals: %s", e.what());

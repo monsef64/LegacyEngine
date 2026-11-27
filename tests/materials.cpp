@@ -35,7 +35,7 @@ int main(){
     auto older=parseJson(encoded);auto& fields=older["objects"][0]["components"]["MeshRenderer"];fields.erase("material");fields.erase("materialOverrides");fields.erase("materialValues");
     ProjectIO::Loaded oldProject;ProjectIO::decode(older.dump(),oldProject,meshes);assert(oldProject.world.get<MeshRenderer>(e).material.empty());
     PlayMode play;play.play(world);world.get<MeshRenderer>(e).material.clear();play.stop(world);assert(world.get<MeshRenderer>(e).material==path);
-    std::vector<ScriptField> exports;syncScriptExports("@export albedo Texture \"Textures/color.png\"",exports);assert(exports.size()==1 && exports[0].type=="Texture");
+    std::vector<ScriptField> exports;syncScriptExports("global Texture albedo = \"Textures/color.png\"",exports);assert(exports.size()==1 && exports[0].type=="Texture");
     assert(console.bindExports(exports));assert(console.execute("assert(albedo=='Textures/color.png');self:getComponent(MeshRenderer):setMaterialTexture(albedo)"));
     assert(console.execute("self:getComponent(MeshRenderer):resetMaterialOverrides()"));assert(world.get<MeshRenderer>(e).materialOverrides==0);
     assert(console.execute("self:getComponent(MeshRenderer).material='Other.mat'"));assert(world.get<MeshRenderer>(e).material=="Other.mat");
