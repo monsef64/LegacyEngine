@@ -11,7 +11,7 @@ size measurements do not establish Windows GUI/runtime compatibility.
 - Try a mixture of images, audio, scripts, models and directories. Verify normal
   model conversion, texture dependencies, folder structure and existing filename
   collision handling still apply. Include paths with spaces and Unicode.
-- Use Import > Files / Models and multi-select files in the native dialog. The
+- Use Import > Files / Models and multi-select files in the ImGui picker. The
   project Open/Save and folder pickers remain single-selection dialogs.
 - Include an invalid model between valid files: the remaining files must still
   import, and the failed filenames/errors should remain visible at completion.
@@ -34,7 +34,7 @@ active async worker as before; pending in-memory requests are not persisted.
   sizes separately against a build with `LEGACY_SMALL_RELEASE=OFF`.
 - Launch the packaged copy (not just the build copy). Check models/animated glTF,
   Lua/LegacyScript, physics, audio, particles, terrain, light baking, shadows,
-  editor icons/fonts, native dialogs and save/load of old projects and meshes.
+  editor icons/fonts, ImGui pickers and save/load of old projects and meshes.
 - Verify shaders, particle assets, runtime DLLs, docs and license files remain
   bundled. Debug build symbols must remain available; packaging must not modify
   the build-directory executable.

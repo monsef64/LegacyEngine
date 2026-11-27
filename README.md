@@ -11,7 +11,7 @@ LegacyScript (`.lua`, with legacy `.ls` compatibility) adds Inspector-exported f
 - GameObjects, physics, cameras, audio, dynamic lights and filtered shadows.
 - Project-owned materials, textures, six-face/HDR skyboxes and JSON projects.
 - LegacyScript scripting and a VS Code extension with autocomplete and an LSP server.
-- Play/Pause/Stop, undo/redo, native project dialogs and keyboard/mouse/gamepad input.
+- Play/Pause/Stop, undo/redo, ImGui project dialogs and keyboard/mouse/gamepad input.
 
 ## Build
 
