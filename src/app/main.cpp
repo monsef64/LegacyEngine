@@ -379,7 +379,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             LuaConsole::dispatchEvents();
         }
         browser.pollImports();
-        if (!smokeTest && !GameServices::pendingQuit() &&
+        // Wayland compositors may not map/focus a window until its first buffer
+        // is presented. Never wait for focus before submitting that first frame.
+        if (renderedFrames > 0 && !smokeTest && !GameServices::pendingQuit() &&
             !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
             !(gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS))) {
             input.releaseMouse();
@@ -819,7 +821,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
         }
 
-        if (!smokeTest && !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
+        // Also let the initial frame through if startup events have not granted
+        // focus yet; blocking here would prevent the first swap on Wayland.
+        if (renderedFrames > 0 && !smokeTest &&
+            !(SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) &&
             !(gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS))) {
             input.releaseMouse();
             input.clear();

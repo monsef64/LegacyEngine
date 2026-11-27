@@ -20,3 +20,21 @@
   all layers selected must retain their appearance.
 - Reproduce the reported Lua if/else failure with the user's affected script;
   no interpreter-condition fix is claimed without that reproduction.
+
+## Linux startup before window focus
+
+- On a native Wayland session (including a compositor configured not to focus
+  newly launched applications), launch the editor normally without --smoke-test.
+  Confirm the editor paints its first frame and becomes visible rather than
+  remaining as a background process after logging "Editor started".
+- Repeat with SDL_VIDEO_DRIVER=x11 under XWayland and with a native X11 session.
+- After the first frame, switch focus to another application: the editor should
+  still suspend simulation/rendering without busy-spinning. Refocus and verify
+  normal rendering/input resumes. Close it while unfocused and verify exit.
+- Repeat minimized startup and restore, plus startup while another window holds
+  focus. The initial frame must not depend on receiving keyboard focus.
+
+The startup focus gates now permit the first frame before blocking for focus;
+Wayland may need the first submitted buffer to map/focus the window. This fixes
+that ordering hazard; it does not establish the cause of every invisible-window
+report without reproducing the affected desktop session.
