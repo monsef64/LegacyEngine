@@ -317,7 +317,16 @@ bool Renderer::preloadAssets(const std::set<std::string>& paths) {
         modelRevision_ = modelAssetRevision;
     }
     pumpModels();
+    materialTextures_.discardUnrequested(paths);
     materialTextures_.beginFrame();
+    // Mark all resident dependencies before uploads can evict anything. An
+    // oversized required set must report a cache-budget error, not thrash until
+    // the loading screen times out.
+    for (const auto& path : paths) {
+        if (materialTexturePath(path)) {
+            materialTextures_.retainForFrame(path);
+        }
+    }
     bool ready = true;
     for (const auto& path : paths) {
         if (modelAsset(path)) {
@@ -338,7 +347,10 @@ bool Renderer::preloadAssets(const std::set<std::string>& paths) {
             }
         }
     }
-    return ready && !materialTextures_.streaming();
+    // Only requested dependencies gate Play. The cache may also contain editor
+    // preview/revalidation jobs whose results are consumed only by get(path).
+    // Waiting for those unrelated jobs here can never complete.
+    return ready;
 }
 
 void Renderer::pumpModels() {

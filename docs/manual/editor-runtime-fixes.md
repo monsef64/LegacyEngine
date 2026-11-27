@@ -60,3 +60,22 @@ report without reproducing the affected desktop session.
 - A pending picker without import jobs must not force periodic background wakeups.
 
 These are manual instructions, not automated tests or claims of desktop execution.
+
+## Picker icons and Play preload completion
+
+- Open each file/folder picker: folders must show the editor's folder glyph;
+  files must show their existing type-specific glyph (script, image, model,
+  audio, generic file). Check the embedded icon font on Linux and Windows.
+- Start asynchronous texture previews in the editor, then immediately press Play
+  on a scene that does not use those textures. Loading must finish when the
+  scene's dependencies are resident, without waiting for unrelated cache jobs.
+- Repeat with required textures/models still decoding: Play must not start early.
+  Test first Play, Stop/Play, an empty scene, separate Game, and player startup.
+- Try a level whose required texture set exceeds the material cache capacity.
+  Loading must report a budget error and return to editing instead of repeatedly
+  evicting/reloading required textures until the loading timeout. Check that the
+  original edit scene and selection survive. Retry with a smaller working set.
+- Missing/corrupt required assets must still report their load error. Check
+  window-close cancellation while loading and background focus restoration.
+
+These checks require a desktop and have not been executed in the sandbox.

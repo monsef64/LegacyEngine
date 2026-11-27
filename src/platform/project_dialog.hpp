@@ -1,4 +1,5 @@
 #pragma once
+#include "editor/asset_icons.hpp"
 #include "models/model_import.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -330,8 +331,8 @@ class ProjectDialog {
             for (std::size_t i = 0; i < entries_.size(); ++i) {
                 const auto& e = entries_[i];
                 ImGui::PushID(int(i));
-                const std::string label =
-                    (e.directory ? "[Folder] " : "") + e.path.filename().string();
+                const std::string label = std::string(assetIcon(e.path.string(), e.directory)) +
+                                          " " + e.path.filename().string();
                 if (ImGui::Selectable(label.c_str(),
                                       selected_.count(e.path) != 0,
                                       ImGuiSelectableFlags_AllowDoubleClick)) {
