@@ -97,6 +97,7 @@ inline LevelSystem::Transition preloadBeforePlay(const AssetManager& assets,
                                                  Renderer& renderer,
                                                  SDL_Window* window,
                                                  std::optional<SDL_FRect> gameArea = std::nullopt) {
+    SDL_Log("Play preload: preparing scene assets");
     auto job = WorkerPool::shared().submit([assets, meshes, scene = std::move(scene)]() mutable {
         return LevelSystem::prepare(assets, meshes, "", std::move(scene));
     });
@@ -104,6 +105,7 @@ inline LevelSystem::Transition preloadBeforePlay(const AssetManager& assets,
         throw std::runtime_error("Preload worker queue is full");
     }
     std::optional<LevelSystem::Transition> prepared;
+    SDL_Log("Play preload: initializing loading overlay");
     PreloadText text(window, gameArea);
     const auto started = SDL_GetTicks();
     for (;;) {
@@ -116,8 +118,11 @@ inline LevelSystem::Transition preloadBeforePlay(const AssetManager& assets,
         }
         if (!prepared && job->wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             prepared = job->get();
+            SDL_Log("Play preload: scene prepared (%zu dependencies); uploading GPU assets",
+                    prepared->assets.size());
         }
         if (prepared && renderer.preloadAssets(prepared->assets)) {
+            SDL_Log("Play preload: assets ready; closing loading overlay");
             return std::move(*prepared);
         }
         if (SDL_GetTicks() - started > 120000) {

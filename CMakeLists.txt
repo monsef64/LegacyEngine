@@ -191,9 +191,9 @@ add_library(legacy_imgui STATIC
   ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
+  src/ui/imgui_opengl3.cpp)
 target_include_directories(legacy_imgui SYSTEM PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
-target_link_libraries(legacy_imgui PUBLIC SDL3::SDL3 ${CMAKE_DL_LIBS})
+target_link_libraries(legacy_imgui PUBLIC SDL3::SDL3 glad ${CMAKE_DL_LIBS})
 
 # --- ImGuizmo (transform handles, pinned for reproducible builds) -----------
 FetchContent_Declare(imguizmo

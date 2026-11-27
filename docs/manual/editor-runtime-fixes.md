@@ -79,3 +79,28 @@ These are manual instructions, not automated tests or claims of desktop executio
   window-close cancellation while loading and background focus restoration.
 
 These checks require a desktop and have not been executed in the sandbox.
+
+## OpenGL loader lifetime during Play
+
+The ImGui OpenGL backend now compiles through `src/ui/imgui_opengl3.cpp`, using
+GLAD's existing SDL-resolved dispatch instead of ImGui's private dynamic loader.
+All editor/loading/scripted-GUI contexts share the engine GL loader lifetime;
+shutting down a temporary UI backend must not close OpenGL libraries while the
+renderer is still using their entry points. Keep this wrapper when upgrading
+ImGui and do not also compile upstream imgui_impl_opengl3.cpp independently.
+
+- On Linux Mesa/AMD (native Wayland and X11) and Windows MinGW-w64, press Play in
+  an empty scene and an asset-heavy scene. Repeat Stop/Play, pause/resume, separate
+  Game and embedded Game, with and without scripts defining onGUI.
+- Exercise successful preload, invalid assets, loading cancellation, repeated
+  runtime GUI destruction, and application exit. Verify the editor still renders
+  after each temporary backend is torn down.
+- Check the terminal's Play preload stages: scene preparation, loading overlay
+  initialization, scene prepared, GPU assets ready/overlay closing, overlay closed
+  and runtime started. If a native crash persists, capture the final stage plus
+  `thread apply all bt` and `info sharedlibrary` from GDB while stopped at the
+  original SIGSEGV (before the crash handler runs).
+
+The user's supplied trace confirms a main-thread SIGSEGV at an unnamed address;
+it does not prove this loader-lifetime hazard is the cause. Desktop confirmation
+on the affected build/system is still required.

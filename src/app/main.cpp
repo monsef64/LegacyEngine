@@ -1788,12 +1788,14 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                                gameImageSize.y}});
             } catch (const std::exception& e) {
                 projectError = e.what();
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Play preload failed: %s", e.what());
                 if (createdLoadingWindow) {
                     SDL_DestroyWindow(gameWindow);
                     gameWindow = nullptr;
                 }
             }
             if (preloaded) {
+                SDL_Log("Play: loading overlay closed; starting runtime");
                 editSelection = selectedEntity;
                 editLevelName = levels.current();
                 editSource = scripts.source();
@@ -1834,6 +1836,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     componentScripts.start(world, browser.assets, runtimeMeshes, planeMesh);
                     lastTicks = SDL_GetTicksNS();
                     LuaConsole::postEvent("onLevelLoaded", {levels.current()});
+                    SDL_Log("Play: runtime started");
                 }
             }
         }
