@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 #include <glad/gl.h>
+#include <random>
 #include <set>
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -673,6 +674,18 @@ int gameIndex(lua_State* L) {
         lua_pushboolean(L, block);
     } else {
         int op = !std::strcmp(key, "quit") ? 3 : !std::strcmp(key, "openURL") ? 4 : -1;
+        const char* saves[]{
+            "saveString", "saveInt", "saveFloat", "saveBool", "saveTable", "saveVector3"};
+        const char* loads[]{
+            "loadString", "loadInt", "loadFloat", "loadBool", "loadTable", "loadVector3"};
+        for (int i = 0; i < 6; ++i) {
+            if (!std::strcmp(key, saves[i])) {
+                op = 20 + i;
+            }
+            if (!std::strcmp(key, loads[i])) {
+                op = 30 + i;
+            }
+        }
         if (op < 0) {
             lua_pushnil(L);
             return 1;
@@ -698,6 +711,62 @@ int gameWrite(lua_State* L) {
     }
     return 0;
 }
+int randomFunction(lua_State* L) {
+    const int op = int(lua_tointeger(L, lua_upvalueindex(1)));
+    lua_Number lo = 0, hi = 0;
+    lua_Integer a = 0, b = 0, length = 0;
+    if (op == 0) {
+        lo = luaL_checknumber(L, 1);
+        hi = luaL_checknumber(L, 2);
+        if (!std::isfinite(lo) || !std::isfinite(hi) || lo > hi) {
+            return luaL_error(L, "Expected finite min <= max");
+        }
+    }
+    if (op == 1) {
+        a = luaL_checkinteger(L, 1);
+        b = luaL_checkinteger(L, 2);
+        if (a > b) {
+            return luaL_error(L, "Expected min <= max");
+        }
+    }
+    if (op == 3) {
+        length = luaL_checkinteger(L, 1);
+        if (length < 0 || length > 4096) {
+            return luaL_error(L, "Random string length must be 0..4096");
+        }
+    }
+    char error[256]{};
+    try {
+        static thread_local std::mt19937_64 generator{std::random_device{}()};
+        if (op == 0) {
+            std::uniform_real_distribution<long double> distribution(lo, hi);
+            lua_pushnumber(L, std::clamp(lua_Number(distribution(generator)), lo, hi));
+            return 1;
+        }
+        if (op == 1) {
+            lua_pushinteger(L, std::uniform_int_distribution<lua_Integer>(a, b)(generator));
+            return 1;
+        }
+        if (op == 2) {
+            lua_pushboolean(L, std::bernoulli_distribution(.5)(generator));
+            return 1;
+        }
+        constexpr char alphabet[] =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        std::string value(std::size_t(length), ' ');
+        for (auto& c : value) {
+            c = alphabet[std::uniform_int_distribution<unsigned>(0,
+                                                                 sizeof(alphabet) - 2)(generator)];
+        }
+        lua_pushlstring(L, value.data(), value.size());
+        return 1;
+    } catch (const std::exception& e) {
+        std::snprintf(error, sizeof(error), "%s", e.what());
+    }
+    lua_pushnil(L);
+    lua_pushstring(L, error);
+    return 2;
+}
 void proxy(lua_State* L, const char* name, lua_CFunction index, lua_CFunction write) {
     lua_newuserdatauv(L, 1, 0);
     lua_newtable(L);
@@ -715,17 +784,16 @@ void install(lua_State* L) {
     proxy(L, "Screen", screenIndex, screenWrite);
     proxy(L, "Game", gameIndex, gameWrite);
     lua_newtable(L);
-    const char* types[]{"String", "Int", "Float", "Bool", "Table", "Vector3"};
-    for (int i = 0; i < 6; ++i) {
-        auto save = std::string("save") + types[i], load = std::string("load") + types[i];
-        function(L, save.c_str(), 20 + i);
-        function(L, load.c_str(), 30 + i);
-        lua_getfield(L, -1, save.c_str());
-        lua_setglobal(L, save.c_str());
-        lua_getfield(L, -1, load.c_str());
-        lua_setglobal(L, load.c_str());
+    const char* randomNames[]{
+        "randomFloat", "randomInt", "randomBool", "randomString"};
+    for (int i = 0; i < 4; ++i) {
+        lua_pushinteger(L, i);
+        lua_pushcclosure(L, randomFunction, 1);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, randomNames[i]);
+        lua_setfield(L, -2, randomNames[i]);
     }
-    lua_setglobal(L, "Saving");
+    lua_setglobal(L, "Random");
     luaL_newmetatable(L, "GameFile");
     lua_pushcfunction(L, fileGC);
     lua_setfield(L, -2, "__gc");

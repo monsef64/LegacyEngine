@@ -64,6 +64,7 @@ inline std::string staticState(World& world, const AssetManager& assets) {
             auto h = pose;
             h.scalar(1);
             h.text(mesh->model);
+            h.scalar(mesh->castShadow);
             h.scalar(mesh->model.empty() ? mesh->mesh.id : 0u);
             try {
                 MaterialProperties material;

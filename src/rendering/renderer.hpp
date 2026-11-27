@@ -140,6 +140,7 @@ class Renderer {
 
     // Frees what init() and createMesh() created. Call it if init() succeeded,
     // before the OpenGL context is destroyed.
+    bool preloadAssets(const std::set<std::string>& paths);
     void shutdown();
 
     // Copies a mesh to the graphics card. Put the returned handle in the
@@ -279,6 +280,8 @@ class Renderer {
     struct StreamedModel {
         MeshData mesh;
         std::map<std::string, Json> documents;
+        std::map<std::string, GpuSkinning::PreparedSource> skinSources;
+        std::map<std::string, std::shared_ptr<const SkeletonPose>> skeletons;
     };
     std::map<std::string, std::future<StreamedModel>> pendingModels_;
     std::map<std::string, std::chrono::steady_clock::time_point> failedModels_;

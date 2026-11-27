@@ -1,4 +1,5 @@
 #include "rendering/renderer.hpp"
+#include "project/layers.hpp"
 #include "audio/audio_gizmo.hpp"
 #include "core/profiler.hpp"
 #include "core/worker_pool.hpp"
@@ -310,6 +311,48 @@ MeshHandle Renderer::createMesh(const MeshData& data) {
 
 // Decode/decompress/pose the bind mesh with a private document cache on a CPU
 // worker. Only this render-thread completion path publishes cache entries/GL IDs.
+bool Renderer::preloadAssets(const std::set<std::string>& paths) {
+    if (modelRevision_ != modelAssetRevision) {
+        clearModelCache();
+        modelRevision_ = modelAssetRevision;
+    }
+    pumpModels();
+    materialTextures_.discardUnrequested(paths);
+    materialTextures_.beginFrame();
+    // Mark all resident dependencies before uploads can evict anything. An
+    // oversized required set must report a cache-budget error, not thrash until
+    // the loading screen times out.
+    for (const auto& path : paths) {
+        if (materialTexturePath(path)) {
+            materialTextures_.retainForFrame(path);
+        }
+    }
+    bool ready = true;
+    for (const auto& path : paths) {
+        if (modelAsset(path)) {
+            if (failedModels_.count(path)) {
+                throw std::runtime_error("Cannot preload model: " + path + ": " + modelError);
+            }
+            if (!requestModel(path)) {
+                ready = false;
+            }
+        } else if (!path.empty() && materialTexturePath(path)) {
+            std::string error;
+            const auto texture = materialTextures_.get(materialAssets_, path, error);
+            if (!error.empty()) {
+                throw std::runtime_error("Cannot preload texture: " + path + ": " + error);
+            }
+            if (!texture) {
+                ready = false;
+            }
+        }
+    }
+    // Only requested dependencies gate Play. The cache may also contain editor
+    // preview/revalidation jobs whose results are consumed only by get(path).
+    // Waiting for those unrelated jobs here can never complete.
+    return ready;
+}
+
 void Renderer::pumpModels() {
     for (auto it = pendingModels_.begin(); it != pendingModels_.end(); ++it) {
         if (it->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
@@ -326,6 +369,15 @@ void Renderer::pumpModels() {
             }
             for (auto& document : result.documents) {
                 modelDocuments_.emplace(document.first, std::move(document.second));
+            }
+            for (auto& source : result.skinSources) {
+                gpuSkinning_.publishSource(source.first, std::move(source.second));
+            }
+            for (auto& skeleton : result.skeletons) {
+                auto found = modelDocuments_.find(skeleton.first);
+                if (found != modelDocuments_.end()) {
+                    gpuSkinning_.publishSkeleton(&found->second, std::move(skeleton.second));
+                }
             }
             failedModels_.erase(path);
         } catch (const std::exception& error) {
@@ -353,6 +405,28 @@ bool Renderer::requestModel(const std::string& path) {
     auto request = WorkerPool::shared().submit([assets = materialAssets_, path] {
         StreamedModel result;
         result.mesh = loadModelAsset(assets, path, 0, -1, 0, &result.documents);
+        // Prepare large vertex/weight streams and typed animation keys on the CPU
+        // worker while the model is loading, not on first Play/crossFade.
+        for (const auto& entry : result.documents) {
+            const auto& doc = entry.second;
+            if (doc.contains("nodes") && doc.contains("animations") && !doc.at("nodes").empty()) {
+                result.skeletons.emplace(entry.first, std::make_shared<const SkeletonPose>(doc));
+            }
+            if (doc.contains("bones") && doc.contains("weights") && doc.contains("vertices")) {
+                result.skinSources.emplace(entry.first, GpuSkinning::prepareSource(doc));
+            }
+            if (doc.contains("embeddedAssets")) {
+                for (auto child = doc.at("embeddedAssets").begin();
+                     child != doc.at("embeddedAssets").end();
+                     ++child) {
+                    if (child.value().contains("bones") && child.value().contains("weights") &&
+                        child.value().contains("vertices")) {
+                        result.skinSources.emplace(entry.first + "#" + child.key(),
+                                                   GpuSkinning::prepareSource(child.value()));
+                    }
+                }
+            }
+        }
         return result;
     });
     if (request) {
@@ -566,7 +640,9 @@ void Renderer::draw(World& world,
     glDisable(GL_SCISSOR_TEST);
     glViewport(x, y, width, height);
     glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glStencilMask(0xff);
+    glClearStencil(0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     {
         ProfileScope scope(ProfilePart::Lights);
@@ -739,6 +815,9 @@ void Renderer::draw(World& world,
     RenderVisibility::Scope visibilityScope(visibilityPreview ? &world : nullptr,
                                             visibilityPreview ? &hiddenEntities : nullptr,
                                             visibilityPreview ? &visibleBounds : nullptr);
+    glEnable(GL_STENCIL_TEST);
+    glStencilMask(0xff);
+    glStencilOp(GL_KEEP,GL_KEEP,GL_REPLACE);
     terrainRenderer_.draw(
         world, materialAssets_, viewProjection, cameraPosition, litProgram_, lights_, &occlusion);
     glUseProgram(litProgram_);
@@ -908,12 +987,16 @@ void Renderer::draw(World& world,
                 transparent.push_back(
                     {t, &r, std::move(material), dot(delta, delta), transparent.size()});
             } else {
+                glStencilFunc(GL_ALWAYS,LayerSettings::effective(world,e),0xff);
                 drawMesh(t, r, material);
             }
         });
     // Explicit insertion order preserves equal-depth behavior without stable_sort's temporary
     // buffer.
     foliage_.draw(world, materialAssets_, viewProjection, cameraPosition, skyAmbient);
+    glDisable(GL_STENCIL_TEST);
+    glStencilMask(0xff);
+    glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP);
     decals_.draw(world, materialAssets_, viewProjection);
     std::sort(transparent.begin(), transparent.end(), [](const auto& a, const auto& b) {
         return a.distance == b.distance ? a.order < b.order : a.distance > b.distance;
@@ -1299,8 +1382,8 @@ void Renderer::prepareLighting(World& world,
     if (needsShadows) {
         world.eachReadOnly<Transform, MeshRenderer>(
             [&](Entity e, const Transform& t, const MeshRenderer& r) {
-                if (!isActive(world, e) || world.has<Water>(e) || world.has<Camera>(e) ||
-                    r.mesh.id >= meshes_.size()) {
+                if (!r.castShadow || !isActive(world, e) || world.has<Water>(e) ||
+                    world.has<Camera>(e) || r.mesh.id >= meshes_.size()) {
                     return;
                 }
                 const auto& mesh = meshes_[r.mesh.id];
