@@ -7,19 +7,19 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'Animator'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'|'Canvas'|'UI'|'Decal'|'Recoil'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'Animator'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'|'Decal'|'Recoil'
 ---Live named script proxy. Public globals accept scalar values/functions; see scripting guide.
 ---@class NamedScriptComponent
 ---@class GameObject
 ---@field getScript fun(name:string):NamedScriptComponent|nil
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil
----@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil
----@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil
----@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil
----@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal
+---@field getComponent fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onAnimationFinish fun()|nil
 ---@field onAnimationStart fun()|nil
@@ -103,7 +103,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -995,6 +995,7 @@ TPSCamera = nil
 ---@field velocity Vec3 Read-only actual last-frame velocity
 ---@field hasPath boolean Read-only; true while following a complete reachable path
 ---@field pathPending boolean Read-only; destination request awaits the next Play update
+---@field distance number Read-only straight-line 3D distance from the agent position to its destination, in world units; zero if no destination or Transform.
 ---@field remainingDistance number Read-only remaining path distance
 ---@field status string Read-only navigation status
 ---@field setDestination fun(self:NavMeshAgent, x:number|Vec3, y?:number, z?:number) Queue a path request; resumes movement
@@ -1017,24 +1018,6 @@ function Vector3(x,y,z) end
 ---@field size Vec3 Local box dimensions, positive; assign a whole vector
 ---@field center Vec3 Local box center; assign a whole vector
 NavMeshObstacle = nil
-
----@class Canvas
----@field enabled boolean Show this Canvas when its owner is active; defaults to true.
----@field rml string Project-relative .rml asset; both rml and rcss must be assigned.
----@field rcss string Project-relative .rcss asset; applied to this document.
----@field isLoaded fun(self:Canvas):boolean Whether this component's document is loaded in Play.
----@field setText fun(self:Canvas,id:string,plainText:string):boolean Set escaped plain text in this Canvas document.
----@field onClick fun(self:Canvas,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart.
-Canvas = nil
-
----@class UI
----@field enabled boolean Show this UI when its owner is active; defaults to true.
----@field rml string Project-relative .rml asset; both rml and rcss must be assigned.
----@field rcss string Project-relative .rcss asset; applied to this document.
----@field isLoaded fun(self:UI):boolean Whether this component's document is loaded in Play.
----@field setText fun(self:UI,id:string,plainText:string):boolean Set escaped plain text in this UI document.
----@field onClick fun(self:UI,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart.
-UI = nil
 
 ---@class GUI
 ---@field WindowFlags GUIWindowFlags

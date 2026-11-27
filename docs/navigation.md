@@ -178,3 +178,27 @@ change, plus `onNavMeshAgentMoving()`, `onNavMeshAgentArrived()`,
 `onNavMeshAgentStopped()`. Events fire once when entering that status, not every
 frame. Read the agent's `status` inside the callback. Delivery happens after all
 agents update in both editor Play and exported games.
+
+## Distance to destination
+
+Read `navmesh.distance` on a `NavMeshAgent` reference to get the straight-line
+3D distance from the agent's current Transform position to its requested
+destination, in world units (a floating-point Lua number):
+
+```lua
+local navmesh = self:getComponent(NavMeshAgent)
+if navmesh then
+    local distance = navmesh.distance
+end
+```
+
+This property is read-only and computed when read, even while stopped or when
+no valid route exists. It returns `0` before a destination is set, after
+`resetPath()`, or if the owner has no Transform. It includes the pivot height
+and vertical distance; it is not clamped by stoppingDistance. Use
+`remainingDistance` for the remaining distance along the calculated path.
+
+Manual check: set an agent at (0, 0, 0) and destination to (3, 0, 4);
+`distance` should be 5. Move the agent, stop/resume it, and change the destination
+to verify the value updates immediately. Reset the path to check it returns 0.
+Assignment to `distance` must be rejected as read-only.

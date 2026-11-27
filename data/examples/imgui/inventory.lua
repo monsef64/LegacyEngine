@@ -1,4 +1,4 @@
--- Attach to a GameObject and press Play. UI remains the RML/RCSS component.
+-- Attach to an active GameObject and press Play. GUI draws each frame in onGUI.
 local selected, quality = 1, 0
 local message = "Drag an item onto the equipment slot."
 local items = {"Sword", "Shield", "Potion"}

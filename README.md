@@ -55,10 +55,9 @@ See [Jolt migration and manual checks](docs/manual/jolt-and-model-imports.md) fo
 
 ### In-game UI
 
-The UI component displays assigned RML/RCSS assets with RmlUi/OpenGL, separate
-from the ImGui editor. Scripts access a specific UI component; no UI folder
-is auto-loaded.
-See the [setup/API guide](docs/game-ui.md) and [interactive HUD example](data/examples/rmlui/README.md).
+Game interfaces use the ImGui `GUI` namespace in per-frame `onGUI()` callbacks.
+See the [setup/API guide](docs/game-ui.md) and `data/examples/imgui`.
+
 
 ## License
 
@@ -66,6 +65,6 @@ See the [setup/API guide](docs/game-ui.md) and [interactive HUD example](data/ex
 Third-party dependencies and assets retain their respective licenses and notices,
 collected under [`data/license/`](data/license/README.md) and included in releases.
 
-Runtime interfaces offer the RML/RCSS **UI** component and the separate **GUI**
+Runtime interfaces use the **GUI**
 ImGui scripting namespace (draw inside `onGUI()`). See [in-game interfaces](docs/game-ui.md)
-and the examples in `data/examples/rmlui` and `data/examples/imgui`.
+and the examples in `data/examples/imgui`.

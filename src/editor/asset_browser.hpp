@@ -274,10 +274,7 @@ class AssetBrowser {
                 }
             }
         });
-        world.each<UI>([&](Entity, UI& g) {
-            remap(g.rml);
-            remap(g.rcss);
-        });
+
         world.each<Collider>([&](Entity, Collider& collider) { remap(collider.model); });
         world.each<LightShafts>([&](Entity, LightShafts& s) { remap(s.texture); });
         auto remapLight = [&](Entity, auto& l) {
@@ -336,7 +333,7 @@ class AssetBrowser {
                             }
                         } else if (value.is_string()) {
                             const std::string keys =
-                                "|rml|rcss|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|controller|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                                "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|controller|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                             if (keys.find("|" + key + "|") == std::string::npos) {
                                 return;
                             }
@@ -512,7 +509,7 @@ class AssetBrowser {
                     }
                 } else if (value.is_string()) {
                     const std::string keys =
-                        "|rml|rcss|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|controller|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                        "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|controller|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                     if (keys.find("|" + key + "|") == std::string::npos) {
                         return;
                     }

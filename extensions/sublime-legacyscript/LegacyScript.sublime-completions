@@ -443,7 +443,7 @@
       "trigger": "GUI",
       "contents": "GUI",
       "annotation": "LegacyEngine",
-      "details": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window. Canvas is the RML/RCSS component."
+      "details": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window."
     },
     {
       "trigger": "GUI.beginWindow",
@@ -698,18 +698,6 @@
       "details": "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder, layerMask (unsigned receiver layers). Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."
     },
     {
-      "trigger": "UI",
-      "contents": "UI",
-      "annotation": "LegacyEngine",
-      "details": "UI - Compatibility alias for Canvas."
-    },
-    {
-      "trigger": "Canvas",
-      "contents": "Canvas",
-      "annotation": "LegacyEngine",
-      "details": "Canvas - RmlUi Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(Canvas) or global Canvas hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
-    },
-    {
       "trigger": "Vector3",
       "contents": "Vector3",
       "annotation": "LegacyEngine",
@@ -725,7 +713,7 @@
       "trigger": "NavMeshAgent",
       "contents": "NavMeshAgent",
       "annotation": "LegacyEngine",
-      "details": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), heightOffset (-1000..1000 world units), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(), stop(), start(), setSpeed(speed), setHeightOffset(height). stop/start preserve the route. Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Use heightOffset to raise centered pivots above the navigation surface (default 0 for foot pivots). No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
+      "details": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), heightOffset (-1000..1000 world units), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(), stop(), start(), setSpeed(speed), setHeightOffset(height). stop/start preserve the route. Read-only hasPath, pathPending, distance (straight-line 3D world-unit distance from agent position to destination; zero without destination/Transform), remainingDistance (path length), velocity, status. Bake static objects/terrains in Windows > Navigation. Use heightOffset to raise centered pivots above the navigation surface (default 0 for foot pivots). No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
     },
     {
       "trigger": "TPSCamera",
@@ -2321,37 +2309,37 @@
       "trigger": "getComponent",
       "contents": "getComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil"
+      "details": "fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "getComponentInParent",
       "contents": "getComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "getComponentInChildren",
       "contents": "getComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "findComponentInParent",
       "contents": "findComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "findComponentInChildren",
       "contents": "findComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "addComponent",
       "contents": "addComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Canvas|UI|Decal"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal"
     },
     {
       "trigger": "removeComponent",
@@ -5456,6 +5444,12 @@
       "details": "boolean Read-only; destination request awaits the next Play update"
     },
     {
+      "trigger": "distance",
+      "contents": "distance",
+      "annotation": "NavMeshAgent",
+      "details": "number Read-only straight-line 3D distance from the agent position to its destination, in world units; zero if no destination or Transform."
+    },
+    {
       "trigger": "remainingDistance",
       "contents": "remainingDistance",
       "annotation": "NavMeshAgent",
@@ -5508,78 +5502,6 @@
       "contents": "center",
       "annotation": "NavMeshObstacle",
       "details": "Vec3 Local box center; assign a whole vector"
-    },
-    {
-      "trigger": "enabled",
-      "contents": "enabled",
-      "annotation": "Canvas",
-      "details": "boolean Show this Canvas when its owner is active; defaults to true."
-    },
-    {
-      "trigger": "rml",
-      "contents": "rml",
-      "annotation": "Canvas",
-      "details": "string Project-relative .rml asset; both rml and rcss must be assigned."
-    },
-    {
-      "trigger": "rcss",
-      "contents": "rcss",
-      "annotation": "Canvas",
-      "details": "string Project-relative .rcss asset; applied to this document."
-    },
-    {
-      "trigger": "isLoaded",
-      "contents": "isLoaded",
-      "annotation": "Canvas",
-      "details": "fun(self:Canvas):boolean Whether this component's document is loaded in Play."
-    },
-    {
-      "trigger": "setText",
-      "contents": "setText",
-      "annotation": "Canvas",
-      "details": "fun(self:Canvas,id:string,plainText:string):boolean Set escaped plain text in this Canvas document."
-    },
-    {
-      "trigger": "onClick",
-      "contents": "onClick",
-      "annotation": "Canvas",
-      "details": "fun(self:Canvas,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart."
-    },
-    {
-      "trigger": "enabled",
-      "contents": "enabled",
-      "annotation": "UI",
-      "details": "boolean Show this UI when its owner is active; defaults to true."
-    },
-    {
-      "trigger": "rml",
-      "contents": "rml",
-      "annotation": "UI",
-      "details": "string Project-relative .rml asset; both rml and rcss must be assigned."
-    },
-    {
-      "trigger": "rcss",
-      "contents": "rcss",
-      "annotation": "UI",
-      "details": "string Project-relative .rcss asset; applied to this document."
-    },
-    {
-      "trigger": "isLoaded",
-      "contents": "isLoaded",
-      "annotation": "UI",
-      "details": "fun(self:UI):boolean Whether this component's document is loaded in Play."
-    },
-    {
-      "trigger": "setText",
-      "contents": "setText",
-      "annotation": "UI",
-      "details": "fun(self:UI,id:string,plainText:string):boolean Set escaped plain text in this UI document."
-    },
-    {
-      "trigger": "onClick",
-      "contents": "onClick",
-      "annotation": "UI",
-      "details": "fun(self:UI,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart."
     },
     {
       "trigger": "WindowFlags",

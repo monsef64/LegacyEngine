@@ -497,21 +497,12 @@ drive gameplay; focus loss and Stop must clear held and pending key state.
 
 ## In-game UI
 
-Add a `UI` component, assign its RML and RCSS assets, and use
-`self:getComponent(UI)` or an exported `UI` reference. Call
-`gui:setText(id, text)` and register `gui:onClick(id, callback)` once in onStart.
-See [In-game UI](game-ui.md) for component setup and the interactive example.
-
-### Two runtime interface systems
-
-Use **UI** components for RML/RCSS documents and scoped `ui:onClick(...)` /
-`ui:setText(...)`. Use the **GUI** namespace for script-authored ImGui controls,
-drawn each rendered frame inside `function onGUI() ... end`. GUI is not a component
-or export-reference type. See [in-game interfaces](game-ui.md).
+Use the `GUI` namespace inside per-frame `onGUI()` callbacks for game interfaces.
+See [In-game GUI](game-ui.md). The former document-based UI component is removed.
 
 ### Advanced runtime GUI
 
-`GUI` is the ImGui scripting namespace; `UI` is the RML/RCSS component. Define
+`GUI` is the ImGui scripting namespace, not a component. Define
 `function onGUI() ... end` for per-rendered-frame drawing. Use the generated scripting
 reference for images, tables, menus, popups, combos, radio buttons, style/font
 scopes, typed drag/drop, custom drawing and mouse/key queries. Window flags combine

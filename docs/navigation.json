@@ -61,11 +61,7 @@
   },
   {
     "file": "game-ui.md",
-    "title": "In-game UI (RmlUi)"
-  },
-  {
-    "file": "visual-ui-maker.md",
-    "title": "Canvas — Visual UI Editor"
+    "title": "In-game GUI (ImGui)"
   },
   {
     "file": "first-person.md",

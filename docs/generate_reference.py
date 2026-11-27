@@ -271,12 +271,6 @@ def example(entry):
         before = '        GUI.setNextWindowPos(20, 20)\n' if name == 'setNextWindowPos' else '        GUI.setNextWindowSize(300, 200)\n' if name == 'setNextWindowSize' else ''
         body = '\n'.join('        ' + line for line in calls[name].splitlines())
         return setup + 'function onGUI()\n' + before + '        GUI.beginWindow(\"HUD\")\n' + body + '\n        GUI.endWindow()\nend'
-    if owner in ('Canvas', 'UI'):
-        return {
-            'isLoaded': 'local gui = self:getComponent(UI)\nif gui and gui:isLoaded() then debug.log("UI ready") end',
-            'setText': 'local gui = self:getComponent(UI)\nif gui then gui:setText("health", "100 / 100") end',
-            'onClick': 'function onStart()\n    local gui = self:getComponent(UI)\n    if gui then gui:onClick("collect", function() gui:setText("status", "Collected!") end) end\nend',
-        }[name].replace('getComponent(UI)', f'getComponent({owner})')
     if owner == 'ColorFade':
         return f'local fade = fadeToColor(color.black)\nfade:{name}(1)'
     if owner == 'LegacyDebug':
@@ -381,7 +375,7 @@ independent spring/damper contacts. Anti-roll strength has been removed;
 `centerOfMassX/Y/Z` remain available without locking chassis pitch/roll.
 
 
-See [In-game UI](game-ui.md) for RML/RCSS setup and the `Canvas` component example.
+See [In-game GUI](game-ui.md) for the per-frame ImGui scripting API.
 """
 
 def render_reference():

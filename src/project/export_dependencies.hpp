@@ -8,7 +8,7 @@
 
 namespace GameExport {
 // A conservative dependency closure, not a copy of the entire Assets tree.
-// Literal paths in scripts/UI are followed. Constructed runtime paths must be
+// Literal paths in scripts are followed. Constructed runtime paths must be
 // declared in Settings/ExportAssets.json: {"include":["Folder/file", "Folder/"]}.
 inline std::set<std::string> exportDependencies(const AssetManager& assets,
                                                 const std::string& scene,
@@ -225,8 +225,7 @@ inline std::set<std::string> exportDependencies(const AssetManager& assets,
                           ext == ".lemesh" || ext == ".terrain" || ext == ".prefab" ||
                           ext == ".level" || ext == ".legacy" || ext == ".leanim" ||
                           ext == ".cubemap" || ext == ".controller" || ext == ".gltf";
-        const bool text = ext == ".ls" || ext == ".lua" || ext == ".rml" || ext == ".rcss" ||
-                          ext == ".css" || ext == ".obj" || ext == ".mtl";
+        const bool text = ext == ".ls" || ext == ".lua" || ext == ".obj" || ext == ".mtl";
         if (json) {
             // Engine JSON assets may be compressed model/terrain containers.
             if (ext == ".level" || ext == ".prefab" || ext == ".legacy") {

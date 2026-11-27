@@ -119,7 +119,6 @@ inline std::string encodeLegacy(World& world,
             (world.has<NavMeshAgent>(e) ? 8589934592ull : 0ull) |
             (world.has<NavMeshObstacle>(e) ? 17179869184ull : 0ull) |
             (world.has<Animator>(e) ? 34359738368ull : 0ull) |
-            (world.has<UI>(e) ? 68719476736ull : 0ull) |
             (world.has<Decal>(e) ? 137438953472ull : 0ull) |
             (world.has<Recoil>(e) ? 274877906944ull : 0ull);
         int parent = -1;
@@ -363,10 +362,7 @@ inline std::string encodeLegacy(World& world,
             (void)Animators::parse(Animators::settings(*animator));
             out << std::quoted(Animators::settings(*animator).dump()) << ' ';
         }
-        if (const auto* g = world.tryGet<UI>(e)) {
-            require(exportAssetPath(g->rml) && exportAssetPath(g->rcss));
-            out << g->enabled << ' ' << std::quoted(g->rml) << ' ' << std::quoted(g->rcss) << ' ';
-        }
+
         if (const auto* d = world.tryGet<Decal>(e)) {
             (void)Decals::parse(Decals::settings(*d));
             require(world.has<Transform>(e));
@@ -427,8 +423,8 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             in >> std::quoted(field.name) >> std::quoted(field.type) >> std::quoted(field.text);
             field.number = number(in);
             in >> field.boolean >> target;
-            if (field.type == "GUI") {
-                field.type = "UI"; // legacy RML component reference
+            if (field.type == "GUI" || field.type == "UI" || field.type == "Canvas") {
+                continue;
             }
             require(exportName(field.name) &&
                     (exportType(field.type) || field.type == "Animator") &&
@@ -922,10 +918,11 @@ inline void decodeLegacy(const std::string& text, Loaded& result, const Meshes& 
             }
         }
         if (mask & 68719476736ull) {
-            UI g;
-            in >> g.enabled >> std::quoted(g.rml) >> std::quoted(g.rcss);
-            require(exportAssetPath(g.rml) && exportAssetPath(g.rcss));
-            result.world.add(e, g);
+            // Consume the removed overlay component without instantiating it.
+            bool enabled = false;
+            std::string document, stylesheet;
+            in >> enabled >> std::quoted(document) >> std::quoted(stylesheet);
+            require(bool(in) && document.size() <= 4096 && stylesheet.size() <= 4096);
         }
         if (mask & 137438953472ull) {
             std::string data;

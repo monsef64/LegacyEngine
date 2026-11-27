@@ -529,9 +529,7 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
         if constexpr (std::is_same_v<T, Decal>) {
             type = 33;
         }
-        if constexpr (std::is_same_v<T, UI>) {
-            type = 32;
-        }
+
         if constexpr (std::is_same_v<T, NavMeshObstacle>) {
             type = 30;
         }
@@ -607,7 +605,8 @@ componentHeader(World& world, Entity entity, const char* name, const T& defaults
                                 "NavMeshAgent",
                                 "NavMeshObstacle",
                                 "Animator",
-                                "Canvas",
+                                "", // Reserved removed component slot
+
                                 "Decal",
                                 "Recoil"};
             for (int i = 0; i < 35; ++i) {
@@ -727,7 +726,8 @@ inline void drawScriptExports(World& world,
                                  "NavMeshAgent",
                                  "NavMeshObstacle",
                                  "Animator",
-                                 "Canvas",
+                                 "", // Reserved removed component slot
+
                                  "Decal",
                                  "Recoil"};
     for (auto& field : fields) {
@@ -1286,11 +1286,17 @@ inline void drawInspector(World& world,
                             "Projection depth", &edited.depth, .01f, .001f, 1000);
                         ImGui::InputInt("Sorting order", &edited.sortingOrder);
                         if (ImGui::TreeNode("Receiver layers")) {
-                            for (int i=0;i<32;++i) if (!LayerSettings::names[i].empty()) {
-                                bool receive = (edited.layerMask & (1u<<i)) != 0;
-                                if (ImGui::Checkbox(LayerSettings::names[i].c_str(),&receive)) {
-                                    if (receive) edited.layerMask |= 1u<<i;
-                                    else edited.layerMask &= ~(1u<<i);
+                            for (int i = 0; i < 32; ++i) {
+                                if (!LayerSettings::names[i].empty()) {
+                                    bool receive = (edited.layerMask & (1u << i)) != 0;
+                                    if (ImGui::Checkbox(LayerSettings::names[i].c_str(),
+                                                        &receive)) {
+                                        if (receive) {
+                                            edited.layerMask |= 1u << i;
+                                        } else {
+                                            edited.layerMask &= ~(1u << i);
+                                        }
+                                    }
                                 }
                             }
                             ImGui::TreePop();
@@ -1299,20 +1305,6 @@ inline void drawInspector(World& world,
                             *d = Decals::parse(Decals::settings(edited));
                         } catch (...) {
                         }
-                    }
-                }
-                if (componentID == 32) {
-                    if (auto* g = world.tryGet<UI>(selected);
-                        g && componentHeader<UI>(world, selected, "Canvas")) {
-
-                        assetPicker("RML asset", g->rml, assets, [](const std::string& file) {
-                            return AssetManager::extension(file) == ".rml";
-                        });
-                        assetPicker("RCSS asset", g->rcss, assets, [](const std::string& file) {
-                            return AssetManager::extension(file) == ".rcss";
-                        });
-                        ImGui::TextWrapped(
-                            "Assign both assets to show this Canvas in Game during Play. Open Windows > Canvas - Visual UI Editor to edit. Scripts: self:getComponent(Canvas), or global Canvas hud = nil.");
                     }
                 }
 
@@ -2652,9 +2644,7 @@ inline void drawInspector(World& world,
                     }
                     world.add(selected, BoneAttachment{});
                 }
-                if (!world.has<UI>(selected) && ImGui::MenuItem("Canvas")) {
-                    world.add(selected, UI{});
-                }
+
                 if (!world.has<CameraEffects>(selected) && ImGui::MenuItem("Camera Effects")) {
                     world.add(selected, CameraEffects{});
                 }

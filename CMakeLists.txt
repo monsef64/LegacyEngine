@@ -292,20 +292,19 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma onc
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation)
 
-include(cmake/RmlUi.cmake)
-target_link_libraries(LegacyEngine PRIVATE legacy_game_ui legacy_game_export)
+target_link_libraries(LegacyEngine PRIVATE legacy_game_export)
 
 # Native standalone player template, configured and renamed by File > Export.
 add_executable(LegacyPlayer src/app/player.cpp src/rendering/mesh.cpp src/physics/physics.cpp src/rendering/renderer.cpp)
 target_include_directories(LegacyPlayer PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(LegacyPlayer PRIVATE SDL3::SDL3 Jolt glad legacy_imgui lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation legacy_game_ui legacy_game_export)
+target_link_libraries(LegacyPlayer PRIVATE SDL3::SDL3 Jolt glad legacy_imgui lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation legacy_game_export)
 add_custom_command(TARGET LegacyPlayer POST_BUILD
   COMMAND ${CMAKE_COMMAND} -DPLAYER=$<TARGET_FILE:LegacyPlayer> -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/player_template.cmake")
 if(WIN32)
   set_target_properties(LegacyPlayer PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
-target_link_libraries(lua_console PUBLIC legacy_game_ui legacy_material_textures)
+target_link_libraries(lua_console PUBLIC legacy_material_textures)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)

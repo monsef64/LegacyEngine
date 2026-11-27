@@ -250,7 +250,7 @@ inline const std::vector<std::pair<const char*, std::vector<Field>>> components{
     {"NavMeshObstacle", {{"settings", 'j'}}},
     // Controller-backed Animator reuses the reserved slot; old settings are ignored.
     {"Animator", {{"settings", 'j'}}},
-    {"Canvas", {{"enabled", 'b'}, {"rml", 's'}, {"rcss", 's'}}},
+    {"__removedOverlay", {{"enabled", 'b'}, {"rml", 's'}, {"rcss", 's'}}},
     {"Decal", {{"settings", 'j'}}},
     {"Recoil", {{"settings", 'j'}}}};
 // Vector schemas are iterated through a one-field adapter to keep both directions identical.
@@ -448,10 +448,15 @@ inline std::string toLegacy(const Json& doc) {
     out << doc.at("objects").size() << ' ';
     for (const auto& object : doc.at("objects")) {
         auto data = object.at("components");
-        // UI and the older GUI spelling map to the same persistent Canvas slot.
-        for (const auto* old : {"GUI", "UI"}) if (data.contains(old)) {
-            if (data.contains("Canvas")) throw std::runtime_error("Duplicate Canvas component");
-            data["Canvas"] = data.at(old); data.erase(old);
+        // Old names occupy a reserved wire slot, consumed and discarded on load.
+        for (const auto* old : {"GUI", "UI", "Canvas"}) {
+            if (data.contains(old)) {
+                if (data.contains("__removedOverlay")) {
+                    throw std::runtime_error("Duplicate removed overlay");
+                }
+                data["__removedOverlay"] = data.at(old);
+                data.erase(old);
+            }
         }
         if (!data.is_object()) {
             throw std::runtime_error("Invalid components");

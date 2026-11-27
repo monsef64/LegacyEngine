@@ -22,7 +22,6 @@
 #include "scene/scene_camera.hpp"
 #include "scripting/game_services.hpp"
 #include "scripting/script_components.hpp"
-#include "ui/game_ui.hpp"
 #include "ui/script_gui.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
@@ -101,12 +100,9 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
     input.window = window;
     InputSettings bindings;
     bindings.load(assets, input);
-    GameUI ui;
     ScriptGUI gui;
     SceneSurface surface;
-    ui.clicked = [](Entity owner, const std::string& id) {
-        LuaConsole::postEvent(GameUI::clickEvent(owner, id));
-    };
+
     auto bindScripts = [&] {
         global.reset();
         global.setAssetRoot(assets.root);
@@ -223,11 +219,9 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             continue;
         }
         surface.resize(width, height);
-        ui.sync(world, true, assets.root, window);
-        ui.viewport(0, 0, float(logicalW), float(logicalH), width, height);
         gui.viewport(0, 0, float(logicalW), float(logicalH), width, height);
-        input.enabled = !ui.capturesKeyboard() && !gui.capturesKeyboard();
-        input.mouseEnabled = !ui.capturesMouse() && !gui.capturesMouse();
+        input.enabled = !gui.capturesKeyboard();
+        input.mouseEnabled = !gui.capturesMouse();
         input.beginFrame();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -239,8 +233,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
                 SDL_SetWindowFullscreen(window,
                                         !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
             }
-            const bool consumed = gui.event(event, window, true, input.mouseLocked) |
-                                  ui.event(event, window, true, input.mouseLocked);
+            const bool consumed = gui.event(event, window, true, input.mouseLocked);
             if (!consumed) {
                 input.event(event);
             }
@@ -257,7 +250,6 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             input.releaseMouse();
             LuaConsole::clearEvents();
             gui.shutdown();
-            ui.sync(world, false, assets.root, window);
             world.restore(transition->level->world);
             source = transition->level->source;
             physics.reset();
@@ -301,7 +293,9 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         renderer.updateSkyboxFades(world, dt);
         updateHierarchy(world);
         navigation.update(world, dt);
-            for (const auto& event : navigation.events) notify(event.first,event.second.c_str());
+        for (const auto& event : navigation.events) {
+            notify(event.first, event.second.c_str());
+        }
         updateHierarchy(world);
         Terrains::update(world, assets);
         physics.update(world, dt, [&](float fixed) {
@@ -412,7 +406,6 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
                           (std::uint64_t(camera.generation) << 32) | camera.index);
         }
         glBindFramebuffer(GL_FRAMEBUFFER, surface.framebuffer);
-        ui.render(width, height, true);
         gui.render(window, width, height, true, assets.root);
         GameServices::finishFrame(surface.framebuffer, width, height);
         glDisable(GL_SCISSOR_TEST);
@@ -429,7 +422,6 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
     LuaConsole::clearEvents();
     input.releaseMouse();
     gui.shutdown();
-    ui.sync(world, false, assets.root, window);
     audio.clear();
     TextureQuality::lifecycle(false);
 }

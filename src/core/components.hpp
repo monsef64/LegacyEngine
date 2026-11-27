@@ -27,7 +27,6 @@
 #include "rendering/mesh.hpp"
 #include "rendering/skybox.hpp"
 #include "terrain/terrain.hpp"
-#include "ui/ui.hpp"
 #include <functional>
 #include <string>
 #include <unordered_set>

@@ -14,7 +14,7 @@ No automated tests added or run. Verify Linux/OpenGL desktop and Windows MinGW-w
 - Old expose declarations remain readable with saved overrides.
   Keywords inside strings/block comments, mid-line or as identifier prefixes must
   not create fields. Errors keep their original source line numbers.
-- Verify bundled recoil/RML UI examples use global and load successfully.
+- Verify bundled recoil/ImGui examples use global and load successfully.
 
 ## Orthographic editor movement
 

@@ -293,7 +293,7 @@
   },
   {
     "name": "GUI",
-    "signature": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window. Canvas is the RML/RCSS component."
+    "signature": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window."
   },
   {
     "name": "GUI.beginWindow",
@@ -464,14 +464,6 @@
     "signature": "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder, layerMask (unsigned receiver layers). Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."
   },
   {
-    "name": "UI",
-    "signature": "UI - Compatibility alias for Canvas."
-  },
-  {
-    "name": "Canvas",
-    "signature": "Canvas - RmlUi Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(Canvas) or global Canvas hud =. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
-  },
-  {
     "name": "Vector3",
     "signature": "Vector3(x,y,z) - Construct a vector table accepted by position, rotation, destination and obstacle vector setters."
   },
@@ -481,7 +473,7 @@
   },
   {
     "name": "NavMeshAgent",
-    "signature": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), heightOffset (-1000..1000 world units), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(), stop(), start(), setSpeed(speed), setHeightOffset(height). stop/start preserve the route. Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Use heightOffset to raise centered pivots above the navigation surface (default 0 for foot pivots). No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
+    "signature": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), heightOffset (-1000..1000 world units), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(), stop(), start(), setSpeed(speed), setHeightOffset(height). stop/start preserve the route. Read-only hasPath, pathPending, distance (straight-line 3D world-unit distance from agent position to destination; zero without destination/Transform), remainingDistance (path length), velocity, status. Bake static objects/terrains in Windows > Navigation. Use heightOffset to raise centered pivots above the navigation surface (default 0 for foot pivots). No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
   },
   {
     "name": "TPSCamera",

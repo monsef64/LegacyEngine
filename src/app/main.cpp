@@ -4,7 +4,6 @@
 #include "effects/laser_update.hpp"
 #include "engine_version.hpp"
 #include "scripting/game_services.hpp"
-#include "ui/game_ui.hpp"
 #include "ui/script_gui.hpp"
 #include <cctype>
 #include <imgui_internal.h>
@@ -23,7 +22,6 @@
 #include "editor/animation_window.hpp"
 #include "editor/animator_requests.hpp"
 #include "editor/animator_window.hpp"
-#include "editor/canvas_editor.hpp"
 #include "editor/asset_browser.hpp"
 #include "editor/asset_preview_renderer.hpp"
 #include "editor/create_menu.hpp"
@@ -195,7 +193,7 @@ static void createWindow(int multisamples, SDL_Window*& window, SDL_GLContext& c
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, multisamples > 0 ? 1 : 0);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, multisamples);
 
@@ -277,12 +275,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     NavigationWindow navigationWindow;
     ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
-    GameUI gameUI;
-    CanvasEditor canvasEditor;
     ScriptGUI scriptGUI;
-    gameUI.clicked = [](Entity owner, const std::string& id) {
-        LuaConsole::postEvent(GameUI::clickEvent(owner, id));
-    };
     auto lastSceneRender = std::chrono::steady_clock::time_point{};
     int lastSceneWidth = 0, lastSceneHeight = 0;
     AssetPreviewRenderer assetPreviews(
@@ -448,7 +441,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             input.releaseMouse();
             LuaConsole::clearEvents();
             scriptGUI.shutdown();
-            gameUI.sync(world, false, browser.assets.root, window);
             world.restore(transition->level->world);
             resetHierarchyExpansion();
             embeddedLegacySource = transition->level->source;
@@ -499,29 +491,17 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         playMode.playing() && !cameraLooking &&
                         (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || input.mouseLocked) &&
-                        !inputSettings.visible && !gameUI.capturesKeyboard() &&
-                        !scriptGUI.capturesKeyboard();
+                        !inputSettings.visible && !scriptGUI.capturesKeyboard();
         input.mouseEnabled = externalFocus || gameHovered || sceneHovered || input.mouseLocked;
         input.beginFrame();
-        try {
-            if (!playMode.active()) {
-                scriptGUI.shutdown();
-            }
-            gameUI.sync(world, playMode.active(), browser.assets.root, input.window);
-        } catch (const std::exception& error) {
-            terminalErrors.report("Game UI", error.what());
+        if (!playMode.active()) {
+            scriptGUI.shutdown();
         }
         const auto uiOrigin = ImGui::GetMainViewport()->Pos;
         int uiW = 1, uiH = 1;
         if (gameWindow) {
             SDL_GetWindowSize(gameWindow, &uiW, &uiH);
         }
-        gameUI.viewport(gameWindow ? 0.f : gameImageOrigin.x - uiOrigin.x,
-                        gameWindow ? 0.f : gameImageOrigin.y - uiOrigin.y,
-                        gameWindow ? float(uiW) : gameImageSize.x,
-                        gameWindow ? float(uiH) : gameImageSize.y,
-                        gameSurface.width,
-                        gameSurface.height);
         scriptGUI.viewport(gameWindow ? 0.f : gameImageOrigin.x - uiOrigin.x,
                            gameWindow ? 0.f : gameImageOrigin.y - uiOrigin.y,
                            gameWindow ? float(uiW) : gameImageSize.x,
@@ -539,7 +519,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 input.releaseMouse();
                 input.window = window;
                 scriptGUI.shutdown();
-                gameUI.sync(world, false, browser.assets.root, window);
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
                 continue;
@@ -555,8 +534,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     }
                     continue;
                 }
-                if (!(scriptGUI.event(event, gameWindow, externalFocus, input.mouseLocked) |
-                      gameUI.event(event, gameWindow, externalFocus, input.mouseLocked)) ||
+                if (!(scriptGUI.event(event, gameWindow, externalFocus, input.mouseLocked)) ||
                     event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
                     input.event(event);
                 }
@@ -618,9 +596,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 ImGui_ImplSDL3_ProcessEvent(&event);
             }
             if (!(scriptGUI.event(
-                      event, window, gameFocused && playMode.active(), input.mouseLocked) |
-                  gameUI.event(
-                      event, window, gameFocused && playMode.active(), input.mouseLocked)) ||
+                    event, window, gameFocused && playMode.active(), input.mouseLocked)) ||
                 event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
                 input.event(event);
             }
@@ -919,9 +895,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 if (ImGui::MenuItem("Save Level", nullptr, false, projectEnabled)) {
                     try {
-                        if (!canvasEditor.saveIfDirty(browser.assets)) {
-                            throw std::runtime_error(canvasEditor.error());
-                        }
+
                         if (!animatorWindow.saveIfDirty(browser.assets, &world)) {
                             throw std::runtime_error(animatorWindow.error());
                         }
@@ -964,9 +938,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (browser.importing()) {
                     throw std::runtime_error("Wait for the asset import to finish before saving");
                 }
-                if (!canvasEditor.saveIfDirty(browser.assets)) {
-                    throw std::runtime_error(canvasEditor.error());
-                }
+
                 if (!animatorWindow.saveIfDirty(browser.assets, &world)) {
                     throw std::runtime_error(animatorWindow.error());
                 }
@@ -1020,7 +992,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     projectDirty = currentProject.empty() || scripts.hasUnsavedChanges() ||
                                    animationWindow.hasUnsavedChanges() ||
                                    animatorWindow.hasUnsavedChanges() ||
-                                   canvasEditor.hasUnsavedChanges() ||
                                    projectContentState(world, embeddedLegacySource, camera) !=
                                        savedProjectState;
                 }
@@ -1218,20 +1189,18 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         const bool objectSelected = world.alive(selectedEntity);
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("Edit")) {
-                undoRequested =
-                    ImGui::MenuItem("Undo",
-                                    "Ctrl+Z",
-                                    false,
-                                    editAllowed && !playMode.active() &&
-                                        (animatorWindow.focused ? animatorWindow.canUndo()
-                                                                : history.canUndo()));
-                redoRequested =
-                    ImGui::MenuItem("Redo",
-                                    "Ctrl+Y / Ctrl+Shift+Z",
-                                    false,
-                                    editAllowed && !playMode.active() &&
-                                        (animatorWindow.focused ? animatorWindow.canRedo()
-                                                                : history.canRedo()));
+                undoRequested = ImGui::MenuItem(
+                    "Undo",
+                    "Ctrl+Z",
+                    false,
+                    editAllowed && !playMode.active() &&
+                        (animatorWindow.focused ? animatorWindow.canUndo() : history.canUndo()));
+                redoRequested = ImGui::MenuItem(
+                    "Redo",
+                    "Ctrl+Y / Ctrl+Shift+Z",
+                    false,
+                    editAllowed && !playMode.active() &&
+                        (animatorWindow.focused ? animatorWindow.canRedo() : history.canRedo()));
                 ImGui::Separator();
                 duplicateRequested =
                     ImGui::MenuItem("Duplicate", "Ctrl+D", false, editAllowed && objectSelected);
@@ -1252,7 +1221,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 ImGui::MenuItem("Animation", nullptr, &animationWindow.visible);
                 ImGui::MenuItem("Animator", nullptr, &animatorWindow.visible);
-                ImGui::MenuItem("Canvas - Visual UI Editor", nullptr, &canvasEditor.visible);
                 ImGui::MenuItem("Lighting", nullptr, &lightmappingWindow.visible);
                 ImGui::MenuItem("Occlusion Culling", nullptr, &occlusionWindow.visible);
                 ImGui::MenuItem("Navigation", nullptr, &navigationWindow.visible);
@@ -1772,9 +1740,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             clicking = false;
             bool preflightReady = true;
             try {
-                if (!canvasEditor.saveIfDirty(browser.assets)) {
-                    throw std::runtime_error(canvasEditor.error());
-                }
+
                 if (!animatorWindow.saveIfDirty(browser.assets, &world)) {
                     throw std::runtime_error(animatorWindow.error());
                 }
@@ -1899,7 +1865,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 input.releaseMouse();
                 input.window = window;
                 scriptGUI.shutdown();
-                gameUI.sync(world, false, browser.assets.root, window);
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
             }
@@ -2068,8 +2033,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 browser.assets, std::exchange(browser.editAnimatorRequest, {}), selectedEntity);
         }
         animatorWindow.draw(world, selectedEntity, browser.assets, playMode.active());
-        canvasEditor.draw(
-            browser.assets, gameUI, window, world, selectedEntity, playMode.active());
+
         if (!browser.editAnimationRequest.empty()) {
             animationWindow.open(browser.assets, std::exchange(browser.editAnimationRequest, {}));
         }
@@ -2495,8 +2459,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 editor.draw(world,
                             selectedEntity,
                             !projectDialog.pending() && !browser.dialog.pending() &&
-                                !orientationInteracting && !playbackHovered &&
-                                !cameraLooking &&
+                                !orientationInteracting && !playbackHovered && !cameraLooking &&
                                 !terrainEditor.active(world, selectedEntity) && !curveEditing &&
                                 (!world.has<BoneAttachment>(selectedEntity) ||
                                  !world.get<BoneAttachment>(selectedEntity).enabled) &&
@@ -2675,8 +2638,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         playMode.playing() && !cameraLooking &&
                         (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || gameFocused || input.mouseLocked) &&
-                        !inputSettings.visible && !gameUI.capturesKeyboard() &&
-                        !scriptGUI.capturesKeyboard();
+                        !inputSettings.visible && !scriptGUI.capturesKeyboard();
         input.synchronizeKeyboard();
         // The time that has passed since the previous frame.
         const Uint64 ticks = SDL_GetTicksNS();
@@ -2749,9 +2711,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (playMode.playing()) {
             navigationWindow.system.update(world, seconds);
             for (const auto& event : navigationWindow.system.events) {
-                if (isActive(world,event.first)) {
-                    componentScripts.objectEvent(event.first,event.second.c_str());
-                    scripts.console().objectEvent(event.first,event.second.c_str());
+                if (isActive(world, event.first)) {
+                    componentScripts.objectEvent(event.first, event.second.c_str());
+                    scripts.console().objectEvent(event.first, event.second.c_str());
                 }
             }
             updateHierarchy(world);
@@ -2859,8 +2821,8 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 v = .5f;
                 inside = true;
             }
-            if (inside && !gameUI.capturesMouse() && !scriptGUI.capturesMouse() && u >= 0 &&
-                u <= 1 && v >= 0 && v <= 1 && cameraEntity != Entity{}) {
+            if (inside && !scriptGUI.capturesMouse() && u >= 0 && u <= 1 && v >= 0 && v <= 1 &&
+                cameraEntity != Entity{}) {
                 const auto& c = world.get<Camera>(cameraEntity);
                 const auto& t = world.get<Transform>(cameraEntity);
                 if (u >= c.viewportX && u <= c.viewportX + c.viewportWidth && v >= c.viewportY &&
@@ -3083,7 +3045,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
             if (gameVisible && playMode.active()) {
                 glBindFramebuffer(GL_FRAMEBUFFER, gameSurface.framebuffer);
-                gameUI.render(gameSurface.width, gameSurface.height, playMode.playing());
                 scriptGUI.render(input.window,
                                  gameSurface.width,
                                  gameSurface.height,
@@ -3166,7 +3127,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             projectDirty =
                 currentProject.empty() || scripts.hasUnsavedChanges() ||
                 animationWindow.hasUnsavedChanges() || animatorWindow.hasUnsavedChanges() ||
-                                   canvasEditor.hasUnsavedChanges() ||
                 projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
         }
         if (projectEnabled && !currentProject.empty() && projectDirty &&
@@ -3196,7 +3156,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     input.releaseMouse();
                     input.window = window;
                     scriptGUI.shutdown();
-                    gameUI.sync(world, false, browser.assets.root, window);
                     SDL_DestroyWindow(gameWindow);
                     gameWindow = nullptr;
                 }
@@ -3220,7 +3179,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 projectDirty =
                     currentProject.empty() || scripts.hasUnsavedChanges() ||
                     animationWindow.hasUnsavedChanges() || animatorWindow.hasUnsavedChanges() ||
-                                   canvasEditor.hasUnsavedChanges() ||
                     projectContentState(world, embeddedLegacySource, camera) != savedProjectState;
             }
             if (browser.importing() || prefabLevel || levels.busy() || projectDialog.pending()) {
@@ -3309,7 +3267,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         input.releaseMouse();
         input.window = window;
         scriptGUI.shutdown();
-        gameUI.sync(world, false, browser.assets.root, window);
         SDL_DestroyWindow(gameWindow);
     }
     scripts.shutdown();

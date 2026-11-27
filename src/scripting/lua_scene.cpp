@@ -15,7 +15,6 @@
 #include "scene/skybox_transition.hpp"
 #include "scripting/lua_console.hpp"
 #include "scripting/script_exports.hpp"
-#include "ui/game_ui.hpp"
 #include "ui/script_gui.hpp"
 #include <cstdio>
 extern "C" {
@@ -79,7 +78,7 @@ const char* types[]{"Transform",
                     "TPSCamera",
                     "NavMeshAgent",
                     "NavMeshObstacle",
-                    "Canvas",
+                    "", // Reserved removed overlay type
                     "Decal",
                     "Recoil",
                     "Animator"};
@@ -88,12 +87,11 @@ int componentType(lua_State* L, int index) {
         return *type;
     }
     const char* name = luaL_checkstring(L, index);
-    if (!std::strcmp(name,"UI") || !std::strcmp(name,"GUI")) name="Canvas";
     if (!std::strcmp(name, "BoxCollider")) {
         return 2;
     }
     for (int i = 0; i < int(std::size(types)); ++i) {
-        if (!std::strcmp(name, types[i])) {
+        if (*types[i] && !std::strcmp(name, types[i])) {
             return i;
         }
     }
@@ -155,7 +153,7 @@ bool has(const Handle& h, int type) {
     case 31:
         return h.world->has<Decal>(h.entity);
     case 30:
-        return h.world->has<UI>(h.entity);
+        return false;
     case 29:
         return h.world->has<NavMeshObstacle>(h.entity);
     case 28:
@@ -543,6 +541,9 @@ LuaScene::LuaScene(lua_State* L,
     lua_setfield(L, -2, "__metatable");
     lua_pop(L, 1);
     for (int i = 0; i < int(std::size(types)); ++i) {
+        if (!*types[i]) {
+            continue;
+        }
         auto* type = static_cast<int*>(lua_newuserdatauv(L, sizeof(int), 0));
         *type = i;
         luaL_setmetatable(L, "ComponentType");
@@ -550,7 +551,6 @@ LuaScene::LuaScene(lua_State* L,
             lua_pushvalue(L, -1);
             lua_setglobal(L, "BoxCollider");
         }
-        if (!std::strcmp(types[i],"Canvas")) { lua_pushvalue(L,-1); lua_setglobal(L,"UI"); }
         lua_setglobal(L, types[i]);
     }
     lua_pushcclosure(
@@ -794,7 +794,6 @@ int LuaScene::api(lua_State* L) {
             self.world_.each<Decal>([&](Entity e, Decal&) { collect(e); });
             break;
         case 30:
-            self.world_.each<UI>([&](Entity e, UI&) { collect(e); });
             break;
         case 29:
             self.world_.each<NavMeshObstacle>([&](Entity e, NavMeshObstacle&) { collect(e); });
@@ -1013,7 +1012,6 @@ int LuaScene::api(lua_State* L) {
             self.world_.remove<Decal>(h.entity);
             break;
         case 30:
-            self.world_.remove<UI>(h.entity);
             break;
         case 29:
             self.world_.remove<NavMeshObstacle>(h.entity);
@@ -1138,11 +1136,7 @@ int LuaScene::api(lua_State* L) {
             self.world_.add(h.entity, Decal{});
             break;
         case 30:
-            if (!self.world_.has<Transform>(h.entity)) {
-                self.world_.add(h.entity, Transform{});
-            }
-            self.world_.add(h.entity, UI{});
-            break;
+            return luaL_error(L, "Component type has been removed");
         case 29:
             if (!self.world_.has<Transform>(h.entity)) {
                 self.world_.add(h.entity, Transform{});
@@ -1467,7 +1461,7 @@ int LuaScene::componentIndex(lua_State* L) {
         } else if (!std::strcmp(key, "depth")) {
             lua_pushnumber(L, d.depth);
         } else if (!std::strcmp(key, "layerMask")) {
-            lua_pushinteger(L,d.layerMask);
+            lua_pushinteger(L, d.layerMask);
         } else if (!std::strcmp(key, "sortingOrder")) {
             lua_pushinteger(L, d.sortingOrder);
         } else {
@@ -1475,26 +1469,7 @@ int LuaScene::componentIndex(lua_State* L) {
         }
         return 1;
     }
-    if (c.type == 30) {
-        const auto& g = c.object.world->get<UI>(c.object.entity);
-        if (!std::strcmp(key, "enabled")) {
-            lua_pushboolean(L, g.enabled);
-            return 1;
-        }
-        if (!std::strcmp(key, "rml") || !std::strcmp(key, "rcss")) {
-            lua_pushstring(L, !std::strcmp(key, "rml") ? g.rml.c_str() : g.rcss.c_str());
-            return 1;
-        }
-        const char* methods[]{"isLoaded", "setText", "onClick"};
-        for (int i = 0; i < 3; ++i) {
-            if (!std::strcmp(key, methods[i])) {
-                lua_pushvalue(L, 1);
-                lua_pushinteger(L, i);
-                lua_pushcclosure(L, guiMethod, 2);
-                return 1;
-            }
-        }
-    }
+
     const char* sharedMethods[]{"getComponent",
                                 "addComponent",
                                 "removeComponent",
@@ -1733,6 +1708,16 @@ int LuaScene::componentIndex(lua_State* L) {
         }
         if (!std::strcmp(key, "stopped")) {
             lua_pushboolean(L, a.stopped);
+            return 1;
+        }
+        if (!std::strcmp(key, "distance")) {
+            const auto* transform = c.object.world->tryGet<Transform>(c.object.entity);
+            float distance = 0.f;
+            if (a.destinationSet && transform) {
+                const Vec3 delta = a.destination - transform->position;
+                distance = std::sqrt(dot(delta, delta));
+            }
+            lua_pushnumber(L, distance);
             return 1;
         }
         if (!std::strcmp(key, "remainingDistance")) {
@@ -2537,8 +2522,9 @@ int LuaScene::componentNewIndex(lua_State* L) {
                 d.opacity = value;
             } else if (!std::strcmp(key, "depth")) {
                 d.depth = value;
-            } else if (!std::strcmp(key,"layerMask") && std::isfinite(value) && value >= 0 && double(value) <= 4294967295.0 && std::floor(value) == value) {
-                d.layerMask = static_cast<std::uint32_t>(luaL_checkinteger(L,3));
+            } else if (!std::strcmp(key, "layerMask") && std::isfinite(value) && value >= 0 &&
+                       double(value) <= 4294967295.0 && std::floor(value) == value) {
+                d.layerMask = static_cast<std::uint32_t>(luaL_checkinteger(L, 3));
             } else if (!std::strcmp(key, "sortingOrder") && std::isfinite(value) &&
                        value >= -10000 && value <= 10000) {
                 d.sortingOrder = int(value);
@@ -2559,29 +2545,7 @@ int LuaScene::componentNewIndex(lua_State* L) {
         }
         return 0;
     }
-    if (c.type == 30) {
-        if (!c.object.world->alive(c.object.entity) || !has(c.object, c.type)) {
-            return luaL_error(L, "UI no longer exists");
-        }
-        auto& g = c.object.world->get<UI>(c.object.entity);
-        const char* key = luaL_checkstring(L, 2);
-        if (!std::strcmp(key, "enabled")) {
-            luaL_checktype(L, 3, LUA_TBOOLEAN);
-            g.enabled = lua_toboolean(L, 3);
-            return 0;
-        }
-        if (std::strcmp(key, "rml") && std::strcmp(key, "rcss")) {
-            return luaL_error(L, "Unknown or read-only UI property");
-        }
-        const char* path = luaL_checkstring(L, 3);
-        if (!exportAssetPath(path) ||
-            (*path &&
-             AssetManager::extension(path) != (!std::strcmp(key, "rml") ? ".rml" : ".rcss"))) {
-            return luaL_error(L, "Expected a project-relative RML/RCSS asset path");
-        }
-        (!std::strcmp(key, "rml") ? g.rml : g.rcss) = path;
-        return 0;
-    }
+
     if (c.type == 32) {
         if (!has(c.object, 32)) {
             return luaL_error(L, "Recoil no longer exists");
@@ -4341,7 +4305,7 @@ void LuaScene::setExports(const std::vector<ScriptField>& fields) {
             } else {
                 int type = 0;
                 for (; type < int(std::size(types)); ++type) {
-                    if (field.type == types[type] || (field.type == "UI" && !std::strcmp(types[type],"Canvas"))) {
+                    if (field.type == types[type]) {
                         break;
                     }
                 }
@@ -4636,62 +4600,6 @@ int LuaScene::fadeColorControl(lua_State* L) {
         fx.fadeAmount = fx.fadeTarget;
     }
     return 0;
-}
-
-int LuaScene::guiMethod(lua_State* L) {
-    const auto c = *static_cast<Component*>(luaL_checkudata(L, lua_upvalueindex(1), "Component"));
-    if (!c.object.world->alive(c.object.entity) || !has(c.object, 30)) {
-        return luaL_error(L, "UI no longer exists");
-    }
-    const int op = int(lua_tointeger(L, lua_upvalueindex(2)));
-    const int arg = luaL_testudata(L, 1, "Component") ? 2 : 1;
-    auto* ui = GameUI::current();
-    const auto& g = c.object.world->get<UI>(c.object.entity);
-    const bool available = ui && g.enabled && isActive(*c.object.world, c.object.entity) &&
-                           ui->loaded(c.object.entity);
-    if (op == 0) {
-        lua_pushboolean(L, available);
-        return 1;
-    }
-    size_t length = 0;
-    const char* id = luaL_checklstring(L, arg, &length);
-    if (!length || length > 64 || std::strlen(id) != length) {
-        return luaL_error(L, "UI element id must be 1..64 bytes");
-    }
-    if (op == 1) {
-        const char* text = luaL_checkstring(L, arg + 1);
-        lua_pushboolean(L, available && ui->setText(c.object.entity, id, text));
-        return 1;
-    }
-    if (lua_isnoneornil(L, arg + 1)) {
-        lua_pushboolean(L, available && ui->takeClick(c.object.entity, id));
-        return 1;
-    }
-    luaL_checktype(L, arg + 1, LUA_TFUNCTION);
-    // Reuse the bounded event subscription dispatcher, instruction budgets,
-    // error reporting and shutdown cleanup. Register once (usually onStart).
-    lua_getglobal(L, "on");
-    lua_pushstring(L, GameUI::clickEvent(c.object.entity, id).c_str());
-    lua_pushvalue(L, lua_upvalueindex(1));
-    lua_pushvalue(L, arg + 1);
-    lua_pushcclosure(
-        L,
-        [](lua_State* state) -> int {
-            const auto bound = *static_cast<Component*>(lua_touserdata(state, lua_upvalueindex(1)));
-            auto* runtime = GameUI::current();
-            if (!bound.object.world->alive(bound.object.entity) || !has(bound.object, 30) ||
-                !isActive(*bound.object.world, bound.object.entity) ||
-                !bound.object.world->get<UI>(bound.object.entity).enabled || !runtime ||
-                !runtime->loaded(bound.object.entity)) {
-                return 0;
-            }
-            lua_pushvalue(state, lua_upvalueindex(2));
-            lua_call(state, 0, 0);
-            return 0;
-        },
-        2);
-    lua_call(L, 2, 1);
-    return 1;
 }
 
 // Built-in pre-quit listeners remain synchronous, but may spawn owned tasks.

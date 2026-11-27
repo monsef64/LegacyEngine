@@ -80,7 +80,7 @@ cause renderer initialization errors; inspect the player log for the failing sta
 Exports collect a dependency closure from the exported scene and every level in
 `Assets/Levels/levels.json` (registered levels are runtime-addressable roots).
 Referenced materials, model containers, animations, prefabs, terrain layers,
-foliage, images, audio, lightmaps and RML/RCSS dependencies are followed recursively.
+foliage, images, audio, lightmaps and script dependencies are followed recursively.
 Unused files and unregistered, unreferenced levels are left out. Packed model
 members travel with their model container; exports do not rewrite those containers
 or remove individual embedded members. Engine runtime resources and project

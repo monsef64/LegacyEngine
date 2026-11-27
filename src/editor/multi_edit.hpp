@@ -210,11 +210,7 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
         V(RigidBody, linearVelocity);
         V(RigidBody, angularVelocity);
     }
-    H(UI) {
-        B(UI, enabled);
-        S(UI, rml);
-        S(UI, rcss);
-    }
+
     H(LuaScript) {
         B(LuaScript, enabled);
         S(LuaScript, path);
