@@ -38,3 +38,25 @@ The startup focus gates now permit the first frame before blocking for focus;
 Wayland may need the first submitted buffer to map/focus the window. This fixes
 that ordering hazard; it does not establish the cause of every invisible-window
 report without reproducing the affected desktop session.
+
+## Built-in ImGui picker
+
+- On Linux, launch with an invalid SDL_FILE_DIALOG_DRIVER value and without
+  Zenity/portal services. Project Open/Save, Files / Models import, Folder import,
+  archive extraction folder, and export icon/player/output selection must all
+  open the ImGui picker, not an SDL native dialog or an unsupported-driver error.
+- Repeat on Windows MinGW-w64. Navigate between drives and type absolute paths;
+  on Linux test mount paths. Test relative directory input, Up and Refresh.
+- Choose each file filter; directories must remain navigable. Include paths with
+  spaces, Unicode, hidden files, and filenames containing ImGui's ##/### markers.
+- Ctrl-select several files/folders for imports. Confirm every selected item is
+  returned once; cancel and title-bar close must enqueue nothing and clear busy.
+- Save without an extension, overwrite an existing project (confirm and decline),
+  create a folder, enter invalid/missing paths and browse unreadable directories.
+  Errors must remain inside the picker without terminating the editor.
+- Close the originating tool while picking; the picker must remain usable. Open
+  another picker request and verify only one modal is handled at a time. Refocus
+  after switching applications: the picker should resume with its state intact.
+- A pending picker without import jobs must not force periodic background wakeups.
+
+These are manual instructions, not automated tests or claims of desktop execution.

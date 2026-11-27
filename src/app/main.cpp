@@ -368,10 +368,10 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         return true;
     };
     auto waitWhileSuspended = [&](SDL_Event& event) {
-        // Workers/native dialogs need no window event to finish. Only wake periodically
+        // Import workers need no window event to finish. Only wake periodically
         // while imports need servicing; an idle unfocused engine still blocks normally.
-        return browser.importing() || browser.dialog.pending() ? SDL_WaitEventTimeout(&event, 100)
-                                                               : SDL_WaitEvent(&event);
+        return browser.importing() ? SDL_WaitEventTimeout(&event, 100)
+                                   : SDL_WaitEvent(&event);
     };
     while (running) {
         GameServices::update(gameWindow ? gameWindow : window, playMode.active());
@@ -2634,6 +2634,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (renderedFrames == 0) {
             ImGui::SetWindowFocus("Assets");
         }
+        ProjectDialog::drawAll();
         ImGui::Render();
         finishEditorTheme(ImGui::GetDrawData());
         profiler.checkpoint(ProfilePart::Editor);

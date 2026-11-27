@@ -460,10 +460,10 @@ loop stops simulation, scripting, rendering and autosave work and blocks waiting
 for a window event. Audio output is suspended without resetting playback state.
 Focus recovery resets frame timing so no catch-up simulation runs. A focused
 external Game window continues normal gameplay. Input capture is released on focus
-loss. Asset importing is an explicit exception: OS file/folder drops and completed
-native import-dialog selections are accepted while unfocused, and queued imports
-continue to completion. Pending imports/dialogs use a low-frequency timed event
-wait; an idle engine still blocks normally. Thumbnail GPU updates wait until
+loss. Asset importing is an explicit exception: OS file/folder drops are accepted
+while unfocused, and queued imports continue to completion. Pending imports use
+a low-frequency timed event wait; an idle engine still blocks normally. ImGui
+file pickers pause with the editor when unfocused. Thumbnail GPU updates wait until
 rendering resumes. Gameplay, rendering, scripting and autosave remain suspended;
 this is main-loop suspension, not unsafe suspension of every process thread.
 
@@ -790,3 +790,20 @@ prefab defaults. This preserves assigned `global Prefab` assets and instance-onl
 children across reopening. Prefab links are still validated, so missing or corrupt
 templates can be reported. Explicit prefab saves remain the propagation point;
 loading a scene no longer silently replaces its saved instance state.
+
+## Built-in file and folder picker
+
+Project Open/Save, asset file/folder import, archive extraction destinations and
+export icon/player/output-folder selection use an ImGui modal inside the editor.
+No SDL native dialog backend, Zenity or desktop portal is needed.
+
+- Enter an absolute directory (or a path relative to the current directory) and
+  press Enter. Use Up, Refresh, or double-click a folder to navigate. Windows
+  drive buttons allow switching drives; Linux mount paths can be entered directly.
+- Select a file, or enter a filename/path. Choose a file-type filter as needed.
+  File/folder imports support Ctrl+click multi-selection. Folder pickers can
+  select the current directory when nothing is selected.
+- To make a folder, enter its name and click Create folder using name.
+- Project Save adds `.legacy` if no extension is given, and asks before replacing
+  an existing file. Cancel or close the picker to leave the request unchanged.
+- Invalid paths and permission errors stay in the picker for correction.

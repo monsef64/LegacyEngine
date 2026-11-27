@@ -209,11 +209,11 @@ class GameExportWindow {
                     picking_ = kind;
                     pickerRoot_ = root_;
 #ifdef _WIN32
-                    static const SDL_DialogFileFilter iconFilter[]{{"Icon", "ico"}};
-                    static const SDL_DialogFileFilter playerFilter[]{{"Player", "exe"}};
+                    static const ProjectDialog::Filter iconFilter[]{{"Icon", "ico"}};
+                    static const ProjectDialog::Filter playerFilter[]{{"Player", "exe"}};
 #else
-                    static const SDL_DialogFileFilter iconFilter[]{{"Icon", "png"}};
-                    static const SDL_DialogFileFilter playerFilter[]{{"Player", "*"}};
+                    static const ProjectDialog::Filter iconFilter[]{{"Icon", "png"}};
+                    static const ProjectDialog::Filter playerFilter[]{{"Player", "*"}};
 #endif
                     picker_.chooseExportPath(SDL_GL_GetCurrentWindow(),
                                              kind == 2,
@@ -236,7 +236,8 @@ class GameExportWindow {
             ImGui::InputText("Native player template", player_, sizeof(player_));
             browse(3, "Browse##Player");
             ImGui::SliderInt("Chunk size (MiB)", &chunkMiB_, 1, 64);
-            ImGui::TextWrapped("Assets are Zstandard-compressed on export, then authenticated/encrypted. Chunk size is before compression. Editor source assets are not changed. Use an updated native player template.");
+            ImGui::TextWrapped(
+                "Assets are Zstandard-compressed on export, then authenticated/encrypted. Chunk size is before compression. Editor source assets are not changed. Use an updated native player template.");
             if (ImGui::Button("Export Game")) {
                 try {
                     persistEdits(true);
