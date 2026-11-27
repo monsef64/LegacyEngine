@@ -26,6 +26,7 @@ class System {
     bool basePath(Vec3 start, Vec3 destination, std::vector<Vec3>& corners) const;
 
   public:
+    std::vector<std::pair<Entity, std::string>> events;
     bool valid = false;
     std::string status;
     Settings settings;

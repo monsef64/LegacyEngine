@@ -1,3 +1,4 @@
+#include "project/layers.hpp"
 #pragma once
 #include "core/frustum.hpp"
 #include "core/hierarchy.hpp"
@@ -378,6 +379,7 @@ class FoliageRenderer {
                             glUniform1i(textured_, texture ? 1 : 0);
                             glBindTexture(GL_TEXTURE_2D, texture);
                             glBindVertexArray(part.vao);
+                            glStencilFunc(GL_ALWAYS,LayerSettings::effective(world,e),0xff);
                             glDrawArraysInstanced(
                                 GL_TRIANGLES, 0, part.count, GLsizei(visible.size()));
                         }

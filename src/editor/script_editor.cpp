@@ -430,6 +430,8 @@ void ScriptEditor::draw(const EditorLayout* layout,
         if (beginEditorPanel("Console", layout ? fixedPanelFlags : 0)) {
             if (ImGui::Button("Clear")) {
                 console_.clear();
+                componentOutput.clear();
+                clearComponentOutputRequested = true;
             }
             ImGui::SameLine();
             ImGui::Checkbox("Auto-scroll", &autoScroll_);

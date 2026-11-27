@@ -19,6 +19,7 @@ class ScriptEditor {
   public:
     ScriptEditor();
     std::vector<std::string> componentOutput;
+    bool clearComponentOutputRequested = false;
     void draw(const EditorLayout* layout = nullptr,
               bool executionEnabled = true,
               AssetManager* assets = nullptr,
@@ -120,8 +121,8 @@ class ScriptEditor {
         world_ = &world;
         console_.bindWorld(world, cube, sphere, capsule, cone, plane);
     }
-    void update(float dt) {
-        console_.update(dt);
+    void update(float dt, double waitDelta = -1) {
+        console_.update(dt, waitDelta);
     }
     void fixedUpdate(float dt) {
         console_.fixedUpdate(dt);

@@ -278,10 +278,10 @@ void LuaConsole::bindWorld(World& world,
     installScene();
     installEvents();
 }
-void LuaConsole::update(float dt) {
+void LuaConsole::update(float dt, double waitDelta) {
     if (scene_) {
         beginBudget();
-        scene_->update(dt);
+        scene_->update(dt, waitDelta);
         endBudget();
     }
 }

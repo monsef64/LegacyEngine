@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/animation_clip.hpp"
 #include "assets/assets.hpp"
 #include "project/project_io.hpp"
 #include <algorithm>
@@ -6,13 +7,16 @@
 #include <optional>
 
 // Single active level. Requests never replace a World inside a Lua callback.
-// Async workers read bytes only; ECS/JSON validation runs at the frame boundary.
+// Workers decode private Worlds and dependencies; publication/GL uploads stay on the main thread.
 class LevelSystem {
   public:
     inline static LevelSystem* active = nullptr;
     struct Transition {
         std::string name;
         std::unique_ptr<ProjectIO::Loaded> level;
+        std::set<std::string> assets;
+        std::map<std::string, std::vector<float>> audio;
+        std::map<std::string, AnimationClip> clips;
     };
     struct Failure {
         std::string name, error;
@@ -22,6 +26,8 @@ class LevelSystem {
         failure_.reset();
         return result;
     }
+    // Render-thread gate: return true only after bounded resource uploads finish.
+    std::function<bool(Transition&)> preload;
     std::string error;
     bool suspended = false;
 
@@ -32,11 +38,16 @@ class LevelSystem {
     std::vector<std::string> names_;
     std::string current_, requested_, bytes_;
     bool pending_ = false, unload_ = false;
-    std::future<std::string> reader_;
+    std::chrono::steady_clock::time_point preloadStarted_{};
+    std::future<Transition> reader_;
+    std::optional<Transition> prepared_;
+
     static std::string read(const std::filesystem::path& file);
     void manifest();
 
   public:
+    static Transition
+    prepare(AssetManager assets, ProjectIO::Meshes meshes, std::string name, std::string bytes);
     explicit LevelSystem(const ProjectIO::Meshes& meshes) : meshes_(meshes) {}
     ~LevelSystem() {
         if (active == this) {

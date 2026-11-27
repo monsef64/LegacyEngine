@@ -1,3 +1,4 @@
+#include "project/layers.hpp"
 #pragma once
 #include "core/frustum.hpp"
 #include "core/hierarchy.hpp"
@@ -545,6 +546,7 @@ void main(){
                         }
                     }
                     glBindVertexArray(b.vao);
+                    glStencilFunc(GL_ALWAYS,LayerSettings::effective(world,e),0xff);
                     glDrawArrays(GL_TRIANGLES, 0, b.count);
                 }
             }

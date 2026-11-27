@@ -10,9 +10,6 @@ using Json = nlohmann::json;
 // SIMD-accelerated parsing; serialization and the editable DOM retain Json.
 Json parseJson(const std::string& text, std::size_t limit = 16 * 1024 * 1024);
 Json readCompressedMesh(std::istream& stream, std::size_t limit, bool zstandard = false);
-void writeCompressedMesh(std::ostream& stream,
-                         const Json& document,
-                         const char* magic = "LEMZ0002");
 // Shared immutable container snapshot avoids decompressing/parsing the complete
 // model for each embedded material, image, animation and mesh request.
 std::shared_ptr<const Json> readModelContainer(const std::filesystem::path& path);
@@ -105,14 +102,7 @@ inline void writeJsonFile(const std::filesystem::path& path, const Json& documen
     temp += ".tmp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     try {
         std::ofstream out(temp, std::ios::binary);
-        if (path.extension() == ".terrain") {
-            writeCompressedMesh(out, document, "TERZ0001");
-        } else if ((path.extension() == ".mesh" || path.extension() == ".model" ||
-                    path.extension() == ".lemesh")) {
-            writeCompressedMesh(out, document);
-        } else {
-            out << document.dump(2) << '\n';
-        }
+        out << document.dump() << '\n';
         out.close();
         if (!out) {
             throw std::runtime_error("Cannot write JSON file");

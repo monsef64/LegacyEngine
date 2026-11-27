@@ -8,12 +8,12 @@
 #include <cassert>
 int main(){
     const std::string source=R"(
-@export go GameObject
-@export speaker AudioSource
-@export sound AudioClip "tone.wav"
-@export speed number 3.5
-@export active boolean true
-@export title string "Hello world"
+global GameObject go
+global AudioSource speaker
+global AudioClip sound = "tone.wav"
+global number speed = 3.5
+global boolean active = true
+global string title = "Hello world"
 function onStart()
     assert(go:getName() == "Target")
     assert(speed == 7)
@@ -38,32 +38,32 @@ end
     EditorHistory history(world);world.get<LuaScript>(owner).fields[0].entity={};history.commit(world,owner);Entity selection;assert(history.undo(world,selection));assert(world.get<LuaScript>(owner).fields[0].entity==target);
     world.get<LuaScript>(owner).fields[0].entity=owner;auto duplicate=duplicateLevelObject(world,owner);assert(world.get<LuaScript>(duplicate).fields[0].entity==duplicate);
     world.destroy(target);console.reset();assert(console.bindObject(owner));assert(console.bindExports(fields));console.execute("assert(go == nil and speaker == nil)");for(auto& line:console.lines())assert(line.kind!=LuaConsole::Kind::Error);
-    syncScriptExports("---@export self GameObject\n---@export bad Unknown\n---@export n number 2\n---@export n number 3",fields);assert(fields.size()==1 && fields[0].name=="n");
+    syncScriptExports("global GameObject self\nglobal Unknown bad\nglobal number n = 2\nglobal number n = 3",fields);assert(fields.size()==1 && fields[0].name=="n");
     const std::string protectedSource=R"LS(
 local text=[==[
-@export ignored number 99
----@export alsoIgnored number 2
+global number ignored = 99
+global number alsoIgnored = 2
 ]==]
 --[=[
-@export hidden number 1
----@export hiddenToo number 1
+global number hidden = 1
+global number hiddenToo = 1
 ]=]
 local escaped="first\
-@export inString number 5"
--- @export notMetadata number 1
-  @export visible number 4
----@export legacy boolean true
+global number inString = 5"
+-- global number notMetadata = 1
+  global number visible = 4
+global boolean legacy = true
 )LS";
     std::vector<ScriptField> declarations;syncScriptExports(protectedSource,declarations);
     assert(declarations.size()==2 && declarations[0].name=="visible" && declarations[1].name=="legacy");
     auto preprocessed=preprocessLegacyScript(protectedSource);assert(preprocessed.size()==protectedSource.size());
-    assert(preprocessed.find("@export ignored")!=std::string::npos && preprocessed.find("@export hidden")!=std::string::npos);
+    assert(preprocessed.find("global number ignored")!=std::string::npos && preprocessed.find("global number hidden")!=std::string::npos);
     LuaConsole syntax;assert(syntax.execute(protectedSource));
-    assert(!syntax.execute("@export count number 1\n\nerror('line-preserved')"));
+    assert(!syntax.execute("global number count = 1\n\nerror('line-preserved')"));
     bool linePreserved=false;for(const auto& line:syntax.lines())if(line.kind==LuaConsole::Kind::Error && line.text.find(":3:")!=std::string::npos)linePreserved=true;assert(linePreserved);
-    syntax.clear();assert(!syntax.execute("@exported wrong number 1"));
+    syntax.clear();assert(!syntax.execute("globalized wrong number 1"));
     const auto temp=std::filesystem::temp_directory_path()/("legacy-exports-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));AssetManager assets;assets.root=temp;
-    assets.writeScript("Runtime.ls","@export amount number 9\nfunction onStart() self:setPosition(amount,0,0) end");
+    assets.writeScript("Runtime.ls","global number amount = 9\nfunction onStart() self:setPosition(amount,0,0) end");
     auto runtimeOwner=world.create();world.add(runtimeOwner,Transform{});world.add(runtimeOwner,LuaScript{"Runtime.ls",true,{}});
     MeshHandle runtimeMeshes[4]{};ScriptComponents runtime;runtime.start(world,assets,runtimeMeshes);assert(world.get<Transform>(runtimeOwner).position.x==9);runtime.stop();
     ScriptEditor editor;editor.bindWorld(world,{},{},{});editor.setAssetContext("Runtime.ls",runtimeOwner);editor.setSource(assets.readScript("Runtime.ls"));world.get<Transform>(runtimeOwner).position.x=0;assert(editor.executeSource());assert(world.get<Transform>(runtimeOwner).position.x==9);

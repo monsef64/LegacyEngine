@@ -40,11 +40,11 @@ class ScriptComponents {
         }
         return false;
     }
-    void update(float dt) {
+    void update(float dt, double waitDelta = -1) {
         sync();
         for (auto& entry : entries_) {
             if (entry.console) {
-                entry.console->update(dt);
+                entry.console->update(dt, waitDelta);
             }
         }
     }
@@ -64,6 +64,12 @@ class ScriptComponents {
         }
         entries_.clear();
         world_ = nullptr;
+    }
+    void clearMessages() {
+        for (auto& entry : entries_) {
+            entry.error.clear();
+            if (entry.console) entry.console->clear();
+        }
     }
     std::vector<std::string> messages() const {
         std::vector<std::string> lines;

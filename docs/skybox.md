@@ -79,3 +79,9 @@ and retains the source. Only one skybox fade may run in a world at a time.
 The effect pauses with Play and is discarded on Stop. Destination assets are prepared before progress advances. Failed decoding cancels
 the pending transition, keeps the source sky, and reports the error through
 existing skybox diagnostics. Use valid, imported textures.
+
+HDR panoramas now always use packed **RGB9_E5** GPU storage (4 bytes per pixel,
+instead of RGB16F's 6). The Compress checkbox and script toggle are removed; old
+serialized flags remain readable but no longer disable packing. Source HDR assets
+are not recompressed or modified. RGB9_E5 has lower precision and a maximum finite
+channel value of 65408; the loader clamps to that supported range.

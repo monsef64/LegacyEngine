@@ -69,7 +69,6 @@ class ProjectDialog {
             {"Half-Life 1 GoldSrc MDL", "mdl"},
             {"LegacyEngine Mesh", "lemesh"},
             {"Scripts", "ls;lua"},
-            {"UI documents / styles", "rml;rcss"},
             {"Images", "png;jpg;jpeg;bmp;tga;hdr"},
             {"Audio", "wav;mp3;ogg;flac"},
             {"All files", "*"}};
