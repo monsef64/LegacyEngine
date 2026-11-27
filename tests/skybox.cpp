@@ -50,7 +50,7 @@ int main(){
     assert(loaded.world.get<Skybox>(e).type==1 && loaded.world.get<Skybox>(e).front=="front.png");
     auto dup=duplicateLevelObject(world,e);assert(world.get<Skybox>(dup).hdr==world.get<Skybox>(e).hdr);world.destroy(dup);
     PlayMode play;play.play(world);world.get<Skybox>(e).enabled=false;play.stop(world);assert(world.get<Skybox>(e).enabled);
-    std::vector<ScriptField> fields;syncScriptExports("@export panorama Texture \"studio.hdr\"\n@export sky Skybox",fields);assert(fields.size()==2 && fields[0].text=="studio.hdr");fields[1].entity=e;
+    std::vector<ScriptField> fields;syncScriptExports("global Texture panorama = \"studio.hdr\"\nglobal Skybox sky",fields);assert(fields.size()==2 && fields[0].text=="studio.hdr");fields[1].entity=e;
     assert(exportHasComponent(world,e,"Skybox"));assert(console.bindExports(fields));assert(console.execute("sky:setHDR(panorama);assert(sky.hdr=='studio.hdr')"));
     assert(console.execute("stale=self:getComponent(Skybox);self:removeComponent(Skybox)"));assert(!console.execute("stale:setEnabled(true)"));
     {

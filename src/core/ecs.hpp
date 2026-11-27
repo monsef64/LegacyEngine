@@ -1,3 +1,4 @@
+#include <atomic>
 #include <stdexcept>
 // A small entity-component system (ECS).
 //
@@ -59,6 +60,17 @@ class World {
     World() = default;
     World(const World&) = delete;
     World& operator=(const World&) = delete;
+
+    // Transfer a fully staged load without cloning every component a second time.
+    // Unlike restore(), the source is consumed. Existing references are invalidated.
+    void adopt(World&& source) noexcept {
+        if (&source == this) {
+            return;
+        }
+        generations_ = std::move(source.generations_);
+        freeSlots_ = std::move(source.freeSlots_);
+        pools_ = std::move(source.pools_);
+    }
 
     // Explicit deep snapshots include every registered component pool and IDs.
     std::unique_ptr<World> snapshot() const {
@@ -335,8 +347,10 @@ class World {
     // Every component type gets a number the first time it is used; that
     // number is the position of its pool in `pools_`.
     static std::size_t nextTypeId() {
-        static std::size_t next = 0;
-        return next++;
+        // Different private Worlds may first encounter distinct component types
+        // concurrently during worker-side level/prefab decoding.
+        static std::atomic<std::size_t> next{0};
+        return next.fetch_add(1, std::memory_order_relaxed);
     }
 
     template <typename T> static std::size_t typeId() {

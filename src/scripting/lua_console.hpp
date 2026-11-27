@@ -48,7 +48,7 @@ class LuaConsole {
     bool bindExports(const std::vector<ScriptField>& fields);
     void nameScript(Entity entity, const std::string& path);
     static int pushNamedScript(lua_State* caller, World& world, Entity entity, const char* name);
-    void update(float deltaTime);
+    void update(float deltaTime, double waitDelta = -1);
     void
     objectEvent(Entity entity, const char* name, Entity other = {}, bool colliderArgument = false);
     void message(std::string_view text) {

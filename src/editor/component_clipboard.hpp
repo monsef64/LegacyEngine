@@ -25,6 +25,13 @@ class ComponentClipboard {
     template <class T> void copy(World& world, Entity entity) {
         if constexpr (std::is_same_v<T, Transform>) {
             value_ = localTransform(world, entity);
+        } else if constexpr (std::is_same_v<T, Animator>) {
+            const auto& source = world.get<Animator>(entity);
+            Animator copy;
+            copy.controller = source.controller;
+            copy.enabled = source.enabled;
+            copy.playOnStart = source.playOnStart;
+            value_ = std::move(copy);
         } else if constexpr (std::is_same_v<T, Laser>) {
             Laser copy;
             static_cast<LaserSettings&>(copy) = world.get<T>(entity);
