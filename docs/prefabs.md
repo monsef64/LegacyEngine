@@ -63,3 +63,13 @@ the pending delay. Pending destruction is runtime-only and is not saved.
 
 See the [scripting reference](scripting-reference.md) for API signatures and the
 [project guide](projects.md) for level storage.
+
+## Exported games
+
+All project `.prefab` files and their discoverable dependency trees are packaged
+as runtime-addressable roots, including prefabs selected via constructed script
+paths. Unrelated non-prefab assets still use dependency filtering; arbitrary
+constructed texture/audio paths require `Settings/ExportAssets.json` includes.
+Re-export with the updated editor to apply this behavior to a game package.
+Paths passed to `spawn` are relative to Assets and case-sensitive on Linux.
+Missing/invalid prefab errors now include the requested path in the player log.

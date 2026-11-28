@@ -7,9 +7,10 @@
 #include <set>
 
 namespace GameExport {
-// A conservative dependency closure, not a copy of the entire Assets tree.
-// Literal paths in scripts are followed. Constructed runtime paths must be
-// declared in Settings/ExportAssets.json: {"include":["Folder/file", "Folder/"]}.
+// A dependency closure rooted in scenes, registered levels and spawnable prefabs,
+// not a copy of the entire Assets tree.
+// Literal paths in scripts are followed. Constructed non-prefab runtime paths
+// must be declared in Settings/ExportAssets.json: {"include":["Folder/file", "Folder/"]}.
 inline std::set<std::string> exportDependencies(const AssetManager& assets,
                                                 const std::string& scene,
                                                 const std::string& startLevel,
@@ -161,6 +162,16 @@ inline std::set<std::string> exportDependencies(const AssetManager& assets,
     documentReferences(documentReferences, parseJson(scene), "", 0);
     if (allLevels) {
         include("Levels/levels.json");
+        // Prefabs are runtime-addressable by name, just like registered levels.
+        // A script can construct "Prefabs/" .. name .. ".prefab" without a
+        // literal full path in the scene. Ship every project prefab as a root,
+        // then let the normal queue follow its meshes/materials/scripts/etc.
+        // Scene-only preload (allLevels=false) intentionally stays selective.
+        for (const auto& entry : inventory) {
+            if (AssetManager::extension(entry.first) == ".prefab") {
+                include(entry.first);
+            }
+        }
     }
     const auto registry = assets.resolve("Levels/levels.json");
     if (allLevels && std::filesystem::exists(registry)) {
