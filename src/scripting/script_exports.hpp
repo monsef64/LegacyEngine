@@ -1,4 +1,5 @@
 #pragma once
+#include "assets/assets.hpp"
 #include "core/components.hpp"
 #include "scripting/legacy_script.hpp"
 #include <cctype>
