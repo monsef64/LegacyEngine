@@ -1,4 +1,4 @@
-# Build and test
+# Build and manual verification
 Requires a C++17 compiler, CMake 3.20+, Git and platform development libraries.
 CMake fetches SDL3 (if not installed), Jolt, Dear ImGui, ImGuizmo and pinned LuaJIT 2.1.
 GLAD, Roboto/Font Awesome fonts, miniaudio, simdjson, nlohmann/json and stb_image
@@ -8,7 +8,7 @@ On Debian/Ubuntu, install the window/audio/OpenGL development dependencies used
 in [the engine workflow](../.github/workflows/release.yml). Then:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target LegacyEngine LegacyPlayer --parallel 2
 ./build/LegacyEngine
 ```
@@ -18,8 +18,13 @@ A graphical session and an OpenGL 3.3-capable driver are required at runtime.
 File and folder selection uses the built-in ImGui picker; Zenity, desktop portals,
 and SDL file-dialog backend configuration are not required.
 Linux CI builds on Ubuntu 24.04; check its run log for the resulting glibc requirement.
-GitHub Actions builds/packages only, with `BUILD_TESTING=OFF`; tests are manual.
-Use `-DBUILD_TESTING=ON` locally to build the optional test executables.
+Test compilation and CTest integration have been removed from the project.
+No test executables are generated, even when an old build cache has
+`BUILD_TESTING=ON`; configuration forces it off before loading dependencies.
+Historical test sources remain in `tests/` for reference, and manual verification
+checklists remain in `docs/manual/`. Reconfigure an existing build directory to
+remove stale test targets; previously built test binaries may remain on disk but
+are no longer built or registered by this project.
 
 For headless graphical checks on Linux:
 
@@ -177,7 +182,7 @@ In a modern MSYS2 MINGW64 shell with Git, GCC, CMake, Ninja and Python installed
 ```sh
 cmake -S . -B build-win7 -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
-  -DLEGACY_WINDOWS7=ON -DBUILD_TESTING=OFF
+  -DLEGACY_WINDOWS7=ON
 cmake --build build-win7 --target LegacyEngine --parallel 2
 ```
 

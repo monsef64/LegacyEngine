@@ -15,17 +15,16 @@ LegacyScript (`.lua`, with legacy `.ls` compatibility) adds Inspector-exported f
 
 ## Build
 
-Requires a C++17 compiler, CMake 3.16+, Git and desktop/OpenGL development libraries.
+Requires a C++17 compiler, CMake 3.20+, Git and desktop/OpenGL development libraries.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 2
-ctest --test-dir build --output-on-failure
 ./build/LegacyEngine
 ```
 
 A graphical session and OpenGL 3.3 driver are required. See the
-[build guide](docs/building.md) for dependencies and graphical tests.
+[build guide](docs/building.md) for dependencies and manual verification.
 
 ## Documentation and downloads
 
