@@ -1,207 +1,83 @@
 [
   {
-    "name": "GUI.image",
-    "signature": "GUI.image(path:string,width?:number,height?:number):boolean - Full-resolution project image; returns loaded."
+    "name": "Screen",
+    "signature": "Screen.width/height/currentResolution (read-only), brightness (0..1), fullScreen; getResolutions(), getResolution(w,h), setResolution(w,h), takeScreenshot(relativePngPath)."
   },
   {
-    "name": "GUI.imageButton",
-    "signature": "GUI.imageButton(id:string,path:string,width?:number,height?:number):boolean - Returns clicked."
+    "name": "Game",
+    "signature": "Game.companyName/getDataPath/isEditor/isFocused/userDataPath/engineVersion (read-only), targetFrameRate (-1 or 1..1000), blockGameKilling; openURL(httpUrl), quit()."
   },
   {
-    "name": "GUI.beginTable",
-    "signature": "GUI.beginTable(id:string,columns:integer,flags?:integer,height?:number):boolean - 1..64 columns; only end when true. ScrollY needs height."
+    "name": "Game.save/load",
+    "signature": "Game.saveString/Int/Float/Bool/Table/Vector3(key,value); Game.loadString/Int/Float/Bool/Table/Vector3(key,default). Persisted per game; replaces the former Saving namespace."
   },
   {
-    "name": "GUI.endTable",
-    "signature": "GUI.endTable() - Table scope operation; set up columns before rows."
+    "name": "randomFloat",
+    "signature": "randomFloat(min:number,max:number):number - Uniform finite floating sample; min <= max."
   },
   {
-    "name": "GUI.tableNextRow",
-    "signature": "GUI.tableNextRow() - Table scope operation; set up columns before rows."
+    "name": "randomInt",
+    "signature": "randomInt(min:integer,max:integer):integer - Inclusive uniform integer sample."
   },
   {
-    "name": "GUI.tableHeadersRow",
-    "signature": "GUI.tableHeadersRow() - Table scope operation; set up columns before rows."
+    "name": "randomBool",
+    "signature": "randomBool():boolean - Equally likely true or false."
   },
   {
-    "name": "GUI.tableNextColumn",
-    "signature": "GUI.tableNextColumn():boolean - Advance to next column."
+    "name": "randomString",
+    "signature": "randomString(length:integer):string - 0..4096 alphanumeric characters, not cryptographic."
   },
   {
-    "name": "GUI.tableSetColumnIndex",
-    "signature": "GUI.tableSetColumnIndex(index:integer):boolean - Zero-based table column index."
+    "name": "castShadow",
+    "signature": "MeshRenderer.castShadow: boolean, default true. Controls realtime and baked shadow casting; rebake static lighting after changing."
   },
   {
-    "name": "GUI.tableSetupColumn",
-    "signature": "GUI.tableSetupColumn(label:string,width?:number) - Fixed width when positive, otherwise stretch."
+    "name": "Recoil",
+    "signature": "Recoil - Camera > Recoil. Render-only six-axis damped spring, bounded stacking, seeded variation, timed bursts and scheduled sequences. trigger(strength=1), start(), stop(), reset(), playSequence(), setSequence(keys)."
   },
   {
-    "name": "GUI.tableGetColumnIndex",
-    "signature": "GUI.tableGetColumnIndex():integer - Current zero-based index or column count."
+    "name": "onAnimationRestarted",
+    "signature": "onAnimationRestarted() - Owner callback on replay or loop wrap. Animation.onRestarted is the corresponding wait token."
   },
   {
-    "name": "GUI.tableGetColumnCount",
-    "signature": "GUI.tableGetColumnCount():integer - Current zero-based index or column count."
+    "name": "Random",
+    "signature": "Random.randomFloat(min,max), randomInt(min,max), randomBool(), randomString(length). Also available globally; non-cryptographic."
   },
   {
-    "name": "GUI.beginMenu",
-    "signature": "GUI.beginMenu(label:string,enabled?:boolean):boolean - Only end when true."
+    "name": "AnimationClip",
+    "signature": "AnimationClip(path:string):string - Checked .leanim asset path for Animation.playClip/crossFade."
   },
   {
-    "name": "GUI.endMenu",
-    "signature": "GUI.endMenu() - End successful beginMenu."
+    "name": "playClip",
+    "signature": "animation:playClip(AnimationClip(path)) - Plays a selected clip; decoding is asynchronous and Stop cancels pending playback."
   },
   {
-    "name": "GUI.beginMenuBar",
-    "signature": "GUI.beginMenuBar():boolean - Requires GUI.WindowFlags.MenuBar on beginWindow. Only end when true."
+    "name": "global",
+    "signature": "global Type name = default - Inspector fields; int, float, bool, string, Prefab, AnimationClip, Texture, AudioClip and component references."
   },
   {
-    "name": "GUI.endMenuBar",
-    "signature": "GUI.endMenuBar() - End successful beginMenuBar."
+    "name": "File",
+    "signature": "File.open(relativePath,mode), read(handle,format), write(handle,text), close(handle), flush(handle), seek(handle,whence,offset), lines(handleOrPath), rename(old,new), remove(path). Sandboxed under Game.userDataPath."
   },
   {
-    "name": "GUI.menuItem",
-    "signature": "GUI.menuItem(label:string,selected?:boolean,enabled?:boolean):boolean - Returns clicked."
+    "name": "OnResolutionChanged",
+    "signature": "OnResolutionChanged(resolution) - resolution has width, height, refreshRate. Also on(eventName, callback)."
   },
   {
-    "name": "GUI.openPopup",
-    "signature": "GUI.openPopup(id:string) - Open a named popup."
+    "name": "OnFocusLost",
+    "signature": "OnFocusLost() - native game window lost focus."
   },
   {
-    "name": "GUI.beginPopup",
-    "signature": "GUI.beginPopup(id:string):boolean - Only endPopup when true."
+    "name": "OnFocus",
+    "signature": "OnFocus() - native game window gained focus."
   },
   {
-    "name": "GUI.beginPopupModal",
-    "signature": "GUI.beginPopupModal(id:string):boolean - Only endPopup when true."
+    "name": "OnUrlOpened",
+    "signature": "OnUrlOpened(url) - OS accepted an HTTP/HTTPS launch request."
   },
   {
-    "name": "GUI.endPopup",
-    "signature": "GUI.endPopup() - Popup scope operation."
-  },
-  {
-    "name": "GUI.closeCurrentPopup",
-    "signature": "GUI.closeCurrentPopup() - Popup scope operation."
-  },
-  {
-    "name": "GUI.beginCombo",
-    "signature": "GUI.beginCombo(label:string,preview:string):boolean - Only endCombo when true."
-  },
-  {
-    "name": "GUI.endCombo",
-    "signature": "GUI.endCombo() - End successful beginCombo."
-  },
-  {
-    "name": "GUI.combo",
-    "signature": "GUI.combo(label:string,index:integer,items:table):integer,boolean - 1-based selected index and changed; 1..256 items."
-  },
-  {
-    "name": "GUI.radioButton",
-    "signature": "GUI.radioButton(label:string,selected:boolean):boolean - Returns clicked."
-  },
-  {
-    "name": "GUI.pushStyleColor",
-    "signature": "GUI.pushStyleColor(name:string,r:number,g:number,b:number,a?:number) - Use GUI.Col constants; pair with popStyleColor."
-  },
-  {
-    "name": "GUI.popStyleColor",
-    "signature": "GUI.popStyleColor(count?:integer) - Strict reverse-order scoped pop; default 1."
-  },
-  {
-    "name": "GUI.popStyleVar",
-    "signature": "GUI.popStyleVar(count?:integer) - Strict reverse-order scoped pop; default 1."
-  },
-  {
-    "name": "GUI.pushStyleVar",
-    "signature": "GUI.pushStyleVar(name:string,x:number,y?:number) - Use GUI.StyleVar constants. Values 0..1000."
-  },
-  {
-    "name": "GUI.pushFontSize",
-    "signature": "GUI.pushFontSize(size:number) - 8..96 pixels; pair with popFont."
-  },
-  {
-    "name": "GUI.popFont",
-    "signature": "GUI.popFont() - End font size scope."
-  },
-  {
-    "name": "GUI.beginDragDropSource",
-    "signature": "GUI.beginDragDropSource():boolean - Only end when true. Script payloads isolated from editor payloads."
-  },
-  {
-    "name": "GUI.beginDragDropTarget",
-    "signature": "GUI.beginDragDropTarget():boolean - Only end when true. Script payloads isolated from editor payloads."
-  },
-  {
-    "name": "GUI.endDragDropSource",
-    "signature": "GUI.endDragDropSource() - End successful drag/drop scope."
-  },
-  {
-    "name": "GUI.endDragDropTarget",
-    "signature": "GUI.endDragDropTarget() - End successful drag/drop scope."
-  },
-  {
-    "name": "GUI.setDragDropPayload",
-    "signature": "GUI.setDragDropPayload(kind:string,value:string) - Source only. Type max 28 bytes; value max 4096."
-  },
-  {
-    "name": "GUI.acceptDragDropPayload",
-    "signature": "GUI.acceptDragDropPayload(kind:string):string? - Target only. Returns delivered matching script payload or nil."
-  },
-  {
-    "name": "GUI.getMousePos",
-    "signature": "GUI.getMousePos():number,number - Returns Game-surface mouse x,y."
-  },
-  {
-    "name": "GUI.isMouseDown",
-    "signature": "GUI.isMouseDown(button:integer):boolean - Mouse button 0..4."
-  },
-  {
-    "name": "GUI.isMouseClicked",
-    "signature": "GUI.isMouseClicked(button:integer):boolean - Mouse button 0..4."
-  },
-  {
-    "name": "GUI.isMouseReleased",
-    "signature": "GUI.isMouseReleased(button:integer):boolean - Mouse button 0..4."
-  },
-  {
-    "name": "GUI.isKeyDown",
-    "signature": "GUI.isKeyDown(key:string):boolean - Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows."
-  },
-  {
-    "name": "GUI.isKeyReleased",
-    "signature": "GUI.isKeyReleased(key:string):boolean - Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows."
-  },
-  {
-    "name": "GUI.isKeyPressed",
-    "signature": "GUI.isKeyPressed(key:string,repeatKey?:boolean):boolean - Named key, optional repeat."
-  },
-  {
-    "name": "GUI.drawLine",
-    "signature": "GUI.drawLine(x:number,y:number,x2:number,y2:number,r:number,g:number,b:number,a?:number,width?:number) - Screen-pixel coordinates; colors 0..1."
-  },
-  {
-    "name": "GUI.drawRect",
-    "signature": "GUI.drawRect(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) - Screen-pixel coordinates; colors 0..1."
-  },
-  {
-    "name": "GUI.drawRectFilled",
-    "signature": "GUI.drawRectFilled(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) - Screen-pixel coordinates; colors 0..1."
-  },
-  {
-    "name": "GUI.drawCircle",
-    "signature": "GUI.drawCircle(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) - Screen-pixel coordinates; radius 0..100000."
-  },
-  {
-    "name": "GUI.drawCircleFilled",
-    "signature": "GUI.drawCircleFilled(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) - Screen-pixel coordinates; radius 0..100000."
-  },
-  {
-    "name": "GUI.drawText",
-    "signature": "GUI.drawText(x:number,y:number,value:string,r:number,g:number,b:number,a?:number) - Screen-pixel coordinates."
-  },
-  {
-    "name": "GUI.drawTriangleFilled",
-    "signature": "GUI.drawTriangleFilled(x:number,y:number,x2:number,y2:number,x3:number,y3:number,r:number,g:number,b:number,a?:number) - Screen-pixel coordinates."
+    "name": "OnGamePreQuit",
+    "signature": "OnGamePreQuit() - start tasks or hold Game.blockGameKilling; graceful quit waits at most ten seconds."
   },
   {
     "name": "getTextureQuality",
@@ -212,176 +88,8 @@
     "signature": "setTextureQuality(quality:integer) - Play-only override 0..3; Stop restores project default."
   },
   {
-    "name": "GUI",
-    "signature": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window. UI is the RML/RCSS component."
-  },
-  {
-    "name": "GUI.beginWindow",
-    "signature": "GUI.beginWindow(title:string,flags?:integer):boolean - Always call endWindow even when false."
-  },
-  {
-    "name": "GUI.endWindow",
-    "signature": "GUI.endWindow() - End the current window."
-  },
-  {
-    "name": "GUI.text",
-    "signature": "GUI.text(value:string) - Plain text, never a printf format."
-  },
-  {
-    "name": "GUI.textWrapped",
-    "signature": "GUI.textWrapped(value:string) - Wrapped plain text."
-  },
-  {
-    "name": "GUI.button",
-    "signature": "GUI.button(label:string):boolean - True on activation."
-  },
-  {
-    "name": "GUI.smallButton",
-    "signature": "GUI.smallButton(label:string):boolean - Compact button."
-  },
-  {
-    "name": "GUI.checkbox",
-    "signature": "GUI.checkbox(label:string,value:boolean):boolean,boolean - Returns new value, changed."
-  },
-  {
-    "name": "GUI.sliderFloat",
-    "signature": "GUI.sliderFloat(label:string,value:number,min:number,max:number):number,boolean - Returns value, changed."
-  },
-  {
-    "name": "GUI.sliderInt",
-    "signature": "GUI.sliderInt(label:string,value:integer,min:integer,max:integer):integer,boolean - Returns value, changed."
-  },
-  {
-    "name": "GUI.dragFloat",
-    "signature": "GUI.dragFloat(label:string,value:number,speed?:number):number,boolean - Returns value, changed; speed defaults 0.1."
-  },
-  {
-    "name": "GUI.inputFloat",
-    "signature": "GUI.inputFloat(label:string,value:number):number,boolean - Returns value, changed."
-  },
-  {
-    "name": "GUI.inputInt",
-    "signature": "GUI.inputInt(label:string,value:integer):integer,boolean - Returns value, changed."
-  },
-  {
-    "name": "GUI.inputText",
-    "signature": "GUI.inputText(label:string,value:string):string,boolean - Returns text, changed; max 4095 bytes."
-  },
-  {
-    "name": "GUI.colorEdit3",
-    "signature": "GUI.colorEdit3(label:string,r:number,g:number,b:number):number,number,number,boolean - Returns r,g,b,changed."
-  },
-  {
-    "name": "GUI.colorEdit4",
-    "signature": "GUI.colorEdit4(label:string,r:number,g:number,b:number,a:number):number,number,number,number,boolean - Returns r,g,b,a,changed."
-  },
-  {
-    "name": "GUI.separator",
-    "signature": "GUI.separator() - Horizontal separator."
-  },
-  {
-    "name": "GUI.sameLine",
-    "signature": "GUI.sameLine(offset?:number,spacing?:number) - Continue on the same line."
-  },
-  {
-    "name": "GUI.spacing",
-    "signature": "GUI.spacing() - Add vertical space."
-  },
-  {
-    "name": "GUI.newLine",
-    "signature": "GUI.newLine() - Start a line."
-  },
-  {
-    "name": "GUI.progressBar",
-    "signature": "GUI.progressBar(fraction:number) - Clamps fraction to 0..1."
-  },
-  {
-    "name": "GUI.selectable",
-    "signature": "GUI.selectable(label:string,selected?:boolean):boolean - True when clicked."
-  },
-  {
-    "name": "GUI.collapsingHeader",
-    "signature": "GUI.collapsingHeader(label:string):boolean - True while expanded; no matching end."
-  },
-  {
-    "name": "GUI.beginChild",
-    "signature": "GUI.beginChild(id:string,width?:number,height?:number):boolean - Always pair with endChild."
-  },
-  {
-    "name": "GUI.endChild",
-    "signature": "GUI.endChild() - End child region."
-  },
-  {
-    "name": "GUI.beginGroup",
-    "signature": "GUI.beginGroup() - Begin a layout group."
-  },
-  {
-    "name": "GUI.endGroup",
-    "signature": "GUI.endGroup() - End a layout group."
-  },
-  {
-    "name": "GUI.beginDisabled",
-    "signature": "GUI.beginDisabled(disabled?:boolean) - Default true; pair with endDisabled."
-  },
-  {
-    "name": "GUI.endDisabled",
-    "signature": "GUI.endDisabled() - End disabled scope."
-  },
-  {
-    "name": "GUI.pushID",
-    "signature": "GUI.pushID(id:string) - Scope repeated widget labels; pair with popID."
-  },
-  {
-    "name": "GUI.popID",
-    "signature": "GUI.popID() - Pop a widget ID."
-  },
-  {
-    "name": "GUI.setNextWindowPos",
-    "signature": "GUI.setNextWindowPos(x:number,y:number) - Game-surface pixels; call before beginWindow."
-  },
-  {
-    "name": "GUI.setNextWindowSize",
-    "signature": "GUI.setNextWindowSize(width:number,height:number) - Game-surface pixels; call before beginWindow."
-  },
-  {
-    "name": "GUI.setCursorPos",
-    "signature": "GUI.setCursorPos(x:number,y:number) - Window-local content position."
-  },
-  {
-    "name": "GUI.getWindowSize",
-    "signature": "GUI.getWindowSize():number,number - Returns width,height."
-  },
-  {
-    "name": "GUI.getContentRegionAvail",
-    "signature": "GUI.getContentRegionAvail():number,number - Returns available width,height."
-  },
-  {
-    "name": "GUI.setNextItemWidth",
-    "signature": "GUI.setNextItemWidth(width:number) - Width of next input."
-  },
-  {
-    "name": "GUI.isItemHovered",
-    "signature": "GUI.isItemHovered():boolean - Whether last widget is hovered."
-  },
-  {
-    "name": "GUI.isItemActive",
-    "signature": "GUI.isItemActive():boolean - Whether last widget is active."
-  },
-  {
-    "name": "GUI.setTooltip",
-    "signature": "GUI.setTooltip(value:string) - Plain-text tooltip."
-  },
-  {
-    "name": "GUI.bulletText",
-    "signature": "GUI.bulletText(value:string) - Bulleted plain text."
-  },
-  {
-    "name": "GUI.getDisplaySize",
-    "signature": "GUI.getDisplaySize():number,number - Returns Game-surface pixel width,height."
-  },
-  {
-    "name": "UI",
-    "signature": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or @export hud UI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
+    "name": "Decal",
+    "signature": "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder, layerMask (unsigned receiver layers). Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."
   },
   {
     "name": "Vector3",
@@ -393,7 +101,7 @@
   },
   {
     "name": "NavMeshAgent",
-    "signature": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(). Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Agent origin is at feet. No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
+    "signature": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), heightOffset (-1000..1000 world units), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(), stop(), start(), setSpeed(speed), setHeightOffset(height). stop/start preserve the route. Read-only hasPath, pathPending, distance (straight-line 3D world-unit distance from agent position to destination; zero without destination/Transform), remainingDistance (path length), velocity, status. Bake static objects/terrains in Windows > Navigation. Use heightOffset to raise centered pivots above the navigation surface (default 0 for foot pivots). No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
   },
   {
     "name": "TPSCamera",
@@ -492,8 +200,12 @@
     "signature": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles/Blood/Explosion); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"
   },
   {
+    "name": "Animator",
+    "signature": "Animator - controller-backed state machine. Fields controller (.controller asset), enabled, playOnStart; read-only currentState, stateTime, isPlaying, paused, error. Methods setBool(name,value), setInt(name,value), setFloat(name,value), getBool(name), getInt(name), getFloat(name), play(state), crossFade(state,seconds=0.2), stop(), pause(), resume(), hasState(name). States reference .leanim clips with per-state loop. Ordered transitions combine typed conditions, normalized exit time and fade seconds. Edit graph in Windows > Animator. Animator owns the object's Animation backend while running."
+  },
+  {
     "name": "Animation",
-    "signature": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"
+    "signature": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25), playClip(clip); onFinished/onStarted/onRestarted/onStopped/onPaused/onResumed wait tokens; isPlaying is read-only"
   },
   {
     "name": "onAnimationFinish",
@@ -685,7 +397,7 @@
   },
   {
     "name": "wait",
-    "signature": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event"
+    "signature": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio/animation component event"
   },
   {
     "name": "isActive",
@@ -725,7 +437,7 @@
   },
   {
     "name": "loadLevelAsync",
-    "signature": "loadLevelAsync(name=nil) -> accepted, error; background file read"
+    "signature": "loadLevelAsync(name=nil) -> accepted, error; background decoding and asset preloading"
   },
   {
     "name": "unloadLevel",
@@ -773,7 +485,7 @@
   },
   {
     "name": "Texture",
-    "signature": "Texture - export-only image or HDR asset path; @export image Texture"
+    "signature": "Texture - export-only image or HDR asset path; global Texture image ="
   },
   {
     "name": "AudioListener",
@@ -1104,6 +816,30 @@
     "signature": "onMouseUp() - targeted GameObject callback"
   },
   {
+    "name": "onNavMeshAgentStatusChanged",
+    "signature": "onNavMeshAgentStatusChanged() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentMoving",
+    "signature": "onNavMeshAgentMoving() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentArrived",
+    "signature": "onNavMeshAgentArrived() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentBlocked",
+    "signature": "onNavMeshAgentBlocked() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentUnreachable",
+    "signature": "onNavMeshAgentUnreachable() - NavMeshAgent status edge callback"
+  },
+  {
+    "name": "onNavMeshAgentStopped",
+    "signature": "onNavMeshAgentStopped() - NavMeshAgent status edge callback"
+  },
+  {
     "name": "onMouseEnter",
     "signature": "onMouseEnter() - targeted GameObject callback"
   },
@@ -1138,14 +874,6 @@
   {
     "name": "onStart",
     "signature": "onStart() - called when Execute succeeds"
-  },
-  {
-    "name": "onGUI",
-    "signature": "onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task."
-  },
-  {
-    "name": "hdrCompression",
-    "signature": "Skybox.hdrCompression: boolean, default false. Packed RGB9_E5 GPU HDR storage (4 bytes/pixel instead of RGB16F 6); lower precision, source unchanged."
   },
   {
     "name": "onUpdate",
@@ -1261,7 +989,7 @@
   },
   {
     "name": "setMaterialShader",
-    "signature": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"
+    "signature": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection'|'Stochastic Texture Sampling')"
   },
   {
     "name": "setMaterialNormalStrength",

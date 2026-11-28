@@ -16,12 +16,6 @@ These are manual checks only. No automated tests were added or run.
   only common components are offered, unrelated fields/axes remain distinct,
   invalid dependent values are rejected for the entire selection, and Undo/Redo
   restores the batch. Repeat during Play and verify Stop restores authored data.
-- **UI/GUI:** load the RML/RCSS HUD with a UI component; confirm old saved GUI
-  component data migrates. Run `data/examples/imgui/hud.lua` and `inventory.lua`.
-  Check tables, menu/popup, combo, typed drag/drop and styles. Add image/imageButton,
-  font scopes and custom drawing. Check malformed scope calls yield script errors
-  without damaging later subscribers. Repeat with the separate Game window,
-  paused/resumed Play, focus changes, Stop and a second Play session.
 - **Texture quality:** compare Full/Half/Quarter/Eighth on a detailed material
   and normal map. Call setTextureQuality from onStart and during Play. Confirm
   cookies and GUI images remain full resolution, Stop restores project quality,

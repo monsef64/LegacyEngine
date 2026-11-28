@@ -63,6 +63,7 @@ jobs:
           install: >-
             git
             python
+            make
             ${{ matrix.prefix }}-gcc
             ${{ matrix.prefix }}-cmake
             ${{ matrix.prefix }}-ninja

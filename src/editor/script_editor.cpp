@@ -282,7 +282,7 @@ void ScriptEditor::draw(const EditorLayout* layout,
                 ImGui::TextWrapped(
                     "Execution failed. Check Console for details. Asset scripts need a unique attachment owner or its selection.");
             }
-            ImGui::TextDisabled("Lua 5.4 | Tab: complete API names | output below");
+            ImGui::TextDisabled("LuaJIT 2.1 | Tab: complete API names | output below");
             if (!fileOpen()) {
                 ImGui::TextWrapped(
                     "Open a .ls or .lua file to edit. Only script assets can be edited here.");
@@ -430,6 +430,8 @@ void ScriptEditor::draw(const EditorLayout* layout,
         if (beginEditorPanel("Console", layout ? fixedPanelFlags : 0)) {
             if (ImGui::Button("Clear")) {
                 console_.clear();
+                componentOutput.clear();
+                clearComponentOutputRequested = true;
             }
             ImGui::SameLine();
             ImGui::Checkbox("Auto-scroll", &autoScroll_);

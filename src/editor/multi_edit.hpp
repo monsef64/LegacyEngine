@@ -35,6 +35,9 @@ template <class C> bool valid(const C& c) {
     } else if constexpr (std::is_same_v<C, ParticleSystem>) {
         Particles::parse(Particles::settings(c));
         return true;
+    } else if constexpr (std::is_same_v<C, Recoil>) {
+        Recoils::parse(Recoils::settings(c));
+        return true;
     } else if constexpr (std::is_same_v<C, TPSCamera>) {
         TPSCameras::parse(TPSCameras::settings(c));
         return true;
@@ -89,10 +92,7 @@ LEGACY_BATCH_NOINLINE void field(World& world,
     if constexpr (std::is_same_v<V, bool>) {
         changed = ImGui::Checkbox(label, &edited);
     } else if constexpr (std::is_same_v<V, Vec3>) {
-        float v[]{edited.x, edited.y, edited.z};
-        changed = ImGui::DragFloat3(
-            label, v, .05f, minimum, maximum, "%.3f", ImGuiSliderFlags_AlwaysClamp);
-        edited = {v[0], v[1], v[2]};
+        changed = editVector(label, edited, .05f, minimum, maximum, C{}.*member);
     } else if constexpr (std::is_same_v<V, std::string>) {
         char buffer[4097];
         std::snprintf(buffer, sizeof(buffer), "%s", edited.c_str());
@@ -182,6 +182,7 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
         S(MeshRenderer, material);
         F(MeshRenderer, color, 0, 100);
         B(MeshRenderer, checkerboard);
+        B(MeshRenderer, castShadow);
         F(MeshRenderer, specular, 0, 1);
     }
     H(Collider) {
@@ -206,11 +207,7 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
         V(RigidBody, linearVelocity);
         V(RigidBody, angularVelocity);
     }
-    H(UI) {
-        B(UI, enabled);
-        S(UI, rml);
-        S(UI, rcss);
-    }
+
     H(LuaScript) {
         B(LuaScript, enabled);
         S(LuaScript, path);
@@ -278,6 +275,16 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
         B(FPSCamera, mouseLook);
         F(FPSCamera, sensitivity, .001f, 10);
         S(FPSCamera, speed);
+    }
+    H(Recoil) {
+        B(Recoil, enabled);
+        B(Recoil, playOnStart);
+        B(Recoil, sequenceLoop);
+        S(Recoil, burstCount);
+        S(Recoil, seed);
+        for (const auto& f : Recoils::fields) {
+            field<Recoil>(w, p, f.name, f.member, f.low, f.high);
+        }
     }
     H(TPSCamera) {
         B(TPSCamera, enabled);
@@ -474,7 +481,6 @@ LEGACY_BATCH_NOINLINE inline void draw(World& w, Entity p, bool runtime) {
         F(Skybox, type, 0, 1);
         F(Skybox, color, 0, 100);
         B(Skybox, affectEnvironment);
-        B(Skybox, hdrCompression);
         F(Skybox, environmentIntensity, 0, 5);
         S(Skybox, cubemap);
         S(Skybox, hdr);

@@ -91,7 +91,7 @@ class Renderer {
             modelRevision_ = modelAssetRevision;
         }
         if (asynchronous) {
-            if (!requestModel(path)) {
+            if (!requestModel(path, false)) {
                 return false;
             }
             return meshBounds(modelMeshes_.at(path), low, high);
@@ -140,6 +140,7 @@ class Renderer {
 
     // Frees what init() and createMesh() created. Call it if init() succeeded,
     // before the OpenGL context is destroyed.
+    bool preloadAssets(const std::set<std::string>& paths);
     void shutdown();
 
     // Copies a mesh to the graphics card. Put the returned handle in the
@@ -279,11 +280,14 @@ class Renderer {
     struct StreamedModel {
         MeshData mesh;
         std::map<std::string, Json> documents;
+        std::map<std::string, GpuSkinning::PreparedSource> skinSources;
+        std::map<std::string, std::shared_ptr<const SkeletonPose>> skeletons;
     };
     std::map<std::string, std::future<StreamedModel>> pendingModels_;
     std::map<std::string, std::chrono::steady_clock::time_point> failedModels_;
     void pumpModels();
-    bool requestModel(const std::string& path);
+    bool queueModel(const std::string& path);
+    bool requestModel(const std::string& path, bool waitForReady = true);
     MeshHandle cloneModelMesh(MeshHandle source);
     void clearModelCache();
     unsigned modelRevision_ = 0;

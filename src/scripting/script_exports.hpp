@@ -1,4 +1,5 @@
 #pragma once
+#include "assets/assets.hpp"
 #include "core/components.hpp"
 #include "scripting/legacy_script.hpp"
 #include <cctype>
@@ -6,23 +7,26 @@
 #include <iomanip>
 #include <sstream>
 inline bool exportReferenceType(const std::string& type) {
-    return type == "Decal" || type == "UI" || type == "GameObject" || type == "Transform" ||
+    return type == "Recoil" || type == "Decal" || type == "GameObject" || type == "Transform" ||
            type == "RigidBody" || type == "Collider" || type == "MeshRenderer" ||
            type == "ObjectName" || type == "LuaScript" || type == "Camera" ||
            type == "AudioSource" || type == "AudioListener" || type == "DirectionalLight" ||
            type == "PointLight" || type == "SpotLight" || type == "Skybox" ||
            type == "CharacterController" || type == "NavMeshObstacle" || type == "NavMeshAgent" ||
            type == "TPSCamera" || type == "FPSCamera" || type == "Raycast" || type == "Animation" ||
-           type == "ParticleSystem" || type == "Laser" || type == "LightShafts" ||
-           type == "Water" || type == "BoneAttachment" || type == "Vehicle" ||
-           type == "CloudSystem" || type == "River" || type == "Fog" || type == "CameraEffects";
+           type == "Animator" || type == "ParticleSystem" || type == "Laser" ||
+           type == "LightShafts" || type == "Water" || type == "BoneAttachment" ||
+           type == "Vehicle" || type == "CloudSystem" || type == "River" || type == "Fog" ||
+           type == "CameraEffects";
 }
 inline bool exportAssetType(const std::string& type) {
-    return type == "Asset" || type == "AudioClip" || type == "Texture";
+    return type == "Asset" || type == "AudioClip" || type == "Texture" || type == "Prefab" ||
+           type == "AnimationClip";
 }
 inline bool exportType(const std::string& type) {
     return exportReferenceType(type) || exportAssetType(type) || type == "number" ||
-           type == "boolean" || type == "string";
+           type == "boolean" || type == "string" || type == "int" || type == "float" ||
+           type == "bool";
 }
 inline bool exportAssetPath(const std::string& path) {
     if (path.size() > 4096 || path.find('\0') != std::string::npos ||
@@ -46,10 +50,10 @@ inline bool exportName(const std::string& name) {
             return false;
         }
     }
-    return name != "self" && name != "onStart" && name != "onGUI" && name != "onUpdate" &&
-           name != "onFixedUpdate" && name != "onDestroy" && name != "onTriggerEnter" &&
-           name != "onTriggerStay" && name != "onTriggerExit" && name != "onCollisionEnter" &&
-           name != "onCollisionStay" && name != "onCollisionExit";
+    return name != "self" && name != "onStart" && name != "onUpdate" && name != "onFixedUpdate" &&
+           name != "onDestroy" && name != "onTriggerEnter" && name != "onTriggerStay" &&
+           name != "onTriggerExit" && name != "onCollisionEnter" && name != "onCollisionStay" &&
+           name != "onCollisionExit";
 }
 inline void syncScriptExports(std::string_view source, std::vector<ScriptField>& fields) {
     std::vector<ScriptField> next;
@@ -60,7 +64,28 @@ inline void syncScriptExports(std::string_view source, std::vector<ScriptField>&
         std::istringstream in(
             std::string(source.substr(declaration.body, declaration.end - declaration.body)));
         ScriptField field;
-        in >> field.name >> field.type;
+        if (declaration.typed) {
+            in >> field.type >> std::ws;
+            while (in &&
+                   (std::isalnum(static_cast<unsigned char>(in.peek())) || in.peek() == '_')) {
+                field.name += char(in.get());
+            }
+            in >> std::ws;
+            if (in.peek() == '=') {
+                in.get();
+            }
+        } else {
+            in >> field.name >> field.type;
+        }
+        if (field.type == "integer") {
+            field.type = "int";
+        }
+        if (field.type == "float") {
+            field.type = "number";
+        }
+        if (field.type == "bool") {
+            field.type = "boolean";
+        }
         if (!exportName(field.name) || !exportType(field.type)) {
             continue;
         }
@@ -73,12 +98,15 @@ inline void syncScriptExports(std::string_view source, std::vector<ScriptField>&
         if (duplicate) {
             continue;
         }
-        if (field.type == "number") {
+        if (field.type == "number" || field.type == "int") {
             in >> field.number;
             if (!std::isfinite(field.number)) {
                 field.number = 0;
             }
             field.number = std::clamp(field.number, -1000000.0f, 1000000.0f);
+            if (field.type == "int") {
+                field.number = std::round(field.number);
+            }
         } else if (field.type == "boolean") {
             std::string value;
             in >> value;
@@ -91,6 +119,10 @@ inline void syncScriptExports(std::string_view source, std::vector<ScriptField>&
         }
         if (exportAssetType(field.type) &&
             (!exportAssetPath(field.text) ||
+             (!field.text.empty() && field.type == "Prefab" &&
+              AssetManager::extension(field.text) != ".prefab") ||
+             (!field.text.empty() && field.type == "AnimationClip" &&
+              AssetManager::extension(field.text) != ".leanim") ||
              (field.type == "Texture" &&
               !(materialTexturePath(field.text) || skyboxHDRPath(field.text))))) {
             field.text.clear();
@@ -135,6 +167,7 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(NavMeshObstacle);
     EXPORT_COMPONENT(Raycast);
     EXPORT_COMPONENT(Animation);
+    EXPORT_COMPONENT(Animator);
     EXPORT_COMPONENT(ParticleSystem);
     EXPORT_COMPONENT(Laser);
     EXPORT_COMPONENT(LightShafts);
@@ -143,7 +176,7 @@ inline bool exportHasComponent(World& world, Entity e, const std::string& type) 
     EXPORT_COMPONENT(CloudSystem);
     EXPORT_COMPONENT(River);
     EXPORT_COMPONENT(Vehicle);
-    EXPORT_COMPONENT(UI);
+    EXPORT_COMPONENT(Recoil);
     EXPORT_COMPONENT(Decal);
     EXPORT_COMPONENT(Water);
     EXPORT_COMPONENT(BoneAttachment);

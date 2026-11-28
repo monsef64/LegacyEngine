@@ -1,9 +1,6 @@
 #include "levels/level_system.hpp"
+#include "scripting/lua_compat.hpp"
 #include "scripting/lua_console.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-}
 namespace {
 int levelCall(lua_State* L) {
     const int op = int(lua_tointeger(L, lua_upvalueindex(1)));

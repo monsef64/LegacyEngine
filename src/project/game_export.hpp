@@ -8,6 +8,7 @@ struct Settings {
     std::string name, company, version, description, copyright, icon, output, player;
     std::string startLevel;
     unsigned chunkMiB = 16;
+    bool debugMode = false;
 };
 void validate(const Settings& settings);
 // Builds in a private sibling directory; existing output is never overwritten.

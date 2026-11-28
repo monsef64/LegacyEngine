@@ -13,7 +13,7 @@
   script/reference assignment and listener-independent audio previews.
 - Internal Lua editor with highlighting or external VS Code editing; Dark/Grey themes.
 - Three-slot named keyboard/mouse/gamepad-button mappings, raw input APIs and cursor controls.
-- Structured JSON projects, separate settings files and native Save/Open dialogs.
+- Structured JSON projects, separate settings files and ImGui Save/Open dialogs.
 
 - Project-owned Diffuse/Diffuse Bumped material assets and six-face/HDR skyboxes.
 - Debug menu with FPS display and collider wireframes in the Game view.

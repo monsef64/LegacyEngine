@@ -1,6 +1,6 @@
-# Build and test
+# Build and manual verification
 Requires a C++17 compiler, CMake 3.20+, Git and platform development libraries.
-CMake fetches SDL3 (if not installed), Jolt, Dear ImGui, ImGuizmo and Lua.
+CMake fetches SDL3 (if not installed), Jolt, Dear ImGui, ImGuizmo and pinned LuaJIT 2.1.
 GLAD, Roboto/Font Awesome fonts, miniaudio, simdjson, nlohmann/json and stb_image
 are included under `third_party/`.
 
@@ -9,17 +9,22 @@ in [the engine workflow](../.github/workflows/release.yml). Then:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel 2
-ctest --test-dir build --output-on-failure
+cmake --build build --target LegacyEngine LegacyPlayer --parallel 2
 ./build/LegacyEngine
 ```
 
 Use `-DLEGACY_VENDORED_SDL=ON` to force a static vendored SDL build.
 A graphical session and an OpenGL 3.3-capable driver are required at runtime.
-Native file dialogs require a working desktop portal or another SDL dialog backend.
+File and folder selection uses the built-in ImGui picker; Zenity, desktop portals,
+and SDL file-dialog backend configuration are not required.
 Linux CI builds on Ubuntu 24.04; check its run log for the resulting glibc requirement.
-GitHub Actions builds/packages only, with `BUILD_TESTING=OFF`; tests are manual.
-Use `-DBUILD_TESTING=ON` locally to build the optional test executables.
+Test compilation and CTest integration have been removed from the project.
+No test executables are generated, even when an old build cache has
+`BUILD_TESTING=ON`; configuration forces it off before loading dependencies.
+Historical test sources remain in `tests/` for reference, and manual verification
+checklists remain in `docs/manual/`. Reconfigure an existing build directory to
+remove stale test targets; previously built test binaries may remain on disk but
+are no longer built or registered by this project.
 
 For headless graphical checks on Linux:
 
@@ -177,7 +182,7 @@ In a modern MSYS2 MINGW64 shell with Git, GCC, CMake, Ninja and Python installed
 ```sh
 cmake -S . -B build-win7 -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
-  -DLEGACY_WINDOWS7=ON -DBUILD_TESTING=OFF
+  -DLEGACY_WINDOWS7=ON
 cmake --build build-win7 --target LegacyEngine --parallel 2
 ```
 
@@ -259,3 +264,40 @@ meshoptimizer v0.22 for opt-in simplification; its MIT notice is packaged under
 
 [Terrain chunks and Navigation](navigation.md) documents smaller camera-culled
 terrain pieces, the Recast/Detour bake window and scriptable Navmesh Agents.
+
+## Embedded LuaJIT
+
+GNU make (`make`/`gmake`) and a native GCC/Clang toolchain are required in addition
+to CMake/Ninja. On Windows use MSYS2 MinGW-w64 (UCRT64 or MINGW64) with the
+`make` package; MSVC and cross-compiling are not supported by this integration.
+CMake builds a pinned LuaJIT source revision in a private build-directory copy
+and statically links it into editor/player. No system Lua interpreter or
+`lua51.dll` is required. FFI is compiled out, and native module loading and the
+`jit` control library are not exposed to scripts.
+
+The instruction-budget sandbox takes precedence over JIT optimization: engine
+callbacks/snippets disable tracing while their instruction hook is active, and
+the runtime is built with CHECKHOOK as an additional safeguard. This migration
+does not promise JIT acceleration for budgeted callbacks. See the
+[scripting migration notes](scripting.md#luajit-runtime-and-migration).
+
+## Lean Jolt build
+
+The static Jolt build excludes its debug renderer, built-in profiler, ObjectStream
+serialization/attribute metadata and C++ RTTI. LegacyEngine uses its own collider
+wireframes, frame profiler and JSON scene serialization; those remain available.
+Jolt's internal type registration and supported collision shapes remain intact.
+This is upstream feature configuration, not a maintained fork of Jolt.
+
+Optimized GNU/Clang builds keep function/data sections and linker garbage
+collection (`LEGACY_SMALL_RELEASE=ON`). `LEGACY_PHYSICS_LTO=ON` additionally enables
+supported IPO for Jolt in Release/MinSizeRel only. The rest of the editor does not
+use whole-program LTO, limiting compiler/linker memory requirements. Unsupported
+IPO toolchains fall back to the section-GC build; set
+`-DLEGACY_PHYSICS_LTO=OFF` to diagnose toolchain/linker issues. Use `-j1` on
+memory-limited systems. Windows builds continue to use MinGW-w64, not MSVC.
+
+Measure the **stripped executable**, not `libJolt.a`: LTO archives contain compiler
+IR and can grow even when the final executable shrinks. Release packaging already
+strips unneeded symbols. Keep the same compiler, configuration and strip options
+when comparing sizes; compressed archive size and Windows results will differ.

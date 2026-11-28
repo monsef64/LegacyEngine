@@ -26,7 +26,8 @@ void MaterialTextureCache::clear() {
 unsigned MaterialTextureCache::get(const AssetManager& assets,
                                    const std::string& path,
                                    std::string& error,
-                                   bool fullResolution) {
+                                   bool fullResolution,
+                                   bool waitForReady) {
     if (quality_ != TextureQuality::current()) {
         clear();
         quality_ = TextureQuality::current();
@@ -49,8 +50,11 @@ unsigned MaterialTextureCache::get(const AssetManager& assets,
     try {
         auto pending = pending_.find(cacheKey);
         if (pending != pending_.end()) {
+            if (waitForReady && found == entries_.end()) {
+                pending->second.wait();
+            }
             if (pending->second.wait_for(std::chrono::seconds(0)) != std::future_status::ready ||
-                uploads_ >= 1) {
+                (!waitForReady && uploads_ >= 1)) {
                 waiting_ = true;
                 return resident();
             }
@@ -121,7 +125,7 @@ unsigned MaterialTextureCache::get(const AssetManager& assets,
         if (found != entries_.end() && now - found->second.checked < std::chrono::seconds(1)) {
             return resident();
         }
-        if (pending_.size() >= 2) {
+        if (!waitForReady && pending_.size() >= 2) {
             waiting_ = true;
             return resident();
         }
@@ -129,12 +133,7 @@ unsigned MaterialTextureCache::get(const AssetManager& assets,
         const auto stamp = hasOld ? found->second.stamp : std::filesystem::file_time_type{};
         const auto oldSize = hasOld ? found->second.size : 0;
         const int mipReduction = fullResolution ? 0 : quality_;
-        auto request = WorkerPool::shared().submit([assets,
-                                                    path,
-                                                    hasOld,
-                                                    stamp,
-                                                    oldSize,
-                                                    mipReduction] {
+        auto decode = [assets, path, hasOld, stamp, oldSize, mipReduction] {
             if (!materialTexturePath(path)) {
                 throw std::runtime_error("Unsupported material texture");
             }
@@ -212,10 +211,23 @@ unsigned MaterialTextureCache::get(const AssetManager& assets,
                 throw std::runtime_error("Texture changed while streaming; retrying");
             }
             return result;
-        });
+        };
+        auto request = WorkerPool::shared().submit(decode);
+        if (!request && waitForReady && found == entries_.end()) {
+            // Imports may fill the bounded pool. Complete this required resource
+            // locally rather than displaying a placeholder or growing the queue.
+            std::packaged_task<Decoded()> task(std::move(decode));
+            request = task.get_future();
+            task();
+        }
         waiting_ = true;
         if (request) {
             pending_.emplace(cacheKey, std::move(*request));
+            // First-use resources are ready before drawing, never revealed as
+            // untextured placeholders. Resident hot-reloads remain asynchronous.
+            if (waitForReady && found == entries_.end()) {
+                return get(assets, path, error, fullResolution, true);
+            }
         }
         return resident();
     } catch (const std::exception& e) {

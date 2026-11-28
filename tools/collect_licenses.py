@@ -48,7 +48,8 @@ for folder, filename, target in [
     ('imgui', 'LICENSE.txt', 'DearImGui.txt'), ('imguizmo', 'LICENSE', 'ImGuizmo.txt'),
     ('assimp', 'LICENSE', 'assimp.txt'), ('meshoptimizer', 'LICENSE.md', 'meshoptimizer.txt'), ('recastnavigation', 'License.txt', 'RecastNavigation.txt')]:
     copy(args.build / '_deps' / (folder + '-src') / filename, target)
-comments(args.build / '_deps/lua-src/lua.h', 'Lua.txt')
+copy(args.build / '_deps/luajit-src/COPYRIGHT', 'LuaJIT.txt')
+# Lua.txt remains checked in for the adapted Lua UTF-8 library.
 for dependency, subtree in [('assimp', 'contrib'), ('sdl3', 'src')]:
     source = args.build / '_deps' / (dependency + '-src') / subtree
     for path in sorted(source.rglob('*')):

@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/animator_controller.hpp"
 
 #include "assets/assets.hpp"
 #include "core/components.hpp"
@@ -110,13 +111,18 @@ copyLevelObject(World& sourceWorld, Entity source, World& world, bool preservePa
     component(CharacterController{});
     component(FPSCamera{});
     component(TPSCamera{});
+    if (const auto* r = sourceWorld.tryGet<Recoil>(source)) {
+        world.add(copy, Recoils::parse(Recoils::settings(*r)));
+    }
     component(NavMeshObstacle{});
-    component(UI{});
 
     if (const auto* a = sourceWorld.tryGet<NavMeshAgent>(source)) {
         world.add(copy, Navigation::parseAgent(Navigation::agentSettings(*a)));
     }
     component(Raycast{});
+    if (const auto* a = sourceWorld.tryGet<Animator>(source)) {
+        world.add(copy, Animators::parse(Animators::settings(*a)));
+    }
     component(Animation{});
     component(ParticleSystem{});
     component(LightShafts{});
@@ -393,24 +399,6 @@ inline bool drawLevelObjects(World& world,
             known.clear();
             expansionEpoch = hierarchyExpansionEpoch;
         }
-        if (createRequest) {
-            ImGui::BeginDisabled(!selectionEnabled);
-            if (ImGui::Button(world.alive(selected) ? "Create child..." : "Create...")) {
-                ImGui::OpenPopup("Hierarchy create");
-            }
-            if (ImGui::BeginPopup("Hierarchy create")) {
-                int item = drawCreateItems();
-                if (item >= 0) {
-                    *createRequest = item;
-                    collapsed.erase(hierarchyKey(selected));
-                    if (createParent) {
-                        *createParent = selected;
-                    }
-                }
-                ImGui::EndPopup();
-            }
-            ImGui::EndDisabled();
-        }
         static Entity renameTarget;
         static char renameName[256]{};
         static bool renameFocus = false;
@@ -432,14 +420,26 @@ inline bool drawLevelObjects(World& world,
             changed = true;
         };
         static ImGuiTextFilter search;
-        search.Draw("Search", -60);
-        ImGui::SameLine();
+        const auto searchPosition = ImGui::GetCursorScreenPos();
+        const float searchWidth = ImGui::GetContentRegionAvail().x;
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {26.f, ImGui::GetStyle().FramePadding.y});
+        ImGui::SetNextItemWidth(searchWidth);
+        if (ImGui::InputTextWithHint(
+                "##HierarchySearch", "Search", search.InputBuf, IM_ARRAYSIZE(search.InputBuf))) {
+            search.Build();
+        }
+        ImGui::PopStyleVar();
+        const auto afterSearch = ImGui::GetCursorScreenPos();
+        ImGui::SetCursorScreenPos({searchPosition.x + searchWidth - 25.f, searchPosition.y + 2.f});
+        ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(0, 0, 0, 0));
         if (ImGui::SmallButton("x##ClearSearch")) {
             search.Clear();
         }
+        ImGui::PopStyleColor();
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Clear search");
         }
+        ImGui::SetCursorScreenPos(afterSearch);
         const auto visible = hierarchyMatches(world, objects, search.InputBuf);
 
         if (!selectionEnabled) {

@@ -1,4 +1,5 @@
 #pragma once
+#include "animation/animator_controller.hpp"
 #include "core/hierarchy.hpp"
 #include "effects/camera_effects_io.hpp"
 #include "effects/laser_io.hpp"
@@ -121,6 +122,7 @@ inline std::string sceneSignature(World& world) {
                 fields(entry.fields);
             }
         });
+        component(e, Recoil{}, [&](const Recoil& c) { result += Recoils::settings(c).dump(); });
         component(e, Decal{}, [&](const Decal& d) { result += Decals::settings(d).dump(); });
         component(
             e, LightShafts{}, [&](const LightShafts& s) { result += Shafts::settings(s).dump(); });
@@ -255,6 +257,8 @@ inline std::string sceneSignature(World& world) {
                 scalar(id);
             }
         });
+        component(
+            e, Animator{}, [&](const Animator& a) { result += Animators::settings(a).dump(); });
         component(e, Animation{}, [&](const Animation& a) {
             scalar(a.clip.size());
             result += a.clip;
@@ -283,6 +287,7 @@ inline std::string sceneSignature(World& world) {
             scalar(m.lightmapGrid);
             vec(m.color);
             scalar(m.checkerboard);
+            scalar(m.castShadow);
             scalar(m.specular);
             scalar(m.material.size());
             result += m.material;

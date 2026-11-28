@@ -15,8 +15,133 @@ class GameExportWindow {
     std::future<std::string> job_;
     ProjectDialog picker_;
     int picking_ = 0, chunkMiB_ = 16;
+    std::filesystem::path root_, pickerRoot_, jobRoot_;
+    Json observed_, saved_;
+    double editedAt_ = 0;
+    bool dirty_ = false, debugMode_ = false;
+    static std::filesystem::path settingsFile(const std::filesystem::path& root) {
+        return (root.filename() == "Assets" ? root.parent_path() : root) / "Settings" /
+               "Export.json";
+    }
+    Json settings() const {
+        return {{"version", 1},
+                {"name", name_},
+                {"company", company_},
+                {"gameVersion", version_},
+                {"description", description_},
+                {"copyright", copyright_},
+                {"icon", icon_},
+                {"output", output_},
+                {"player", player_},
+                {"startScene", scene_},
+                {"chunkMiB", chunkMiB_},
+                {"debugMode", debugMode_}};
+    }
+    void saveSettings() {
+        if (!dirty_ || root_.empty()) {
+            return;
+        }
+        auto document = settings();
+        writeJsonFile(settingsFile(root_), document);
+        saved_ = observed_ = std::move(document);
+        dirty_ = false;
+    }
+    void loadSettings(const AssetManager& assets) {
+        if (root_ == assets.root) {
+            return;
+        }
+        try {
+            saveSettings();
+        } catch (const std::exception& e) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Export settings: %s", e.what());
+        }
+        root_ = assets.root;
+        *name_ = *company_ = *description_ = *copyright_ = *icon_ = *output_ = *player_ = 0;
+        std::snprintf(version_, sizeof(version_), "1.0.0");
+        scene_.clear();
+        chunkMiB_ = 16;
+        debugMode_ = false;
+        error_.clear();
+        status_.clear();
+        dirty_ = false;
+        try {
+            const auto file = settingsFile(root_);
+            if (!root_.empty() && std::filesystem::exists(file)) {
+                const auto j = readJsonFile(file, 32768);
+                if (j.at("version") != 1) {
+                    throw std::runtime_error("Unsupported export settings version");
+                }
+                // Validate every value before applying anything; malformed files
+                // cannot leak partial or truncated metadata into an export.
+                auto read = [&](const char* key, std::size_t capacity, const char* fallback = "") {
+                    auto value = j.value(key, std::string(fallback));
+                    if (value.size() >= capacity || value.find('\0') != value.npos) {
+                        throw std::runtime_error(std::string("Invalid export setting: ") + key);
+                    }
+                    return value;
+                };
+                const auto name = read("name", sizeof(name_)),
+                           company = read("company", sizeof(company_)),
+                           version = read("gameVersion", sizeof(version_), "1.0.0"),
+                           description = read("description", sizeof(description_)),
+                           copyright = read("copyright", sizeof(copyright_)),
+                           icon = read("icon", sizeof(icon_)),
+                           output = read("output", sizeof(output_)),
+                           player = read("player", sizeof(player_)),
+                           scene = read("startScene", 129);
+                const bool debugMode = j.value("debugMode", false);
+                const int chunk = j.value("chunkMiB", 16);
+                if (chunk < 1 || chunk > 64) {
+                    throw std::runtime_error("Invalid export chunk size");
+                }
+                if (!scene.empty() && !LevelSystem::validName(scene)) {
+                    throw std::runtime_error("Invalid export start scene");
+                }
+                std::snprintf(name_, sizeof(name_), "%s", name.c_str());
+                std::snprintf(company_, sizeof(company_), "%s", company.c_str());
+                std::snprintf(version_, sizeof(version_), "%s", version.c_str());
+                std::snprintf(description_, sizeof(description_), "%s", description.c_str());
+                std::snprintf(copyright_, sizeof(copyright_), "%s", copyright.c_str());
+                std::snprintf(icon_, sizeof(icon_), "%s", icon.c_str());
+                std::snprintf(output_, sizeof(output_), "%s", output.c_str());
+                std::snprintf(player_, sizeof(player_), "%s", player.c_str());
+                scene_ = scene;
+                chunkMiB_ = chunk;
+                debugMode_ = debugMode;
+            }
+        } catch (const std::exception& e) {
+            error_ = std::string("Cannot load export settings: ") + e.what();
+        }
+        saved_ = observed_ = settings();
+    }
+    void persistEdits(bool force = false) {
+        auto current = settings();
+        if (current != observed_) {
+            observed_ = std::move(current);
+            editedAt_ = ImGui::GetTime();
+            dirty_ = observed_ != saved_;
+        }
+        if (dirty_ && (force || ImGui::GetTime() - editedAt_ >= .4 || !ImGui::IsAnyItemActive())) {
+            try {
+                saveSettings();
+            } catch (const std::exception& e) {
+                error_ = std::string("Cannot save export settings: ") + e.what();
+            }
+        }
+    }
 
   public:
+    ~GameExportWindow() {
+        try {
+            saveSettings();
+        } catch (const std::exception& e) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Export settings: %s", e.what());
+        }
+    }
+    void saveProjectSettings(const AssetManager& source, const AssetManager& destination) {
+        loadSettings(source);
+        writeJsonFile(settingsFile(destination.root), settings());
+    }
     bool visible = false;
     bool busy() const {
         return job_.valid();
@@ -28,7 +153,8 @@ class GameExportWindow {
               const ProjectIO::Meshes& meshes,
               const LevelSystem& levels,
               bool allowed) {
-        if (auto result = picker_.poll()) {
+        loadSettings(assets);
+        if (auto result = picker_.poll(); result && pickerRoot_ == root_) {
             if (!result->error.empty()) {
                 error_ = result->error;
             }
@@ -45,14 +171,20 @@ class GameExportWindow {
         }
         if (job_.valid() && job_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             try {
-                status_ = job_.get();
-                error_.clear();
+                auto result = job_.get();
+                if (jobRoot_ == root_) {
+                    status_ = std::move(result);
+                    error_.clear();
+                }
             } catch (const std::exception& error) {
-                error_ = error.what();
-                status_.clear();
+                if (jobRoot_ == root_) {
+                    error_ = error.what();
+                    status_.clear();
+                }
             }
         }
         if (!visible && !busy()) {
+            persistEdits(true); // Includes a dialog result delivered after closing the window.
             return;
         }
         ImGui::SetNextWindowSize(ImVec2(650, 610), ImGuiCond_FirstUseEver);
@@ -79,12 +211,13 @@ class GameExportWindow {
                 ImGui::SameLine();
                 if (ImGui::Button(label)) {
                     picking_ = kind;
+                    pickerRoot_ = root_;
 #ifdef _WIN32
-                    static const SDL_DialogFileFilter iconFilter[]{{"Icon", "ico"}};
-                    static const SDL_DialogFileFilter playerFilter[]{{"Player", "exe"}};
+                    static const ProjectDialog::Filter iconFilter[]{{"Icon", "ico"}};
+                    static const ProjectDialog::Filter playerFilter[]{{"Player", "exe"}};
 #else
-                    static const SDL_DialogFileFilter iconFilter[]{{"Icon", "png"}};
-                    static const SDL_DialogFileFilter playerFilter[]{{"Player", "*"}};
+                    static const ProjectDialog::Filter iconFilter[]{{"Icon", "png"}};
+                    static const ProjectDialog::Filter playerFilter[]{{"Player", "*"}};
 #endif
                     picker_.chooseExportPath(SDL_GL_GetCurrentWindow(),
                                              kind == 2,
@@ -106,9 +239,15 @@ class GameExportWindow {
             }
             ImGui::InputText("Native player template", player_, sizeof(player_));
             browse(3, "Browse##Player");
+            ImGui::Checkbox("Debug Mode", &debugMode_);
+            ImGui::TextWrapped(
+                "Debug exports allow the backtick (`) key to open a read-only log console.");
             ImGui::SliderInt("Chunk size (MiB)", &chunkMiB_, 1, 64);
+            ImGui::TextWrapped(
+                "Assets are Zstandard-compressed on export, then authenticated/encrypted. Chunk size is before compression. Editor source assets are not changed. Use an updated native player template.");
             if (ImGui::Button("Export Game")) {
                 try {
+                    persistEdits(true);
                     GameExport::Settings settings{name_,
                                                   company_,
                                                   version_,
@@ -117,6 +256,7 @@ class GameExportWindow {
                                                   icon_,
                                                   output_,
                                                   player_};
+                    settings.debugMode = debugMode_;
                     settings.chunkMiB = unsigned(chunkMiB_);
                     settings.startLevel = scene_.empty() ? levels.current() : scene_;
                     GameExport::validate(settings);
@@ -138,6 +278,7 @@ class GameExportWindow {
                         scene = ProjectIO::encode(loaded, script, pose, meshes, "Assets");
                     }
                     const auto engineData = std::filesystem::path(SDL_GetBasePath()) / "data";
+                    jobRoot_ = root_;
                     job_ = std::async(std::launch::async,
                                       [settings, assets, scene = std::move(scene), engineData] {
                                           GameExport::build(settings, assets, scene, engineData);
@@ -158,5 +299,6 @@ class GameExportWindow {
             }
         }
         ImGui::End();
+        persistEdits(!visible);
     }
 };
