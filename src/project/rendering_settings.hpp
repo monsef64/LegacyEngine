@@ -5,7 +5,7 @@
 #include "rendering/texture_quality.hpp"
 #include <SDL3/SDL.h>
 struct RenderingSettings {
-    bool visible = false, vsync = false;
+    bool visible = false, vsync = true;
     ShadowSettings shadows;
     int textureQuality = 0;
     std::string error;
@@ -14,21 +14,23 @@ struct RenderingSettings {
         return (assets.root.filename() == "Assets" ? assets.root.parent_path() : assets.root) /
                "Settings" / "Rendering.json";
     }
-    void apply() {
-        if (!SDL_GL_SetSwapInterval(vsync ? 1 : 0)) {
+    void apply(bool gameplay = false) {
+        if (!SDL_GL_SetSwapInterval(gameplay && vsync ? 1 : 0)) {
             error = std::string("Cannot change VSync: ") + SDL_GetError();
             SDL_LogWarn(SDL_LOG_CATEGORY_RENDER, "%s", error.c_str());
         } else {
             error.clear();
-            SDL_Log("VSync %s", vsync ? "enabled" : "disabled");
+            SDL_Log("%s VSync %s",
+                    gameplay ? "Game" : "Editor",
+                    gameplay && vsync ? "enabled" : "disabled");
         }
     }
-    void load(const AssetManager& assets) {
+    void load(const AssetManager& assets, bool gameplay = false) {
         if (root == assets.root) {
             return;
         }
         root = assets.root;
-        vsync = false;
+        vsync = true;
         shadows = {};
         textureQuality = 0;
         TextureQuality::project = 0;
@@ -76,7 +78,7 @@ struct RenderingSettings {
             error = e.what();
             return;
         }
-        apply();
+        apply(gameplay);
     }
     void save(const AssetManager& assets) const {
         writeJsonFile(file(assets),

@@ -427,8 +427,10 @@ the context menu still offers **Create wheel meshes**; see [vehicles](vehicles.m
 See [TPS camera and environment lighting](third-person-and-environment.md) for
 third-person camera setup/Lua, optional sky-colored ambient light, steering
 stability, terrain surface edges, expanded Scene picking, middle-drag navigation,
-near-camera creation, field Reset value controls and uncapped defaults.
-Existing saved FPS caps/VSync preferences remain respected.
+near-camera creation and field Reset value controls. Editing now uses a fixed
+60 FPS cap, and the Scene view is capped at 60 Hz during Play. Game/Play follows
+project VSync and script-controlled pacing instead of the editor's old FPS limit.
+New projects default to Game VSync on; existing saved VSync values are preserved.
 
 
 See [Mesh LOD and baked occlusion](lod-and-occlusion.md) for the MeshRenderer
@@ -844,3 +846,15 @@ open keeps the previous editor world. Newly assigned scene assets also complete
 their first-use loading before drawing; very large assignments can pause a frame.
 Manual verification steps are recorded in `docs/manual/asset-streaming-and-cpu.md`
 in the source repository.
+
+### Window dragging and pacing
+
+Floating editor windows can only be moved by dragging their title bars, not empty
+content areas. Docking and controls inside windows remain interactive.
+
+The editor's non-Play loop and level view run at up to 60 FPS. The Game follows
+project VSync (on by default for new settings) and runtime pacing. Scene rendering
+stays capped at 60 Hz during Play. The embedded Game shares the editor's frame
+loop, so ImGui input/layout processing follows Game cadence while playing; this
+is not a separate threaded 60 Hz UI loop. The former editor FPS-limit slider is
+removed; old preference files still load.
