@@ -48,6 +48,9 @@ class AssetBrowser {
     std::string transientError_;
     double errorUntil_ = 0;
     unsigned thumbnailRevision_ = ~0u;
+    std::string hoveredPreviewKey_;
+    double hoveredPreviewSince_ = 0;
+    int hoveredPreviewFrame_ = -2;
 
   public:
     AssetBrowser() {
@@ -62,7 +65,7 @@ class AssetBrowser {
     AssetManager assets;
     Entity prefabCreation;
     std::string editPrefabRequest, spawnPrefabRequest, editCubemapRequest, spawnModelRequest,
-        editAnimationRequest, previewModelRequest;
+        editAnimationRequest, editAnimatorRequest, previewModelRequest;
     std::string selected, openedScript, currentFolder;
     std::pair<std::string, std::string> movedAsset;
     EditorSettings settings;
@@ -271,10 +274,7 @@ class AssetBrowser {
                 }
             }
         });
-        world.each<UI>([&](Entity, UI& g) {
-            remap(g.rml);
-            remap(g.rcss);
-        });
+
         world.each<Collider>([&](Entity, Collider& collider) { remap(collider.model); });
         world.each<LightShafts>([&](Entity, LightShafts& s) { remap(s.texture); });
         auto remapLight = [&](Entity, auto& l) {
@@ -308,6 +308,7 @@ class AssetBrowser {
                 rename(extra.fields);
             }
         });
+        world.each<Animator>([&](Entity, Animator& a) { remap(a.controller); });
         world.each<PrefabInstance>([&](Entity, PrefabInstance& link) { remap(link.asset); });
         world.each<MeshRenderer>([&](Entity, MeshRenderer& r) {
             remap(r.material);
@@ -317,7 +318,7 @@ class AssetBrowser {
         for (const auto& file : assets.files()) {
             const auto extension = AssetManager::extension(file);
             if (extension == ".leanim" || extension == ".prefab" || extension == ".level" ||
-                extension == ".cubemap" || extension == ".terrain") {
+                extension == ".cubemap" || extension == ".terrain" || extension == ".controller") {
                 try {
                     auto doc = readJsonFile(assets.resolve(file), 256 * 1024 * 1024);
                     bool changed = false;
@@ -332,7 +333,7 @@ class AssetBrowser {
                             }
                         } else if (value.is_string()) {
                             const std::string keys =
-                                "|rml|rcss|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                                "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|controller|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                             if (keys.find("|" + key + "|") == std::string::npos) {
                                 return;
                             }
@@ -508,7 +509,7 @@ class AssetBrowser {
                     }
                 } else if (value.is_string()) {
                     const std::string keys =
-                        "|rml|rcss|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
+                        "|subAssets|dataFolder|mesh|settings|material|texture|normalMap|cookie|bake|model|lightmap|clip|controller|asset|path|hdr|cubemap|right|left|top|bottom|front|back|";
                     if (keys.find("|" + key + "|") == std::string::npos) {
                         return;
                     }
@@ -525,7 +526,7 @@ class AssetBrowser {
                 const auto ext = AssetManager::extension(file);
                 if (ext != ".mesh" && ext != ".model" && ext != ".lemesh" && ext != ".leanim" &&
                     ext != ".mat" && ext != ".prefab" && ext != ".level" && ext != ".cubemap" &&
-                    ext != ".terrain") {
+                    ext != ".terrain" && ext != ".controller") {
                     return;
                 }
                 auto doc = readJsonFile(file, 256 * 1024 * 1024);
@@ -949,8 +950,18 @@ class AssetBrowser {
                                       thumbnailFlip);
                         }
                         const bool itemHovered = ImGui::IsMouseHoveringRect(itemMin, itemMax);
-                        if (itemHovered && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip) &&
-                            GImGui->HoveredIdTimer >= 1.5f && ImGui::BeginTooltip()) {
+                        const bool tooltipHovered = itemHovered && ImGui::IsItemHovered();
+                        if (tooltipHovered) {
+                            const auto key = assets.root.generic_string() + "/" + file;
+                            if (hoveredPreviewKey_ != key ||
+                                hoveredPreviewFrame_ < ImGui::GetFrameCount() - 1) {
+                                hoveredPreviewKey_ = key;
+                                hoveredPreviewSince_ = ImGui::GetTime();
+                            }
+                            hoveredPreviewFrame_ = ImGui::GetFrameCount();
+                        }
+                        if (tooltipHovered && ImGui::GetTime() - hoveredPreviewSince_ >= 1.5 &&
+                            ImGui::BeginTooltip()) {
                             ImGui::TextUnformatted(fullName.c_str());
                             const std::string type = folderItem                   ? "Folder"
                                                      : modelAsset(file)           ? "3D Model"
@@ -1025,6 +1036,10 @@ class AssetBrowser {
                             if (!folderItem && AssetManager::extension(file) == ".leanim" &&
                                 ImGui::IsMouseDoubleClicked(0)) {
                                 editAnimationRequest = file;
+                            }
+                            if (!folderItem && AssetManager::extension(file) == ".controller" &&
+                                ImGui::IsMouseDoubleClicked(0)) {
+                                editAnimatorRequest = file;
                             }
                             if (!folderItem && modelAsset(file) && ImGui::IsMouseDoubleClicked(0)) {
                                 previewModelRequest = file;
@@ -1131,6 +1146,10 @@ class AssetBrowser {
                                 ImGui::IsMouseDoubleClicked(0)) {
                                 editAnimationRequest = file;
                             }
+                            if (!folderItem && AssetManager::extension(file) == ".controller" &&
+                                ImGui::IsMouseDoubleClicked(0)) {
+                                editAnimatorRequest = file;
+                            }
                             if (!folderItem &&
                                 ImGui::MenuItem("Attach LegacyScript to selected object",
                                                 nullptr,
@@ -1158,6 +1177,10 @@ class AssetBrowser {
                                     ImGui::IsMouseDoubleClicked(0)) {
                                     editAnimationRequest = file;
                                 }
+                                if (!folderItem && AssetManager::extension(file) == ".controller" &&
+                                    ImGui::IsMouseDoubleClicked(0)) {
+                                    editAnimatorRequest = file;
+                                }
                                 renameRequested_ = true;
                             }
                             if (ImGui::MenuItem("Move to Trash", "Del")) {
@@ -1165,6 +1188,10 @@ class AssetBrowser {
                                 if (!folderItem && AssetManager::extension(file) == ".leanim" &&
                                     ImGui::IsMouseDoubleClicked(0)) {
                                     editAnimationRequest = file;
+                                }
+                                if (!folderItem && AssetManager::extension(file) == ".controller" &&
+                                    ImGui::IsMouseDoubleClicked(0)) {
+                                    editAnimatorRequest = file;
                                 }
                                 deleteRequested_ = true;
                             }

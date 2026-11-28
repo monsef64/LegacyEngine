@@ -4,6 +4,7 @@
 #include "core/hierarchy.hpp"
 #include "models/model_asset.hpp"
 #include "project/json_io.hpp"
+#include <mutex>
 #include <set>
 
 struct AnimationKey {
@@ -25,7 +26,7 @@ inline bool animationFunctionName(const std::string& name) {
         std::isdigit(static_cast<unsigned char>(name[0]))) {
         return false;
     }
-    return name != "onGUI" && name != "onStart" && name != "onUpdate" && name != "onFixedUpdate" &&
+    return name != "onStart" && name != "onUpdate" && name != "onFixedUpdate" &&
            name != "onDestroy";
 }
 struct AnimationClip {
@@ -34,6 +35,7 @@ struct AnimationClip {
     float duration = 1;
     std::vector<AnimationTrack> tracks;
     std::vector<AnimationScriptEvent> events;
+    std::shared_ptr<const Json> skeleton; // Runtime-only, geometry-free fade metadata.
 };
 inline bool animationAsset(const std::string& path) {
     return materialPathValid(path) && AssetManager::extension(path) == ".leanim";
@@ -186,13 +188,63 @@ inline Json encodeAnimationClip(const AnimationClip& clip) {
     decodeAnimationClip(result);
     return result;
 }
+// Share only skeleton/key data across clips for the same packed model. Never
+// retain/copy its high-poly geometry just to interrupt a crossfade.
+inline std::shared_ptr<const Json> animationSkeletonMetadata(const std::filesystem::path& file,
+                                                             const Json& doc) {
+    struct Entry {
+        std::filesystem::file_time_type stamp;
+        std::uintmax_t size;
+        std::weak_ptr<const Json> data;
+    };
+    static std::mutex mutex;
+    static std::map<std::filesystem::path, Entry> cache;
+    const auto stamp = std::filesystem::last_write_time(file);
+    const auto size = std::filesystem::file_size(file);
+    {
+        std::lock_guard<std::mutex> guard(mutex);
+        auto found = cache.find(file);
+        if (found != cache.end() && found->second.stamp == stamp && found->second.size == size) {
+            if (auto data = found->second.data.lock()) {
+                return data;
+            }
+        }
+    }
+    auto result = std::make_shared<const Json>(
+        Json{{"nodes", doc.at("nodes")}, {"animations", doc.at("animations")}});
+    std::lock_guard<std::mutex> guard(mutex);
+    auto found = cache.find(file);
+    if (found != cache.end() && found->second.stamp == stamp && found->second.size == size) {
+        if (auto data = found->second.data.lock()) {
+            return data;
+        }
+    }
+    if (cache.size() >= 32) {
+        cache.erase(cache.begin());
+    }
+    cache.insert_or_assign(file, Entry{stamp, size, result});
+    return result;
+}
 inline AnimationClip loadAnimationClip(const AssetManager& assets, const std::string& path) {
     if (!animationAsset(path)) {
         throw std::runtime_error("Expected .leanim clip");
     }
-    auto clip = decodeAnimationClip(readJsonFile(assets.resolve(path), 4 * 1024 * 1024));
+    const auto file = assets.resolve(path);
+    std::shared_ptr<const Json> container;
+    AnimationClip clip;
+    if (embeddedAsset(path)) {
+        container = readModelContainer(assetContainerPath(file));
+        clip = decodeAnimationClip(container->at("embeddedAssets").at(embeddedAssetName(path)));
+    } else {
+        clip = decodeAnimationClip(readJsonFile(file, 4 * 1024 * 1024));
+    }
     if (!clip.model.empty()) {
-        const auto doc = modelDocument(assets, clip.model);
+        const auto modelFile = assetContainerPath(assets.resolve(clip.model));
+        if (!container || modelFile != assetContainerPath(file)) {
+            container = readModelContainer(modelFile);
+        }
+        const auto& doc = *container;
+        clip.skeleton = animationSkeletonMetadata(modelFile, doc);
         const auto& clips = doc.at("animations");
         if (!clips.is_array() || std::size_t(clip.modelAnimation) >= clips.size()) {
             throw std::runtime_error("Missing imported model animation");

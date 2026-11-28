@@ -1,9 +1,6 @@
 #include "input/input.hpp"
+#include "scripting/lua_compat.hpp"
 #include "scripting/lua_console.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-}
 namespace {
 void vector(lua_State* L, float x, float y) {
     lua_createtable(L, 0, 2);

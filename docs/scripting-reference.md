@@ -48,7 +48,7 @@ and animation function events.
   Up targets the object that received Down, even if released outside it.
 - Audio callbacks target scripts attached to the AudioSource owner. Finished means natural
   primary-clip completion, not pause, explicit stop, fade-out stop or one-shot completion.
-- `waitForSeconds` and `wait(audio.onAudioFinished)` suspend lifecycle/object callbacks only.
+- `waitForSeconds`, `wait(audio.onAudioFinished)` and `wait(animation.onFinished)` suspend lifecycle/object callbacks only.
   Do not use them at file top-level, in custom event listeners or onDestroy. Each callback
   has at most one pending invocation. Other callbacks keep running; Play pause or object
   deactivation freezes timers, and Stop cancels waits. Audio waits observe the next event,
@@ -58,7 +58,7 @@ and animation function events.
   Inspector can reactivate it. State persists in project/level saves and undo history.
 - `debug.error()` logs without throwing. Memory/instruction limits still apply.
 
-The sandbox also exposes Lua 5.4 base, table, string, math and utf8 computation libraries.
+The LuaJIT sandbox exposes base, table, string, math, bit and adapted utf8 computation libraries.
 It does not expose filesystem/process/module loading, coroutines, pcall/xpcall or the
 standard introspection debug library. Those standard computation-library APIs are not
 engine functions; this reference covers the engine-owned API.
@@ -104,18 +104,6 @@ and [object activity and waits](scripting.md#object-activity-mouseaudio-callback
 ```lua
 function onStart()
     debug.log("Script started", self:getName())
-end
-```
-
-### onGUI
-
-`onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task.`
-
-```lua
-function onGUI()
-    GUI.beginWindow("HUD")
-    GUI.text("Hello")
-    GUI.endWindow()
 end
 ```
 
@@ -191,7 +179,7 @@ Use getComponent(Type) for attached self, getComponent(object, Type) for an expl
 - `overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil`
 - `overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil`
 - `overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil`
-- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+- `return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil`
 - `overload fun(componentType:ComponentType):any`
 
 ```lua
@@ -799,7 +787,7 @@ if not accepted then debug.warning(reason) end
 
 ### loadLevelAsync
 
-`loadLevelAsync(name=nil) -> accepted, error; background file read`
+`loadLevelAsync(name=nil) -> accepted, error; background decoding and asset preloading`
 
 - `param name? string`
 - `return boolean accepted`
@@ -1119,11 +1107,11 @@ end
 
 ### wait
 
-`wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event`
+`wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio/animation component event`
 
-Takes an opaque AudioEvent token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the AudioSource cancels its continuation.
+Takes an opaque audio or animation component event token, not a function name string or a call to the event. Waits for its next occurrence after subscribing. Stop/reset cancels waits; removing the watched component cancels its continuation.
 
-- `param secondsOrEvent number|AudioEvent Finite 0..86400 seconds or a live audio event token`
+- `param secondsOrEvent number|AudioEvent|ComponentEvent Finite 0..86400 seconds or a live audio/animation event token`
 
 ```lua
 function onStart()
@@ -1356,6 +1344,49 @@ function onStart()
 end
 ```
 
+### AnimationClip
+
+`AnimationClip(path:string):string - Checked .leanim asset path for Animation.playClip/crossFade.`
+
+- `param path string`
+- `return string clip Checked .leanim asset path value.`
+
+```lua
+local clip = AnimationClip("Animations/Walk.leanim")
+```
+
+### randomFloat
+
+`randomFloat(min:number,max:number):number - Uniform finite floating sample; min <= max.`
+
+```lua
+local value = Random.randomFloat(0, 1)
+```
+
+### randomInt
+
+`randomInt(min:integer,max:integer):integer - Inclusive uniform integer sample.`
+
+```lua
+local value = Random.randomInt(1, 6)
+```
+
+### randomBool
+
+`randomBool():boolean - Equally likely true or false.`
+
+```lua
+local value = Random.randomBool()
+```
+
+### randomString
+
+`randomString(length:integer):string - 0..4096 alphanumeric characters, not cryptographic.`
+
+```lua
+local value = Random.randomString(12)
+```
+
 ### print
 
 `print(...) - log tab-separated values`
@@ -1377,7 +1408,7 @@ if health then debug.log(health.health) end
 
 ### GameObject.getComponent
 
-`getComponent(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`getComponent(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil`
 
 - `getComponent(Type) / getComponent(gameObject, Type) / object.getComponent(Type) -> live component or nil`
 
@@ -1388,7 +1419,7 @@ object:getComponent(Transform)
 
 ### GameObject.getComponentInParent
 
-`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`getComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil`
 
 - `getComponentInParent(Type) / getComponentInParent(object, Type) / object:getComponentInParent(Type) -> live component or nil; self first, then nearest parent`
 
@@ -1399,7 +1430,7 @@ object:getComponentInParent(RigidBody)
 
 ### GameObject.getComponentInChildren
 
-`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`getComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil`
 
 - `getComponentInChildren(Type) / getComponentInChildren(object, Type) / object:getComponentInChildren(Type) -> live component or nil; self first, then breadth-first descendants`
 
@@ -1410,7 +1441,7 @@ object:getComponentInChildren(Camera)
 
 ### GameObject.findComponentInParent
 
-`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`findComponentInParent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil`
 
 - `findComponentInParent(Type) / findComponentInParent(object, Type) / object:findComponentInParent(Type) -> alias of getComponentInParent`
 
@@ -1421,7 +1452,7 @@ object:findComponentInParent(RigidBody)
 
 ### GameObject.findComponentInChildren
 
-`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil`
+`findComponentInChildren(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil`
 
 - `findComponentInChildren(Type) / findComponentInChildren(object, Type) / object:findComponentInChildren(Type) -> alias of getComponentInChildren`
 
@@ -1432,7 +1463,7 @@ object:findComponentInChildren(Camera)
 
 ### GameObject.addComponent
 
-`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal`
+`addComponent(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal`
 
 - `addComponent(gameObject, componentType) / component:addComponent(Type) -> live component on the same owner`
 
@@ -1512,15 +1543,15 @@ self.onAnimationResume = function()
 end
 ```
 
-### GameObject.onGUI
+### GameObject.onAnimationRestarted
 
-`onGUI()|nil Draw GUI once per rendered Game frame; no wait/task`
+`onAnimationRestarted()|nil`
 
-- `onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task.`
+- `onAnimationRestarted() - Owner callback on replay or loop wrap. Animation.onRestarted is the corresponding wait token.`
 
 ```lua
-self.onGUI = function()
-    debug.log("Object callback: onGUI")
+self.onAnimationRestarted = function()
+    debug.log("Object callback: onAnimationRestarted")
 end
 ```
 
@@ -3091,6 +3122,17 @@ local component = self:getComponent(Animation) or self:addComponent(Animation)
 component:play()
 ```
 
+### Animation.playClip
+
+`playClip(self:Animation,clip:string) Play an AnimationClip path value; loads asynchronously if needed.`
+
+- `animation:playClip(AnimationClip(path)) - Plays a selected clip; decoding is asynchronous and Stop cancels pending playback.`
+
+```lua
+local animation = self:getComponent(Animation)
+animation:playClip(AnimationClip("Animations/Walk.leanim"))
+```
+
 ### Animation.stop
 
 `stop(self:Animation) Stops and rewinds to frame zero`
@@ -3250,6 +3292,44 @@ fade:stop(1)
 
 ## NavMeshAgent
 
+### NavMeshAgent.stop
+
+`stop(self:NavMeshAgent) Pause movement and clear velocity, keeping the route`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:stop()
+```
+
+### NavMeshAgent.start
+
+`start(self:NavMeshAgent) Resume the existing route without discarding it`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:start()
+```
+
+### NavMeshAgent.setSpeed
+
+`setSpeed(self:NavMeshAgent, speed:number) Set movement speed, 0..100`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:setSpeed(4.5)
+```
+
+### NavMeshAgent.setHeightOffset
+
+`setHeightOffset(self:NavMeshAgent, height:number) Set pivot height above the surface, -1000..1000`
+
+```lua
+local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
+component:setHeightOffset(1.0)
+```
+
 ### NavMeshAgent.setDestination
 
 `setDestination(self:NavMeshAgent, x:number|Vec3, y?:number, z?:number) Queue a path request; resumes movement`
@@ -3266,1666 +3346,6 @@ component:setDestination(Vector3(8, 0, 4))
 ```lua
 local component = self:getComponent(NavMeshAgent) or self:addComponent(NavMeshAgent)
 component:resetPath()
-```
-
-## UI
-
-### UI.isLoaded
-
-`isLoaded(self:UI):boolean Whether this component's document is loaded in Play.`
-
-```lua
-local gui = self:getComponent(UI)
-if gui and gui:isLoaded() then debug.log("UI ready") end
-```
-
-### UI.setText
-
-`setText(self:UI,id:string,plainText:string):boolean Set escaped plain text in this UI document.`
-
-```lua
-local gui = self:getComponent(UI)
-if gui then gui:setText("health", "100 / 100") end
-```
-
-### UI.onClick
-
-`onClick(self:UI,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart.`
-
-```lua
-function onStart()
-    local gui = self:getComponent(UI)
-    if gui then gui:onClick("collect", function() gui:setText("status", "Collected!") end) end
-end
-```
-
-## GUI
-
-### GUI.image
-
-`image(path:string,width?:number,height?:number):boolean Full-resolution project image; returns loaded.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.image("icon.png", 64, 64)
-        GUI.endWindow()
-end
-```
-
-### GUI.imageButton
-
-`imageButton(id:string,path:string,width?:number,height?:number):boolean Returns clicked.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.imageButton("icon", "icon.png", 64, 64)
-        GUI.endWindow()
-end
-```
-
-### GUI.beginTable
-
-`beginTable(id:string,columns:integer,flags?:integer,height?:number):boolean 1..64 columns; only end when true. ScrollY needs height.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
-        GUI.tableSetupColumn("Name")
-        GUI.tableSetupColumn("Value")
-        GUI.tableHeadersRow()
-        GUI.tableNextRow()
-        GUI.tableSetColumnIndex(0)
-        GUI.text("Health")
-        GUI.tableNextColumn()
-        GUI.text("100")
-        GUI.endTable()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.endTable
-
-`endTable() Table scope operation; set up columns before rows.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
-        GUI.tableSetupColumn("Name")
-        GUI.tableSetupColumn("Value")
-        GUI.tableHeadersRow()
-        GUI.tableNextRow()
-        GUI.tableSetColumnIndex(0)
-        GUI.text("Health")
-        GUI.tableNextColumn()
-        GUI.text("100")
-        GUI.endTable()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.tableNextRow
-
-`tableNextRow() Table scope operation; set up columns before rows.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
-        GUI.tableSetupColumn("Name")
-        GUI.tableSetupColumn("Value")
-        GUI.tableHeadersRow()
-        GUI.tableNextRow()
-        GUI.tableSetColumnIndex(0)
-        GUI.text("Health")
-        GUI.tableNextColumn()
-        GUI.text("100")
-        GUI.endTable()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.tableHeadersRow
-
-`tableHeadersRow() Table scope operation; set up columns before rows.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
-        GUI.tableSetupColumn("Name")
-        GUI.tableSetupColumn("Value")
-        GUI.tableHeadersRow()
-        GUI.tableNextRow()
-        GUI.tableSetColumnIndex(0)
-        GUI.text("Health")
-        GUI.tableNextColumn()
-        GUI.text("100")
-        GUI.endTable()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.tableNextColumn
-
-`tableNextColumn():boolean Advance to next column.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
-        GUI.tableSetupColumn("Name")
-        GUI.tableSetupColumn("Value")
-        GUI.tableHeadersRow()
-        GUI.tableNextRow()
-        GUI.tableSetColumnIndex(0)
-        GUI.text("Health")
-        GUI.tableNextColumn()
-        GUI.text("100")
-        GUI.endTable()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.tableSetColumnIndex
-
-`tableSetColumnIndex(index:integer):boolean Zero-based table column index.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
-        GUI.tableSetupColumn("Name")
-        GUI.tableSetupColumn("Value")
-        GUI.tableHeadersRow()
-        GUI.tableNextRow()
-        GUI.tableSetColumnIndex(0)
-        GUI.text("Health")
-        GUI.tableNextColumn()
-        GUI.text("100")
-        GUI.endTable()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.tableSetupColumn
-
-`tableSetupColumn(label:string,width?:number) Fixed width when positive, otherwise stretch.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
-        GUI.tableSetupColumn("Name")
-        GUI.tableSetupColumn("Value")
-        GUI.tableHeadersRow()
-        GUI.tableNextRow()
-        GUI.tableSetColumnIndex(0)
-        GUI.text("Health")
-        GUI.tableNextColumn()
-        GUI.text("100")
-        GUI.endTable()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.tableGetColumnIndex
-
-`tableGetColumnIndex():integer Current zero-based index or column count.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
-        GUI.tableSetupColumn("Name")
-        GUI.tableSetupColumn("Value")
-        GUI.tableHeadersRow()
-        GUI.tableNextRow()
-        GUI.tableSetColumnIndex(0)
-        GUI.text("Health")
-        GUI.tableNextColumn()
-        GUI.text("100")
-        GUI.endTable()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.tableGetColumnCount
-
-`tableGetColumnCount():integer Current zero-based index or column count.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then
-        GUI.tableSetupColumn("Name")
-        GUI.tableSetupColumn("Value")
-        GUI.tableHeadersRow()
-        GUI.tableNextRow()
-        GUI.tableSetColumnIndex(0)
-        GUI.text("Health")
-        GUI.tableNextColumn()
-        GUI.text("100")
-        GUI.endTable()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.beginMenu
-
-`beginMenu(label:string,enabled?:boolean):boolean Only end when true.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginMenu("Actions") then
-        if GUI.menuItem("Save") then debug.log("Save") end
-        GUI.endMenu()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.endMenu
-
-`endMenu() End successful beginMenu.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginMenu("Actions") then
-        if GUI.menuItem("Save") then debug.log("Save") end
-        GUI.endMenu()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.beginMenuBar
-
-`beginMenuBar():boolean Requires GUI.WindowFlags.MenuBar on beginWindow. Only end when true.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginMenuBar() then
-        if GUI.beginMenu("Actions") then
-        if GUI.menuItem("Save") then debug.log("Save") end
-        GUI.endMenu()
-        end
-        GUI.endMenuBar()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.endMenuBar
-
-`endMenuBar() End successful beginMenuBar.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginMenuBar() then GUI.endMenuBar() end
-        GUI.endWindow()
-end
-```
-
-### GUI.menuItem
-
-`menuItem(label:string,selected?:boolean,enabled?:boolean):boolean Returns clicked.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginMenu("Actions") then
-        if GUI.menuItem("Save") then debug.log("Save") end
-        GUI.endMenu()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.openPopup
-
-`openPopup(id:string) Open a named popup.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.button("Open") then GUI.openPopup("Info") end
-        if GUI.beginPopup("Info") then
-        GUI.text("Information")
-        if GUI.button("Close") then GUI.closeCurrentPopup() end
-        GUI.endPopup()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.beginPopup
-
-`beginPopup(id:string):boolean Only endPopup when true.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.button("Open") then GUI.openPopup("Info") end
-        if GUI.beginPopup("Info") then
-        GUI.text("Information")
-        if GUI.button("Close") then GUI.closeCurrentPopup() end
-        GUI.endPopup()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.beginPopupModal
-
-`beginPopupModal(id:string):boolean Only endPopup when true.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.button("Open") then GUI.openPopup("Info") end
-        if GUI.beginPopup("Info") then
-        GUI.text("Information")
-        if GUI.button("Close") then GUI.closeCurrentPopup() end
-        GUI.endPopup()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.endPopup
-
-`endPopup() Popup scope operation.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.button("Open") then GUI.openPopup("Info") end
-        if GUI.beginPopup("Info") then
-        GUI.text("Information")
-        if GUI.button("Close") then GUI.closeCurrentPopup() end
-        GUI.endPopup()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.closeCurrentPopup
-
-`closeCurrentPopup() Popup scope operation.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.button("Open") then GUI.openPopup("Info") end
-        if GUI.beginPopup("Info") then
-        GUI.text("Information")
-        if GUI.button("Close") then GUI.closeCurrentPopup() end
-        GUI.endPopup()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.beginCombo
-
-`beginCombo(label:string,preview:string):boolean Only endCombo when true.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginCombo("Choice", "First") then
-        GUI.selectable("First")
-        GUI.endCombo()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.endCombo
-
-`endCombo() End successful beginCombo.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.beginCombo("Choice", "First") then
-        GUI.selectable("First")
-        GUI.endCombo()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.combo
-
-`combo(label:string,index:integer,items:table):integer,boolean 1-based selected index and changed; 1..256 items.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        local index, changed = GUI.combo("Choice", 1, {"First", "Second"})
-        GUI.endWindow()
-end
-```
-
-### GUI.radioButton
-
-`radioButton(label:string,selected:boolean):boolean Returns clicked.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.radioButton("First", true) then debug.log("First") end
-        GUI.endWindow()
-end
-```
-
-### GUI.pushStyleColor
-
-`pushStyleColor(name:string|integer,r:number,g:number,b:number,a?:number) Use GUI.Col constants; pair with popStyleColor.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.pushStyleColor(GUI.Col.Text, 1, 0.8, 0.2, 1)
-        GUI.text("Gold")
-        GUI.popStyleColor()
-        GUI.endWindow()
-end
-```
-
-### GUI.popStyleColor
-
-`popStyleColor(count?:integer) Strict reverse-order scoped pop; default 1.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.pushStyleVar(GUI.StyleVar.Alpha, 0.8)
-        GUI.text("Styled")
-        GUI.popStyleVar()
-        GUI.endWindow()
-end
-```
-
-### GUI.popStyleVar
-
-`popStyleVar(count?:integer) Strict reverse-order scoped pop; default 1.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.pushStyleVar(GUI.StyleVar.Alpha, 0.8)
-        GUI.text("Styled")
-        GUI.popStyleVar()
-        GUI.endWindow()
-end
-```
-
-### GUI.pushStyleVar
-
-`pushStyleVar(name:string|integer,x:number,y?:number) Use GUI.StyleVar constants. Values 0..1000.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.pushStyleVar(GUI.StyleVar.WindowPadding, 12, 12)
-        GUI.text("Padded")
-        GUI.popStyleVar()
-        GUI.endWindow()
-end
-```
-
-### GUI.pushFontSize
-
-`pushFontSize(size:number) 8..96 pixels; pair with popFont.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.pushFontSize(24)
-        GUI.text("Large")
-        GUI.popFont()
-        GUI.endWindow()
-end
-```
-
-### GUI.popFont
-
-`popFont() End font size scope.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.pushFontSize(24)
-        GUI.text("Large")
-        GUI.popFont()
-        GUI.endWindow()
-end
-```
-
-### GUI.beginDragDropSource
-
-`beginDragDropSource():boolean Only end when true. Script payloads isolated from editor payloads.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.button("Drag")
-        if GUI.beginDragDropSource() then
-        GUI.setDragDropPayload("item", "sword")
-        GUI.text("Sword")
-        GUI.endDragDropSource()
-        end
-        GUI.button("Drop")
-        if GUI.beginDragDropTarget() then
-        local value = GUI.acceptDragDropPayload("item")
-        if value then debug.log(value) end
-        GUI.endDragDropTarget()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.beginDragDropTarget
-
-`beginDragDropTarget():boolean Only end when true. Script payloads isolated from editor payloads.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.button("Drag")
-        if GUI.beginDragDropSource() then
-        GUI.setDragDropPayload("item", "sword")
-        GUI.text("Sword")
-        GUI.endDragDropSource()
-        end
-        GUI.button("Drop")
-        if GUI.beginDragDropTarget() then
-        local value = GUI.acceptDragDropPayload("item")
-        if value then debug.log(value) end
-        GUI.endDragDropTarget()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.endDragDropSource
-
-`endDragDropSource() End successful drag/drop scope.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.button("Drag")
-        if GUI.beginDragDropSource() then
-        GUI.setDragDropPayload("item", "sword")
-        GUI.text("Sword")
-        GUI.endDragDropSource()
-        end
-        GUI.button("Drop")
-        if GUI.beginDragDropTarget() then
-        local value = GUI.acceptDragDropPayload("item")
-        if value then debug.log(value) end
-        GUI.endDragDropTarget()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.endDragDropTarget
-
-`endDragDropTarget() End successful drag/drop scope.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.button("Drag")
-        if GUI.beginDragDropSource() then
-        GUI.setDragDropPayload("item", "sword")
-        GUI.text("Sword")
-        GUI.endDragDropSource()
-        end
-        GUI.button("Drop")
-        if GUI.beginDragDropTarget() then
-        local value = GUI.acceptDragDropPayload("item")
-        if value then debug.log(value) end
-        GUI.endDragDropTarget()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.setDragDropPayload
-
-`setDragDropPayload(kind:string,value:string) Source only. Type max 28 bytes; value max 4096.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.button("Drag")
-        if GUI.beginDragDropSource() then
-        GUI.setDragDropPayload("item", "sword")
-        GUI.text("Sword")
-        GUI.endDragDropSource()
-        end
-        GUI.button("Drop")
-        if GUI.beginDragDropTarget() then
-        local value = GUI.acceptDragDropPayload("item")
-        if value then debug.log(value) end
-        GUI.endDragDropTarget()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.acceptDragDropPayload
-
-`acceptDragDropPayload(kind:string):string? Target only. Returns delivered matching script payload or nil.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.button("Drag")
-        if GUI.beginDragDropSource() then
-        GUI.setDragDropPayload("item", "sword")
-        GUI.text("Sword")
-        GUI.endDragDropSource()
-        end
-        GUI.button("Drop")
-        if GUI.beginDragDropTarget() then
-        local value = GUI.acceptDragDropPayload("item")
-        if value then debug.log(value) end
-        GUI.endDragDropTarget()
-        end
-        GUI.endWindow()
-end
-```
-
-### GUI.getMousePos
-
-`getMousePos():number,number Returns Game-surface mouse x,y.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        local x, y = GUI.getMousePos()
-        GUI.text(tostring(x))
-        GUI.endWindow()
-end
-```
-
-### GUI.isMouseDown
-
-`isMouseDown(button:integer):boolean Mouse button 0..4.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.isMouseClicked(0) then debug.log("Click") end
-        GUI.endWindow()
-end
-```
-
-### GUI.isMouseClicked
-
-`isMouseClicked(button:integer):boolean Mouse button 0..4.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.isMouseClicked(0) then debug.log("Click") end
-        GUI.endWindow()
-end
-```
-
-### GUI.isMouseReleased
-
-`isMouseReleased(button:integer):boolean Mouse button 0..4.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.isMouseClicked(0) then debug.log("Click") end
-        GUI.endWindow()
-end
-```
-
-### GUI.isKeyDown
-
-`isKeyDown(key:string):boolean Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows.`
-
-- `isKeyDown(keyNameOrScancode) -> boolean`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.isKeyDown("Space") then GUI.text("Space") end
-        GUI.endWindow()
-end
-```
-
-### GUI.isKeyReleased
-
-`isKeyReleased(key:string):boolean Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows.`
-
-- `isKeyReleased(keyNameOrScancode) -> boolean`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.isKeyDown("Space") then GUI.text("Space") end
-        GUI.endWindow()
-end
-```
-
-### GUI.isKeyPressed
-
-`isKeyPressed(key:string,repeatKey?:boolean):boolean Named key, optional repeat.`
-
-- `isKeyPressed(keyNameOrScancode) -> boolean`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.isKeyPressed("Space") then debug.log("Space") end
-        GUI.endWindow()
-end
-```
-
-### GUI.drawLine
-
-`drawLine(x:number,y:number,x2:number,y2:number,r:number,g:number,b:number,a?:number,width?:number) Screen-pixel coordinates; colors 0..1.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.drawLine(20, 20, 100, 100, 1, 1, 1, 1, 2)
-        GUI.endWindow()
-end
-```
-
-### GUI.drawRect
-
-`drawRect(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) Screen-pixel coordinates; colors 0..1.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.drawRect(20, 20, 100, 60, 1, 1, 1, 1)
-        GUI.endWindow()
-end
-```
-
-### GUI.drawRectFilled
-
-`drawRectFilled(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) Screen-pixel coordinates; colors 0..1.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.drawRect(20, 20, 100, 60, 1, 1, 1, 1)
-        GUI.endWindow()
-end
-```
-
-### GUI.drawCircle
-
-`drawCircle(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) Screen-pixel coordinates; radius 0..100000.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.drawCircle(80, 80, 30, 1, 0, 0, 1)
-        GUI.endWindow()
-end
-```
-
-### GUI.drawCircleFilled
-
-`drawCircleFilled(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) Screen-pixel coordinates; radius 0..100000.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.drawCircle(80, 80, 30, 1, 0, 0, 1)
-        GUI.endWindow()
-end
-```
-
-### GUI.drawText
-
-`drawText(x:number,y:number,value:string,r:number,g:number,b:number,a?:number) Screen-pixel coordinates.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.drawText(20, 20, "Hello", 1, 1, 1, 1)
-        GUI.endWindow()
-end
-```
-
-### GUI.drawTriangleFilled
-
-`drawTriangleFilled(x:number,y:number,x2:number,y2:number,x3:number,y3:number,r:number,g:number,b:number,a?:number) Screen-pixel coordinates.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.drawTriangleFilled(20, 20, 60, 80, 100, 20, 1, 0, 0, 1)
-        GUI.endWindow()
-end
-```
-
-### GUI.beginWindow
-
-`beginWindow(title:string,flags?:integer):boolean Always call endWindow even when false.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.text("Window contents")
-        GUI.endWindow()
-end
-```
-
-### GUI.endWindow
-
-`endWindow() End the current window.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.text("Window contents")
-        GUI.endWindow()
-end
-```
-
-### GUI.text
-
-`text(value:string) Plain text, never a printf format.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.text("Hello, player!")
-        GUI.endWindow()
-end
-```
-
-### GUI.textWrapped
-
-`textWrapped(value:string) Wrapped plain text.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.textWrapped("A longer message for the player.")
-        GUI.endWindow()
-end
-```
-
-### GUI.button
-
-`button(label:string):boolean True on activation.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.button("Collect") then debug.log("Collected") end
-        GUI.endWindow()
-end
-```
-
-### GUI.smallButton
-
-`smallButton(label:string):boolean Compact button.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.smallButton("Reset") then debug.log("Reset") end
-        GUI.endWindow()
-end
-```
-
-### GUI.checkbox
-
-`checkbox(label:string,value:boolean):boolean,boolean Returns new value, changed.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        enabled, changed = GUI.checkbox("Enabled", enabled)
-        GUI.endWindow()
-end
-```
-
-### GUI.sliderFloat
-
-`sliderFloat(label:string,value:number,min:number,max:number):number,boolean Returns value, changed.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        volume, changed = GUI.sliderFloat("Volume", volume, 0, 1)
-        GUI.endWindow()
-end
-```
-
-### GUI.sliderInt
-
-`sliderInt(label:string,value:integer,min:integer,max:integer):integer,boolean Returns value, changed.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        count, changed = GUI.sliderInt("Count", count, 0, 10)
-        GUI.endWindow()
-end
-```
-
-### GUI.dragFloat
-
-`dragFloat(label:string,value:number,speed?:number):number,boolean Returns value, changed; speed defaults 0.1.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        volume, changed = GUI.dragFloat("Value", volume, 0.1)
-        GUI.endWindow()
-end
-```
-
-### GUI.inputFloat
-
-`inputFloat(label:string,value:number):number,boolean Returns value, changed.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        volume, changed = GUI.inputFloat("Value", volume)
-        GUI.endWindow()
-end
-```
-
-### GUI.inputInt
-
-`inputInt(label:string,value:integer):integer,boolean Returns value, changed.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        count, changed = GUI.inputInt("Count", count)
-        GUI.endWindow()
-end
-```
-
-### GUI.inputText
-
-`inputText(label:string,value:string):string,boolean Returns text, changed; max 4095 bytes.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        name, changed = GUI.inputText("Name", name)
-        GUI.endWindow()
-end
-```
-
-### GUI.colorEdit3
-
-`colorEdit3(label:string,r:number,g:number,b:number):number,number,number,boolean Returns r,g,b,changed.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        r, g, b, changed = GUI.colorEdit3("Color", r, g, b)
-        GUI.endWindow()
-end
-```
-
-### GUI.colorEdit4
-
-`colorEdit4(label:string,r:number,g:number,b:number,a:number):number,number,number,number,boolean Returns r,g,b,a,changed.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        r, g, b, a, changed = GUI.colorEdit4("Color", r, g, b, a)
-        GUI.endWindow()
-end
-```
-
-### GUI.separator
-
-`separator() Horizontal separator.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.separator()
-        GUI.endWindow()
-end
-```
-
-### GUI.sameLine
-
-`sameLine(offset?:number,spacing?:number) Continue on the same line.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.text("Label"); GUI.sameLine(); GUI.button("Action")
-        GUI.endWindow()
-end
-```
-
-### GUI.spacing
-
-`spacing() Add vertical space.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.spacing()
-        GUI.endWindow()
-end
-```
-
-### GUI.newLine
-
-`newLine() Start a line.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.newLine()
-        GUI.endWindow()
-end
-```
-
-### GUI.progressBar
-
-`progressBar(fraction:number) Clamps fraction to 0..1.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.progressBar(0.75)
-        GUI.endWindow()
-end
-```
-
-### GUI.selectable
-
-`selectable(label:string,selected?:boolean):boolean True when clicked.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.selectable("Item", false) then debug.log("Selected") end
-        GUI.endWindow()
-end
-```
-
-### GUI.collapsingHeader
-
-`collapsingHeader(label:string):boolean True while expanded; no matching end.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        if GUI.collapsingHeader("Details") then GUI.text("More information") end
-        GUI.endWindow()
-end
-```
-
-### GUI.beginChild
-
-`beginChild(id:string,width?:number,height?:number):boolean Always pair with endChild.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.beginChild("Content", 200, 100)
-        GUI.text("Child contents")
-        GUI.endChild()
-        GUI.endWindow()
-end
-```
-
-### GUI.endChild
-
-`endChild() End child region.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.beginChild("Content", 200, 100)
-        GUI.text("Child contents")
-        GUI.endChild()
-        GUI.endWindow()
-end
-```
-
-### GUI.beginGroup
-
-`beginGroup() Begin a layout group.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.beginGroup()
-        GUI.text("Group")
-        GUI.endGroup()
-        GUI.endWindow()
-end
-```
-
-### GUI.endGroup
-
-`endGroup() End a layout group.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.beginGroup()
-        GUI.text("Group")
-        GUI.endGroup()
-        GUI.endWindow()
-end
-```
-
-### GUI.beginDisabled
-
-`beginDisabled(disabled?:boolean) Default true; pair with endDisabled.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.beginDisabled(true)
-        GUI.button("Unavailable")
-        GUI.endDisabled()
-        GUI.endWindow()
-end
-```
-
-### GUI.endDisabled
-
-`endDisabled() End disabled scope.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.beginDisabled(true)
-        GUI.button("Unavailable")
-        GUI.endDisabled()
-        GUI.endWindow()
-end
-```
-
-### GUI.pushID
-
-`pushID(id:string) Scope repeated widget labels; pair with popID.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.pushID("item-1")
-        GUI.button("Use")
-        GUI.popID()
-        GUI.endWindow()
-end
-```
-
-### GUI.popID
-
-`popID() Pop a widget ID.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.pushID("item-1")
-        GUI.button("Use")
-        GUI.popID()
-        GUI.endWindow()
-end
-```
-
-### GUI.setNextWindowPos
-
-`setNextWindowPos(x:number,y:number) Game-surface pixels; call before beginWindow.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.setNextWindowPos(20, 20)
-        GUI.beginWindow("HUD")
-        GUI.text("Positioned window")
-        GUI.endWindow()
-end
-```
-
-### GUI.setNextWindowSize
-
-`setNextWindowSize(width:number,height:number) Game-surface pixels; call before beginWindow.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.setNextWindowSize(300, 200)
-        GUI.beginWindow("HUD")
-        GUI.text("Sized window")
-        GUI.endWindow()
-end
-```
-
-### GUI.setCursorPos
-
-`setCursorPos(x:number,y:number) Window-local content position.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.setCursorPos(20, 60)
-        GUI.text("Positioned text")
-        GUI.endWindow()
-end
-```
-
-### GUI.getWindowSize
-
-`getWindowSize():number,number Returns width,height.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        local w, h = GUI.getWindowSize()
-        GUI.text(tostring(w) .. " x " .. tostring(h))
-        GUI.endWindow()
-end
-```
-
-### GUI.getContentRegionAvail
-
-`getContentRegionAvail():number,number Returns available width,height.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        local w, h = GUI.getContentRegionAvail()
-        GUI.text(tostring(w) .. " available")
-        GUI.endWindow()
-end
-```
-
-### GUI.setNextItemWidth
-
-`setNextItemWidth(width:number) Width of next input.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.setNextItemWidth(180)
-        name = GUI.inputText("Name", name)
-        GUI.endWindow()
-end
-```
-
-### GUI.isItemHovered
-
-`isItemHovered():boolean Whether last widget is hovered.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.button("Help")
-        if GUI.isItemHovered() then GUI.setTooltip("A helpful hint") end
-        GUI.endWindow()
-end
-```
-
-### GUI.isItemActive
-
-`isItemActive():boolean Whether last widget is active.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.button("Hold")
-        if GUI.isItemActive() then debug.log("Active") end
-        GUI.endWindow()
-end
-```
-
-### GUI.setTooltip
-
-`setTooltip(value:string) Plain-text tooltip.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.button("Help")
-        if GUI.isItemHovered() then GUI.setTooltip("A helpful hint") end
-        GUI.endWindow()
-end
-```
-
-### GUI.bulletText
-
-`bulletText(value:string) Bulleted plain text.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        GUI.bulletText("Objective: find supplies")
-        GUI.endWindow()
-end
-```
-
-### GUI.getDisplaySize
-
-`getDisplaySize():number,number Returns Game-surface pixel width,height.`
-
-```lua
-local enabled, changed = true, false
-local volume, count, name = 0.5, 1, "Player"
-local r, g, b, a = 1, 1, 1, 1
-function onGUI()
-        GUI.beginWindow("HUD")
-        local w, h = GUI.getDisplaySize()
-        GUI.text(tostring(w) .. " x " .. tostring(h))
-        GUI.endWindow()
-end
 ```
 
 ## ScreenAPI
@@ -4980,102 +3400,100 @@ Game.openURL("https://example.com")
 Game.quit()
 ```
 
-## SavingAPI
-
-### SavingAPI.saveString
+### GameAPI.saveString
 
 `saveString(key:string,value:string):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveString("example", "Player")
+local result, err = Game.saveString("example", "Player")
 ```
 
-### SavingAPI.loadString
+### GameAPI.loadString
 
 `loadString(key:string,default?:string):string|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadString("example", "Player")
+local result, err = Game.loadString("example", "Player")
 ```
 
-### SavingAPI.saveInt
+### GameAPI.saveInt
 
 `saveInt(key:string,value:integer):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveInt("example", 10)
+local result, err = Game.saveInt("example", 10)
 ```
 
-### SavingAPI.loadInt
+### GameAPI.loadInt
 
 `loadInt(key:string,default?:integer):integer|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadInt("example", 10)
+local result, err = Game.loadInt("example", 10)
 ```
 
-### SavingAPI.saveFloat
+### GameAPI.saveFloat
 
 `saveFloat(key:string,value:number):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveFloat("example", 0.5)
+local result, err = Game.saveFloat("example", 0.5)
 ```
 
-### SavingAPI.loadFloat
+### GameAPI.loadFloat
 
 `loadFloat(key:string,default?:number):number|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadFloat("example", 0.5)
+local result, err = Game.loadFloat("example", 0.5)
 ```
 
-### SavingAPI.saveBool
+### GameAPI.saveBool
 
 `saveBool(key:string,value:boolean):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveBool("example", true)
+local result, err = Game.saveBool("example", true)
 ```
 
-### SavingAPI.loadBool
+### GameAPI.loadBool
 
 `loadBool(key:string,default?:boolean):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadBool("example", true)
+local result, err = Game.loadBool("example", true)
 ```
 
-### SavingAPI.saveTable
+### GameAPI.saveTable
 
 `saveTable(key:string,value:table):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveTable("example", {score = 10})
+local result, err = Game.saveTable("example", {score = 10})
 ```
 
-### SavingAPI.loadTable
+### GameAPI.loadTable
 
 `loadTable(key:string,default?:table):table|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadTable("example", {score = 10})
+local result, err = Game.loadTable("example", {score = 10})
 ```
 
-### SavingAPI.saveVector3
+### GameAPI.saveVector3
 
 `saveVector3(key:string,value:Vec3):boolean|nil,error?:string`
 
 ```lua
-local result, err = Saving.saveVector3("example", {x = 1, y = 2, z = 3})
+local result, err = Game.saveVector3("example", {x = 1, y = 2, z = 3})
 ```
 
-### SavingAPI.loadVector3
+### GameAPI.loadVector3
 
 `loadVector3(key:string,default?:Vec3):Vec3|nil,error?:string`
 
 ```lua
-local result, err = Saving.loadVector3("example", {x = 1, y = 2, z = 3})
+local result, err = Game.loadVector3("example", {x = 1, y = 2, z = 3})
 ```
 
 ## FileAPI
@@ -5158,6 +3576,224 @@ File.rename("notes.txt", "old-notes.txt")
 File.remove("old-notes.txt")
 ```
 
+## RandomAPI
+
+### RandomAPI.randomFloat
+
+`randomFloat(min:number,max:number):number Finite bounds, min <= max; uniform floating sample.`
+
+- `randomFloat(min:number,max:number):number - Uniform finite floating sample; min <= max.`
+
+```lua
+local value = Random.randomFloat(0, 1)
+```
+
+### RandomAPI.randomInt
+
+`randomInt(min:integer,max:integer):integer Inclusive uniform bounds.`
+
+- `randomInt(min:integer,max:integer):integer - Inclusive uniform integer sample.`
+
+```lua
+local value = Random.randomInt(1, 6)
+```
+
+### RandomAPI.randomBool
+
+`randomBool():boolean Equally likely true/false.`
+
+- `randomBool():boolean - Equally likely true or false.`
+
+```lua
+local value = Random.randomBool()
+```
+
+### RandomAPI.randomString
+
+`randomString(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic.`
+
+- `randomString(length:integer):string - 0..4096 alphanumeric characters, not cryptographic.`
+
+```lua
+local value = Random.randomString(12)
+```
+
+## Recoil
+
+### Recoil.trigger
+
+`trigger(self:Recoil,strength?:number) One impulse; multiplier 0..10, default 1.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:trigger(1) end
+```
+
+### Recoil.start
+
+`start(self:Recoil) Start/restart timed burst after delay.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:start() end
+```
+
+### Recoil.stop
+
+`stop(self:Recoil) Stop future impulses; let the spring recover.`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:stop() end
+```
+
+### Recoil.reset
+
+`reset(self:Recoil) Stop and zero offsets immediately.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:reset() end
+```
+
+### Recoil.playSequence
+
+`playSequence(self:Recoil) Start the authored sequence after delay.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:playSequence() end
+```
+
+### Recoil.setSequence
+
+`setSequence(self:Recoil,keys:RecoilKey[]) Replace sorted keys; stops firing.`
+
+```lua
+local recoil = self:getComponent(Recoil)
+if recoil then recoil:setSequence({{time=0,strength=1},{time=0.1,strength=0.8}}) end
+```
+
+## Animator
+
+### Animator.setBool
+
+`setBool(self:Animator, name:string, value:boolean) Set a declared Bool parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:setBool("Grounded", true)
+```
+
+### Animator.setInt
+
+`setInt(self:Animator, name:string, value:integer) Set a declared Int parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:setInt("Mode", 1)
+```
+
+### Animator.setFloat
+
+`setFloat(self:Animator, name:string, value:number) Set a declared Float parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:setFloat("Speed", 2.5)
+```
+
+### Animator.getBool
+
+`getBool(self:Animator, name:string):boolean Read a declared Bool parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:getBool("Grounded")
+```
+
+### Animator.getInt
+
+`getInt(self:Animator, name:string):integer Read a declared Int parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:getInt("Mode")
+```
+
+### Animator.getFloat
+
+`getFloat(self:Animator, name:string):number Read a declared Float parameter`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:getFloat("Speed")
+```
+
+### Animator.play
+
+`play(self:Animator, state:string) Enter/restart a state with no fade`
+
+- `audio:play() - restart assigned clip`
+
+```lua
+local animator = self:getComponent(Animator)
+animator:play("Idle")
+```
+
+### Animator.crossFade
+
+`crossFade(self:Animator, state:string, seconds?:number) Enter/restart a state with a fade; default 0.2 seconds`
+
+```lua
+local animator = self:getComponent(Animator)
+animator:crossFade("Idle", 0.2)
+```
+
+### Animator.stop
+
+`stop(self:Animator) Stop state evaluation and rewind backend to its first pose`
+
+- `audio:stop() - stop and rewind`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:stop()
+```
+
+### Animator.pause
+
+`pause(self:Animator) Pause state evaluation and playback`
+
+- `audio:pause()`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:pause()
+```
+
+### Animator.resume
+
+`resume(self:Animator) Resume a paused state machine`
+
+- `audio:resume()`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:resume()
+```
+
+### Animator.hasState
+
+`hasState(self:Animator, state:string):boolean Test a controller state name or ID`
+
+```lua
+local component = self:getComponent(Animator) or self:addComponent(Animator)
+component:hasState("Idle")
+```
+
 ## Component fields and type tokens
 
 Component type names such as `Transform`, `Skybox`, `PointLight` and `AudioSource`
@@ -5229,6 +3865,7 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
+| `castShadow` | `boolean Cast realtime/baked shadows; default true. Rebake static lighting after changes.` |
 | `material` | `string Project-relative .mat asset path; empty uses inline Diffuse` |
 | `mesh` | `'Cube' / 'Sphere' / 'Capsule' / 'Cone' / 'Plane'` |
 | `color` | `Vec3` |
@@ -5334,7 +3971,6 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
-| `hdrCompression` | `boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged` |
 | `type` | `integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama` |
 | `enabled` | `boolean` |
 | `color` | `Vector3 Color tint` |
@@ -5431,6 +4067,12 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 
 | Field | Type / meaning |
 | --- | --- |
+| `onFinished` | `ComponentEvent Natural nonloop completion, not Stop.` |
+| `onRestarted` | `ComponentEvent Explicit restart or loop wrap.` |
+| `onStopped` | `ComponentEvent Stop or Reset while active.` |
+| `onStarted` | `ComponentEvent Playback starts after the clip is ready.` |
+| `onPaused` | `ComponentEvent Playback paused.` |
+| `onResumed` | `ComponentEvent Playback resumed.` |
 | `gameObject` | `GameObject` |
 | `clip` | `string` |
 | `loop` | `boolean` |
@@ -5689,12 +4331,14 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | --- | --- |
 | `enabled` | `boolean` |
 | `speed` | `number Movement speed, 0..100 metres/second` |
+| `heightOffset` | `number World-space pivot height above the navmesh, -1000..1000; default 0` |
 | `stoppingDistance` | `number 0.01..10 metres` |
 | `stopped` | `boolean Pause movement without clearing the route` |
 | `destination` | `Vec3 Assign a complete world-space destination, or call setDestination` |
 | `velocity` | `Vec3 Read-only actual last-frame velocity` |
 | `hasPath` | `boolean Read-only; true while following a complete reachable path` |
 | `pathPending` | `boolean Read-only; destination request awaits the next Play update` |
+| `distance` | `number Read-only straight-line 3D distance from the agent position to its destination, in world units; zero if no destination or Transform.` |
 | `remainingDistance` | `number Read-only remaining path distance` |
 | `status` | `string Read-only navigation status` |
 | `updateRotation` | `boolean Automatically face the navigation path; default true` |
@@ -5707,151 +4351,6 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `enabled` | `boolean` |
 | `size` | `Vec3 Local box dimensions, positive; assign a whole vector` |
 | `center` | `Vec3 Local box center; assign a whole vector` |
-
-### UI fields
-
-| Field | Type / meaning |
-| --- | --- |
-| `enabled` | `boolean Show this UI when its owner is active; defaults to true.` |
-| `rml` | `string Project-relative .rml asset; both rml and rcss must be assigned.` |
-| `rcss` | `string Project-relative .rcss asset; applied to this document.` |
-
-### GUI fields
-
-| Field | Type / meaning |
-| --- | --- |
-| `WindowFlags` | `GUIWindowFlags` |
-| `TableFlags` | `GUITableFlags` |
-| `Col` | `GUIColors` |
-| `StyleVar` | `GUIStyleVars` |
-
-### GUIWindowFlags fields
-
-| Field | Type / meaning |
-| --- | --- |
-| `NoTitleBar` | `integer` |
-| `NoResize` | `integer` |
-| `NoMove` | `integer` |
-| `NoScrollbar` | `integer` |
-| `NoCollapse` | `integer` |
-| `AlwaysAutoResize` | `integer` |
-| `NoBackground` | `integer` |
-| `MenuBar` | `integer` |
-| `NoInputs` | `integer` |
-| `NoNav` | `integer` |
-| `NoDecoration` | `integer` |
-| `NoFocusOnAppearing` | `integer` |
-| `NoBringToFrontOnFocus` | `integer` |
-
-### GUITableFlags fields
-
-| Field | Type / meaning |
-| --- | --- |
-| `Borders` | `integer` |
-| `RowBg` | `integer` |
-| `Resizable` | `integer` |
-| `Reorderable` | `integer` |
-| `Hideable` | `integer` |
-| `SizingStretchProp` | `integer` |
-| `ScrollY` | `integer` |
-
-### GUIStyleVars fields
-
-| Field | Type / meaning |
-| --- | --- |
-| `Alpha` | `integer` |
-| `DisabledAlpha` | `integer` |
-| `WindowPadding` | `integer` |
-| `WindowRounding` | `integer` |
-| `WindowBorderSize` | `integer` |
-| `WindowMinSize` | `integer` |
-| `WindowTitleAlign` | `integer` |
-| `ChildRounding` | `integer` |
-| `ChildBorderSize` | `integer` |
-| `PopupRounding` | `integer` |
-| `PopupBorderSize` | `integer` |
-| `FramePadding` | `integer` |
-| `FrameRounding` | `integer` |
-| `FrameBorderSize` | `integer` |
-| `ItemSpacing` | `integer` |
-| `ItemInnerSpacing` | `integer` |
-| `IndentSpacing` | `integer` |
-| `CellPadding` | `integer` |
-| `ScrollbarSize` | `integer` |
-| `ScrollbarRounding` | `integer` |
-| `GrabMinSize` | `integer` |
-| `GrabRounding` | `integer` |
-| `TabRounding` | `integer` |
-| `ButtonTextAlign` | `integer` |
-| `SelectableTextAlign` | `integer` |
-
-### GUIColors fields
-
-| Field | Type / meaning |
-| --- | --- |
-| `Text` | `integer` |
-| `TextDisabled` | `integer` |
-| `WindowBg` | `integer` |
-| `ChildBg` | `integer` |
-| `PopupBg` | `integer` |
-| `Border` | `integer` |
-| `BorderShadow` | `integer` |
-| `FrameBg` | `integer` |
-| `FrameBgHovered` | `integer` |
-| `FrameBgActive` | `integer` |
-| `TitleBg` | `integer` |
-| `TitleBgActive` | `integer` |
-| `TitleBgCollapsed` | `integer` |
-| `MenuBarBg` | `integer` |
-| `ScrollbarBg` | `integer` |
-| `ScrollbarGrab` | `integer` |
-| `ScrollbarGrabHovered` | `integer` |
-| `ScrollbarGrabActive` | `integer` |
-| `CheckMark` | `integer` |
-| `SliderGrab` | `integer` |
-| `SliderGrabActive` | `integer` |
-| `Button` | `integer` |
-| `ButtonHovered` | `integer` |
-| `ButtonActive` | `integer` |
-| `Header` | `integer` |
-| `HeaderHovered` | `integer` |
-| `HeaderActive` | `integer` |
-| `Separator` | `integer` |
-| `SeparatorHovered` | `integer` |
-| `SeparatorActive` | `integer` |
-| `ResizeGrip` | `integer` |
-| `ResizeGripHovered` | `integer` |
-| `ResizeGripActive` | `integer` |
-| `InputTextCursor` | `integer` |
-| `TabHovered` | `integer` |
-| `Tab` | `integer` |
-| `TabSelected` | `integer` |
-| `TabSelectedOverline` | `integer` |
-| `TabDimmed` | `integer` |
-| `TabDimmedSelected` | `integer` |
-| `TabDimmedSelectedOverline` | `integer` |
-| `DockingPreview` | `integer` |
-| `DockingEmptyBg` | `integer` |
-| `PlotLines` | `integer` |
-| `PlotLinesHovered` | `integer` |
-| `PlotHistogram` | `integer` |
-| `PlotHistogramHovered` | `integer` |
-| `TableHeaderBg` | `integer` |
-| `TableBorderStrong` | `integer` |
-| `TableBorderLight` | `integer` |
-| `TableRowBg` | `integer` |
-| `TableRowBgAlt` | `integer` |
-| `TextLink` | `integer` |
-| `TextSelectedBg` | `integer` |
-| `TreeLines` | `integer` |
-| `DragDropTarget` | `integer` |
-| `DragDropTargetBg` | `integer` |
-| `UnsavedMarker` | `integer` |
-| `NavCursor` | `integer` |
-| `NavWindowingHighlight` | `integer` |
-| `NavWindowingDimBg` | `integer` |
-| `ModalWindowDimBg` | `integer` |
-| `COUNT` | `integer` |
 
 ### Decal fields
 
@@ -5896,6 +4395,56 @@ are opaque tokens for get/add/remove operations, not callable loaders.
 | `engineVersion` | `string Read-only.` |
 | `blockGameKilling` | `boolean Holds normal graceful quit until cleared or the ten-second timeout.` |
 | `targetFrameRate` | `integer -1 uncapped, or 1..1000; VSync may cap further.` |
+
+### Recoil fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `enabled` | `boolean Render-only local camera recoil, independent of FPS/TPS Transform.` |
+| `playOnStart` | `boolean Start burst, or sequence if keys exist.` |
+| `sequenceLoop` | `boolean Repeat the scheduled sequence.` |
+| `burstCount` | `integer Zero repeats until stopped or duration expires.` |
+| `seed` | `integer Nonnegative pseudorandom seed.` |
+| `isFiring` | `boolean Read-only burst/sequence activity, not recovery state.` |
+| `pitch` | `number Degrees, -45..45. Positive lifts the view.` |
+| `yaw` | `number Degrees, -45..45.` |
+| `roll` | `number Degrees, -45..45.` |
+| `back` | `number Metres, -1..1; positive local Z kicks backward.` |
+| `up` | `number Metres, -1..1.` |
+| `side` | `number Metres, -1..1.` |
+| `rotationRandom` | `number Independent random angle amplitude, 0..45 degrees.` |
+| `positionRandom` | `number Fraction of absolute back displacement, 0..2.` |
+| `frequency` | `number Angular spring frequency, 0.1..40 Hz.` |
+| `damping` | `number Angular damping ratio, 0.1..3; one is critical damping.` |
+| `positionFrequency` | `number Position spring frequency, 0.1..40 Hz.` |
+| `positionDamping` | `number Position damping ratio, 0.1..3.` |
+| `maxAngle` | `number Combined angular displacement cap, 0..89 degrees.` |
+| `maxDistance` | `number Combined positional displacement cap, 0..2 metres.` |
+| `interval` | `number Timed shot spacing / sequence loop gap, 0.01..60 seconds.` |
+| `duration` | `number Burst duration after delay, 0..3600; zero unlimited.` |
+| `delay` | `number Start delay, 0..3600 seconds.` |
+| `strength` | `number Global impulse multiplier, 0..10.` |
+| `recovery` | `number Spring frequency multiplier, 0.1..4.` |
+
+### RecoilKey fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `time` | `number Seconds from sequence start, 0..3600; sorted ascending.` |
+| `strength` | `number Optional impulse multiplier, 0..10; default 1.` |
+
+### Animator fields
+
+| Field | Type / meaning |
+| --- | --- |
+| `controller` | `string Project-relative .controller file` |
+| `enabled` | `boolean Pause/resume the state machine and its backend` |
+| `playOnStart` | `boolean Enter the controller entry state automatically; default true` |
+| `currentState` | `string Read-only current state name` |
+| `stateTime` | `number Read-only elapsed playback seconds in the current state` |
+| `isPlaying` | `boolean Read-only; state machine is running, enabled and unpaused (it may hold a finished nonlooping state)` |
+| `paused` | `boolean Read-only paused flag` |
+| `error` | `string Read-only controller/playback diagnostic` |
 
 ## Skybox1 to Skybox2 transition
 
@@ -5948,6 +4497,3 @@ GameObject reference, `offset` is assigned as a complete vector and
 `Skybox.environmentIntensity` sets 0..5 intensity. Vehicle suspension uses
 independent spring/damper contacts. Anti-roll strength has been removed;
 `centerOfMassX/Y/Z` remain available without locking chassis pitch/roll.
-
-
-See [In-game UI](game-ui.md) for RML/RCSS setup and the `UI` component example.

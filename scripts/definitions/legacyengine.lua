@@ -7,26 +7,26 @@
 ---@class Quaternion: Vec3
 ---@field w number
 ---@class ComponentToken
----@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'|'UI'|'Decal'
+---@alias ComponentType ComponentToken|'Transform'|'RigidBody'|'Collider'|'BoxCollider'|'MeshRenderer'|'ObjectName'|'LuaScript'|'Camera'|'AudioSource'|'AudioListener'|'CharacterController'|'FPSCamera'|'Animation'|'Animator'|'ParticleSystem'|'Laser'|'SpotLight'|'LightShafts'|'CameraEffects'|'Fog'|'CloudSystem'|'River'|'Vehicle'|'Water'|'BoneAttachment'|'TPSCamera'|'NavMeshAgent'|'Decal'|'Recoil'
 ---Live named script proxy. Public globals accept scalar values/functions; see scripting guide.
 ---@class NamedScriptComponent
 ---@class GameObject
 ---@field getScript fun(name:string):NamedScriptComponent|nil
 ---@field name string
 ---@field parent GameObject|nil
----@field getComponent fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
----@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal
+---@field getComponent fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field getComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field getComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field findComponentInParent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field findComponentInChildren fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
+---@field addComponent fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal
 ---@field removeComponent fun(componentType:ComponentType)
 ---@field onAnimationFinish fun()|nil
 ---@field onAnimationStart fun()|nil
 ---@field onAnimationStopped fun()|nil
 ---@field onAnimationPause fun()|nil
 ---@field onAnimationResume fun()|nil
----@field onGUI fun()|nil Draw GUI once per rendered Game frame; no wait/task
+---@field onAnimationRestarted fun()|nil
 ---@field onStart fun()|nil
 ---@field onUpdate fun(deltaTime:number)|nil
 ---@field onFixedUpdate fun(deltaTime:number)|nil
@@ -63,6 +63,7 @@
 -- Texture exports are project-relative PNG/JPEG/BMP/TGA/HDR asset paths, not loaders.
 ---@alias Texture string
 ---@class MeshRenderer
+---@field castShadow boolean Cast realtime/baked shadows; default true. Rebake static lighting after changes.
 ---@field material string Project-relative .mat asset path; empty uses inline Diffuse
 ---@field setMaterial fun(self:MeshRenderer,path:string) Assign an asset, reset instance overrides
 ---@field setMaterialColor fun(self:MeshRenderer,r:number,g:number,b:number)
@@ -82,8 +83,6 @@
 ---@field value string
 
 function onStart() end
----Draw GUI only in this callback; called each rendered Game frame during Play.
-function onGUI() end
 ---@param deltaTime number Seconds since the previous frame (capped at 0.25).
 function onUpdate(deltaTime) end
 ---@param deltaTime number Fixed physics interval, 1/60 seconds.
@@ -101,7 +100,7 @@ function destroyGameObject(gameObject) end
 ---@overload fun(gameObject:GameObject,componentType:'Collider'|'BoxCollider'):Collider|nil
 ---@overload fun(gameObject:GameObject,componentType:'MeshRenderer'):MeshRenderer|nil
 ---@overload fun(gameObject:GameObject,componentType:'ObjectName'):ObjectName|nil
----@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|Decal|nil
+---@return Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil
 ---@overload fun(componentType:ComponentType):any
 function getComponent(gameObject,componentType) end
 ---@param gameObject GameObject
@@ -438,7 +437,6 @@ function isCursorVisible() end
 function isCursorLocked() end
 
 ---@class Skybox
----@field hdrCompression boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged
 ---@field type integer 0 cubemap asset (legacy inline faces supported), 1 HDR panorama
 ---@field enabled boolean
 ---@field color Vector3 Color tint
@@ -542,8 +540,8 @@ function task(block) end
 ---Suspend this lifecycle callback/task without blocking the engine. Not supported at top-level/onDestroy/custom event listeners.
 ---@param seconds number Finite seconds from 0 to 86400; zero resumes on next update
 function waitForSeconds(seconds) end
----Wait for playing-time seconds or the next AudioSource event; past events do not count.
----@param secondsOrEvent number|AudioEvent Finite 0..86400 seconds or a live audio event token
+---Wait for playing-time seconds or the next audio/animation event; past events do not count.
+---@param secondsOrEvent number|AudioEvent|ComponentEvent Finite 0..86400 seconds or a live audio/animation event token
 function wait(secondsOrEvent) end
 
 ---Instantiate a prefab asset or copy a GameObject subtree. Returns the new root.
@@ -705,6 +703,12 @@ function findComponentInParent(gameObject,componentType) end
 function findComponentInChildren(gameObject,componentType) end
 
 ---@class Animation
+---@field onFinished ComponentEvent Natural nonloop completion, not Stop.
+---@field onRestarted ComponentEvent Explicit restart or loop wrap.
+---@field onStopped ComponentEvent Stop or Reset while active.
+---@field onStarted ComponentEvent Playback starts after the clip is ready.
+---@field onPaused ComponentEvent Playback paused.
+---@field onResumed ComponentEvent Playback resumed.
 ---@field gameObject GameObject
 ---@field clip string
 ---@field loop boolean
@@ -714,6 +718,7 @@ function findComponentInChildren(gameObject,componentType) end
 ---@field time number Read-only seconds
 ---@field error string Read-only loading error
 ---@field play fun(self:Animation)
+---@field playClip fun(self:Animation,clip:string) Play an AnimationClip path value; loads asynchronously if needed.
 ---@field stop fun(self:Animation) Stops and rewinds to frame zero
 ---@field pause fun(self:Animation)
 ---@field resume fun(self:Animation)
@@ -976,12 +981,18 @@ TPSCamera = nil
 ---@class NavMeshAgent
 ---@field enabled boolean
 ---@field speed number Movement speed, 0..100 metres/second
+---@field heightOffset number World-space pivot height above the navmesh, -1000..1000; default 0
+---@field stop fun(self:NavMeshAgent) Pause movement and clear velocity, keeping the route
+---@field start fun(self:NavMeshAgent) Resume the existing route without discarding it
+---@field setSpeed fun(self:NavMeshAgent, speed:number) Set movement speed, 0..100
+---@field setHeightOffset fun(self:NavMeshAgent, height:number) Set pivot height above the surface, -1000..1000
 ---@field stoppingDistance number 0.01..10 metres
 ---@field stopped boolean Pause movement without clearing the route
 ---@field destination Vec3 Assign a complete world-space destination, or call setDestination
 ---@field velocity Vec3 Read-only actual last-frame velocity
 ---@field hasPath boolean Read-only; true while following a complete reachable path
 ---@field pathPending boolean Read-only; destination request awaits the next Play update
+---@field distance number Read-only straight-line 3D distance from the agent position to its destination, in world units; zero if no destination or Transform.
 ---@field remainingDistance number Read-only remaining path distance
 ---@field status string Read-only navigation status
 ---@field setDestination fun(self:NavMeshAgent, x:number|Vec3, y?:number, z?:number) Queue a path request; resumes movement
@@ -1005,236 +1016,11 @@ function Vector3(x,y,z) end
 ---@field center Vec3 Local box center; assign a whole vector
 NavMeshObstacle = nil
 
----@class UI
----@field enabled boolean Show this UI when its owner is active; defaults to true.
----@field rml string Project-relative .rml asset; both rml and rcss must be assigned.
----@field rcss string Project-relative .rcss asset; applied to this document.
----@field isLoaded fun(self:UI):boolean Whether this component's document is loaded in Play.
----@field setText fun(self:UI,id:string,plainText:string):boolean Set escaped plain text in this UI document.
----@field onClick fun(self:UI,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart.
-UI = nil
-
----@class GUI
----@field WindowFlags GUIWindowFlags
----@field TableFlags GUITableFlags
----@field Col GUIColors
----@field StyleVar GUIStyleVars
----@field image fun(path:string,width?:number,height?:number):boolean Full-resolution project image; returns loaded.
----@field imageButton fun(id:string,path:string,width?:number,height?:number):boolean Returns clicked.
----@field beginTable fun(id:string,columns:integer,flags?:integer,height?:number):boolean 1..64 columns; only end when true. ScrollY needs height.
----@field endTable fun() Table scope operation; set up columns before rows.
----@field tableNextRow fun() Table scope operation; set up columns before rows.
----@field tableHeadersRow fun() Table scope operation; set up columns before rows.
----@field tableNextColumn fun():boolean Advance to next column.
----@field tableSetColumnIndex fun(index:integer):boolean Zero-based table column index.
----@field tableSetupColumn fun(label:string,width?:number) Fixed width when positive, otherwise stretch.
----@field tableGetColumnIndex fun():integer Current zero-based index or column count.
----@field tableGetColumnCount fun():integer Current zero-based index or column count.
----@field beginMenu fun(label:string,enabled?:boolean):boolean Only end when true.
----@field endMenu fun() End successful beginMenu.
----@field beginMenuBar fun():boolean Requires GUI.WindowFlags.MenuBar on beginWindow. Only end when true.
----@field endMenuBar fun() End successful beginMenuBar.
----@field menuItem fun(label:string,selected?:boolean,enabled?:boolean):boolean Returns clicked.
----@field openPopup fun(id:string) Open a named popup.
----@field beginPopup fun(id:string):boolean Only endPopup when true.
----@field beginPopupModal fun(id:string):boolean Only endPopup when true.
----@field endPopup fun() Popup scope operation.
----@field closeCurrentPopup fun() Popup scope operation.
----@field beginCombo fun(label:string,preview:string):boolean Only endCombo when true.
----@field endCombo fun() End successful beginCombo.
----@field combo fun(label:string,index:integer,items:table):integer,boolean 1-based selected index and changed; 1..256 items.
----@field radioButton fun(label:string,selected:boolean):boolean Returns clicked.
----@field pushStyleColor fun(name:string|integer,r:number,g:number,b:number,a?:number) Use GUI.Col constants; pair with popStyleColor.
----@field popStyleColor fun(count?:integer) Strict reverse-order scoped pop; default 1.
----@field popStyleVar fun(count?:integer) Strict reverse-order scoped pop; default 1.
----@field pushStyleVar fun(name:string|integer,x:number,y?:number) Use GUI.StyleVar constants. Values 0..1000.
----@field pushFontSize fun(size:number) 8..96 pixels; pair with popFont.
----@field popFont fun() End font size scope.
----@field beginDragDropSource fun():boolean Only end when true. Script payloads isolated from editor payloads.
----@field beginDragDropTarget fun():boolean Only end when true. Script payloads isolated from editor payloads.
----@field endDragDropSource fun() End successful drag/drop scope.
----@field endDragDropTarget fun() End successful drag/drop scope.
----@field setDragDropPayload fun(kind:string,value:string) Source only. Type max 28 bytes; value max 4096.
----@field acceptDragDropPayload fun(kind:string):string? Target only. Returns delivered matching script payload or nil.
----@field getMousePos fun():number,number Returns Game-surface mouse x,y.
----@field isMouseDown fun(button:integer):boolean Mouse button 0..4.
----@field isMouseClicked fun(button:integer):boolean Mouse button 0..4.
----@field isMouseReleased fun(button:integer):boolean Mouse button 0..4.
----@field isKeyDown fun(key:string):boolean Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows.
----@field isKeyReleased fun(key:string):boolean Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows.
----@field isKeyPressed fun(key:string,repeatKey?:boolean):boolean Named key, optional repeat.
----@field drawLine fun(x:number,y:number,x2:number,y2:number,r:number,g:number,b:number,a?:number,width?:number) Screen-pixel coordinates; colors 0..1.
----@field drawRect fun(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) Screen-pixel coordinates; colors 0..1.
----@field drawRectFilled fun(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) Screen-pixel coordinates; colors 0..1.
----@field drawCircle fun(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) Screen-pixel coordinates; radius 0..100000.
----@field drawCircleFilled fun(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) Screen-pixel coordinates; radius 0..100000.
----@field drawText fun(x:number,y:number,value:string,r:number,g:number,b:number,a?:number) Screen-pixel coordinates.
----@field drawTriangleFilled fun(x:number,y:number,x2:number,y2:number,x3:number,y3:number,r:number,g:number,b:number,a?:number) Screen-pixel coordinates.
----@field beginWindow fun(title:string,flags?:integer):boolean Always call endWindow even when false.
----@field endWindow fun() End the current window.
----@field text fun(value:string) Plain text, never a printf format.
----@field textWrapped fun(value:string) Wrapped plain text.
----@field button fun(label:string):boolean True on activation.
----@field smallButton fun(label:string):boolean Compact button.
----@field checkbox fun(label:string,value:boolean):boolean,boolean Returns new value, changed.
----@field sliderFloat fun(label:string,value:number,min:number,max:number):number,boolean Returns value, changed.
----@field sliderInt fun(label:string,value:integer,min:integer,max:integer):integer,boolean Returns value, changed.
----@field dragFloat fun(label:string,value:number,speed?:number):number,boolean Returns value, changed; speed defaults 0.1.
----@field inputFloat fun(label:string,value:number):number,boolean Returns value, changed.
----@field inputInt fun(label:string,value:integer):integer,boolean Returns value, changed.
----@field inputText fun(label:string,value:string):string,boolean Returns text, changed; max 4095 bytes.
----@field colorEdit3 fun(label:string,r:number,g:number,b:number):number,number,number,boolean Returns r,g,b,changed.
----@field colorEdit4 fun(label:string,r:number,g:number,b:number,a:number):number,number,number,number,boolean Returns r,g,b,a,changed.
----@field separator fun() Horizontal separator.
----@field sameLine fun(offset?:number,spacing?:number) Continue on the same line.
----@field spacing fun() Add vertical space.
----@field newLine fun() Start a line.
----@field progressBar fun(fraction:number) Clamps fraction to 0..1.
----@field selectable fun(label:string,selected?:boolean):boolean True when clicked.
----@field collapsingHeader fun(label:string):boolean True while expanded; no matching end.
----@field beginChild fun(id:string,width?:number,height?:number):boolean Always pair with endChild.
----@field endChild fun() End child region.
----@field beginGroup fun() Begin a layout group.
----@field endGroup fun() End a layout group.
----@field beginDisabled fun(disabled?:boolean) Default true; pair with endDisabled.
----@field endDisabled fun() End disabled scope.
----@field pushID fun(id:string) Scope repeated widget labels; pair with popID.
----@field popID fun() Pop a widget ID.
----@field setNextWindowPos fun(x:number,y:number) Game-surface pixels; call before beginWindow.
----@field setNextWindowSize fun(width:number,height:number) Game-surface pixels; call before beginWindow.
----@field setCursorPos fun(x:number,y:number) Window-local content position.
----@field getWindowSize fun():number,number Returns width,height.
----@field getContentRegionAvail fun():number,number Returns available width,height.
----@field setNextItemWidth fun(width:number) Width of next input.
----@field isItemHovered fun():boolean Whether last widget is hovered.
----@field isItemActive fun():boolean Whether last widget is active.
----@field setTooltip fun(value:string) Plain-text tooltip.
----@field bulletText fun(value:string) Bulleted plain text.
----@field getDisplaySize fun():number,number Returns Game-surface pixel width,height.
-GUI = {}
-
 ---@return integer quality 0 full, 1 half, 2 quarter, 3 eighth
 function getTextureQuality() end
 ---@param quality integer Play-only texture quality, 0..3
 function setTextureQuality(quality) end
 
----@class GUIWindowFlags
----@field NoTitleBar integer
----@field NoResize integer
----@field NoMove integer
----@field NoScrollbar integer
----@field NoCollapse integer
----@field AlwaysAutoResize integer
----@field NoBackground integer
----@field MenuBar integer
----@field NoInputs integer
----@field NoNav integer
----@field NoDecoration integer
----@field NoFocusOnAppearing integer
----@field NoBringToFrontOnFocus integer
-
----@class GUITableFlags
----@field Borders integer
----@field RowBg integer
----@field Resizable integer
----@field Reorderable integer
----@field Hideable integer
----@field SizingStretchProp integer
----@field ScrollY integer
-
----@class GUIStyleVars
----@field Alpha integer
----@field DisabledAlpha integer
----@field WindowPadding integer
----@field WindowRounding integer
----@field WindowBorderSize integer
----@field WindowMinSize integer
----@field WindowTitleAlign integer
----@field ChildRounding integer
----@field ChildBorderSize integer
----@field PopupRounding integer
----@field PopupBorderSize integer
----@field FramePadding integer
----@field FrameRounding integer
----@field FrameBorderSize integer
----@field ItemSpacing integer
----@field ItemInnerSpacing integer
----@field IndentSpacing integer
----@field CellPadding integer
----@field ScrollbarSize integer
----@field ScrollbarRounding integer
----@field GrabMinSize integer
----@field GrabRounding integer
----@field TabRounding integer
----@field ButtonTextAlign integer
----@field SelectableTextAlign integer
-
----@class GUIColors
----@field Text integer
----@field TextDisabled integer
----@field WindowBg integer
----@field ChildBg integer
----@field PopupBg integer
----@field Border integer
----@field BorderShadow integer
----@field FrameBg integer
----@field FrameBgHovered integer
----@field FrameBgActive integer
----@field TitleBg integer
----@field TitleBgActive integer
----@field TitleBgCollapsed integer
----@field MenuBarBg integer
----@field ScrollbarBg integer
----@field ScrollbarGrab integer
----@field ScrollbarGrabHovered integer
----@field ScrollbarGrabActive integer
----@field CheckMark integer
----@field SliderGrab integer
----@field SliderGrabActive integer
----@field Button integer
----@field ButtonHovered integer
----@field ButtonActive integer
----@field Header integer
----@field HeaderHovered integer
----@field HeaderActive integer
----@field Separator integer
----@field SeparatorHovered integer
----@field SeparatorActive integer
----@field ResizeGrip integer
----@field ResizeGripHovered integer
----@field ResizeGripActive integer
----@field InputTextCursor integer
----@field TabHovered integer
----@field Tab integer
----@field TabSelected integer
----@field TabSelectedOverline integer
----@field TabDimmed integer
----@field TabDimmedSelected integer
----@field TabDimmedSelectedOverline integer
----@field DockingPreview integer
----@field DockingEmptyBg integer
----@field PlotLines integer
----@field PlotLinesHovered integer
----@field PlotHistogram integer
----@field PlotHistogramHovered integer
----@field TableHeaderBg integer
----@field TableBorderStrong integer
----@field TableBorderLight integer
----@field TableRowBg integer
----@field TableRowBgAlt integer
----@field TextLink integer
----@field TextSelectedBg integer
----@field TreeLines integer
----@field DragDropTarget integer
----@field DragDropTargetBg integer
----@field UnsavedMarker integer
----@field NavCursor integer
----@field NavWindowingHighlight integer
----@field NavWindowingDimBg integer
----@field ModalWindowDimBg integer
----@field COUNT integer
-
----Box-projected texture on opaque geometry. Local XY is the image, Z is projection depth.
 ---@class Decal
 ---@field enabled boolean
 ---@field texture string
@@ -1275,9 +1061,6 @@ Screen = {}
 ---@field targetFrameRate integer -1 uncapped, or 1..1000; VSync may cap further.
 ---@field openURL fun(url:string):boolean|nil,error?:string HTTP/HTTPS only; success means handed to OS.
 ---@field quit fun() Deferred graceful quit; stops Play in editor.
----@type GameAPI
-Game = {}
----@class SavingAPI
 ---@field saveString fun(key:string,value:string):boolean|nil,error?:string
 ---@field loadString fun(key:string,default?:string):string|nil,error?:string
 ---@field saveInt fun(key:string,value:integer):boolean|nil,error?:string
@@ -1290,8 +1073,8 @@ Game = {}
 ---@field loadTable fun(key:string,default?:table):table|nil,error?:string
 ---@field saveVector3 fun(key:string,value:Vec3):boolean|nil,error?:string
 ---@field loadVector3 fun(key:string,default?:Vec3):Vec3|nil,error?:string
----@type SavingAPI
-Saving = {}
+---@type GameAPI
+Game = {}
 ---@class GameFile Opaque file handle; use File functions, not io.
 ---@class FileAPI
 ---@field open fun(path:string,mode:string):GameFile|nil,error?:string r/rb/w/wb/a/ab; sandboxed paths.
@@ -1308,16 +1091,82 @@ File = {}
 -- Built-in events may be global functions or registered using on(name, callback):
 -- OnResolutionChanged(resolution), OnFocusLost(), OnFocus(), OnUrlOpened(url), OnGamePreQuit().
 
--- Compatibility aliases for the typed Saving API.
-saveString = Saving.saveString
-loadString = Saving.loadString
-saveInt = Saving.saveInt
-loadInt = Saving.loadInt
-saveFloat = Saving.saveFloat
-loadFloat = Saving.loadFloat
-saveBool = Saving.saveBool
-loadBool = Saving.loadBool
-saveTable = Saving.saveTable
-loadTable = Saving.loadTable
-saveVector3 = Saving.saveVector3
-loadVector3 = Saving.loadVector3
+
+---@param path string
+---@return string clip Checked .leanim asset path value.
+function AnimationClip(path) end
+---@class RandomAPI
+---@field randomFloat fun(min:number,max:number):number Finite bounds, min <= max; uniform floating sample.
+---@field randomInt fun(min:integer,max:integer):integer Inclusive uniform bounds.
+---@field randomBool fun():boolean Equally likely true/false.
+---@field randomString fun(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic.
+---@type RandomAPI
+Random = {}
+-- The same Random functions are also available globally.
+function randomFloat(min,max) end
+function randomInt(min,max) end
+function randomBool() end
+function randomString(length) end
+
+---@class ComponentEvent
+---Opaque next-occurrence event for wait(); read it from a live component.
+---@class Recoil
+---@field enabled boolean Render-only local camera recoil, independent of FPS/TPS Transform.
+---@field playOnStart boolean Start burst, or sequence if keys exist.
+---@field sequenceLoop boolean Repeat the scheduled sequence.
+---@field burstCount integer Zero repeats until stopped or duration expires.
+---@field seed integer Nonnegative pseudorandom seed.
+---@field isFiring boolean Read-only burst/sequence activity, not recovery state.
+---@field trigger fun(self:Recoil,strength?:number) One impulse; multiplier 0..10, default 1.
+---@field start fun(self:Recoil) Start/restart timed burst after delay.
+---@field stop fun(self:Recoil) Stop future impulses; let the spring recover.
+---@field reset fun(self:Recoil) Stop and zero offsets immediately.
+---@field playSequence fun(self:Recoil) Start the authored sequence after delay.
+---@field setSequence fun(self:Recoil,keys:RecoilKey[]) Replace sorted keys; stops firing.
+---@field pitch number Degrees, -45..45. Positive lifts the view.
+---@field yaw number Degrees, -45..45.
+---@field roll number Degrees, -45..45.
+---@field back number Metres, -1..1; positive local Z kicks backward.
+---@field up number Metres, -1..1.
+---@field side number Metres, -1..1.
+---@field rotationRandom number Independent random angle amplitude, 0..45 degrees.
+---@field positionRandom number Fraction of absolute back displacement, 0..2.
+---@field frequency number Angular spring frequency, 0.1..40 Hz.
+---@field damping number Angular damping ratio, 0.1..3; one is critical damping.
+---@field positionFrequency number Position spring frequency, 0.1..40 Hz.
+---@field positionDamping number Position damping ratio, 0.1..3.
+---@field maxAngle number Combined angular displacement cap, 0..89 degrees.
+---@field maxDistance number Combined positional displacement cap, 0..2 metres.
+---@field interval number Timed shot spacing / sequence loop gap, 0.01..60 seconds.
+---@field duration number Burst duration after delay, 0..3600; zero unlimited.
+---@field delay number Start delay, 0..3600 seconds.
+---@field strength number Global impulse multiplier, 0..10.
+---@field recovery number Spring frequency multiplier, 0.1..4.
+---@type ComponentToken
+Recoil = {}
+---@class RecoilKey
+---@field time number Seconds from sequence start, 0..3600; sorted ascending.
+---@field strength number Optional impulse multiplier, 0..10; default 1.
+
+---@class Animator
+---@field controller string Project-relative .controller file
+---@field enabled boolean Pause/resume the state machine and its backend
+---@field playOnStart boolean Enter the controller entry state automatically; default true
+---@field currentState string Read-only current state name
+---@field stateTime number Read-only elapsed playback seconds in the current state
+---@field isPlaying boolean Read-only; state machine is running, enabled and unpaused (it may hold a finished nonlooping state)
+---@field paused boolean Read-only paused flag
+---@field error string Read-only controller/playback diagnostic
+---@field setBool fun(self:Animator, name:string, value:boolean) Set a declared Bool parameter
+---@field setInt fun(self:Animator, name:string, value:integer) Set a declared Int parameter
+---@field setFloat fun(self:Animator, name:string, value:number) Set a declared Float parameter
+---@field getBool fun(self:Animator, name:string):boolean Read a declared Bool parameter
+---@field getInt fun(self:Animator, name:string):integer Read a declared Int parameter
+---@field getFloat fun(self:Animator, name:string):number Read a declared Float parameter
+---@field play fun(self:Animator, state:string) Enter/restart a state with no fade
+---@field crossFade fun(self:Animator, state:string, seconds?:number) Enter/restart a state with a fade; default 0.2 seconds
+---@field stop fun(self:Animator) Stop state evaluation and rewind backend to its first pose
+---@field pause fun(self:Animator) Pause state evaluation and playback
+---@field resume fun(self:Animator) Resume a paused state machine
+---@field hasState fun(self:Animator, state:string):boolean Test a controller state name or ID
+Animator = nil

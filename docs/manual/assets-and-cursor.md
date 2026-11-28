@@ -2,12 +2,12 @@
 
 ## Mesh storage and imports
 
-New or rewritten `.lemesh` files use a `LEMZ0002` binary envelope: an explicit
-little-endian expanded byte count followed by Zstandard-compressed CBOR. Existing
-JSON meshes and `LEMZ0001` zlib meshes remain readable without conversion. Mesh schema versions and paths
-are unchanged. Both packed and expanded data are bounded by the mesh file limit;
-corrupt compression is rejected. Meshes should be edited through the editor, not
-as text. Fast compression (Zstandard level 3) avoids expensive maximum-compression work.
+New or rewritten `.mesh`, `.model`, `.lemesh` and `.terrain` assets are stored as
+uncompressed compact JSON in the editor. Existing JSON, `LEMZ0001` zlib,
+`LEMZ0002` Zstandard and `TERZ0001` terrain files remain readable; saving/reimporting
+rewrites only the affected asset. Schema and paths are unchanged. Expanded and
+on-disk byte limits remain enforced. Zstandard compression is performed on export
+package chunks, not while editing.
 
 The Assets import action and dropped files use one background worker. That worker
 owns its AssetManager and Assimp importer; it does not access ImGui, OpenGL, the
@@ -83,20 +83,18 @@ and over-budget input still produces an error.
   unmatched delimiter, or invalid expression. Verify squiggles and Problems entries.
 - Correct the error, save, close/reopen, and edit an untitled LegacyScript document.
   Verify diagnostics update and stale entries disappear.
-- Verify `@export` and `---@export` declarations work; malformed declarations,
+- Verify `global` declarations work; malformed declarations,
   duplicate field names and unknown types should produce useful errors.
 - Put export examples inside quoted/long strings and comments; these must remain text.
-- Verify valid Lua 5.4 local attributes do not produce spurious syntax errors.
+- Verify LuaJIT syntax is accepted and unsupported Lua 5.4 local attributes are diagnosed.
 - Confirm engine runtime errors remain in its script console rather than being
   misleadingly reported as statically detectable VS Code errors.
 
 ## Asset workflow improvements
 
-New and rewritten `.lemesh` files now use **Zstandard level 3**, CBOR and the
-`LEMZ0002` envelope. Existing plain JSON and `LEMZ0001` zlib files remain readable;
-existing files are not rewritten until saved/reimported. Static Zstandard 1.5.7 is
-fetched through CMake, including MinGW builds; no Zstandard DLL installation is needed.
-The same packed/expanded size guards still apply.
+Editor mesh saves are uncompressed; old compressed assets remain readable. Static
+Zstandard 1.5.7 remains linked for backward-compatible reading and export packaging,
+including MinGW builds; no Zstandard DLL installation is needed.
 
 - Material thumbnails use a stable untextured sphere after their texture is
   deleted, rather than alternating stale/empty previews. Restoring the texture
@@ -148,7 +146,7 @@ Component-specific methods retain their existing behavior.
 
 ### Manual verification
 
-Import a model and inspect its LEMZ0002 file, then reopen both old/new formats and
+Import a model and inspect its uncompressed JSON file, then reopen both old/new formats and
 play skeletal clips. Delete/undo its root and confirm the data folder follows it.
 Delete a material's texture externally and through Delete, then restore it; the icon
 must not flicker. Delete each supported/unknown file type, a folder and the open

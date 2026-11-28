@@ -40,13 +40,6 @@
     ],
     "description": "Set FOV on owning Camera"
   },
-  "Export field": {
-    "prefix": "export",
-    "body": [
-      "@export ${1:target} ${2|GameObject,ParticleSystem,AudioSource,AudioListener,Transform,RigidBody,Collider,Camera,Skybox,Texture,AudioClip,Asset,number,boolean,string|} ${3}"
-    ],
-    "description": "Declare an Inspector-assigned LegacyScript field"
-  },
   "Independent waiting task": {
     "prefix": "task",
     "body": [
@@ -57,17 +50,11 @@
     ],
     "description": "Independent cooperative block: waits pause only this task, not its caller"
   },
-  "Draw runtime GUI": {
-    "prefix": "onGUI",
+  "Global Inspector field": {
+    "prefix": "global",
     "body": [
-      "function onGUI()",
-      "    if GUI.beginWindow(\"${1:HUD}\") then",
-      "        GUI.text(\"${2:Hello}\")",
-      "        $0",
-      "    end",
-      "    GUI.endWindow()",
-      "end"
+      "global ${1|int,float,bool,string,Prefab,AnimationClip,GameObject,Texture,AudioClip,Asset,Transform,RigidBody,Collider,Camera,Animation,Animator|} ${2:value} = ${3:0}"
     ],
-    "description": "Draw runtime ImGui once per rendered Game frame; no onStart registration."
+    "description": "Declare a typed global field editable in the Inspector"
   }
 }

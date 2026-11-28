@@ -1,13 +1,9 @@
 const api = require('./api.json');
 const members = require('./members.json');
 const keywords = 'and break do else elseif end false for function goto if in local nil not or repeat return then true until while'.split(' ');
-const objectMembers = { ...members.UI, ...members.Transform, ...members.Animation, ...members.ParticleSystem, ...members.Laser, ...members.LightShafts, ...members.GameObject, ...members.MeshRenderer, ...members.CameraObject, ...members.AudioSource, ...members.AudioListener, ...members.DirectionalLight, ...members.PointLight, ...members.Skybox, ...members.SpotLight, ...members.CharacterController, ...members.FPSCamera, ...members.RigidBody, ...members.Collider, ...members.Raycast };
+const objectMembers = { ...members.Recoil, ...members.Transform, ...members.Animation, ...members.ParticleSystem, ...members.Laser, ...members.LightShafts, ...members.GameObject, ...members.MeshRenderer, ...members.CameraObject, ...members.AudioSource, ...members.AudioListener, ...members.DirectionalLight, ...members.PointLight, ...members.Skybox, ...members.SpotLight, ...members.CharacterController, ...members.FPSCamera, ...members.RigidBody, ...members.Collider, ...members.Raycast };
 function memberTable(receiver) {
-  if (receiver === 'WindowFlags') return members.GUIWindowFlags;
-  if (receiver === 'TableFlags') return members.GUITableFlags;
-  if (receiver === 'StyleVar') return members.GUIStyleVars;
-  if (receiver === 'Col') return members.GUIColors;
-  if (receiver === 'GUI') return members.GUI;
+  if (['Game','Screen','File','Random'].includes(receiver)) return members[receiver+'API'];
   if (receiver === 'GameObject') return members.GameObjectConstructor;
   if (receiver === 'color') return members.ColorPalette;
   if (receiver === 'Raycast') return members.RaycastType;
@@ -24,8 +20,8 @@ function completion(doc, position) {
   for (const label of ['print','type','tostring','tonumber','pairs','ipairs','assert','error','math','string','table','self']) if (!items.has(label)) items.set(label, { label, kind: 6 });
   for (const match of doc.getText().matchAll(/\b(?:local\s+(?:function\s+)?|function\s+)([A-Za-z_]\w*)/g))
     items.set(match[1], { label: match[1], kind: 6, detail: 'Document symbol' });
-  for (const match of doc.getText().matchAll(/^[ \t]*(?:---)?@export\s+([A-Za-z_]\w*)\s+(\w+)/gm))
-    items.set(match[1], { label: match[1], kind: 6, detail: `Exported ${match[2]} (assigned in Inspector)` });
+  for(const match of doc.getText().matchAll(/^[ \t]*(?:global|expose)\s+(\w+)\s+([A-Za-z_]\w*)/gm))
+    items.set(match[2],{label:match[2],kind:6,detail:`Exposed ${match[1]} (assigned in Inspector)`});
   return [...items.values()];
 }
 function signature(name, receiver) {
@@ -40,8 +36,8 @@ function hover(doc, position) {
   while(start>0 && /\w/.test(text[start-1]))--start;
   while(end<text.length && /\w/.test(text[end]))++end;
   const word=text.slice(start,end),receiver=text.slice(0,start).match(/(\w+)\s*[.:]\s*$/)?.[1];
-  const exported=[...text.matchAll(/^[ \t]*(?:---)?@export\s+([A-Za-z_]\w*)\s+(\w+)/gm)].find(m=>m[1]===word);
-  const detail=exported?`${word}: ${exported[2]} — exported Inspector field`:word==='self'?'self: GameObject — owner of the attached script. Camera methods require a Camera component.':signature(word,receiver);
+  const exposed=[...text.matchAll(/^[ \t]*(?:global|expose)\s+(\w+)\s+([A-Za-z_]\w*)/gm)].find(m=>m[2]===word);
+  const detail=exposed?`${word}: ${exposed[1]} — exposed Inspector field`:word==='self'?'self: GameObject — owner of the attached script. Camera methods require a Camera component.':signature(word,receiver);
   return detail?{contents:{kind:'markdown',value:`\`\`\`lua\n${detail}\n\`\`\``},range:{start:doc.positionAt(start),end:doc.positionAt(end)}}:null;
 }
 function signatureHelp(doc, position) {

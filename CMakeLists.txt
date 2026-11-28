@@ -191,9 +191,9 @@ add_library(legacy_imgui STATIC
   ${imgui_SOURCE_DIR}/imgui.cpp ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp ${imgui_SOURCE_DIR}/imgui_widgets.cpp
   ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
-  ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
+  src/ui/imgui_opengl3.cpp)
 target_include_directories(legacy_imgui SYSTEM PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
-target_link_libraries(legacy_imgui PUBLIC SDL3::SDL3 ${CMAKE_DL_LIBS})
+target_link_libraries(legacy_imgui PUBLIC SDL3::SDL3 glad ${CMAKE_DL_LIBS})
 
 # --- ImGuizmo (transform handles, pinned for reproducible builds) -----------
 FetchContent_Declare(imguizmo
@@ -203,19 +203,8 @@ set(IMGUIZMO_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(imguizmo)
 target_link_libraries(imguizmo PUBLIC legacy_imgui)
 
-# --- Lua (embedded, no external interpreter installation needed) -------------
-FetchContent_Declare(lua
-  GIT_REPOSITORY https://github.com/lua/lua.git
-  GIT_TAG v5.4.8
-  GIT_SHALLOW TRUE)
-FetchContent_MakeAvailable(lua)
-file(GLOB lua_sources CONFIGURE_DEPENDS "${lua_SOURCE_DIR}/*.c")
-list(FILTER lua_sources EXCLUDE REGEX "/(lua|luac|onelua|ltests)\\.c$")
-add_library(legacy_lua STATIC ${lua_sources})
-target_include_directories(legacy_lua SYSTEM PUBLIC ${lua_SOURCE_DIR})
-if(UNIX)
-  target_link_libraries(legacy_lua PUBLIC m)
-endif()
+# --- LuaJIT (embedded, no system interpreter or DLL required) ----------------
+include(cmake/LuaJIT.cmake)
 find_package(Threads REQUIRED)
 add_library(legacy_miniaudio STATIC src/audio/miniaudio.cpp)
 target_include_directories(legacy_miniaudio SYSTEM PUBLIC third_party/miniaudio)
@@ -227,10 +216,10 @@ add_library(legacy_audio STATIC src/audio/audio_clip.cpp src/audio/audio_output.
 target_include_directories(legacy_audio PUBLIC src)
 target_link_libraries(legacy_audio PUBLIC legacy_miniaudio)
 
-add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_scene.cpp src/scripting/lua_input.cpp src/scripting/lua_levels.cpp src/scripting/lua_events.cpp src/scripting/game_services.cpp src/ui/script_gui.cpp)
+add_library(lua_console STATIC src/scripting/lua_console.cpp src/scripting/lua_scene.cpp src/scripting/lua_input.cpp src/scripting/lua_levels.cpp src/scripting/lua_events.cpp src/scripting/game_services.cpp src/scripting/lua_utf8.cpp)
 target_include_directories(lua_console PUBLIC src PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(lua_console PRIVATE glad)
-target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3 legacy_imgui)
+target_link_libraries(lua_console PUBLIC legacy_lua legacy_audio SDL3::SDL3)
 
 add_library(legacy_thumbnails STATIC src/assets/texture_preview.cpp)
 target_include_directories(legacy_thumbnails PUBLIC src PRIVATE third_party/stb)
@@ -247,7 +236,7 @@ target_link_libraries(legacy_json PRIVATE legacy_simdjson zlibstatic libzstd_sta
 # Level storage/transitions have no dependency on Lua or the editor.
 add_library(legacy_levels STATIC src/levels/level_system.cpp)
 target_include_directories(legacy_levels PUBLIC src)
-target_link_libraries(legacy_levels PUBLIC legacy_json Threads::Threads)
+target_link_libraries(legacy_levels PUBLIC legacy_json legacy_audio Threads::Threads)
 target_link_libraries(lua_console PUBLIC legacy_levels)
 target_link_libraries(legacy_imgui PUBLIC legacy_json)
 
@@ -258,7 +247,7 @@ target_link_libraries(legacy_material_textures PUBLIC legacy_thumbnails)
 # Authenticated game data packages (Monocypher 4.0.2, BSD-2-Clause).
 add_library(legacy_game_export STATIC src/project/game_export.cpp third_party/monocypher/monocypher.c)
 target_include_directories(legacy_game_export PUBLIC src PRIVATE third_party/monocypher)
-target_link_libraries(legacy_game_export PUBLIC legacy_json)
+target_link_libraries(legacy_game_export PUBLIC legacy_json PRIVATE libzstd_static)
 if(WIN32)
   target_link_libraries(legacy_game_export PRIVATE bcrypt)
 endif()
@@ -292,20 +281,19 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/editor_icons.hpp" "#pragma onc
 target_include_directories(LegacyEngine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(LegacyEngine PRIVATE SDL3::SDL3 Jolt glad legacy_imgui imguizmo lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation)
 
-include(cmake/RmlUi.cmake)
-target_link_libraries(LegacyEngine PRIVATE legacy_game_ui legacy_game_export)
+target_link_libraries(LegacyEngine PRIVATE legacy_game_export)
 
 # Native standalone player template, configured and renamed by File > Export.
 add_executable(LegacyPlayer src/app/player.cpp src/rendering/mesh.cpp src/physics/physics.cpp src/rendering/renderer.cpp)
 target_include_directories(LegacyPlayer PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-target_link_libraries(LegacyPlayer PRIVATE SDL3::SDL3 Jolt glad legacy_imgui lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation legacy_game_ui legacy_game_export)
+target_link_libraries(LegacyPlayer PRIVATE SDL3::SDL3 Jolt glad legacy_imgui lua_console legacy_material_textures legacy_models meshoptimizer legacy_navigation legacy_game_export)
 add_custom_command(TARGET LegacyPlayer POST_BUILD
   COMMAND ${CMAKE_COMMAND} -DPLAYER=$<TARGET_FILE:LegacyPlayer> -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/player_template.cmake")
 if(WIN32)
   set_target_properties(LegacyPlayer PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
-target_link_libraries(lua_console PUBLIC legacy_game_ui legacy_material_textures)
+target_link_libraries(lua_console PUBLIC legacy_material_textures)
 
 if(MSVC)
   target_compile_options(LegacyEngine PRIVATE /W4)

@@ -1,9 +1,9 @@
-# Screen, Game, Saving and File
+# Screen, Game and File
 
 These namespaces are installed in every LegacyScript. Calls use dots, not colons.
 Host I/O failures return `nil, error`; invalid argument types raise script errors.
 Use `on("OnFocus", function() ... end)` or a global `function OnFocus() ... end`
-for built-in events. These do not replace `onStart`, `onUpdate`, or `onGUI`.
+for built-in events. These do not replace `onStart` or `onUpdate`.
 
 ## Screen
 
@@ -60,23 +60,23 @@ termination. Editor Stop remains an immediate development/rollback control.
 function OnGamePreQuit()
     task(function()
         wait(0.1)
-        Saving.saveInt("score", 120)
+        Game.saveInt("score", 120)
     end)
 end
 ```
 
-## Saving
+## Game persistence
 
 ```lua
-Saving.saveInt("score", 10)
-local score = Saving.loadInt("score", 0)
-Saving.saveVector3("spawn", {x = 1, y = 2, z = 3})
-local spawn = Saving.loadVector3("spawn", {x = 0, y = 0, z = 0})
+Game.saveInt("score", 10)
+local score = Game.loadInt("score", 0)
+Game.saveVector3("spawn", {x = 1, y = 2, z = 3})
+local spawn = Game.loadVector3("spawn", {x = 0, y = 0, z = 0})
 ```
 
 Paired `saveString/loadString`, `saveInt/loadInt`, `saveFloat/loadFloat`,
 `saveBool/loadBool`, `saveTable/loadTable`, `saveVector3/loadVector3` functions use
-named keys. The same names are available as global aliases. Missing keys or a
+named keys. The functions now live on `Game`; the old `Saving` namespace and global save/load aliases are removed. Missing keys or a
 stored type mismatch return the supplied default (nil if omitted). Corrupted
 stores return `nil, error`, not a silently reset save.
 
@@ -94,7 +94,7 @@ explicit persistent writes.
 All paths must be **relative to Game.userDataPath**, not absolute paths copied
 from that property. Traversal, virtual packed-member paths, drive prefixes and
 symlink escapes are rejected. This is not unrestricted Lua `io` or `os` access.
-Do not edit `Saving.json` with File while using Saving.
+Do not edit `Saving.json` with File while using the Game persistence API.
 
 ```lua
 local f, err = File.open("notes/log.txt", "w")

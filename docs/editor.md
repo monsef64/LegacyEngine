@@ -448,9 +448,10 @@ also detected (and the standard macOS Sublime application is recognized).
 Install native Sublime syntax highlighting, API/member completions and hover help
 by copying `extensions/sublime-legacyscript` into Sublime's Packages directory as
 `LegacyScript`. See that folder's README for installation details and limitations.
-The existing Animation player and cross-fades remain; the recently introduced
-Animator/AnimatorSheet state-machine system and its asset creation/editor UI have
-been removed. Old serialized Animator components are ignored when loading a scene.
+The Animation clip player and cross-fades remain. The new controller-backed
+[Animator state machine](animator.md) uses `.controller` assets and is available
+through Add Component > Animator and Windows > Animator. Old removed
+Animator/AnimatorSheet settings are not migrated into this new controller format.
 
 ### Focus suspension, primitives and terrain tabs
 
@@ -459,10 +460,10 @@ loop stops simulation, scripting, rendering and autosave work and blocks waiting
 for a window event. Audio output is suspended without resetting playback state.
 Focus recovery resets frame timing so no catch-up simulation runs. A focused
 external Game window continues normal gameplay. Input capture is released on focus
-loss. Asset importing is an explicit exception: OS file/folder drops and completed
-native import-dialog selections are accepted while unfocused, and queued imports
-continue to completion. Pending imports/dialogs use a low-frequency timed event
-wait; an idle engine still blocks normally. Thumbnail GPU updates wait until
+loss. Asset importing is an explicit exception: OS file/folder drops are accepted
+while unfocused, and queued imports continue to completion. Pending imports use
+a low-frequency timed event wait; an idle engine still blocks normally. ImGui
+file pickers pause with the editor when unfocused. Thumbnail GPU updates wait until
 rendering resumes. Gameplay, rendering, scripting and autosave remain suspended;
 this is main-loop suspension, not unsafe suspension of every process thread.
 
@@ -663,13 +664,11 @@ are checked at most once a second per skybox renderer. Project/asset changes dis
 stale jobs before they can upload. Crossfades wait for the requested textures to be
 ready. Until an image loads, the ordinary tinted fallback remains visible.
 
-For an HDR panorama, enable **Compress HDR (RGB9_E5)** in the Skybox Inspector.
-This packs GPU HDR storage into 4 bytes/pixel instead of RGB16F's 6 (about one-third
-less base-level texture memory). It trades color precision for memory/bandwidth,
-particularly for very differently sized RGB channels. It is not BC6H and does not
-rewrite/compress the original `.hdr` file on disk. Set `sky.hdrCompression` in Lua
-for a Play-time change. Old projects default to uncompressed RGB16F. The setting
-is included in scene/prefab serialization, undo and Stop rollback.
+HDR panoramas always use packed RGB9_E5 GPU storage (4 bytes/pixel rather than
+RGB16F's 6). This reduces base-level texture storage by about one-third at the
+cost of precision, especially for differently sized RGB channels. It is not BC6H
+and does not modify the original `.hdr` file. There is no Compress checkbox or
+runtime compression toggle; older serialized flags are consumed for compatibility.
 
 The shader reconstructs sky rays at the fullscreen triangle vertices rather than
 doing inverse-matrix transforms for every fragment. Performance gains depend on
@@ -720,3 +719,91 @@ polled without waiting; cache serialization and writes run on workers with bound
 backpressure. These changes remove synchronous GPU readback/disk writes from the
 normal preview save path. Very large prefab/model decoding and GPU uploads can
 still have costs; desktop performance needs manual verification on target hardware.
+
+### Component switches and asset labels
+
+Components that already support enabled/active state now expose **Enabled** on
+their collapsible header, including when collapsed. This does not add disabling
+to structural components such as Transform or Collider. Camera uses its existing
+active-camera selection rules. The primary script is controlled from the script
+component header; additional attachments keep individual switches.
+
+Shared asset fields show **filename.extension** instead of the full path; hover
+for the full project-relative path. The stored reference is unchanged, so same-name
+assets in different folders remain distinct. Selection dialogs retain their path
+context. Prefab and AnimationClip script fields use the same filtered asset picker.
+
+### Header switch sizing and asset hover details
+
+Component header Enabled switches use the current font/style measurements, stay
+right-aligned inside the header, and are vertically centered. On narrow Inspector
+panels the label hides (hover the checkbox for **Enabled**) and long component names
+are clipped before the control. Clicking the switch does not also collapse the
+component. Only components that already support enabled/active state get a switch.
+
+Asset-browser hover details wait on the **current asset** for 1.5 seconds. Moving
+to another asset, changing projects, or leaving/re-entering the browser resets
+that delay. Shared detail-preview slots no longer return the previous asset's
+image, waveform or text while a new asset is waiting for the preview-generation
+budget; an empty/loading preview is preferable to unrelated information.
+
+### Orthographic transform dragging
+
+The level editor uses a gizmo-specific orthographic ray projection: it preserves
+the rendered screen positions while placing the drag ray's near origin in front
+of the active handle. This avoids reflected ray/plane intersections that could
+send a transform to very large positive/negative coordinates. The orthographic
+view, picking rays, scene Camera components and saved projection settings remain
+unchanged. The gizmo's virtual camera anchor stays fixed for the duration of the
+gesture. World/Local axes, snapping, hierarchy edits and undo retain their normal
+behavior.
+
+### Attach scripts by dropping them into Inspector
+
+Select a GameObject and drag a project `.lua` or `.ls` script from Assets onto
+unused Inspector space or its component headers. A LegacyScript component is
+created if needed; otherwise the script is appended to the existing attachments.
+Dropping the same attachment again does not add a duplicate. Existing script
+asset fields still replace their own assignment. The attachment and its Inspector
+fields participate in normal undo/redo, save/load, and Play rollback.
+
+### Loading feedback inside Game
+
+Startup/Play preloading shows only centered `Loading..` text over the Game view,
+not a full-editor loading screen or progress bar. In a separate Game window and
+in exported games, the text is centered in that window. Level transitions show
+the same text in the rendered Game surface while staged assets load. Dependency
+preloading remains enabled; scripts still start only after required assets are ready.
+
+### Saving added prefab children and keeping instance assignments
+
+On a linked prefab instance (or one of its children), **Inspector > Save to Prefab**
+writes the instance root and its full current child hierarchy to the linked
+`.prefab` file and refreshes linked instances/saved levels. Use this explicitly
+when you want instance-added children to become part of the reusable asset.
+In Prefab Mode, **Save Prefab** also includes children added through model drops.
+Prefab asset writes are file saves, not undoable scene-only edits.
+
+Project opening, player startup and level preloading keep the complete saved
+instance hierarchy and script-field assignments instead of rebuilding it from
+prefab defaults. This preserves assigned `global Prefab` assets and instance-only
+children across reopening. Prefab links are still validated, so missing or corrupt
+templates can be reported. Explicit prefab saves remain the propagation point;
+loading a scene no longer silently replaces its saved instance state.
+
+## Built-in file and folder picker
+
+Project Open/Save, asset file/folder import, archive extraction destinations and
+export icon/player/output-folder selection use an ImGui modal inside the editor.
+No SDL native dialog backend, Zenity or desktop portal is needed.
+
+- Enter an absolute directory (or a path relative to the current directory) and
+  press Enter. Use Up, Refresh, or double-click a folder to navigate. Windows
+  drive buttons allow switching drives; Linux mount paths can be entered directly.
+- Select a file, or enter a filename/path. Choose a file-type filter as needed.
+  File/folder imports support Ctrl+click multi-selection. Folder pickers can
+  select the current directory when nothing is selected.
+- To make a folder, enter its name and click Create folder using name.
+- Project Save adds `.legacy` if no extension is given, and asks before replacing
+  an existing file. Cancel or close the picker to leave the request unchanged.
+- Invalid paths and permission errors stay in the picker for correction.

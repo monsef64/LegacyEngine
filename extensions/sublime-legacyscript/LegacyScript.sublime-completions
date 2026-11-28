@@ -2,310 +2,124 @@
   "scope": "source.legacyscript - comment - string",
   "completions": [
     {
-      "trigger": "GUI.image",
-      "contents": "GUI.image",
+      "trigger": "Screen",
+      "contents": "Screen",
       "annotation": "LegacyEngine",
-      "details": "GUI.image(path:string,width?:number,height?:number):boolean - Full-resolution project image; returns loaded."
+      "details": "Screen.width/height/currentResolution (read-only), brightness (0..1), fullScreen; getResolutions(), getResolution(w,h), setResolution(w,h), takeScreenshot(relativePngPath)."
     },
     {
-      "trigger": "GUI.imageButton",
-      "contents": "GUI.imageButton",
+      "trigger": "Game",
+      "contents": "Game",
       "annotation": "LegacyEngine",
-      "details": "GUI.imageButton(id:string,path:string,width?:number,height?:number):boolean - Returns clicked."
+      "details": "Game.companyName/getDataPath/isEditor/isFocused/userDataPath/engineVersion (read-only), targetFrameRate (-1 or 1..1000), blockGameKilling; openURL(httpUrl), quit()."
     },
     {
-      "trigger": "GUI.beginTable",
-      "contents": "GUI.beginTable",
+      "trigger": "Game.save/load",
+      "contents": "Game.save/load",
       "annotation": "LegacyEngine",
-      "details": "GUI.beginTable(id:string,columns:integer,flags?:integer,height?:number):boolean - 1..64 columns; only end when true. ScrollY needs height."
+      "details": "Game.saveString/Int/Float/Bool/Table/Vector3(key,value); Game.loadString/Int/Float/Bool/Table/Vector3(key,default). Persisted per game; replaces the former Saving namespace."
     },
     {
-      "trigger": "GUI.endTable",
-      "contents": "GUI.endTable",
+      "trigger": "randomFloat",
+      "contents": "randomFloat",
       "annotation": "LegacyEngine",
-      "details": "GUI.endTable() - Table scope operation; set up columns before rows."
+      "details": "randomFloat(min:number,max:number):number - Uniform finite floating sample; min <= max."
     },
     {
-      "trigger": "GUI.tableNextRow",
-      "contents": "GUI.tableNextRow",
+      "trigger": "randomInt",
+      "contents": "randomInt",
       "annotation": "LegacyEngine",
-      "details": "GUI.tableNextRow() - Table scope operation; set up columns before rows."
+      "details": "randomInt(min:integer,max:integer):integer - Inclusive uniform integer sample."
     },
     {
-      "trigger": "GUI.tableHeadersRow",
-      "contents": "GUI.tableHeadersRow",
+      "trigger": "randomBool",
+      "contents": "randomBool",
       "annotation": "LegacyEngine",
-      "details": "GUI.tableHeadersRow() - Table scope operation; set up columns before rows."
+      "details": "randomBool():boolean - Equally likely true or false."
     },
     {
-      "trigger": "GUI.tableNextColumn",
-      "contents": "GUI.tableNextColumn",
+      "trigger": "randomString",
+      "contents": "randomString",
       "annotation": "LegacyEngine",
-      "details": "GUI.tableNextColumn():boolean - Advance to next column."
+      "details": "randomString(length:integer):string - 0..4096 alphanumeric characters, not cryptographic."
     },
     {
-      "trigger": "GUI.tableSetColumnIndex",
-      "contents": "GUI.tableSetColumnIndex",
+      "trigger": "castShadow",
+      "contents": "castShadow",
       "annotation": "LegacyEngine",
-      "details": "GUI.tableSetColumnIndex(index:integer):boolean - Zero-based table column index."
+      "details": "MeshRenderer.castShadow: boolean, default true. Controls realtime and baked shadow casting; rebake static lighting after changing."
     },
     {
-      "trigger": "GUI.tableSetupColumn",
-      "contents": "GUI.tableSetupColumn",
+      "trigger": "Recoil",
+      "contents": "Recoil",
       "annotation": "LegacyEngine",
-      "details": "GUI.tableSetupColumn(label:string,width?:number) - Fixed width when positive, otherwise stretch."
+      "details": "Recoil - Camera > Recoil. Render-only six-axis damped spring, bounded stacking, seeded variation, timed bursts and scheduled sequences. trigger(strength=1), start(), stop(), reset(), playSequence(), setSequence(keys)."
     },
     {
-      "trigger": "GUI.tableGetColumnIndex",
-      "contents": "GUI.tableGetColumnIndex",
+      "trigger": "onAnimationRestarted",
+      "contents": "onAnimationRestarted",
       "annotation": "LegacyEngine",
-      "details": "GUI.tableGetColumnIndex():integer - Current zero-based index or column count."
+      "details": "onAnimationRestarted() - Owner callback on replay or loop wrap. Animation.onRestarted is the corresponding wait token."
     },
     {
-      "trigger": "GUI.tableGetColumnCount",
-      "contents": "GUI.tableGetColumnCount",
+      "trigger": "Random",
+      "contents": "Random",
       "annotation": "LegacyEngine",
-      "details": "GUI.tableGetColumnCount():integer - Current zero-based index or column count."
+      "details": "Random.randomFloat(min,max), randomInt(min,max), randomBool(), randomString(length). Also available globally; non-cryptographic."
     },
     {
-      "trigger": "GUI.beginMenu",
-      "contents": "GUI.beginMenu",
+      "trigger": "AnimationClip",
+      "contents": "AnimationClip",
       "annotation": "LegacyEngine",
-      "details": "GUI.beginMenu(label:string,enabled?:boolean):boolean - Only end when true."
+      "details": "AnimationClip(path:string):string - Checked .leanim asset path for Animation.playClip/crossFade."
     },
     {
-      "trigger": "GUI.endMenu",
-      "contents": "GUI.endMenu",
+      "trigger": "playClip",
+      "contents": "playClip",
       "annotation": "LegacyEngine",
-      "details": "GUI.endMenu() - End successful beginMenu."
+      "details": "animation:playClip(AnimationClip(path)) - Plays a selected clip; decoding is asynchronous and Stop cancels pending playback."
     },
     {
-      "trigger": "GUI.beginMenuBar",
-      "contents": "GUI.beginMenuBar",
+      "trigger": "global",
+      "contents": "global",
       "annotation": "LegacyEngine",
-      "details": "GUI.beginMenuBar():boolean - Requires GUI.WindowFlags.MenuBar on beginWindow. Only end when true."
+      "details": "global Type name = default - Inspector fields; int, float, bool, string, Prefab, AnimationClip, Texture, AudioClip and component references."
     },
     {
-      "trigger": "GUI.endMenuBar",
-      "contents": "GUI.endMenuBar",
+      "trigger": "File",
+      "contents": "File",
       "annotation": "LegacyEngine",
-      "details": "GUI.endMenuBar() - End successful beginMenuBar."
+      "details": "File.open(relativePath,mode), read(handle,format), write(handle,text), close(handle), flush(handle), seek(handle,whence,offset), lines(handleOrPath), rename(old,new), remove(path). Sandboxed under Game.userDataPath."
     },
     {
-      "trigger": "GUI.menuItem",
-      "contents": "GUI.menuItem",
+      "trigger": "OnResolutionChanged",
+      "contents": "OnResolutionChanged",
       "annotation": "LegacyEngine",
-      "details": "GUI.menuItem(label:string,selected?:boolean,enabled?:boolean):boolean - Returns clicked."
+      "details": "OnResolutionChanged(resolution) - resolution has width, height, refreshRate. Also on(eventName, callback)."
     },
     {
-      "trigger": "GUI.openPopup",
-      "contents": "GUI.openPopup",
+      "trigger": "OnFocusLost",
+      "contents": "OnFocusLost",
       "annotation": "LegacyEngine",
-      "details": "GUI.openPopup(id:string) - Open a named popup."
+      "details": "OnFocusLost() - native game window lost focus."
     },
     {
-      "trigger": "GUI.beginPopup",
-      "contents": "GUI.beginPopup",
+      "trigger": "OnFocus",
+      "contents": "OnFocus",
       "annotation": "LegacyEngine",
-      "details": "GUI.beginPopup(id:string):boolean - Only endPopup when true."
+      "details": "OnFocus() - native game window gained focus."
     },
     {
-      "trigger": "GUI.beginPopupModal",
-      "contents": "GUI.beginPopupModal",
+      "trigger": "OnUrlOpened",
+      "contents": "OnUrlOpened",
       "annotation": "LegacyEngine",
-      "details": "GUI.beginPopupModal(id:string):boolean - Only endPopup when true."
+      "details": "OnUrlOpened(url) - OS accepted an HTTP/HTTPS launch request."
     },
     {
-      "trigger": "GUI.endPopup",
-      "contents": "GUI.endPopup",
+      "trigger": "OnGamePreQuit",
+      "contents": "OnGamePreQuit",
       "annotation": "LegacyEngine",
-      "details": "GUI.endPopup() - Popup scope operation."
-    },
-    {
-      "trigger": "GUI.closeCurrentPopup",
-      "contents": "GUI.closeCurrentPopup",
-      "annotation": "LegacyEngine",
-      "details": "GUI.closeCurrentPopup() - Popup scope operation."
-    },
-    {
-      "trigger": "GUI.beginCombo",
-      "contents": "GUI.beginCombo",
-      "annotation": "LegacyEngine",
-      "details": "GUI.beginCombo(label:string,preview:string):boolean - Only endCombo when true."
-    },
-    {
-      "trigger": "GUI.endCombo",
-      "contents": "GUI.endCombo",
-      "annotation": "LegacyEngine",
-      "details": "GUI.endCombo() - End successful beginCombo."
-    },
-    {
-      "trigger": "GUI.combo",
-      "contents": "GUI.combo",
-      "annotation": "LegacyEngine",
-      "details": "GUI.combo(label:string,index:integer,items:table):integer,boolean - 1-based selected index and changed; 1..256 items."
-    },
-    {
-      "trigger": "GUI.radioButton",
-      "contents": "GUI.radioButton",
-      "annotation": "LegacyEngine",
-      "details": "GUI.radioButton(label:string,selected:boolean):boolean - Returns clicked."
-    },
-    {
-      "trigger": "GUI.pushStyleColor",
-      "contents": "GUI.pushStyleColor",
-      "annotation": "LegacyEngine",
-      "details": "GUI.pushStyleColor(name:string,r:number,g:number,b:number,a?:number) - Use GUI.Col constants; pair with popStyleColor."
-    },
-    {
-      "trigger": "GUI.popStyleColor",
-      "contents": "GUI.popStyleColor",
-      "annotation": "LegacyEngine",
-      "details": "GUI.popStyleColor(count?:integer) - Strict reverse-order scoped pop; default 1."
-    },
-    {
-      "trigger": "GUI.popStyleVar",
-      "contents": "GUI.popStyleVar",
-      "annotation": "LegacyEngine",
-      "details": "GUI.popStyleVar(count?:integer) - Strict reverse-order scoped pop; default 1."
-    },
-    {
-      "trigger": "GUI.pushStyleVar",
-      "contents": "GUI.pushStyleVar",
-      "annotation": "LegacyEngine",
-      "details": "GUI.pushStyleVar(name:string,x:number,y?:number) - Use GUI.StyleVar constants. Values 0..1000."
-    },
-    {
-      "trigger": "GUI.pushFontSize",
-      "contents": "GUI.pushFontSize",
-      "annotation": "LegacyEngine",
-      "details": "GUI.pushFontSize(size:number) - 8..96 pixels; pair with popFont."
-    },
-    {
-      "trigger": "GUI.popFont",
-      "contents": "GUI.popFont",
-      "annotation": "LegacyEngine",
-      "details": "GUI.popFont() - End font size scope."
-    },
-    {
-      "trigger": "GUI.beginDragDropSource",
-      "contents": "GUI.beginDragDropSource",
-      "annotation": "LegacyEngine",
-      "details": "GUI.beginDragDropSource():boolean - Only end when true. Script payloads isolated from editor payloads."
-    },
-    {
-      "trigger": "GUI.beginDragDropTarget",
-      "contents": "GUI.beginDragDropTarget",
-      "annotation": "LegacyEngine",
-      "details": "GUI.beginDragDropTarget():boolean - Only end when true. Script payloads isolated from editor payloads."
-    },
-    {
-      "trigger": "GUI.endDragDropSource",
-      "contents": "GUI.endDragDropSource",
-      "annotation": "LegacyEngine",
-      "details": "GUI.endDragDropSource() - End successful drag/drop scope."
-    },
-    {
-      "trigger": "GUI.endDragDropTarget",
-      "contents": "GUI.endDragDropTarget",
-      "annotation": "LegacyEngine",
-      "details": "GUI.endDragDropTarget() - End successful drag/drop scope."
-    },
-    {
-      "trigger": "GUI.setDragDropPayload",
-      "contents": "GUI.setDragDropPayload",
-      "annotation": "LegacyEngine",
-      "details": "GUI.setDragDropPayload(kind:string,value:string) - Source only. Type max 28 bytes; value max 4096."
-    },
-    {
-      "trigger": "GUI.acceptDragDropPayload",
-      "contents": "GUI.acceptDragDropPayload",
-      "annotation": "LegacyEngine",
-      "details": "GUI.acceptDragDropPayload(kind:string):string? - Target only. Returns delivered matching script payload or nil."
-    },
-    {
-      "trigger": "GUI.getMousePos",
-      "contents": "GUI.getMousePos",
-      "annotation": "LegacyEngine",
-      "details": "GUI.getMousePos():number,number - Returns Game-surface mouse x,y."
-    },
-    {
-      "trigger": "GUI.isMouseDown",
-      "contents": "GUI.isMouseDown",
-      "annotation": "LegacyEngine",
-      "details": "GUI.isMouseDown(button:integer):boolean - Mouse button 0..4."
-    },
-    {
-      "trigger": "GUI.isMouseClicked",
-      "contents": "GUI.isMouseClicked",
-      "annotation": "LegacyEngine",
-      "details": "GUI.isMouseClicked(button:integer):boolean - Mouse button 0..4."
-    },
-    {
-      "trigger": "GUI.isMouseReleased",
-      "contents": "GUI.isMouseReleased",
-      "annotation": "LegacyEngine",
-      "details": "GUI.isMouseReleased(button:integer):boolean - Mouse button 0..4."
-    },
-    {
-      "trigger": "GUI.isKeyDown",
-      "contents": "GUI.isKeyDown",
-      "annotation": "LegacyEngine",
-      "details": "GUI.isKeyDown(key:string):boolean - Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows."
-    },
-    {
-      "trigger": "GUI.isKeyReleased",
-      "contents": "GUI.isKeyReleased",
-      "annotation": "LegacyEngine",
-      "details": "GUI.isKeyReleased(key:string):boolean - Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows."
-    },
-    {
-      "trigger": "GUI.isKeyPressed",
-      "contents": "GUI.isKeyPressed",
-      "annotation": "LegacyEngine",
-      "details": "GUI.isKeyPressed(key:string,repeatKey?:boolean):boolean - Named key, optional repeat."
-    },
-    {
-      "trigger": "GUI.drawLine",
-      "contents": "GUI.drawLine",
-      "annotation": "LegacyEngine",
-      "details": "GUI.drawLine(x:number,y:number,x2:number,y2:number,r:number,g:number,b:number,a?:number,width?:number) - Screen-pixel coordinates; colors 0..1."
-    },
-    {
-      "trigger": "GUI.drawRect",
-      "contents": "GUI.drawRect",
-      "annotation": "LegacyEngine",
-      "details": "GUI.drawRect(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) - Screen-pixel coordinates; colors 0..1."
-    },
-    {
-      "trigger": "GUI.drawRectFilled",
-      "contents": "GUI.drawRectFilled",
-      "annotation": "LegacyEngine",
-      "details": "GUI.drawRectFilled(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) - Screen-pixel coordinates; colors 0..1."
-    },
-    {
-      "trigger": "GUI.drawCircle",
-      "contents": "GUI.drawCircle",
-      "annotation": "LegacyEngine",
-      "details": "GUI.drawCircle(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) - Screen-pixel coordinates; radius 0..100000."
-    },
-    {
-      "trigger": "GUI.drawCircleFilled",
-      "contents": "GUI.drawCircleFilled",
-      "annotation": "LegacyEngine",
-      "details": "GUI.drawCircleFilled(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) - Screen-pixel coordinates; radius 0..100000."
-    },
-    {
-      "trigger": "GUI.drawText",
-      "contents": "GUI.drawText",
-      "annotation": "LegacyEngine",
-      "details": "GUI.drawText(x:number,y:number,value:string,r:number,g:number,b:number,a?:number) - Screen-pixel coordinates."
-    },
-    {
-      "trigger": "GUI.drawTriangleFilled",
-      "contents": "GUI.drawTriangleFilled",
-      "annotation": "LegacyEngine",
-      "details": "GUI.drawTriangleFilled(x:number,y:number,x2:number,y2:number,x3:number,y3:number,r:number,g:number,b:number,a?:number) - Screen-pixel coordinates."
+      "details": "OnGamePreQuit() - start tasks or hold Game.blockGameKilling; graceful quit waits at most ten seconds."
     },
     {
       "trigger": "getTextureQuality",
@@ -320,262 +134,10 @@
       "details": "setTextureQuality(quality:integer) - Play-only override 0..3; Stop restores project default."
     },
     {
-      "trigger": "GUI",
-      "contents": "GUI",
+      "trigger": "Decal",
+      "contents": "Decal",
       "annotation": "LegacyEngine",
-      "details": "GUI - ImGui runtime interface namespace, not a component. Draw widgets only inside onGUI(), called each rendered Game frame; no wait/task. Windows are scoped per script/object and rendered into Game, including the separate Game window. UI is the RML/RCSS component."
-    },
-    {
-      "trigger": "GUI.beginWindow",
-      "contents": "GUI.beginWindow",
-      "annotation": "LegacyEngine",
-      "details": "GUI.beginWindow(title:string,flags?:integer):boolean - Always call endWindow even when false."
-    },
-    {
-      "trigger": "GUI.endWindow",
-      "contents": "GUI.endWindow",
-      "annotation": "LegacyEngine",
-      "details": "GUI.endWindow() - End the current window."
-    },
-    {
-      "trigger": "GUI.text",
-      "contents": "GUI.text",
-      "annotation": "LegacyEngine",
-      "details": "GUI.text(value:string) - Plain text, never a printf format."
-    },
-    {
-      "trigger": "GUI.textWrapped",
-      "contents": "GUI.textWrapped",
-      "annotation": "LegacyEngine",
-      "details": "GUI.textWrapped(value:string) - Wrapped plain text."
-    },
-    {
-      "trigger": "GUI.button",
-      "contents": "GUI.button",
-      "annotation": "LegacyEngine",
-      "details": "GUI.button(label:string):boolean - True on activation."
-    },
-    {
-      "trigger": "GUI.smallButton",
-      "contents": "GUI.smallButton",
-      "annotation": "LegacyEngine",
-      "details": "GUI.smallButton(label:string):boolean - Compact button."
-    },
-    {
-      "trigger": "GUI.checkbox",
-      "contents": "GUI.checkbox",
-      "annotation": "LegacyEngine",
-      "details": "GUI.checkbox(label:string,value:boolean):boolean,boolean - Returns new value, changed."
-    },
-    {
-      "trigger": "GUI.sliderFloat",
-      "contents": "GUI.sliderFloat",
-      "annotation": "LegacyEngine",
-      "details": "GUI.sliderFloat(label:string,value:number,min:number,max:number):number,boolean - Returns value, changed."
-    },
-    {
-      "trigger": "GUI.sliderInt",
-      "contents": "GUI.sliderInt",
-      "annotation": "LegacyEngine",
-      "details": "GUI.sliderInt(label:string,value:integer,min:integer,max:integer):integer,boolean - Returns value, changed."
-    },
-    {
-      "trigger": "GUI.dragFloat",
-      "contents": "GUI.dragFloat",
-      "annotation": "LegacyEngine",
-      "details": "GUI.dragFloat(label:string,value:number,speed?:number):number,boolean - Returns value, changed; speed defaults 0.1."
-    },
-    {
-      "trigger": "GUI.inputFloat",
-      "contents": "GUI.inputFloat",
-      "annotation": "LegacyEngine",
-      "details": "GUI.inputFloat(label:string,value:number):number,boolean - Returns value, changed."
-    },
-    {
-      "trigger": "GUI.inputInt",
-      "contents": "GUI.inputInt",
-      "annotation": "LegacyEngine",
-      "details": "GUI.inputInt(label:string,value:integer):integer,boolean - Returns value, changed."
-    },
-    {
-      "trigger": "GUI.inputText",
-      "contents": "GUI.inputText",
-      "annotation": "LegacyEngine",
-      "details": "GUI.inputText(label:string,value:string):string,boolean - Returns text, changed; max 4095 bytes."
-    },
-    {
-      "trigger": "GUI.colorEdit3",
-      "contents": "GUI.colorEdit3",
-      "annotation": "LegacyEngine",
-      "details": "GUI.colorEdit3(label:string,r:number,g:number,b:number):number,number,number,boolean - Returns r,g,b,changed."
-    },
-    {
-      "trigger": "GUI.colorEdit4",
-      "contents": "GUI.colorEdit4",
-      "annotation": "LegacyEngine",
-      "details": "GUI.colorEdit4(label:string,r:number,g:number,b:number,a:number):number,number,number,number,boolean - Returns r,g,b,a,changed."
-    },
-    {
-      "trigger": "GUI.separator",
-      "contents": "GUI.separator",
-      "annotation": "LegacyEngine",
-      "details": "GUI.separator() - Horizontal separator."
-    },
-    {
-      "trigger": "GUI.sameLine",
-      "contents": "GUI.sameLine",
-      "annotation": "LegacyEngine",
-      "details": "GUI.sameLine(offset?:number,spacing?:number) - Continue on the same line."
-    },
-    {
-      "trigger": "GUI.spacing",
-      "contents": "GUI.spacing",
-      "annotation": "LegacyEngine",
-      "details": "GUI.spacing() - Add vertical space."
-    },
-    {
-      "trigger": "GUI.newLine",
-      "contents": "GUI.newLine",
-      "annotation": "LegacyEngine",
-      "details": "GUI.newLine() - Start a line."
-    },
-    {
-      "trigger": "GUI.progressBar",
-      "contents": "GUI.progressBar",
-      "annotation": "LegacyEngine",
-      "details": "GUI.progressBar(fraction:number) - Clamps fraction to 0..1."
-    },
-    {
-      "trigger": "GUI.selectable",
-      "contents": "GUI.selectable",
-      "annotation": "LegacyEngine",
-      "details": "GUI.selectable(label:string,selected?:boolean):boolean - True when clicked."
-    },
-    {
-      "trigger": "GUI.collapsingHeader",
-      "contents": "GUI.collapsingHeader",
-      "annotation": "LegacyEngine",
-      "details": "GUI.collapsingHeader(label:string):boolean - True while expanded; no matching end."
-    },
-    {
-      "trigger": "GUI.beginChild",
-      "contents": "GUI.beginChild",
-      "annotation": "LegacyEngine",
-      "details": "GUI.beginChild(id:string,width?:number,height?:number):boolean - Always pair with endChild."
-    },
-    {
-      "trigger": "GUI.endChild",
-      "contents": "GUI.endChild",
-      "annotation": "LegacyEngine",
-      "details": "GUI.endChild() - End child region."
-    },
-    {
-      "trigger": "GUI.beginGroup",
-      "contents": "GUI.beginGroup",
-      "annotation": "LegacyEngine",
-      "details": "GUI.beginGroup() - Begin a layout group."
-    },
-    {
-      "trigger": "GUI.endGroup",
-      "contents": "GUI.endGroup",
-      "annotation": "LegacyEngine",
-      "details": "GUI.endGroup() - End a layout group."
-    },
-    {
-      "trigger": "GUI.beginDisabled",
-      "contents": "GUI.beginDisabled",
-      "annotation": "LegacyEngine",
-      "details": "GUI.beginDisabled(disabled?:boolean) - Default true; pair with endDisabled."
-    },
-    {
-      "trigger": "GUI.endDisabled",
-      "contents": "GUI.endDisabled",
-      "annotation": "LegacyEngine",
-      "details": "GUI.endDisabled() - End disabled scope."
-    },
-    {
-      "trigger": "GUI.pushID",
-      "contents": "GUI.pushID",
-      "annotation": "LegacyEngine",
-      "details": "GUI.pushID(id:string) - Scope repeated widget labels; pair with popID."
-    },
-    {
-      "trigger": "GUI.popID",
-      "contents": "GUI.popID",
-      "annotation": "LegacyEngine",
-      "details": "GUI.popID() - Pop a widget ID."
-    },
-    {
-      "trigger": "GUI.setNextWindowPos",
-      "contents": "GUI.setNextWindowPos",
-      "annotation": "LegacyEngine",
-      "details": "GUI.setNextWindowPos(x:number,y:number) - Game-surface pixels; call before beginWindow."
-    },
-    {
-      "trigger": "GUI.setNextWindowSize",
-      "contents": "GUI.setNextWindowSize",
-      "annotation": "LegacyEngine",
-      "details": "GUI.setNextWindowSize(width:number,height:number) - Game-surface pixels; call before beginWindow."
-    },
-    {
-      "trigger": "GUI.setCursorPos",
-      "contents": "GUI.setCursorPos",
-      "annotation": "LegacyEngine",
-      "details": "GUI.setCursorPos(x:number,y:number) - Window-local content position."
-    },
-    {
-      "trigger": "GUI.getWindowSize",
-      "contents": "GUI.getWindowSize",
-      "annotation": "LegacyEngine",
-      "details": "GUI.getWindowSize():number,number - Returns width,height."
-    },
-    {
-      "trigger": "GUI.getContentRegionAvail",
-      "contents": "GUI.getContentRegionAvail",
-      "annotation": "LegacyEngine",
-      "details": "GUI.getContentRegionAvail():number,number - Returns available width,height."
-    },
-    {
-      "trigger": "GUI.setNextItemWidth",
-      "contents": "GUI.setNextItemWidth",
-      "annotation": "LegacyEngine",
-      "details": "GUI.setNextItemWidth(width:number) - Width of next input."
-    },
-    {
-      "trigger": "GUI.isItemHovered",
-      "contents": "GUI.isItemHovered",
-      "annotation": "LegacyEngine",
-      "details": "GUI.isItemHovered():boolean - Whether last widget is hovered."
-    },
-    {
-      "trigger": "GUI.isItemActive",
-      "contents": "GUI.isItemActive",
-      "annotation": "LegacyEngine",
-      "details": "GUI.isItemActive():boolean - Whether last widget is active."
-    },
-    {
-      "trigger": "GUI.setTooltip",
-      "contents": "GUI.setTooltip",
-      "annotation": "LegacyEngine",
-      "details": "GUI.setTooltip(value:string) - Plain-text tooltip."
-    },
-    {
-      "trigger": "GUI.bulletText",
-      "contents": "GUI.bulletText",
-      "annotation": "LegacyEngine",
-      "details": "GUI.bulletText(value:string) - Bulleted plain text."
-    },
-    {
-      "trigger": "GUI.getDisplaySize",
-      "contents": "GUI.getDisplaySize",
-      "annotation": "LegacyEngine",
-      "details": "GUI.getDisplaySize():number,number - Returns Game-surface pixel width,height."
-    },
-    {
-      "trigger": "UI",
-      "contents": "UI",
-      "annotation": "LegacyEngine",
-      "details": "UI - Game overlay component. Assign project-relative rml (.rml) and rcss (.rcss) assets in Inspector; both required. enabled toggles display. Use self:getComponent(UI) or @export hud UI. gui:isLoaded(), gui:setText(id, plainText), gui:onClick(id, callback) registers once and returns an off(token) subscription; gui:onClick(id) polls a pending click. No automatic UI folder loading or global ui table."
+      "details": "Decal - Box projection onto opaque depth. Fields: enabled, texture (project-relative image), width, height, depth, color, opacity, sortingOrder, layerMask (unsigned receiver layers). Local XY is the image plane, local Z is projector depth; Transform controls position, rotation and scale. No collider required."
     },
     {
       "trigger": "Vector3",
@@ -593,7 +155,7 @@
       "trigger": "NavMeshAgent",
       "contents": "NavMeshAgent",
       "annotation": "LegacyEngine",
-      "details": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(). Read-only hasPath, pathPending, remainingDistance, velocity, status. Bake static objects/terrains in Windows > Navigation. Agent origin is at feet. No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
+      "details": "NavMeshAgent - Transform movement over a baked Recast navmesh. Fields enabled, speed (0..100), heightOffset (-1000..1000 world units), stoppingDistance (0.01..10), stopped, destination (complete world-space vector). Methods setDestination(x,y,z or vector), resetPath(), stop(), start(), setSpeed(speed), setHeightOffset(height). stop/start preserve the route. Read-only hasPath, pathPending, distance (straight-line 3D world-unit distance from agent position to destination; zero without destination/Transform), remainingDistance (path length), velocity, status. Bake static objects/terrains in Windows > Navigation. Use heightOffset to raise centered pivots above the navigation surface (default 0 for foot pivots). No rigidbody/controller/camera movement drivers. updateRotation (default true)/angularSpeed control automatic path-facing heading; NavMeshObstacle boxes support bounded dynamic detours."
     },
     {
       "trigger": "TPSCamera",
@@ -740,10 +302,16 @@
       "details": "ParticleSystem - billboard emitter; play(), pause(), resume(), stop(clear=true), restart(), clear(), emit(count), setPreset(Fire/Smoke/Sparkles/Blood/Explosion); configurable emission, shape, motion, color, size and opt-in sprite sheet (useSpriteSheet=false by default); particleCount/isPlaying/paused/time read-only"
     },
     {
+      "trigger": "Animator",
+      "contents": "Animator",
+      "annotation": "LegacyEngine",
+      "details": "Animator - controller-backed state machine. Fields controller (.controller asset), enabled, playOnStart; read-only currentState, stateTime, isPlaying, paused, error. Methods setBool(name,value), setInt(name,value), setFloat(name,value), getBool(name), getInt(name), getFloat(name), play(state), crossFade(state,seconds=0.2), stop(), pause(), resume(), hasState(name). States reference .leanim clips with per-state loop. Ordered transitions combine typed conditions, normalized exit time and fade seconds. Edit graph in Windows > Animator. Animator owns the object's Animation backend while running."
+    },
+    {
       "trigger": "Animation",
       "contents": "Animation",
       "annotation": "LegacyEngine",
-      "details": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25); isPlaying is read-only"
+      "details": "Animation - keyframed component; clip, loop, playOnStart; play(), stop(), pause(), resume(), reset(), crossFade(clip, seconds=0.25), playClip(clip); onFinished/onStarted/onRestarted/onStopped/onPaused/onResumed wait tokens; isPlaying is read-only"
     },
     {
       "trigger": "onAnimationFinish",
@@ -1031,7 +599,7 @@
       "trigger": "wait",
       "contents": "wait",
       "annotation": "LegacyEngine",
-      "details": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio event"
+      "details": "wait(seconds) / wait(audioSource.onAudioFinished) - suspend this callback/task until time or the next audio/animation component event"
     },
     {
       "trigger": "isActive",
@@ -1091,7 +659,7 @@
       "trigger": "loadLevelAsync",
       "contents": "loadLevelAsync",
       "annotation": "LegacyEngine",
-      "details": "loadLevelAsync(name=nil) -> accepted, error; background file read"
+      "details": "loadLevelAsync(name=nil) -> accepted, error; background decoding and asset preloading"
     },
     {
       "trigger": "unloadLevel",
@@ -1163,7 +731,7 @@
       "trigger": "Texture",
       "contents": "Texture",
       "annotation": "LegacyEngine",
-      "details": "Texture - export-only image or HDR asset path; @export image Texture"
+      "details": "Texture - export-only image or HDR asset path; global Texture image ="
     },
     {
       "trigger": "AudioListener",
@@ -1658,6 +1226,42 @@
       "details": "onMouseUp() - targeted GameObject callback"
     },
     {
+      "trigger": "onNavMeshAgentStatusChanged",
+      "contents": "onNavMeshAgentStatusChanged",
+      "annotation": "LegacyEngine",
+      "details": "onNavMeshAgentStatusChanged() - NavMeshAgent status edge callback"
+    },
+    {
+      "trigger": "onNavMeshAgentMoving",
+      "contents": "onNavMeshAgentMoving",
+      "annotation": "LegacyEngine",
+      "details": "onNavMeshAgentMoving() - NavMeshAgent status edge callback"
+    },
+    {
+      "trigger": "onNavMeshAgentArrived",
+      "contents": "onNavMeshAgentArrived",
+      "annotation": "LegacyEngine",
+      "details": "onNavMeshAgentArrived() - NavMeshAgent status edge callback"
+    },
+    {
+      "trigger": "onNavMeshAgentBlocked",
+      "contents": "onNavMeshAgentBlocked",
+      "annotation": "LegacyEngine",
+      "details": "onNavMeshAgentBlocked() - NavMeshAgent status edge callback"
+    },
+    {
+      "trigger": "onNavMeshAgentUnreachable",
+      "contents": "onNavMeshAgentUnreachable",
+      "annotation": "LegacyEngine",
+      "details": "onNavMeshAgentUnreachable() - NavMeshAgent status edge callback"
+    },
+    {
+      "trigger": "onNavMeshAgentStopped",
+      "contents": "onNavMeshAgentStopped",
+      "annotation": "LegacyEngine",
+      "details": "onNavMeshAgentStopped() - NavMeshAgent status edge callback"
+    },
+    {
       "trigger": "onMouseEnter",
       "contents": "onMouseEnter",
       "annotation": "LegacyEngine",
@@ -1710,18 +1314,6 @@
       "contents": "onStart",
       "annotation": "LegacyEngine",
       "details": "onStart() - called when Execute succeeds"
-    },
-    {
-      "trigger": "onGUI",
-      "contents": "onGUI",
-      "annotation": "LegacyEngine",
-      "details": "onGUI() - Called once per rendered Game frame during unpaused Play. GUI calls are valid only here; no wait/task."
-    },
-    {
-      "trigger": "hdrCompression",
-      "contents": "hdrCompression",
-      "annotation": "LegacyEngine",
-      "details": "Skybox.hdrCompression: boolean, default false. Packed RGB9_E5 GPU HDR storage (4 bytes/pixel instead of RGB16F 6); lower precision, source unchanged."
     },
     {
       "trigger": "onUpdate",
@@ -1895,7 +1487,7 @@
       "trigger": "setMaterialShader",
       "contents": "setMaterialShader",
       "annotation": "LegacyEngine",
-      "details": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection')"
+      "details": "mesh:setMaterialShader('Diffuse'|'Diffuse Bumped'|'Diffuse Transparent'|'Diffuse Reflection'|'Stochastic Texture Sampling')"
     },
     {
       "trigger": "setMaterialNormalStrength",
@@ -2132,6 +1724,12 @@
       "details": "number"
     },
     {
+      "trigger": "getScript",
+      "contents": "getScript",
+      "annotation": "GameObject",
+      "details": "fun(name:string):NamedScriptComponent|nil"
+    },
+    {
       "trigger": "name",
       "contents": "name",
       "annotation": "GameObject",
@@ -2147,37 +1745,37 @@
       "trigger": "getComponent",
       "contents": "getComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType|string):NamedScriptComponent|Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "getComponentInParent",
       "contents": "getComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "getComponentInChildren",
       "contents": "getComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "findComponentInParent",
       "contents": "findComponentInParent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "findComponentInChildren",
       "contents": "findComponentInChildren",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI|nil"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal|nil"
     },
     {
       "trigger": "addComponent",
       "contents": "addComponent",
       "annotation": "GameObject",
-      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|UI"
+      "details": "fun(componentType:ComponentType):Transform|RigidBody|Collider|MeshRenderer|ObjectName|LuaScript|Animation|Animator|ParticleSystem|Laser|LightShafts|CameraEffects|Fog|CloudSystem|River|Vehicle|Water|BoneAttachment|TPSCamera|NavMeshAgent|Decal"
     },
     {
       "trigger": "removeComponent",
@@ -2216,10 +1814,10 @@
       "details": "fun()|nil"
     },
     {
-      "trigger": "onGUI",
-      "contents": "onGUI",
+      "trigger": "onAnimationRestarted",
+      "contents": "onAnimationRestarted",
       "annotation": "GameObject",
-      "details": "fun()|nil Draw GUI once per rendered Game frame; no wait/task"
+      "details": "fun()|nil"
     },
     {
       "trigger": "onStart",
@@ -2660,6 +2258,12 @@
       "details": "Transform Collider owner transform"
     },
     {
+      "trigger": "castShadow",
+      "contents": "castShadow",
+      "annotation": "MeshRenderer",
+      "details": "boolean Cast realtime/baked shadows; default true. Rebake static lighting after changes."
+    },
+    {
       "trigger": "material",
       "contents": "material",
       "annotation": "MeshRenderer",
@@ -2693,7 +2297,7 @@
       "trigger": "setMaterialShader",
       "contents": "setMaterialShader",
       "annotation": "MeshRenderer",
-      "details": "fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent or Diffuse Reflection"
+      "details": "fun(self:MeshRenderer,shader:string) Diffuse, Diffuse Bumped, Diffuse Transparent, Diffuse Reflection or Stochastic Texture Sampling"
     },
     {
       "trigger": "setMaterialNormalStrength",
@@ -3410,12 +3014,6 @@
       "details": "fun(self:DirectionalLight|PointLight|SpotLight,inner:number,outer:number)"
     },
     {
-      "trigger": "hdrCompression",
-      "contents": "hdrCompression",
-      "annotation": "Skybox",
-      "details": "boolean Packed RGB9_E5 GPU HDR storage, default false; source asset unchanged"
-    },
-    {
       "trigger": "type",
       "contents": "type",
       "annotation": "Skybox",
@@ -3884,6 +3482,42 @@
       "details": "integer"
     },
     {
+      "trigger": "onFinished",
+      "contents": "onFinished",
+      "annotation": "Animation",
+      "details": "ComponentEvent Natural nonloop completion, not Stop."
+    },
+    {
+      "trigger": "onRestarted",
+      "contents": "onRestarted",
+      "annotation": "Animation",
+      "details": "ComponentEvent Explicit restart or loop wrap."
+    },
+    {
+      "trigger": "onStopped",
+      "contents": "onStopped",
+      "annotation": "Animation",
+      "details": "ComponentEvent Stop or Reset while active."
+    },
+    {
+      "trigger": "onStarted",
+      "contents": "onStarted",
+      "annotation": "Animation",
+      "details": "ComponentEvent Playback starts after the clip is ready."
+    },
+    {
+      "trigger": "onPaused",
+      "contents": "onPaused",
+      "annotation": "Animation",
+      "details": "ComponentEvent Playback paused."
+    },
+    {
+      "trigger": "onResumed",
+      "contents": "onResumed",
+      "annotation": "Animation",
+      "details": "ComponentEvent Playback resumed."
+    },
+    {
       "trigger": "gameObject",
       "contents": "gameObject",
       "annotation": "Animation",
@@ -3936,6 +3570,12 @@
       "contents": "play",
       "annotation": "Animation",
       "details": "fun(self:Animation)"
+    },
+    {
+      "trigger": "playClip",
+      "contents": "playClip",
+      "annotation": "Animation",
+      "details": "fun(self:Animation,clip:string) Play an AnimationClip path value; loads asynchronously if needed."
     },
     {
       "trigger": "stop",
@@ -5168,6 +4808,36 @@
       "details": "number Movement speed, 0..100 metres/second"
     },
     {
+      "trigger": "heightOffset",
+      "contents": "heightOffset",
+      "annotation": "NavMeshAgent",
+      "details": "number World-space pivot height above the navmesh, -1000..1000; default 0"
+    },
+    {
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent) Pause movement and clear velocity, keeping the route"
+    },
+    {
+      "trigger": "start",
+      "contents": "start",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent) Resume the existing route without discarding it"
+    },
+    {
+      "trigger": "setSpeed",
+      "contents": "setSpeed",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent, speed:number) Set movement speed, 0..100"
+    },
+    {
+      "trigger": "setHeightOffset",
+      "contents": "setHeightOffset",
+      "annotation": "NavMeshAgent",
+      "details": "fun(self:NavMeshAgent, height:number) Set pivot height above the surface, -1000..1000"
+    },
+    {
       "trigger": "stoppingDistance",
       "contents": "stoppingDistance",
       "annotation": "NavMeshAgent",
@@ -5202,6 +4872,12 @@
       "contents": "pathPending",
       "annotation": "NavMeshAgent",
       "details": "boolean Read-only; destination request awaits the next Play update"
+    },
+    {
+      "trigger": "distance",
+      "contents": "distance",
+      "annotation": "NavMeshAgent",
+      "details": "number Read-only straight-line 3D distance from the agent position to its destination, in world units; zero if no destination or Transform."
     },
     {
       "trigger": "remainingDistance",
@@ -5260,1262 +4936,650 @@
     {
       "trigger": "enabled",
       "contents": "enabled",
-      "annotation": "UI",
-      "details": "boolean Show this UI when its owner is active; defaults to true."
+      "annotation": "Decal",
+      "details": "boolean"
     },
     {
-      "trigger": "rml",
-      "contents": "rml",
-      "annotation": "UI",
-      "details": "string Project-relative .rml asset; both rml and rcss must be assigned."
+      "trigger": "texture",
+      "contents": "texture",
+      "annotation": "Decal",
+      "details": "string"
     },
     {
-      "trigger": "rcss",
-      "contents": "rcss",
-      "annotation": "UI",
-      "details": "string Project-relative .rcss asset; applied to this document."
+      "trigger": "color",
+      "contents": "color",
+      "annotation": "Decal",
+      "details": "Vec3 Tint, read as a copy; assign the whole vector to update."
     },
     {
-      "trigger": "isLoaded",
-      "contents": "isLoaded",
-      "annotation": "UI",
-      "details": "fun(self:UI):boolean Whether this component's document is loaded in Play."
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "Decal",
+      "details": "number"
     },
     {
-      "trigger": "setText",
-      "contents": "setText",
-      "annotation": "UI",
-      "details": "fun(self:UI,id:string,plainText:string):boolean Set escaped plain text in this UI document."
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "Decal",
+      "details": "number"
     },
     {
-      "trigger": "onClick",
-      "contents": "onClick",
-      "annotation": "UI",
-      "details": "fun(self:UI,id:string,callback?:fun()):boolean|integer Register a click callback (returns off(token) handle); omit callback to consume a queued click as a boolean. Register callbacks once in onStart."
+      "trigger": "depth",
+      "contents": "depth",
+      "annotation": "Decal",
+      "details": "number"
     },
     {
-      "trigger": "WindowFlags",
-      "contents": "WindowFlags",
-      "annotation": "GUI",
-      "details": "GUIWindowFlags"
+      "trigger": "opacity",
+      "contents": "opacity",
+      "annotation": "Decal",
+      "details": "number"
     },
     {
-      "trigger": "TableFlags",
-      "contents": "TableFlags",
-      "annotation": "GUI",
-      "details": "GUITableFlags"
-    },
-    {
-      "trigger": "Col",
-      "contents": "Col",
-      "annotation": "GUI",
-      "details": "GUIColors"
-    },
-    {
-      "trigger": "StyleVar",
-      "contents": "StyleVar",
-      "annotation": "GUI",
-      "details": "GUIStyleVars"
-    },
-    {
-      "trigger": "image",
-      "contents": "image",
-      "annotation": "GUI",
-      "details": "fun(path:string,width?:number,height?:number):boolean Full-resolution project image; returns loaded."
-    },
-    {
-      "trigger": "imageButton",
-      "contents": "imageButton",
-      "annotation": "GUI",
-      "details": "fun(id:string,path:string,width?:number,height?:number):boolean Returns clicked."
-    },
-    {
-      "trigger": "beginTable",
-      "contents": "beginTable",
-      "annotation": "GUI",
-      "details": "fun(id:string,columns:integer,flags?:integer,height?:number):boolean 1..64 columns; only end when true. ScrollY needs height."
-    },
-    {
-      "trigger": "endTable",
-      "contents": "endTable",
-      "annotation": "GUI",
-      "details": "fun() Table scope operation; set up columns before rows."
-    },
-    {
-      "trigger": "tableNextRow",
-      "contents": "tableNextRow",
-      "annotation": "GUI",
-      "details": "fun() Table scope operation; set up columns before rows."
-    },
-    {
-      "trigger": "tableHeadersRow",
-      "contents": "tableHeadersRow",
-      "annotation": "GUI",
-      "details": "fun() Table scope operation; set up columns before rows."
-    },
-    {
-      "trigger": "tableNextColumn",
-      "contents": "tableNextColumn",
-      "annotation": "GUI",
-      "details": "fun():boolean Advance to next column."
-    },
-    {
-      "trigger": "tableSetColumnIndex",
-      "contents": "tableSetColumnIndex",
-      "annotation": "GUI",
-      "details": "fun(index:integer):boolean Zero-based table column index."
-    },
-    {
-      "trigger": "tableSetupColumn",
-      "contents": "tableSetupColumn",
-      "annotation": "GUI",
-      "details": "fun(label:string,width?:number) Fixed width when positive, otherwise stretch."
-    },
-    {
-      "trigger": "tableGetColumnIndex",
-      "contents": "tableGetColumnIndex",
-      "annotation": "GUI",
-      "details": "fun():integer Current zero-based index or column count."
-    },
-    {
-      "trigger": "tableGetColumnCount",
-      "contents": "tableGetColumnCount",
-      "annotation": "GUI",
-      "details": "fun():integer Current zero-based index or column count."
-    },
-    {
-      "trigger": "beginMenu",
-      "contents": "beginMenu",
-      "annotation": "GUI",
-      "details": "fun(label:string,enabled?:boolean):boolean Only end when true."
-    },
-    {
-      "trigger": "endMenu",
-      "contents": "endMenu",
-      "annotation": "GUI",
-      "details": "fun() End successful beginMenu."
-    },
-    {
-      "trigger": "beginMenuBar",
-      "contents": "beginMenuBar",
-      "annotation": "GUI",
-      "details": "fun():boolean Requires GUI.WindowFlags.MenuBar on beginWindow. Only end when true."
-    },
-    {
-      "trigger": "endMenuBar",
-      "contents": "endMenuBar",
-      "annotation": "GUI",
-      "details": "fun() End successful beginMenuBar."
-    },
-    {
-      "trigger": "menuItem",
-      "contents": "menuItem",
-      "annotation": "GUI",
-      "details": "fun(label:string,selected?:boolean,enabled?:boolean):boolean Returns clicked."
-    },
-    {
-      "trigger": "openPopup",
-      "contents": "openPopup",
-      "annotation": "GUI",
-      "details": "fun(id:string) Open a named popup."
-    },
-    {
-      "trigger": "beginPopup",
-      "contents": "beginPopup",
-      "annotation": "GUI",
-      "details": "fun(id:string):boolean Only endPopup when true."
-    },
-    {
-      "trigger": "beginPopupModal",
-      "contents": "beginPopupModal",
-      "annotation": "GUI",
-      "details": "fun(id:string):boolean Only endPopup when true."
-    },
-    {
-      "trigger": "endPopup",
-      "contents": "endPopup",
-      "annotation": "GUI",
-      "details": "fun() Popup scope operation."
-    },
-    {
-      "trigger": "closeCurrentPopup",
-      "contents": "closeCurrentPopup",
-      "annotation": "GUI",
-      "details": "fun() Popup scope operation."
-    },
-    {
-      "trigger": "beginCombo",
-      "contents": "beginCombo",
-      "annotation": "GUI",
-      "details": "fun(label:string,preview:string):boolean Only endCombo when true."
-    },
-    {
-      "trigger": "endCombo",
-      "contents": "endCombo",
-      "annotation": "GUI",
-      "details": "fun() End successful beginCombo."
-    },
-    {
-      "trigger": "combo",
-      "contents": "combo",
-      "annotation": "GUI",
-      "details": "fun(label:string,index:integer,items:table):integer,boolean 1-based selected index and changed; 1..256 items."
-    },
-    {
-      "trigger": "radioButton",
-      "contents": "radioButton",
-      "annotation": "GUI",
-      "details": "fun(label:string,selected:boolean):boolean Returns clicked."
-    },
-    {
-      "trigger": "pushStyleColor",
-      "contents": "pushStyleColor",
-      "annotation": "GUI",
-      "details": "fun(name:string|integer,r:number,g:number,b:number,a?:number) Use GUI.Col constants; pair with popStyleColor."
-    },
-    {
-      "trigger": "popStyleColor",
-      "contents": "popStyleColor",
-      "annotation": "GUI",
-      "details": "fun(count?:integer) Strict reverse-order scoped pop; default 1."
-    },
-    {
-      "trigger": "popStyleVar",
-      "contents": "popStyleVar",
-      "annotation": "GUI",
-      "details": "fun(count?:integer) Strict reverse-order scoped pop; default 1."
-    },
-    {
-      "trigger": "pushStyleVar",
-      "contents": "pushStyleVar",
-      "annotation": "GUI",
-      "details": "fun(name:string|integer,x:number,y?:number) Use GUI.StyleVar constants. Values 0..1000."
-    },
-    {
-      "trigger": "pushFontSize",
-      "contents": "pushFontSize",
-      "annotation": "GUI",
-      "details": "fun(size:number) 8..96 pixels; pair with popFont."
-    },
-    {
-      "trigger": "popFont",
-      "contents": "popFont",
-      "annotation": "GUI",
-      "details": "fun() End font size scope."
-    },
-    {
-      "trigger": "beginDragDropSource",
-      "contents": "beginDragDropSource",
-      "annotation": "GUI",
-      "details": "fun():boolean Only end when true. Script payloads isolated from editor payloads."
-    },
-    {
-      "trigger": "beginDragDropTarget",
-      "contents": "beginDragDropTarget",
-      "annotation": "GUI",
-      "details": "fun():boolean Only end when true. Script payloads isolated from editor payloads."
-    },
-    {
-      "trigger": "endDragDropSource",
-      "contents": "endDragDropSource",
-      "annotation": "GUI",
-      "details": "fun() End successful drag/drop scope."
-    },
-    {
-      "trigger": "endDragDropTarget",
-      "contents": "endDragDropTarget",
-      "annotation": "GUI",
-      "details": "fun() End successful drag/drop scope."
-    },
-    {
-      "trigger": "setDragDropPayload",
-      "contents": "setDragDropPayload",
-      "annotation": "GUI",
-      "details": "fun(kind:string,value:string) Source only. Type max 28 bytes; value max 4096."
-    },
-    {
-      "trigger": "acceptDragDropPayload",
-      "contents": "acceptDragDropPayload",
-      "annotation": "GUI",
-      "details": "fun(kind:string):string? Target only. Returns delivered matching script payload or nil."
-    },
-    {
-      "trigger": "getMousePos",
-      "contents": "getMousePos",
-      "annotation": "GUI",
-      "details": "fun():number,number Returns Game-surface mouse x,y."
-    },
-    {
-      "trigger": "isMouseDown",
-      "contents": "isMouseDown",
-      "annotation": "GUI",
-      "details": "fun(button:integer):boolean Mouse button 0..4."
-    },
-    {
-      "trigger": "isMouseClicked",
-      "contents": "isMouseClicked",
-      "annotation": "GUI",
-      "details": "fun(button:integer):boolean Mouse button 0..4."
-    },
-    {
-      "trigger": "isMouseReleased",
-      "contents": "isMouseReleased",
-      "annotation": "GUI",
-      "details": "fun(button:integer):boolean Mouse button 0..4."
-    },
-    {
-      "trigger": "isKeyDown",
-      "contents": "isKeyDown",
-      "annotation": "GUI",
-      "details": "fun(key:string):boolean Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows."
-    },
-    {
-      "trigger": "isKeyReleased",
-      "contents": "isKeyReleased",
-      "annotation": "GUI",
-      "details": "fun(key:string):boolean Named key: A..Z, 0..9, Space, Enter, Escape, Tab, Backspace, Delete, arrows."
-    },
-    {
-      "trigger": "isKeyPressed",
-      "contents": "isKeyPressed",
-      "annotation": "GUI",
-      "details": "fun(key:string,repeatKey?:boolean):boolean Named key, optional repeat."
-    },
-    {
-      "trigger": "drawLine",
-      "contents": "drawLine",
-      "annotation": "GUI",
-      "details": "fun(x:number,y:number,x2:number,y2:number,r:number,g:number,b:number,a?:number,width?:number) Screen-pixel coordinates; colors 0..1."
-    },
-    {
-      "trigger": "drawRect",
-      "contents": "drawRect",
-      "annotation": "GUI",
-      "details": "fun(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) Screen-pixel coordinates; colors 0..1."
-    },
-    {
-      "trigger": "drawRectFilled",
-      "contents": "drawRectFilled",
-      "annotation": "GUI",
-      "details": "fun(x:number,y:number,width:number,height:number,r:number,g:number,b:number,a?:number,rounding?:number,thickness?:number) Screen-pixel coordinates; colors 0..1."
-    },
-    {
-      "trigger": "drawCircle",
-      "contents": "drawCircle",
-      "annotation": "GUI",
-      "details": "fun(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) Screen-pixel coordinates; radius 0..100000."
-    },
-    {
-      "trigger": "drawCircleFilled",
-      "contents": "drawCircleFilled",
-      "annotation": "GUI",
-      "details": "fun(x:number,y:number,radius:number,r:number,g:number,b:number,a?:number,thickness?:number) Screen-pixel coordinates; radius 0..100000."
-    },
-    {
-      "trigger": "drawText",
-      "contents": "drawText",
-      "annotation": "GUI",
-      "details": "fun(x:number,y:number,value:string,r:number,g:number,b:number,a?:number) Screen-pixel coordinates."
-    },
-    {
-      "trigger": "drawTriangleFilled",
-      "contents": "drawTriangleFilled",
-      "annotation": "GUI",
-      "details": "fun(x:number,y:number,x2:number,y2:number,x3:number,y3:number,r:number,g:number,b:number,a?:number) Screen-pixel coordinates."
-    },
-    {
-      "trigger": "beginWindow",
-      "contents": "beginWindow",
-      "annotation": "GUI",
-      "details": "fun(title:string,flags?:integer):boolean Always call endWindow even when false."
-    },
-    {
-      "trigger": "endWindow",
-      "contents": "endWindow",
-      "annotation": "GUI",
-      "details": "fun() End the current window."
-    },
-    {
-      "trigger": "text",
-      "contents": "text",
-      "annotation": "GUI",
-      "details": "fun(value:string) Plain text, never a printf format."
-    },
-    {
-      "trigger": "textWrapped",
-      "contents": "textWrapped",
-      "annotation": "GUI",
-      "details": "fun(value:string) Wrapped plain text."
-    },
-    {
-      "trigger": "button",
-      "contents": "button",
-      "annotation": "GUI",
-      "details": "fun(label:string):boolean True on activation."
-    },
-    {
-      "trigger": "smallButton",
-      "contents": "smallButton",
-      "annotation": "GUI",
-      "details": "fun(label:string):boolean Compact button."
-    },
-    {
-      "trigger": "checkbox",
-      "contents": "checkbox",
-      "annotation": "GUI",
-      "details": "fun(label:string,value:boolean):boolean,boolean Returns new value, changed."
-    },
-    {
-      "trigger": "sliderFloat",
-      "contents": "sliderFloat",
-      "annotation": "GUI",
-      "details": "fun(label:string,value:number,min:number,max:number):number,boolean Returns value, changed."
-    },
-    {
-      "trigger": "sliderInt",
-      "contents": "sliderInt",
-      "annotation": "GUI",
-      "details": "fun(label:string,value:integer,min:integer,max:integer):integer,boolean Returns value, changed."
-    },
-    {
-      "trigger": "dragFloat",
-      "contents": "dragFloat",
-      "annotation": "GUI",
-      "details": "fun(label:string,value:number,speed?:number):number,boolean Returns value, changed; speed defaults 0.1."
-    },
-    {
-      "trigger": "inputFloat",
-      "contents": "inputFloat",
-      "annotation": "GUI",
-      "details": "fun(label:string,value:number):number,boolean Returns value, changed."
-    },
-    {
-      "trigger": "inputInt",
-      "contents": "inputInt",
-      "annotation": "GUI",
-      "details": "fun(label:string,value:integer):integer,boolean Returns value, changed."
-    },
-    {
-      "trigger": "inputText",
-      "contents": "inputText",
-      "annotation": "GUI",
-      "details": "fun(label:string,value:string):string,boolean Returns text, changed; max 4095 bytes."
-    },
-    {
-      "trigger": "colorEdit3",
-      "contents": "colorEdit3",
-      "annotation": "GUI",
-      "details": "fun(label:string,r:number,g:number,b:number):number,number,number,boolean Returns r,g,b,changed."
-    },
-    {
-      "trigger": "colorEdit4",
-      "contents": "colorEdit4",
-      "annotation": "GUI",
-      "details": "fun(label:string,r:number,g:number,b:number,a:number):number,number,number,number,boolean Returns r,g,b,a,changed."
-    },
-    {
-      "trigger": "separator",
-      "contents": "separator",
-      "annotation": "GUI",
-      "details": "fun() Horizontal separator."
-    },
-    {
-      "trigger": "sameLine",
-      "contents": "sameLine",
-      "annotation": "GUI",
-      "details": "fun(offset?:number,spacing?:number) Continue on the same line."
-    },
-    {
-      "trigger": "spacing",
-      "contents": "spacing",
-      "annotation": "GUI",
-      "details": "fun() Add vertical space."
-    },
-    {
-      "trigger": "newLine",
-      "contents": "newLine",
-      "annotation": "GUI",
-      "details": "fun() Start a line."
-    },
-    {
-      "trigger": "progressBar",
-      "contents": "progressBar",
-      "annotation": "GUI",
-      "details": "fun(fraction:number) Clamps fraction to 0..1."
-    },
-    {
-      "trigger": "selectable",
-      "contents": "selectable",
-      "annotation": "GUI",
-      "details": "fun(label:string,selected?:boolean):boolean True when clicked."
-    },
-    {
-      "trigger": "collapsingHeader",
-      "contents": "collapsingHeader",
-      "annotation": "GUI",
-      "details": "fun(label:string):boolean True while expanded; no matching end."
-    },
-    {
-      "trigger": "beginChild",
-      "contents": "beginChild",
-      "annotation": "GUI",
-      "details": "fun(id:string,width?:number,height?:number):boolean Always pair with endChild."
-    },
-    {
-      "trigger": "endChild",
-      "contents": "endChild",
-      "annotation": "GUI",
-      "details": "fun() End child region."
-    },
-    {
-      "trigger": "beginGroup",
-      "contents": "beginGroup",
-      "annotation": "GUI",
-      "details": "fun() Begin a layout group."
-    },
-    {
-      "trigger": "endGroup",
-      "contents": "endGroup",
-      "annotation": "GUI",
-      "details": "fun() End a layout group."
-    },
-    {
-      "trigger": "beginDisabled",
-      "contents": "beginDisabled",
-      "annotation": "GUI",
-      "details": "fun(disabled?:boolean) Default true; pair with endDisabled."
-    },
-    {
-      "trigger": "endDisabled",
-      "contents": "endDisabled",
-      "annotation": "GUI",
-      "details": "fun() End disabled scope."
-    },
-    {
-      "trigger": "pushID",
-      "contents": "pushID",
-      "annotation": "GUI",
-      "details": "fun(id:string) Scope repeated widget labels; pair with popID."
-    },
-    {
-      "trigger": "popID",
-      "contents": "popID",
-      "annotation": "GUI",
-      "details": "fun() Pop a widget ID."
-    },
-    {
-      "trigger": "setNextWindowPos",
-      "contents": "setNextWindowPos",
-      "annotation": "GUI",
-      "details": "fun(x:number,y:number) Game-surface pixels; call before beginWindow."
-    },
-    {
-      "trigger": "setNextWindowSize",
-      "contents": "setNextWindowSize",
-      "annotation": "GUI",
-      "details": "fun(width:number,height:number) Game-surface pixels; call before beginWindow."
-    },
-    {
-      "trigger": "setCursorPos",
-      "contents": "setCursorPos",
-      "annotation": "GUI",
-      "details": "fun(x:number,y:number) Window-local content position."
-    },
-    {
-      "trigger": "getWindowSize",
-      "contents": "getWindowSize",
-      "annotation": "GUI",
-      "details": "fun():number,number Returns width,height."
-    },
-    {
-      "trigger": "getContentRegionAvail",
-      "contents": "getContentRegionAvail",
-      "annotation": "GUI",
-      "details": "fun():number,number Returns available width,height."
-    },
-    {
-      "trigger": "setNextItemWidth",
-      "contents": "setNextItemWidth",
-      "annotation": "GUI",
-      "details": "fun(width:number) Width of next input."
-    },
-    {
-      "trigger": "isItemHovered",
-      "contents": "isItemHovered",
-      "annotation": "GUI",
-      "details": "fun():boolean Whether last widget is hovered."
-    },
-    {
-      "trigger": "isItemActive",
-      "contents": "isItemActive",
-      "annotation": "GUI",
-      "details": "fun():boolean Whether last widget is active."
-    },
-    {
-      "trigger": "setTooltip",
-      "contents": "setTooltip",
-      "annotation": "GUI",
-      "details": "fun(value:string) Plain-text tooltip."
-    },
-    {
-      "trigger": "bulletText",
-      "contents": "bulletText",
-      "annotation": "GUI",
-      "details": "fun(value:string) Bulleted plain text."
-    },
-    {
-      "trigger": "getDisplaySize",
-      "contents": "getDisplaySize",
-      "annotation": "GUI",
-      "details": "fun():number,number Returns Game-surface pixel width,height."
-    },
-    {
-      "trigger": "NoTitleBar",
-      "contents": "NoTitleBar",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
-    },
-    {
-      "trigger": "NoResize",
-      "contents": "NoResize",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
-    },
-    {
-      "trigger": "NoMove",
-      "contents": "NoMove",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
-    },
-    {
-      "trigger": "NoScrollbar",
-      "contents": "NoScrollbar",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
-    },
-    {
-      "trigger": "NoCollapse",
-      "contents": "NoCollapse",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
-    },
-    {
-      "trigger": "AlwaysAutoResize",
-      "contents": "AlwaysAutoResize",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
-    },
-    {
-      "trigger": "NoBackground",
-      "contents": "NoBackground",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
-    },
-    {
-      "trigger": "MenuBar",
-      "contents": "MenuBar",
-      "annotation": "GUIWindowFlags",
+      "trigger": "sortingOrder",
+      "contents": "sortingOrder",
+      "annotation": "Decal",
       "details": "integer"
     },
     {
-      "trigger": "NoInputs",
-      "contents": "NoInputs",
-      "annotation": "GUIWindowFlags",
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "ScreenResolution",
       "details": "integer"
     },
     {
-      "trigger": "NoNav",
-      "contents": "NoNav",
-      "annotation": "GUIWindowFlags",
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "ScreenResolution",
       "details": "integer"
     },
     {
-      "trigger": "NoDecoration",
-      "contents": "NoDecoration",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
+      "trigger": "refreshRate",
+      "contents": "refreshRate",
+      "annotation": "ScreenResolution",
+      "details": "number"
     },
     {
-      "trigger": "NoFocusOnAppearing",
-      "contents": "NoFocusOnAppearing",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
+      "trigger": "brightness",
+      "contents": "brightness",
+      "annotation": "ScreenAPI",
+      "details": "number Rendered-game brightness, 0..1 (not monitor brightness)."
     },
     {
-      "trigger": "NoBringToFrontOnFocus",
-      "contents": "NoBringToFrontOnFocus",
-      "annotation": "GUIWindowFlags",
-      "details": "integer"
+      "trigger": "currentResolution",
+      "contents": "currentResolution",
+      "annotation": "ScreenAPI",
+      "details": "ScreenResolution Read-only display mode."
     },
     {
-      "trigger": "Borders",
-      "contents": "Borders",
-      "annotation": "GUITableFlags",
-      "details": "integer"
+      "trigger": "fullScreen",
+      "contents": "fullScreen",
+      "annotation": "ScreenAPI",
+      "details": "boolean Separate game/player windows only."
     },
     {
-      "trigger": "RowBg",
-      "contents": "RowBg",
-      "annotation": "GUITableFlags",
-      "details": "integer"
+      "trigger": "width",
+      "contents": "width",
+      "annotation": "ScreenAPI",
+      "details": "integer Read-only game render width in pixels."
     },
     {
-      "trigger": "Resizable",
-      "contents": "Resizable",
-      "annotation": "GUITableFlags",
-      "details": "integer"
+      "trigger": "height",
+      "contents": "height",
+      "annotation": "ScreenAPI",
+      "details": "integer Read-only game render height in pixels."
     },
     {
-      "trigger": "Reorderable",
-      "contents": "Reorderable",
-      "annotation": "GUITableFlags",
-      "details": "integer"
+      "trigger": "getResolutions",
+      "contents": "getResolutions",
+      "annotation": "ScreenAPI",
+      "details": "fun():ScreenResolution[]"
     },
     {
-      "trigger": "Hideable",
-      "contents": "Hideable",
-      "annotation": "GUITableFlags",
-      "details": "integer"
+      "trigger": "getResolution",
+      "contents": "getResolution",
+      "annotation": "ScreenAPI",
+      "details": "fun(width:integer,height:integer):boolean Checks availability."
     },
     {
-      "trigger": "SizingStretchProp",
-      "contents": "SizingStretchProp",
-      "annotation": "GUITableFlags",
-      "details": "integer"
+      "trigger": "setResolution",
+      "contents": "setResolution",
+      "annotation": "ScreenAPI",
+      "details": "fun(width:integer,height:integer):boolean|nil,error?:string Separate game/player windows only."
     },
     {
-      "trigger": "ScrollY",
-      "contents": "ScrollY",
-      "annotation": "GUITableFlags",
-      "details": "integer"
+      "trigger": "takeScreenshot",
+      "contents": "takeScreenshot",
+      "annotation": "ScreenAPI",
+      "details": "fun(path:string):boolean|nil,error?:string Queue a PNG under userDataPath."
     },
     {
-      "trigger": "Alpha",
-      "contents": "Alpha",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "companyName",
+      "contents": "companyName",
+      "annotation": "GameAPI",
+      "details": "string Read-only."
     },
     {
-      "trigger": "DisabledAlpha",
-      "contents": "DisabledAlpha",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "getDataPath",
+      "contents": "getDataPath",
+      "annotation": "GameAPI",
+      "details": "string Read-only mounted game asset directory (a property)."
     },
     {
-      "trigger": "WindowPadding",
-      "contents": "WindowPadding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "isEditor",
+      "contents": "isEditor",
+      "annotation": "GameAPI",
+      "details": "boolean Read-only."
     },
     {
-      "trigger": "WindowRounding",
-      "contents": "WindowRounding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "isFocused",
+      "contents": "isFocused",
+      "annotation": "GameAPI",
+      "details": "boolean Read-only native-window focus."
     },
     {
-      "trigger": "WindowBorderSize",
-      "contents": "WindowBorderSize",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "userDataPath",
+      "contents": "userDataPath",
+      "annotation": "GameAPI",
+      "details": "string Read-only per-game persistent directory."
     },
     {
-      "trigger": "WindowMinSize",
-      "contents": "WindowMinSize",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "engineVersion",
+      "contents": "engineVersion",
+      "annotation": "GameAPI",
+      "details": "string Read-only."
     },
     {
-      "trigger": "WindowTitleAlign",
-      "contents": "WindowTitleAlign",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "blockGameKilling",
+      "contents": "blockGameKilling",
+      "annotation": "GameAPI",
+      "details": "boolean Holds normal graceful quit until cleared or the ten-second timeout."
     },
     {
-      "trigger": "ChildRounding",
-      "contents": "ChildRounding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "targetFrameRate",
+      "contents": "targetFrameRate",
+      "annotation": "GameAPI",
+      "details": "integer -1 uncapped, or 1..1000; VSync may cap further."
     },
     {
-      "trigger": "ChildBorderSize",
-      "contents": "ChildBorderSize",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "openURL",
+      "contents": "openURL",
+      "annotation": "GameAPI",
+      "details": "fun(url:string):boolean|nil,error?:string HTTP/HTTPS only; success means handed to OS."
     },
     {
-      "trigger": "PopupRounding",
-      "contents": "PopupRounding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "quit",
+      "contents": "quit",
+      "annotation": "GameAPI",
+      "details": "fun() Deferred graceful quit; stops Play in editor."
     },
     {
-      "trigger": "PopupBorderSize",
-      "contents": "PopupBorderSize",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "saveString",
+      "contents": "saveString",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:string):boolean|nil,error?:string"
     },
     {
-      "trigger": "FramePadding",
-      "contents": "FramePadding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "loadString",
+      "contents": "loadString",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:string):string|nil,error?:string"
     },
     {
-      "trigger": "FrameRounding",
-      "contents": "FrameRounding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "saveInt",
+      "contents": "saveInt",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:integer):boolean|nil,error?:string"
     },
     {
-      "trigger": "FrameBorderSize",
-      "contents": "FrameBorderSize",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "loadInt",
+      "contents": "loadInt",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:integer):integer|nil,error?:string"
     },
     {
-      "trigger": "ItemSpacing",
-      "contents": "ItemSpacing",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "saveFloat",
+      "contents": "saveFloat",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:number):boolean|nil,error?:string"
     },
     {
-      "trigger": "ItemInnerSpacing",
-      "contents": "ItemInnerSpacing",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "loadFloat",
+      "contents": "loadFloat",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:number):number|nil,error?:string"
     },
     {
-      "trigger": "IndentSpacing",
-      "contents": "IndentSpacing",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "saveBool",
+      "contents": "saveBool",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:boolean):boolean|nil,error?:string"
     },
     {
-      "trigger": "CellPadding",
-      "contents": "CellPadding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "loadBool",
+      "contents": "loadBool",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:boolean):boolean|nil,error?:string"
     },
     {
-      "trigger": "ScrollbarSize",
-      "contents": "ScrollbarSize",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "saveTable",
+      "contents": "saveTable",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:table):boolean|nil,error?:string"
     },
     {
-      "trigger": "ScrollbarRounding",
-      "contents": "ScrollbarRounding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "loadTable",
+      "contents": "loadTable",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:table):table|nil,error?:string"
     },
     {
-      "trigger": "GrabMinSize",
-      "contents": "GrabMinSize",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "saveVector3",
+      "contents": "saveVector3",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,value:Vec3):boolean|nil,error?:string"
     },
     {
-      "trigger": "GrabRounding",
-      "contents": "GrabRounding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "loadVector3",
+      "contents": "loadVector3",
+      "annotation": "GameAPI",
+      "details": "fun(key:string,default?:Vec3):Vec3|nil,error?:string"
     },
     {
-      "trigger": "TabRounding",
-      "contents": "TabRounding",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "open",
+      "contents": "open",
+      "annotation": "FileAPI",
+      "details": "fun(path:string,mode:string):GameFile|nil,error?:string r/rb/w/wb/a/ab; sandboxed paths."
     },
     {
-      "trigger": "ButtonTextAlign",
-      "contents": "ButtonTextAlign",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "read",
+      "contents": "read",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile,format?:string|integer):string|nil,error?:string Default *l; also *a or byte count."
     },
     {
-      "trigger": "SelectableTextAlign",
-      "contents": "SelectableTextAlign",
-      "annotation": "GUIStyleVars",
-      "details": "integer"
+      "trigger": "write",
+      "contents": "write",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile,data:string):boolean|nil,error?:string"
     },
     {
-      "trigger": "Text",
-      "contents": "Text",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "close",
+      "contents": "close",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile)"
     },
     {
-      "trigger": "TextDisabled",
-      "contents": "TextDisabled",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "flush",
+      "contents": "flush",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile):boolean"
     },
     {
-      "trigger": "WindowBg",
-      "contents": "WindowBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "seek",
+      "contents": "seek",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile,whence?:string,offset?:integer):integer|nil,error?:string set/cur/end."
     },
     {
-      "trigger": "ChildBg",
-      "contents": "ChildBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "lines",
+      "contents": "lines",
+      "annotation": "FileAPI",
+      "details": "fun(file:GameFile|string):fun():string|nil Path form auto-closes at EOF."
     },
     {
-      "trigger": "PopupBg",
-      "contents": "PopupBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "rename",
+      "contents": "rename",
+      "annotation": "FileAPI",
+      "details": "fun(oldPath:string,newPath:string):boolean|nil,error?:string Never overwrites."
     },
     {
-      "trigger": "Border",
-      "contents": "Border",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "remove",
+      "contents": "remove",
+      "annotation": "FileAPI",
+      "details": "fun(path:string):boolean|nil,error?:string Files only."
     },
     {
-      "trigger": "BorderShadow",
-      "contents": "BorderShadow",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "randomFloat",
+      "contents": "randomFloat",
+      "annotation": "RandomAPI",
+      "details": "fun(min:number,max:number):number Finite bounds, min <= max; uniform floating sample."
     },
     {
-      "trigger": "FrameBg",
-      "contents": "FrameBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "randomInt",
+      "contents": "randomInt",
+      "annotation": "RandomAPI",
+      "details": "fun(min:integer,max:integer):integer Inclusive uniform bounds."
     },
     {
-      "trigger": "FrameBgHovered",
-      "contents": "FrameBgHovered",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "randomBool",
+      "contents": "randomBool",
+      "annotation": "RandomAPI",
+      "details": "fun():boolean Equally likely true/false."
     },
     {
-      "trigger": "FrameBgActive",
-      "contents": "FrameBgActive",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "randomString",
+      "contents": "randomString",
+      "annotation": "RandomAPI",
+      "details": "fun(length:integer):string 0..4096 ASCII alphanumeric characters; not cryptographic."
     },
     {
-      "trigger": "TitleBg",
-      "contents": "TitleBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Recoil",
+      "details": "boolean Render-only local camera recoil, independent of FPS/TPS Transform."
     },
     {
-      "trigger": "TitleBgActive",
-      "contents": "TitleBgActive",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "playOnStart",
+      "contents": "playOnStart",
+      "annotation": "Recoil",
+      "details": "boolean Start burst, or sequence if keys exist."
     },
     {
-      "trigger": "TitleBgCollapsed",
-      "contents": "TitleBgCollapsed",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "sequenceLoop",
+      "contents": "sequenceLoop",
+      "annotation": "Recoil",
+      "details": "boolean Repeat the scheduled sequence."
     },
     {
-      "trigger": "MenuBarBg",
-      "contents": "MenuBarBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "burstCount",
+      "contents": "burstCount",
+      "annotation": "Recoil",
+      "details": "integer Zero repeats until stopped or duration expires."
     },
     {
-      "trigger": "ScrollbarBg",
-      "contents": "ScrollbarBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "seed",
+      "contents": "seed",
+      "annotation": "Recoil",
+      "details": "integer Nonnegative pseudorandom seed."
     },
     {
-      "trigger": "ScrollbarGrab",
-      "contents": "ScrollbarGrab",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "isFiring",
+      "contents": "isFiring",
+      "annotation": "Recoil",
+      "details": "boolean Read-only burst/sequence activity, not recovery state."
     },
     {
-      "trigger": "ScrollbarGrabHovered",
-      "contents": "ScrollbarGrabHovered",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "trigger",
+      "contents": "trigger",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil,strength?:number) One impulse; multiplier 0..10, default 1."
     },
     {
-      "trigger": "ScrollbarGrabActive",
-      "contents": "ScrollbarGrabActive",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "start",
+      "contents": "start",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Start/restart timed burst after delay."
     },
     {
-      "trigger": "CheckMark",
-      "contents": "CheckMark",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Stop future impulses; let the spring recover."
     },
     {
-      "trigger": "SliderGrab",
-      "contents": "SliderGrab",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "reset",
+      "contents": "reset",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Stop and zero offsets immediately."
     },
     {
-      "trigger": "SliderGrabActive",
-      "contents": "SliderGrabActive",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "playSequence",
+      "contents": "playSequence",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil) Start the authored sequence after delay."
     },
     {
-      "trigger": "Button",
-      "contents": "Button",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "setSequence",
+      "contents": "setSequence",
+      "annotation": "Recoil",
+      "details": "fun(self:Recoil,keys:RecoilKey[]) Replace sorted keys; stops firing."
     },
     {
-      "trigger": "ButtonHovered",
-      "contents": "ButtonHovered",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "pitch",
+      "contents": "pitch",
+      "annotation": "Recoil",
+      "details": "number Degrees, -45..45. Positive lifts the view."
     },
     {
-      "trigger": "ButtonActive",
-      "contents": "ButtonActive",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "yaw",
+      "contents": "yaw",
+      "annotation": "Recoil",
+      "details": "number Degrees, -45..45."
     },
     {
-      "trigger": "Header",
-      "contents": "Header",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "roll",
+      "contents": "roll",
+      "annotation": "Recoil",
+      "details": "number Degrees, -45..45."
     },
     {
-      "trigger": "HeaderHovered",
-      "contents": "HeaderHovered",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "back",
+      "contents": "back",
+      "annotation": "Recoil",
+      "details": "number Metres, -1..1; positive local Z kicks backward."
     },
     {
-      "trigger": "HeaderActive",
-      "contents": "HeaderActive",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "up",
+      "contents": "up",
+      "annotation": "Recoil",
+      "details": "number Metres, -1..1."
     },
     {
-      "trigger": "Separator",
-      "contents": "Separator",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "side",
+      "contents": "side",
+      "annotation": "Recoil",
+      "details": "number Metres, -1..1."
     },
     {
-      "trigger": "SeparatorHovered",
-      "contents": "SeparatorHovered",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "rotationRandom",
+      "contents": "rotationRandom",
+      "annotation": "Recoil",
+      "details": "number Independent random angle amplitude, 0..45 degrees."
     },
     {
-      "trigger": "SeparatorActive",
-      "contents": "SeparatorActive",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "positionRandom",
+      "contents": "positionRandom",
+      "annotation": "Recoil",
+      "details": "number Fraction of absolute back displacement, 0..2."
     },
     {
-      "trigger": "ResizeGrip",
-      "contents": "ResizeGrip",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "frequency",
+      "contents": "frequency",
+      "annotation": "Recoil",
+      "details": "number Angular spring frequency, 0.1..40 Hz."
     },
     {
-      "trigger": "ResizeGripHovered",
-      "contents": "ResizeGripHovered",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "damping",
+      "contents": "damping",
+      "annotation": "Recoil",
+      "details": "number Angular damping ratio, 0.1..3; one is critical damping."
     },
     {
-      "trigger": "ResizeGripActive",
-      "contents": "ResizeGripActive",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "positionFrequency",
+      "contents": "positionFrequency",
+      "annotation": "Recoil",
+      "details": "number Position spring frequency, 0.1..40 Hz."
     },
     {
-      "trigger": "InputTextCursor",
-      "contents": "InputTextCursor",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "positionDamping",
+      "contents": "positionDamping",
+      "annotation": "Recoil",
+      "details": "number Position damping ratio, 0.1..3."
     },
     {
-      "trigger": "TabHovered",
-      "contents": "TabHovered",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "maxAngle",
+      "contents": "maxAngle",
+      "annotation": "Recoil",
+      "details": "number Combined angular displacement cap, 0..89 degrees."
     },
     {
-      "trigger": "Tab",
-      "contents": "Tab",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "maxDistance",
+      "contents": "maxDistance",
+      "annotation": "Recoil",
+      "details": "number Combined positional displacement cap, 0..2 metres."
     },
     {
-      "trigger": "TabSelected",
-      "contents": "TabSelected",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "interval",
+      "contents": "interval",
+      "annotation": "Recoil",
+      "details": "number Timed shot spacing / sequence loop gap, 0.01..60 seconds."
     },
     {
-      "trigger": "TabSelectedOverline",
-      "contents": "TabSelectedOverline",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "duration",
+      "contents": "duration",
+      "annotation": "Recoil",
+      "details": "number Burst duration after delay, 0..3600; zero unlimited."
     },
     {
-      "trigger": "TabDimmed",
-      "contents": "TabDimmed",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "delay",
+      "contents": "delay",
+      "annotation": "Recoil",
+      "details": "number Start delay, 0..3600 seconds."
     },
     {
-      "trigger": "TabDimmedSelected",
-      "contents": "TabDimmedSelected",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "strength",
+      "contents": "strength",
+      "annotation": "Recoil",
+      "details": "number Global impulse multiplier, 0..10."
     },
     {
-      "trigger": "TabDimmedSelectedOverline",
-      "contents": "TabDimmedSelectedOverline",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "recovery",
+      "contents": "recovery",
+      "annotation": "Recoil",
+      "details": "number Spring frequency multiplier, 0.1..4."
     },
     {
-      "trigger": "DockingPreview",
-      "contents": "DockingPreview",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "time",
+      "contents": "time",
+      "annotation": "RecoilKey",
+      "details": "number Seconds from sequence start, 0..3600; sorted ascending."
     },
     {
-      "trigger": "DockingEmptyBg",
-      "contents": "DockingEmptyBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "strength",
+      "contents": "strength",
+      "annotation": "RecoilKey",
+      "details": "number Optional impulse multiplier, 0..10; default 1."
     },
     {
-      "trigger": "PlotLines",
-      "contents": "PlotLines",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "controller",
+      "contents": "controller",
+      "annotation": "Animator",
+      "details": "string Project-relative .controller file"
     },
     {
-      "trigger": "PlotLinesHovered",
-      "contents": "PlotLinesHovered",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "enabled",
+      "contents": "enabled",
+      "annotation": "Animator",
+      "details": "boolean Pause/resume the state machine and its backend"
     },
     {
-      "trigger": "PlotHistogram",
-      "contents": "PlotHistogram",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "playOnStart",
+      "contents": "playOnStart",
+      "annotation": "Animator",
+      "details": "boolean Enter the controller entry state automatically; default true"
     },
     {
-      "trigger": "PlotHistogramHovered",
-      "contents": "PlotHistogramHovered",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "currentState",
+      "contents": "currentState",
+      "annotation": "Animator",
+      "details": "string Read-only current state name"
     },
     {
-      "trigger": "TableHeaderBg",
-      "contents": "TableHeaderBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "stateTime",
+      "contents": "stateTime",
+      "annotation": "Animator",
+      "details": "number Read-only elapsed playback seconds in the current state"
     },
     {
-      "trigger": "TableBorderStrong",
-      "contents": "TableBorderStrong",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "isPlaying",
+      "contents": "isPlaying",
+      "annotation": "Animator",
+      "details": "boolean Read-only; state machine is running, enabled and unpaused (it may hold a finished nonlooping state)"
     },
     {
-      "trigger": "TableBorderLight",
-      "contents": "TableBorderLight",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "paused",
+      "contents": "paused",
+      "annotation": "Animator",
+      "details": "boolean Read-only paused flag"
     },
     {
-      "trigger": "TableRowBg",
-      "contents": "TableRowBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "error",
+      "contents": "error",
+      "annotation": "Animator",
+      "details": "string Read-only controller/playback diagnostic"
     },
     {
-      "trigger": "TableRowBgAlt",
-      "contents": "TableRowBgAlt",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "setBool",
+      "contents": "setBool",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string, value:boolean) Set a declared Bool parameter"
     },
     {
-      "trigger": "TextLink",
-      "contents": "TextLink",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "setInt",
+      "contents": "setInt",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string, value:integer) Set a declared Int parameter"
     },
     {
-      "trigger": "TextSelectedBg",
-      "contents": "TextSelectedBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "setFloat",
+      "contents": "setFloat",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string, value:number) Set a declared Float parameter"
     },
     {
-      "trigger": "TreeLines",
-      "contents": "TreeLines",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "getBool",
+      "contents": "getBool",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string):boolean Read a declared Bool parameter"
     },
     {
-      "trigger": "DragDropTarget",
-      "contents": "DragDropTarget",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "getInt",
+      "contents": "getInt",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string):integer Read a declared Int parameter"
     },
     {
-      "trigger": "DragDropTargetBg",
-      "contents": "DragDropTargetBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "getFloat",
+      "contents": "getFloat",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, name:string):number Read a declared Float parameter"
     },
     {
-      "trigger": "UnsavedMarker",
-      "contents": "UnsavedMarker",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "play",
+      "contents": "play",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, state:string) Enter/restart a state with no fade"
     },
     {
-      "trigger": "NavCursor",
-      "contents": "NavCursor",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "crossFade",
+      "contents": "crossFade",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, state:string, seconds?:number) Enter/restart a state with a fade; default 0.2 seconds"
     },
     {
-      "trigger": "NavWindowingHighlight",
-      "contents": "NavWindowingHighlight",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "stop",
+      "contents": "stop",
+      "annotation": "Animator",
+      "details": "fun(self:Animator) Stop state evaluation and rewind backend to its first pose"
     },
     {
-      "trigger": "NavWindowingDimBg",
-      "contents": "NavWindowingDimBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "pause",
+      "contents": "pause",
+      "annotation": "Animator",
+      "details": "fun(self:Animator) Pause state evaluation and playback"
     },
     {
-      "trigger": "ModalWindowDimBg",
-      "contents": "ModalWindowDimBg",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "resume",
+      "contents": "resume",
+      "annotation": "Animator",
+      "details": "fun(self:Animator) Resume a paused state machine"
     },
     {
-      "trigger": "COUNT",
-      "contents": "COUNT",
-      "annotation": "GUIColors",
-      "details": "integer"
+      "trigger": "hasState",
+      "contents": "hasState",
+      "annotation": "Animator",
+      "details": "fun(self:Animator, state:string):boolean Test a controller state name or ID"
     }
   ]
 }
