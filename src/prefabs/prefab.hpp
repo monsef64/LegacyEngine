@@ -131,7 +131,7 @@ inline Entity root(World& world) {
     return result;
 }
 inline std::unique_ptr<World>
-load(AssetManager& assets, const std::string& path, const ProjectIO::Meshes& meshes) {
+load(AssetManager& assets, const std::string& path, const ProjectIO::Meshes& meshes) try {
     if (!asset(path)) {
         throw std::runtime_error("Expected project-relative .prefab asset");
     }
@@ -143,6 +143,10 @@ load(AssetManager& assets, const std::string& path, const ProjectIO::Meshes& mes
     static std::mutex mutex;
     static std::map<std::string, Cached> cache;
     const auto file = assets.resolve(path);
+    if (!std::filesystem::is_regular_file(file)) {
+        throw std::runtime_error(
+            "Asset is missing from the project/export. Re-export with the updated editor.");
+    }
     const auto stamp = std::filesystem::last_write_time(file);
     const auto bytes = std::filesystem::file_size(file);
     std::string key = file.generic_string();
@@ -178,6 +182,8 @@ load(AssetManager& assets, const std::string& path, const ProjectIO::Meshes& mes
             key, Cached{stamp, bytes, std::shared_ptr<const World>(std::move(snapshot))});
     }
     return result.world.snapshot();
+} catch (const std::exception& error) {
+    throw std::runtime_error("Cannot load prefab '" + path + "': " + error.what());
 }
 inline void save(AssetManager& assets,
                  const std::string& path,
@@ -209,6 +215,7 @@ inline Entity spawn(AssetManager& assets,
     updateHierarchy(*loaded);
     auto result = clone(*loaded, source, world);
     world.add(result, PrefabInstance{path});
+    updateHierarchy(world);
     return result;
 }
 inline void refresh(AssetManager& assets,

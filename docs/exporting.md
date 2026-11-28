@@ -75,25 +75,31 @@ initialization failure caused by looking for loose `data/shaders` in an encrypte
 export. Missing/invalid graphics drivers or unsupported OpenGL contexts can still
 cause renderer initialization errors; inspect the player log for the failing stage.
 
-## Only referenced project assets are packaged
+## Scene, level and prefab dependencies are packaged
 
 Exports collect a dependency closure from the exported scene and every level in
-`Assets/Levels/levels.json` (registered levels are runtime-addressable roots).
+`Assets/Levels/levels.json`. Every project `.prefab` is also an export root, so
+runtime `spawn("Prefabs/" .. name .. ".prefab", position, rotation)` works even
+without a literal full prefab path in a scene or script. Each prefab's models,
+materials, child assets, scripts and their discoverable dependencies are included
+recursively. This can increase package size when a project keeps unused prefabs;
+move development-only prefab files outside Assets if they must not ship.
 Referenced materials, model containers, animations, prefabs, terrain layers,
 foliage, images, audio, lightmaps and script dependencies are followed recursively.
-Unused files and unregistered, unreferenced levels are left out. Packed model
+Other unreferenced files and unregistered, unreferenced levels are left out. Packed model
 members travel with their model container; exports do not rewrite those containers
 or remove individual embedded members. Engine runtime resources and project
 Settings are retained separately from this Assets filtering.
 
 Literal paths in included scripts and UI are detected, including relative UI/CSS
-paths. An exporter cannot infer a path constructed at runtime, such as
+paths. Apart from the prefab roots above, an exporter cannot infer an arbitrary
+asset path constructed at runtime, such as
 `"Textures/" .. name .. ".png"`. Declare these dependencies explicitly in
 `Settings/ExportAssets.json` before exporting:
 
 ```json
 {
-  "include": ["Textures/RuntimeChoices/", "Prefabs/Spawnable.prefab"]
+  "include": ["Textures/RuntimeChoices/"]
 }
 ```
 
@@ -164,3 +170,10 @@ The console cannot execute Lua or commands and does not restore the removed
 `GUI` scripting namespace or `onGUI` callback. Exports with Debug Mode disabled,
 and old packages without the flag, cannot open it. Build normal releases with
 Debug Mode off so internal script/log messages are not exposed through this UI.
+
+Prefab packaging changes only affect **new exports made with the updated editor**.
+Rebuild/install the player template with the editor, then export to a fresh output
+folder. Updating the editor/player alone does not add files to an existing game
+package. If spawning still fails, enable Debug Mode, open the player's backtick
+console, and copy the error containing the prefab path. Spawn paths are relative
+to Assets (`Prefabs/Crate.prefab`, not `Assets/Prefabs/Crate.prefab`).

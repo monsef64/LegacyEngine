@@ -212,3 +212,20 @@ These native-dialog/desktop checks have not been run in the sandbox.
   underlying cause; no verified editor/export prefab fix is claimed yet.
 
 Desktop timing, dragging, and prefab reproduction have not been performed here.
+
+## Exported prefab dependency follow-up
+
+- Make a prefab referenced only by a constructed script path, with a nested child,
+  model/material/texture and attached script. Export a new game using the updated
+  editor/template and check spawn, child transforms, rendering and script startup.
+- Repeat for literal paths and Inspector Prefab fields, two same-named files in
+  different directories, nested prefab links and multiple registered levels.
+- Confirm all project prefabs ship while unrelated textures/models remain omitted.
+  Check case-sensitive Linux paths and paths with spaces. Missing/corrupt prefab
+  errors must contain the requested asset path in Debug Mode's player console.
+- Opening/Play preloading must remain scene-selective rather than eagerly loading
+  every project prefab. Existing exported packages need a fresh export.
+
+These runtime/export scenarios have not been executed in the sandbox. This change
+fixes the identified omission of dynamically referenced prefabs from export; an
+unrelated spawn failure still needs its player log or affected prefab to diagnose.
