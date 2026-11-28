@@ -153,3 +153,19 @@ These desktop checks have not been run in the sandbox; no automated tests added.
   and metadata without debugMode behaves as disabled. No Lua GUI API is restored.
 
 These desktop/export checks have not been executed in the sandbox.
+
+## Optional Release build dependency follow-up
+
+- Configure with `BUILD_TESTING=ON` and build the default/all target. This is a
+  compile/link check only; do not invoke CTest or test executables unless desired.
+- Inspector includes its own particle serialization and SDL logging declarations;
+  it must not depend on the application's include order.
+- Standalone physics consumers need JSON/model-container linkage plus primitive
+  geometry implementation (including water collider geometry).
+- Release test sources retain their C `assert()` checks through `-UNDEBUG`, but
+  `physics.cpp` must use the linked Release Jolt's debug mode. Its optimized-build
+  `JPH_NO_DEBUG` definition prevents an accidental reference to the absent
+  `JPH::AssertFailed` hook. Explicit Jolt `USE_ASSERTS` settings still propagate.
+- Repeat compile/link verification with Windows MinGW-w64 and an installed SDL3;
+  the sandbox native build uses vendored SDL3. CMake dependency deprecation
+  warnings alone do not indicate a compiler/linker failure.
