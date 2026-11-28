@@ -192,3 +192,23 @@ These desktop/export checks have not been executed in the sandbox.
   Callback state must outlive its originating tool without accessing a dead UI.
 
 These native-dialog/desktop checks have not been run in the sandbox.
+
+## Picker label, title-bar dragging, pacing and prefab diagnostics
+
+- Editor Settings lists exactly Zenity / ImGui, without the explanatory paragraph.
+  Verify backend persistence and fallback are unchanged.
+- Attempt to drag a floating window from blank content: it must not move. Drag
+  its title bar and dock/undock it; controls and asset drag/drop must still work.
+- With a 60/120/144 Hz display, verify editing stays at most 60 FPS and the level
+  view stays at most 60 Hz during Play. New projects/exports default VSync on;
+  existing saved off values stay off. Check Play/Stop, separate Game, runtime
+  VSync/FPS changes and an exported player. Embedded Game and ImGui layout still
+  share one loop; strict independent 60 Hz UI rendering during Play is not added.
+- Instantiate a prefab from Assets/context menu or Scene drop and check hierarchy,
+  transform preview completion, collider synchronization and undo/redo. Failures
+  now open Console with the path and error instead of only a transient Assets
+  message. Success produces a Console confirmation. The reported silent failure
+  still needs an affected prefab file or resulting diagnostic to identify its
+  underlying cause; no verified editor/export prefab fix is claimed yet.
+
+Desktop timing, dragging, and prefab reproduction have not been performed here.

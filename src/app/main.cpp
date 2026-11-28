@@ -1525,7 +1525,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     renderingSettings.vsync = !after;
                     history.perform(world, selectedEntity, [&, after](bool forward) {
                         renderingSettings.vsync = forward ? after : !after;
-                        renderingSettings.apply();
+                        renderingSettings.apply(playMode.active());
                         renderingSettings.save(browser.assets);
                         scripts.console().message(forward ? "Set/Redo VSync setting"
                                                           : "Undo VSync setting");
@@ -1901,6 +1901,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                                             browser.assets.root.parent_path().filename().string(),
                                             browser.assets.root,
                                             gameWindow == nullptr);
+                    renderingSettings.apply(true);
                     GameServices::update(gameWindow ? gameWindow : window, true);
                     panelOpen[6] = true;
                     physics.reset();
@@ -1959,6 +1960,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
 
             TextureQuality::lifecycle(false);
             playMode.stop(world);
+            renderingSettings.apply(false);
             GameServices::cancelQuit();
             input.releaseMouse();
             physics.reset();
@@ -2282,6 +2284,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (!browser.spawnPrefabRequest.empty()) {
             const auto path = std::exchange(browser.spawnPrefabRequest, {});
             try {
+                editor.finish(world);
                 history.commit(world, selectedEntity);
                 const auto parent = prefabLevel ? Prefabs::root(world) : Entity{};
                 selectedEntity = Prefabs::spawn(
@@ -2294,9 +2297,15 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (parent != Entity{}) {
                     setParent(world, selectedEntity, parent);
                 }
+                updateHierarchy(world);
+                physics.reset();
                 history.commit(world, selectedEntity);
+                scripts.console().message("Instantiated prefab: " + path);
             } catch (const std::exception& e) {
-                browser.assets.error = e.what();
+                browser.assets.error = "Cannot instantiate prefab '" + path + "': " + e.what();
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "%s", browser.assets.error.c_str());
+                scripts.console().message(browser.assets.error);
+                panelOpen[4] = true;
             }
         }
         if (!browser.editPrefabRequest.empty() && !playMode.active() && !prefabLevel &&
@@ -2965,15 +2974,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         renderer.setShadowSettings(renderingSettings.shadows);
         renderer.setAssetRoot(browser.assets.root);
         if (width > 0 && height > 0) {
-            // Keep the unfocused editor view live at 15 Hz during gameplay,
-            // rather than rebuilding its full shadow atlas at the Game frame rate.
+            // The Scene/level view never renders at the faster Game cadence.
             const auto renderTime = std::chrono::steady_clock::now();
-            const bool backgroundScene = playMode.playing() && gameVisible &&
-                                         (gameWindow || (!sceneFocused && !sceneHovered));
             const bool renderScene =
-                sceneVisible && (!backgroundScene || sceneSurface.width != lastSceneWidth ||
-                                 sceneSurface.height != lastSceneHeight ||
-                                 renderTime - lastSceneRender >= std::chrono::milliseconds(66));
+                sceneVisible &&
+                (!playMode.active() || sceneSurface.width != lastSceneWidth ||
+                 sceneSurface.height != lastSceneHeight ||
+                 renderTime - lastSceneRender >= std::chrono::nanoseconds(1000000000 / 60));
             if (renderScene) {
                 lastSceneRender = renderTime;
                 lastSceneWidth = sceneSurface.width;
@@ -3318,16 +3325,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         const bool foreground =
             (!(flags & SDL_WINDOW_MINIMIZED) && (flags & SDL_WINDOW_INPUT_FOCUS)) ||
             (gameWindow && (SDL_GetWindowFlags(gameWindow) & SDL_WINDOW_INPUT_FOCUS));
-        const int limit = foreground ? browser.settings.maxFps : 30;
-        int swapInterval = 0;
-        const bool vsyncActive = SDL_GL_GetSwapInterval(&swapInterval) && swapInterval != 0;
-        // Do not stack a fractional-refresh sleep over VSync: it can turn a
-        // 144 Hz display into 72 FPS. Let VSync pace focused windows itself.
-        if (!smokeTest && limit > 0 && (!foreground || !vsyncActive)) {
-            const Uint64 budget = 1000000000ull / Uint64(limit),
-                         elapsed = SDL_GetTicksNS() - frameStarted;
+        // Editing is 60 Hz regardless of monitor refresh or the project's Game
+        // VSync preference. Play retains project/script-controlled game pacing.
+        if (!smokeTest && !playMode.active()) {
+            const Uint64 budget = 1000000000ull / Uint64(foreground ? 60 : 30);
+            const Uint64 elapsed = SDL_GetTicksNS() - frameStarted;
             if (elapsed < budget) {
-                SDL_DelayNS(budget - elapsed); // sleep; never busy-spin
+                SDL_DelayNS(budget - elapsed);
             }
         }
         profiler.checkpoint(ProfilePart::Present);
@@ -3391,7 +3395,7 @@ int engineMain(int argc, char** argv) {
         return 1;
     }
 
-    SDL_GL_SetSwapInterval(1); // vsync, where the driver allows it
+    SDL_GL_SetSwapInterval(0); // Editor uses a software 60 Hz cap; Play applies project VSync.
 
     // If the renderer cannot start, the reason is already logged: skip the
     // loop and exit with an error.
@@ -3403,6 +3407,7 @@ int engineMain(int argc, char** argv) {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        ImGui::GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
         ImGui::GetIO().ConfigDebugHighlightIdConflicts = false;
         GImGui->ErrorCallback = +[](ImGuiContext*, void*, const char* message) {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "ImGui: %s", message);

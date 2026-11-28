@@ -18,7 +18,7 @@ struct EditorSettings {
     int externalEditor = 0; // 0: VS Code, 1: Sublime Text 4
     float scrollZoomSpeed = 1.f;
     float raycastThickness = 2.f; // viewport pixels; editor gizmo only
-    int maxFps = 0;               // zero disables foreground cap; background pauses
+    int maxFps = 0;               // legacy persisted field; editor pacing is fixed at 60 Hz
     int autosaveSeconds = 120;    // zero disables autosave
     GridSettings grid;
     std::string error;
@@ -247,12 +247,9 @@ struct EditorSettings {
                 applyEditorPalette(theme);
                 save();
             }
-            if (EditorValues::Combo(
-                    "File picker", &filePicker, "Zenity (native on Windows)\0ImGui\0")) {
+            if (EditorValues::Combo("File picker", &filePicker, "Zenity\0ImGui\0")) {
                 save();
             }
-            ImGui::TextWrapped(
-                "Zenity is the Linux default. If unavailable, the built-in ImGui picker opens instead. Changes apply to new dialogs.");
             if (EditorValues::Checkbox("Always Show Colliders", &alwaysShowColliders)) {
                 save();
             }
@@ -260,11 +257,6 @@ struct EditorSettings {
                     "Raycast line thickness", &raycastThickness, 1, 8, "%.1f px")) {
                 save();
             }
-            if (EditorValues::SliderInt("FPS limit (VSync off)", &maxFps, 0, 240, "%d")) {
-                save();
-            }
-            ImGui::TextDisabled(
-                "VSync takes priority. Limit 0 = uncapped; unfocused engine updates/rendering are paused.");
             if (EditorValues::InputInt("Autosave delay (seconds)", &autosaveSeconds)) {
                 autosaveSeconds = std::clamp(autosaveSeconds, 0, 3600);
                 save();

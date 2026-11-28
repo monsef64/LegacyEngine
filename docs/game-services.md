@@ -41,7 +41,7 @@ use the export name. The editor has no export-company context, so companyName is
 empty there.
 
 `Game.targetFrameRate = 60` adds a per-frame cap; `-1` removes this cap. Allowed
-range is 1..1000 or -1. VSync and the editor's own cap can still reduce FPS.
+range is 1..1000 or -1. VSync and hardware limits can still reduce FPS; the editing-only 60 Hz cap does not limit Play.
 
 `Game.openURL("https://example.com")` permits HTTP/HTTPS only. `OnUrlOpened(url)`
 means the OS accepted a browser-launch request, not that the page loaded.

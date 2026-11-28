@@ -82,7 +82,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
     LayerSettings layers;
     layers.load(assets);
     RenderingSettings rendering;
-    rendering.load(assets);
+    rendering.load(assets, true);
     renderer.setShadowSettings(rendering.shadows);
     renderer.setAssetRoot(assets.root);
     TextureQuality::lifecycle(true);
