@@ -3,7 +3,7 @@
 These namespaces are installed in every LegacyScript. Calls use dots, not colons.
 Host I/O failures return `nil, error`; invalid argument types raise script errors.
 Use `on("OnFocus", function() ... end)` or a global `function OnFocus() ... end`
-for built-in events. These do not replace `onStart`, `onUpdate`, or `onGUI`.
+for built-in events. These do not replace `onStart` or `onUpdate`.
 
 ## Screen
 

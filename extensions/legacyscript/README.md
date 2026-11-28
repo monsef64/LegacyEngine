@@ -75,9 +75,10 @@ Version 0.1.1 validates open `.lua` / `.ls` documents on open/save and shortly a
 Errors appear inline and in **View → Problems** with source **LegacyScript**;
 fixed errors disappear automatically, and closed files clear their diagnostics.
 Syntax checking never executes scripts. It understands engine `global Type name = default` lines and
-reports malformed/duplicate declarations and unknown export types. Lua 5.4 local
-`<const>` / `<close>` annotations are accepted on top of the bundled Lua 5.3 syntax
-grammar, but attribute semantics are not checked. Validation pauses for documents
+reports malformed/duplicate declarations and unknown export types. Syntax uses
+the bundled parser's LuaJIT mode. Lua 5.4 `<const>` / `<close>`, integer-division
+and bitwise operator syntax are rejected; use `bit.bor` etc. instead.
+Validation pauses for documents
 over 2 MiB and shows a warning rather than freezing the extension host.
 
 Runtime-only failures (missing scene objects/components, dynamic values and engine

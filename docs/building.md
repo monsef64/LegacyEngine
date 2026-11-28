@@ -1,6 +1,6 @@
 # Build and test
 Requires a C++17 compiler, CMake 3.20+, Git and platform development libraries.
-CMake fetches SDL3 (if not installed), Jolt, Dear ImGui, ImGuizmo and Lua.
+CMake fetches SDL3 (if not installed), Jolt, Dear ImGui, ImGuizmo and pinned LuaJIT 2.1.
 GLAD, Roboto/Font Awesome fonts, miniaudio, simdjson, nlohmann/json and stb_image
 are included under `third_party/`.
 
@@ -260,3 +260,19 @@ meshoptimizer v0.22 for opt-in simplification; its MIT notice is packaged under
 
 [Terrain chunks and Navigation](navigation.md) documents smaller camera-culled
 terrain pieces, the Recast/Detour bake window and scriptable Navmesh Agents.
+
+## Embedded LuaJIT
+
+GNU make (`make`/`gmake`) and a native GCC/Clang toolchain are required in addition
+to CMake/Ninja. On Windows use MSYS2 MinGW-w64 (UCRT64 or MINGW64) with the
+`make` package; MSVC and cross-compiling are not supported by this integration.
+CMake builds a pinned LuaJIT source revision in a private build-directory copy
+and statically links it into editor/player. No system Lua interpreter or
+`lua51.dll` is required. FFI is compiled out, and native module loading and the
+`jit` control library are not exposed to scripts.
+
+The instruction-budget sandbox takes precedence over JIT optimization: engine
+callbacks/snippets disable tracing while their instruction hook is active, and
+the runtime is built with CHECKHOOK as an additional safeguard. This migration
+does not promise JIT acceleration for budgeted callbacks. See the
+[scripting migration notes](scripting.md#luajit-runtime-and-migration).

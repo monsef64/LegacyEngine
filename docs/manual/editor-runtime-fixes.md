@@ -84,16 +84,16 @@ These checks require a desktop and have not been executed in the sandbox.
 
 The ImGui OpenGL backend now compiles through `src/ui/imgui_opengl3.cpp`, using
 GLAD's existing SDL-resolved dispatch instead of ImGui's private dynamic loader.
-All editor/loading/scripted-GUI contexts share the engine GL loader lifetime;
+All editor/loading contexts share the engine GL loader lifetime;
 shutting down a temporary UI backend must not close OpenGL libraries while the
 renderer is still using their entry points. Keep this wrapper when upgrading
 ImGui and do not also compile upstream imgui_impl_opengl3.cpp independently.
 
 - On Linux Mesa/AMD (native Wayland and X11) and Windows MinGW-w64, press Play in
   an empty scene and an asset-heavy scene. Repeat Stop/Play, pause/resume, separate
-  Game and embedded Game, with and without scripts defining onGUI.
+  Game and embedded Game.
 - Exercise successful preload, invalid assets, loading cancellation, repeated
-  runtime GUI destruction, and application exit. Verify the editor still renders
+  loading overlay destruction, and application exit. Verify the editor still renders
   after each temporary backend is torn down.
 - Check the terminal's Play preload stages: scene preparation, loading overlay
   initialization, scene prepared, GPU assets ready/overlay closing, overlay closed
@@ -104,3 +104,23 @@ ImGui and do not also compile upstream imgui_impl_opengl3.cpp independently.
 The user's supplied trace confirms a main-thread SIGSEGV at an unnamed address;
 it does not prove this loader-lifetime hazard is the cause. Desktop confirmation
 on the affected build/system is still required.
+
+## Removed scripted in-game ImGui
+
+- Open the editor and exercise Inspector, file/folder picker, docked windows and
+  loading overlay: these still use ImGui and must remain available.
+- In a script, verify `GUI` is nil and a function named onGUI is not invoked
+  automatically during Play, Pause/Resume, external Game, or exported gameplay.
+  Existing source is not rewritten; a direct old GUI call should report an
+  ordinary script error without corrupting the editor or another script.
+- Confirm API completion, hover, snippets and the generated reference no longer
+  advertise GUI widgets/constants or an automatic onGUI lifecycle callback.
+- Check keyboard/mouse input, FPS/TPS camera controls, cursor locking, mouse-up
+  release, focus loss, Stop/Play and level transitions without runtime UI capture.
+  Typing in editor inputs must still not drive gameplay.
+- Verify screenshots/brightness and Game fullscreen/external-window presentation
+  still run even though no scripted UI overlay is rendered.
+- Exercise regular lifecycle callbacks, events and task/wait APIs in editor and
+  player. Scripted GUI contexts/scopes/subscribers must no longer be constructed.
+
+These desktop checks have not been run in the sandbox; no automated tests added.

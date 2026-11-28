@@ -13,16 +13,12 @@
 #include "rendering/texture_quality.hpp"
 #include "scene/scene_camera.hpp"
 #include "scene/skybox_transition.hpp"
+#include "scripting/lua_compat.hpp"
 #include "scripting/lua_console.hpp"
 #include "scripting/script_exports.hpp"
-#include "ui/script_gui.hpp"
-#include <cstdio>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-}
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <unordered_map>
 #include <unordered_set>
@@ -466,7 +462,7 @@ LuaScene::LuaScene(lua_State* L,
     : state_(L), world_(world), meshes_{cube, sphere, capsule, cone, plane},
       error_(std::move(error)) {
     // Keep lifecycle keys interned even when a script exhausts its allocation budget.
-    for (const char* key : {"onStart", "onUpdate", "onFixedUpdate", "onGUI", "onDestroy"}) {
+    for (const char* key : {"onStart", "onUpdate", "onFixedUpdate", "onDestroy"}) {
         lua_pushboolean(L, 1);
         lua_setfield(L, LUA_REGISTRYINDEX, key);
     }
@@ -3375,8 +3371,7 @@ void LuaScene::resume(Task& task, int arguments) {
     auto* previous = currentTask_;
     state_ = task.thread;
     currentTask_ = &task;
-    int results = 0;
-    int status = lua_resume(task.thread, main, arguments, &results);
+    int status = legacyLuaResume(task.thread, arguments);
     state_ = main;
     currentTask_ = previous;
     if (status != LUA_OK && status != LUA_YIELD) {
@@ -3392,7 +3387,7 @@ void LuaScene::resume(Task& task, int arguments) {
 }
 void LuaScene::call(
     const char* name, int reference, float dt, bool delta, Entity other, bool colliderArgument) {
-    if (std::strcmp(name, "onGUI") && tasks_.size() >= 128) {
+    if (tasks_.size() >= 128) {
         error_("Too many waiting callbacks");
         return;
     }
@@ -3415,18 +3410,7 @@ void LuaScene::call(
         lua_settop(state_, base);
         return;
     }
-    if (!std::strcmp(name, "onGUI")) {
-        // Immediate-mode drawing cannot yield or leave ImGui scopes alive.
-        ScriptGUI::beginScope(reinterpret_cast<std::uintptr_t>(this), reference);
-        const int result = lua_pcall(state_, 0, 0, 0);
-        ScriptGUI::endScope();
-        if (result != LUA_OK) {
-            const char* text = lua_tostring(state_, -1);
-            error_(text ? text : "onGUI callback failed");
-        }
-        lua_settop(state_, base);
-        return;
-    }
+
     auto* thread = lua_newthread(state_);
     int ref = luaL_ref(state_, LUA_REGISTRYINDEX);
     lua_xmove(state_, thread, 1);
@@ -3656,19 +3640,7 @@ void LuaScene::tick(const char* name, float dt) {
         }
     }
 }
-void LuaScene::drawGUI() {
-    if (!ScriptGUI::inFrame() || !receivesEvents() || !started_) {
-        return;
-    }
-    call("onGUI", LUA_NOREF, 0, false);
-    const auto count = entries_.size();
-    for (std::size_t i = 0; i < count && active_; ++i) {
-        if (!entries_[i].destroying && entries_[i].started &&
-            isActive(world_, entries_[i].entity)) {
-            call("onGUI", entries_[i].reference, 0, false);
-        }
-    }
-}
+
 void LuaScene::update(float dt, double waitDelta) {
     if (selfEntity_ != Entity{} && !isActive(world_, selfEntity_)) {
         return;

@@ -1,6 +1,6 @@
 # LegacyEngine
 
-A C++17 3D editor built with SDL3, OpenGL, Dear ImGui, Jolt, miniaudio and Lua 5.4.
+A C++17 3D editor built with SDL3, OpenGL, Dear ImGui, Jolt, miniaudio and LuaJIT 2.1.
 LegacyScript (`.lua`, with legacy `.ls` compatibility) adds Inspector-exported fields and engine APIs on top of Lua.
 
 ![LegacyEngine editor](docs/screenshot.png)
@@ -53,18 +53,8 @@ Toggle VSync in **Project > Project Settings > Rendering**. Engine GLSL lives in
 Model source imports support OBJ, glTF/GLB, and Half-Life 1 GoldSrc MDL (IDST v10), including skeletal animations.
 See [Jolt migration and manual checks](docs/manual/jolt-and-model-imports.md) for physics details.
 
-### In-game UI
-
-Game interfaces use the ImGui `GUI` namespace in per-frame `onGUI()` callbacks.
-See the [setup/API guide](docs/game-ui.md) and `data/examples/imgui`.
-
-
 ## License
 
 **GNU General Public License, version 2 only** (`GPL-2.0-only`). See [LICENSE](LICENSE).
 Third-party dependencies and assets retain their respective licenses and notices,
 collected under [`data/license/`](data/license/README.md) and included in releases.
-
-Runtime interfaces use the **GUI**
-ImGui scripting namespace (draw inside `onGUI()`). See [in-game interfaces](docs/game-ui.md)
-and the examples in `data/examples/imgui`.

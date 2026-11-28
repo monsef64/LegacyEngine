@@ -45,7 +45,7 @@ the source tree. Repository-source links point to the revision used for the buil
 
 ## New editor and runtime workflows
 
-- [In-game GUI with Dear ImGui](game-ui.md)
+- [Removed in-game UI: compatibility notes](game-ui.md)
 
 - [Settings history, Game window and asset controls](editor.md#settings-history-and-play-destination)
 - [Mouse picking and AudioSource event setup](audio-input.md#gameobject-mouse-callbacks)

@@ -1,6 +1,6 @@
 const lua = require('luaparse');
 const types = new Set(('Recoil GameObject Transform RigidBody Collider MeshRenderer ObjectName LuaScript Camera AudioSource AudioListener DirectionalLight PointLight SpotLight Skybox CharacterController FPSCamera Raycast Animation Animator ParticleSystem Laser LightShafts Asset AudioClip Texture Prefab AnimationClip int integer float bool number boolean string').split(' '));
-const reserved = new Set('self onStart onGUI onUpdate onFixedUpdate onDestroy onTriggerEnter onTriggerStay onTriggerExit onCollisionEnter onCollisionStay onCollisionExit'.split(' '));
+const reserved = new Set('self onStart onUpdate onFixedUpdate onDestroy onTriggerEnter onTriggerStay onTriggerExit onCollisionEnter onCollisionStay onCollisionExit'.split(' '));
 
 // Preserve UTF-16 offsets and line breaks when removing engine-only declarations.
 // Strings and long comments are skipped, so examples containing declarations are text.
@@ -31,16 +31,6 @@ function preprocess(text) {
       const quote = text[i++];
       while (i < text.length) { if (text[i] === '\\') { i += 2; continue; } if (text[i++] === quote) break; }
       continue;
-    }
-    // Lua 5.4 local attributes aren't understood by the bundled 5.3 grammar.
-    // Only mask attributes in local declarations, never inside text/comments.
-    if (text[i] === '<') {
-      const attribute = text.slice(i).match(/^<\s*(const|close)\s*>/);
-      const prefix = attribute && text.slice(0, i).match(/\blocal\s+[A-Za-z_]\w*(?:\s*<\s*(?:const|close)\s*>\s*)?(?:\s*,\s*[A-Za-z_]\w*(?:\s*<\s*(?:const|close)\s*>\s*)?)*\s*$/);
-      if (attribute && prefix) {
-        for (let j = i; j < i + attribute[0].length; ++j) if (text[j] !== '\n' && text[j] !== '\r') output[j] = ' ';
-        i += attribute[0].length; continue;
-      }
     }
     if (text[i] === '\n') atLineStart = true;
     else if (text[i] !== ' ' && text[i] !== '\t' && text[i] !== '\r') atLineStart = false;
@@ -75,7 +65,7 @@ function diagnostics(doc) {
     if (result.length >= 100) break;
   }
   try {
-    lua.parse(processed.text, {luaVersion: '5.3', locations: true, ranges: true, comments: false, scope: false});
+    lua.parse(processed.text, {luaVersion: 'LuaJIT', locations: true, ranges: true, comments: false, scope: false});
   } catch (error) {
     if (!(error instanceof SyntaxError)) throw error;
     const start = Math.max(0, Math.min(source.length, Number.isInteger(error.index) ? error.index : 0));

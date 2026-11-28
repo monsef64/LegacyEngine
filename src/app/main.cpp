@@ -4,7 +4,6 @@
 #include "effects/laser_update.hpp"
 #include "engine_version.hpp"
 #include "scripting/game_services.hpp"
-#include "ui/script_gui.hpp"
 #include <cctype>
 #include <imgui_internal.h>
 // LegacyEngine - Scene editing and runtime orchestration.
@@ -275,7 +274,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     NavigationWindow navigationWindow;
     ModelPreviewWindow modelPreviewWindow;
     SceneSurface sceneSurface, gameSurface, cameraPreviewSurface;
-    ScriptGUI scriptGUI;
     auto lastSceneRender = std::chrono::steady_clock::time_point{};
     int lastSceneWidth = 0, lastSceneHeight = 0;
     AssetPreviewRenderer assetPreviews(
@@ -370,8 +368,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     auto waitWhileSuspended = [&](SDL_Event& event) {
         // Import workers need no window event to finish. Only wake periodically
         // while imports need servicing; an idle unfocused engine still blocks normally.
-        return browser.importing() ? SDL_WaitEventTimeout(&event, 100)
-                                   : SDL_WaitEvent(&event);
+        return browser.importing() ? SDL_WaitEventTimeout(&event, 100) : SDL_WaitEvent(&event);
     };
     while (running) {
         GameServices::update(gameWindow ? gameWindow : window, playMode.active());
@@ -442,7 +439,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             scripts.shutdown();
             input.releaseMouse();
             LuaConsole::clearEvents();
-            scriptGUI.shutdown();
+
             world.restore(transition->level->world);
             resetHierarchyExpansion();
             embeddedLegacySource = transition->level->source;
@@ -493,23 +490,9 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         playMode.playing() && !cameraLooking &&
                         (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || input.mouseLocked) &&
-                        !inputSettings.visible && !scriptGUI.capturesKeyboard();
+                        !inputSettings.visible;
         input.mouseEnabled = externalFocus || gameHovered || sceneHovered || input.mouseLocked;
         input.beginFrame();
-        if (!playMode.active()) {
-            scriptGUI.shutdown();
-        }
-        const auto uiOrigin = ImGui::GetMainViewport()->Pos;
-        int uiW = 1, uiH = 1;
-        if (gameWindow) {
-            SDL_GetWindowSize(gameWindow, &uiW, &uiH);
-        }
-        scriptGUI.viewport(gameWindow ? 0.f : gameImageOrigin.x - uiOrigin.x,
-                           gameWindow ? 0.f : gameImageOrigin.y - uiOrigin.y,
-                           gameWindow ? float(uiW) : gameImageSize.x,
-                           gameWindow ? float(uiH) : gameImageSize.y,
-                           gameSurface.width,
-                           gameSurface.height);
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             if (gameWindow && event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
@@ -520,7 +503,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 }
                 input.releaseMouse();
                 input.window = window;
-                scriptGUI.shutdown();
+
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
                 continue;
@@ -536,10 +519,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                     }
                     continue;
                 }
-                if (!(scriptGUI.event(event, gameWindow, externalFocus, input.mouseLocked)) ||
-                    event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-                    input.event(event);
-                }
+                input.event(event);
                 continue;
             }
             const auto captureButtons =
@@ -597,11 +577,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (!navigationMouse) {
                 ImGui_ImplSDL3_ProcessEvent(&event);
             }
-            if (!(scriptGUI.event(
-                    event, window, gameFocused && playMode.active(), input.mouseLocked)) ||
-                event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-                input.event(event);
-            }
+            input.event(event);
             const bool mouseEvent = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                                     event.type == SDL_EVENT_MOUSE_BUTTON_UP ||
                                     event.type == SDL_EVENT_MOUSE_MOTION ||
@@ -1632,7 +1608,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         if (ImGui::BeginPopupModal(
                 "About LegacyEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::Text("LegacyEngine %s", EngineVersion::version);
-            ImGui::TextUnformatted("3D scene editor with LegacyScript (Lua 5.4)");
+            ImGui::TextUnformatted("3D scene editor with LegacyScript (LuaJIT 2.1)");
             ImGui::TextUnformatted("SDL3 / OpenGL / Dear ImGui / Jolt");
             if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                 ImGui::CloseCurrentPopup();
@@ -1872,13 +1848,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             if (gameWindow) {
                 input.releaseMouse();
                 input.window = window;
-                scriptGUI.shutdown();
+
                 SDL_DestroyWindow(gameWindow);
                 gameWindow = nullptr;
             }
             mouseOver = {};
             mousePressedObject = {};
-            scriptGUI.shutdown();
+
             TextureQuality::lifecycle(false);
             playMode.stop(world);
             GameServices::cancelQuit();
@@ -2647,7 +2623,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         playMode.playing() && !cameraLooking &&
                         (gameFocused || externalFocus || input.mouseLocked) &&
                         (!ImGui::GetIO().WantTextInput || gameFocused || input.mouseLocked) &&
-                        !inputSettings.visible && !scriptGUI.capturesKeyboard();
+                        !inputSettings.visible;
         input.synchronizeKeyboard();
         // The time that has passed since the previous frame.
         const Uint64 ticks = SDL_GetTicksNS();
@@ -2830,8 +2806,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 v = .5f;
                 inside = true;
             }
-            if (inside && !scriptGUI.capturesMouse() && u >= 0 && u <= 1 && v >= 0 && v <= 1 &&
-                cameraEntity != Entity{}) {
+            if (inside && u >= 0 && u <= 1 && v >= 0 && v <= 1 && cameraEntity != Entity{}) {
                 const auto& c = world.get<Camera>(cameraEntity);
                 const auto& t = world.get<Transform>(cameraEntity);
                 if (u >= c.viewportX && u <= c.viewportX + c.viewportWidth && v >= c.viewportY &&
@@ -3054,11 +3029,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
             }
             if (gameVisible && playMode.active()) {
                 glBindFramebuffer(GL_FRAMEBUFFER, gameSurface.framebuffer);
-                scriptGUI.render(input.window,
-                                 gameSurface.width,
-                                 gameSurface.height,
-                                 playMode.playing(),
-                                 browser.assets.root);
+
                 GameServices::finishFrame(
                     gameSurface.framebuffer, gameSurface.width, gameSurface.height);
             }
@@ -3164,13 +3135,13 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                 if (gameWindow) {
                     input.releaseMouse();
                     input.window = window;
-                    scriptGUI.shutdown();
+
                     SDL_DestroyWindow(gameWindow);
                     gameWindow = nullptr;
                 }
                 mouseOver = {};
                 mousePressedObject = {};
-                scriptGUI.shutdown();
+
                 TextureQuality::lifecycle(false);
                 playMode.stop(world);
                 input.releaseMouse();
@@ -3275,7 +3246,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
     if (gameWindow) {
         input.releaseMouse();
         input.window = window;
-        scriptGUI.shutdown();
+
         SDL_DestroyWindow(gameWindow);
     }
     scripts.shutdown();

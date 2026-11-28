@@ -64,7 +64,6 @@ class LuaConsole {
     static bool hasTasks();
     static bool postEvent(std::string name, std::vector<EventValue> values = {});
     static void dispatchEvents();
-    static void drawGUI();
     static void clearEvents();
     void clear() {
         lines_.clear();

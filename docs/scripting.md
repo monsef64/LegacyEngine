@@ -28,7 +28,7 @@ clears them. Supported values include number, boolean, string, GameObject, engin
 component types, Asset and AudioClip. Defaults are literals, not Lua expressions.
 Declarations use `global Type name = default` at the beginning of a line and are
 preprocessed before Lua runs, preserving error line numbers. Old `expose` declarations remain readable for existing projects; use `global`
-for new scripts. Integers use Lua integer values; float, bool and string defaults
+for new scripts. Integer exports require integral numeric values; float, bool and string defaults
 are supported, as are `Prefab` and `AnimationClip` asset fields.
 In the script editor, type `global` for API completion; in VS Code, use the
 **Global Inspector field** snippet (update/reinstall the bundled extension if it
@@ -495,27 +495,10 @@ test press/release in an FPS/TPS setup and test a Space action in onFixedUpdate 
 frame rates above/below physics frequency. Typing in editor text fields must not
 drive gameplay; focus loss and Stop must clear held and pending key state.
 
-## In-game UI
+## Removed in-game GUI
 
-Use the `GUI` namespace inside per-frame `onGUI()` callbacks for game interfaces.
-See [In-game GUI](game-ui.md). The former document-based UI component is removed.
-
-### Advanced runtime GUI
-
-`GUI` is the ImGui scripting namespace, not a component. Define
-`function onGUI() ... end` for per-rendered-frame drawing. Use the generated scripting
-reference for images, tables, menus, popups, combos, radio buttons, style/font
-scopes, typed drag/drop, custom drawing and mouse/key queries. Window flags combine
-with Lua's `|`, for example `GUI.WindowFlags.MenuBar | GUI.WindowFlags.NoCollapse`.
-Table column indices are zero-based; `GUI.combo` selections are one-based.
-
-Always pair `beginWindow`/`beginChild`, even if they return false. Pair table,
-menu, menu-bar, popup, combo and drag/drop scopes **only when begin returns true**.
-Pop styles/fonts in reverse push order. Unbalanced scopes are unwound after each
-subscriber, including script errors. Script payloads cannot spoof editor asset or
-object drags. Images use project-relative paths, load asynchronously, and return
-false until ready. Custom draw coordinates are Game-surface pixels, not Scene
-coordinates. Drawing outside a window uses the background draw list.
+The ImGui `GUI` namespace and automatic `onGUI` callbacks are no longer provided.
+See [runtime UI removal notes](game-ui.md). Editor ImGui tools are unaffected.
 
 ## Named script components
 
@@ -737,3 +720,36 @@ Do not combine NavMeshAgent with another physics/controller movement driver.
 Use the [Animator state-machine component](animator.md) for controller assets with
 Bool/Int/Float parameters, animation states, per-state looping and conditional
 transitions with fade durations. The existing Animation clip player remains available.
+
+## LuaJIT runtime and migration
+
+LegacyScript now runs on embedded **LuaJIT 2.1**, with Lua 5.1 syntax and
+LuaJIT extensions/selected Lua 5.2 compatibility. The engine's `global`/`expose`
+declarations, component APIs, lifecycle callbacks, events and waits remain available. Script source is still loaded in text-only mode.
+
+This is not full Lua 5.4 language compatibility:
+
+- Replace `a | b`, `a & b`, `a ~ b`, `~a`, `a << b`, and `a >> b` with
+  `bit.bor(a,b)`, `bit.band(a,b)`, `bit.bxor(a,b)`, `bit.bnot(a)`,
+  `bit.lshift(a,b)`, and `bit.rshift(a,b)`. LuaJIT's bit library operates on
+  32-bit values and returns signed results; it is not 64-bit Lua 5.4 arithmetic.
+- Replace integer division `a // b` with `math.floor(a / b)`. Remove or rewrite
+  Lua 5.4 `<const>` and `<close>` local attributes; automatic close semantics
+  are not available. LuaJIT supports `goto`, but not the full Lua 5.4 library.
+- Numbers use LuaJIT numeric semantics. Integral-number checks still reject
+  fractional values for engine integer parameters, but there is no separate
+  script-visible 64-bit integer type. Do not rely on exact integers beyond the
+  double-precision safe range (absolute value 9007199254740991), Lua 5.4
+  `math.type`, `math.tointeger`, or `string.pack`/`string.unpack`.
+- The computation-only `utf8` library is retained as an adaptation of Lua's
+  UTF-8 library. Base, table, string, math and `bit` are provided within the
+  sandbox. File/process/package access, FFI, `jit`, `loadstring`, environment
+  mutation, debug introspection, user-created coroutines and protected calls
+  remain unavailable. Use the engine's wait/task facilities instead.
+- Memory/instruction limits remain enabled. For safety, tracing is disabled
+  during budgeted execution; changing the runtime is not a guarantee that
+  gameplay callbacks will run as JIT-compiled code.
+
+The bundled editor diagnostics and `.luarc.json` now target LuaJIT as well.
+Update existing scripts explicitly; the engine does not rewrite arbitrary Lua
+5.4 source or load old Lua bytecode. Scenes/assets keep their existing formats.

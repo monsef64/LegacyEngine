@@ -15,7 +15,8 @@ license remains in the repository/package root `LICENSE`.
 | Recast Navigation / Detour | v1.6.0 | RecastNavigation.txt |
 | Dear ImGui | v1.92.5-docking | DearImGui.txt |
 | ImGuizmo | 105e4fde45e4e74aae8973d98750820ef7aca7e2 | ImGuizmo.txt |
-| Lua | v5.4.8 | Lua.txt |
+| LuaJIT | 2.1 / 3bfb8fa4ab970b36d42d108ead04e92341c49998 | LuaJIT.txt |
+| Lua UTF-8 computation library (adapted, not the runtime) | v5.4.8 | Lua.txt |
 | glad and generated OpenGL/Khronos headers | glad 2.0.8 | glad.txt, Khronos.txt, Apache-2.0.txt |
 | miniaudio | vendored `third_party/miniaudio` | miniaudio.txt |
 | simdjson | vendored 3.12.3 | simdjson.txt |

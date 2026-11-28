@@ -1,4 +1,4 @@
-# Skybox, onGUI and MDL follow-up: manual verification
+# Skybox and MDL follow-up: manual verification
 
 No automated tests were added or run.
 
@@ -15,14 +15,6 @@ No automated tests were added or run.
   old JSON/text projects. New format versions are JSON 27 / legacy text 36.
 - Crossfade between HDR/cubemap skies while the target is still loading. Fade time
   must wait for both textures, and Stop/project switches must discard stale work.
-- Run data/examples/imgui/hud.lua and inventory.lua. GUI must redraw through
-  onGUI every rendered Game frame. Confirm buttons/values update without onStart
-  registration, global and GameObject onGUI callbacks work, inactive scripts do
-  not draw, and Pause/Stop/Play behave correctly. GUI calls from onStart/onUpdate
-  or event listeners must report an error. GUI.onDraw is deliberately removed.
-- Attempt wait/task and an invalid scope in onGUI; errors must unwind GUI stacks
-  without damaging another script's GUI or the editor context. Check menus,
-  tables, drag/drop, images, styles, focus and separate Game window capture.
 - Check Classic Light / Classic Dark theme labels; stored numeric preferences
   should still select the same palettes.
 - Import the failing GoldSrc model pack. Test its main model, selecting its T.mdl

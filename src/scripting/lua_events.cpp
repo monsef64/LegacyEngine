@@ -1,11 +1,7 @@
+#include "scripting/lua_compat.hpp"
 #include "scripting/lua_console.hpp"
 #include "scripting/lua_scene.hpp"
-#include "ui/script_gui.hpp"
 #include <algorithm>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-}
 namespace {
 struct Event {
     std::string name;
@@ -73,22 +69,10 @@ bool LuaConsole::hasTasks() {
     }
     return false;
 }
-void LuaConsole::drawGUI() {
-    const auto recipients = subscribers;
-    for (auto* console : recipients) {
-        if (std::find(subscribers.begin(), subscribers.end(), console) != subscribers.end()) {
-            if (console->scene_ && ScriptGUI::inFrame()) {
-                console->beginBudget();
-                console->scene_->drawGUI();
-                console->endBudget();
-            }
-        }
-    }
-}
+
 void LuaConsole::installEvents() {
     removeEventListeners();
     subscribers.push_back(this);
-    ScriptGUI::install(state_);
     for (int op = 0; op < 3; ++op) {
         lua_pushinteger(state_, op);
         lua_pushcclosure(state_, eventAPI, 1);
@@ -105,7 +89,7 @@ void LuaConsole::removeEventListeners() {
     subscribers.erase(std::remove(subscribers.begin(), subscribers.end(), this), subscribers.end());
 }
 int LuaConsole::eventAPI(lua_State* L) {
-    auto* self = *static_cast<LuaConsole**>(lua_getextraspace(L));
+    auto* self = static_cast<LuaConsole*>(legacyLuaOwner(L));
     const int op = int(lua_tointeger(L, lua_upvalueindex(1)));
     if (op == 1) {
         const int token = int(luaL_checkinteger(L, 1));
@@ -180,9 +164,7 @@ int LuaConsole::eventAPI(lua_State* L) {
     return 1;
 }
 void LuaConsole::receiveEvent(const std::string& name, const std::vector<EventValue>& values) {
-    if (name == "__runtime_gui" || name == "onGUI") {
-        return;
-    }
+
     if (scene_ && !scene_->receivesEvents()) {
         return;
     }

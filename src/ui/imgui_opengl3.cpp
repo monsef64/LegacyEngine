@@ -1,5 +1,5 @@
 // Use the same SDL-resolved OpenGL dispatch as the renderer. The editor,
-// loading overlay and scripted GUI each own an ImGui backend, but share one
+// loading overlay each own an ImGui backend, but share one
 // SDL GL context. ImGui's embedded loader has process-global dlopen/dlclose
 // lifetime: shutting down a temporary backend must not unload GL entry points
 // while the editor (or another backend) still uses them.

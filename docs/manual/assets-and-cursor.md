@@ -86,7 +86,7 @@ and over-budget input still produces an error.
 - Verify `global` declarations work; malformed declarations,
   duplicate field names and unknown types should produce useful errors.
 - Put export examples inside quoted/long strings and comments; these must remain text.
-- Verify valid Lua 5.4 local attributes do not produce spurious syntax errors.
+- Verify LuaJIT syntax is accepted and unsupported Lua 5.4 local attributes are diagnosed.
 - Confirm engine runtime errors remain in its script console rather than being
   misleadingly reported as statically detectable VS Code errors.
 

@@ -35,7 +35,6 @@ class LuaScene {
     bool hasTasks() const {
         return !tasks_.empty();
     }
-    void drawGUI();
     void update(float dt, double waitDelta = -1);
     void fixedUpdate(float dt);
     void stop();

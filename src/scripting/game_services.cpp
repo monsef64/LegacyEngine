@@ -17,10 +17,7 @@
 #endif
 #include <windows.h>
 #endif
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-}
+#include "scripting/lua_compat.hpp"
 namespace GameServices {
 namespace {
 SDL_Window* window = nullptr;
@@ -784,8 +781,7 @@ void install(lua_State* L) {
     proxy(L, "Screen", screenIndex, screenWrite);
     proxy(L, "Game", gameIndex, gameWrite);
     lua_newtable(L);
-    const char* randomNames[]{
-        "randomFloat", "randomInt", "randomBool", "randomString"};
+    const char* randomNames[]{"randomFloat", "randomInt", "randomBool", "randomString"};
     for (int i = 0; i < 4; ++i) {
         lua_pushinteger(L, i);
         lua_pushcclosure(L, randomFunction, 1);

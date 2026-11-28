@@ -16,7 +16,6 @@ These are manual checks only. No automated tests were added or run.
   only common components are offered, unrelated fields/axes remain distinct,
   invalid dependent values are rejected for the entire selection, and Undo/Redo
   restores the batch. Repeat during Play and verify Stop restores authored data.
-- **GUI:** verify the scripted ImGui namespace in onGUI, including input capture and Stop/Play.
 - **Texture quality:** compare Full/Half/Quarter/Eighth on a detailed material
   and normal map. Call setTextureQuality from onStart and during Play. Confirm
   cookies and GUI images remain full resolution, Stop restores project quality,

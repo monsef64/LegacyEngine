@@ -43,7 +43,7 @@ Linux desktop and Windows MinGW-w64 build; record platform/build and results.
   materials and registered level transitions. Also export a stored starting level.
 - Move the entire export folder outside the project and launch with the source
   project unavailable. Confirm camera/input, fixed updates, triggers/collisions,
-  audio events, animation callbacks, GUI onGUI, level changes, F11,
+  audio events, animation callbacks, level changes, F11,
   focus loss/resume and normal close. No editor windows should appear.
 - Windows: inspect EXE Properties (name/company/version/copyright) and icon;
   launch on a clean compatible machine to check copied DLL dependencies.

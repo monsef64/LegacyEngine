@@ -3,11 +3,7 @@
 #include "scripting/legacy_script.hpp"
 #include "scripting/lua_scene.hpp"
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "scripting/lua_compat.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <cstdlib>
@@ -74,7 +70,7 @@ void LuaConsole::reset() {
         append(Kind::Error, "Unable to create Lua runtime");
         return;
     }
-    *static_cast<LuaConsole**>(lua_getextraspace(state_)) = this;
+    legacyLuaSetOwner(state_, this);
     // Snippets have basic computation libraries, but no host filesystem, process,
     // native module loading or debug access. No coroutines or catchable pcall:
     // scripts must not swallow the instruction-limit error and run forever.
@@ -88,7 +84,15 @@ void LuaConsole::reset() {
     lua_pop(state_, 1);
     luaL_requiref(state_, LUA_UTF8LIBNAME, luaopen_utf8, 1);
     lua_pop(state_, 1);
-    for (const char* name : {"dofile",
+    luaL_requiref(state_, LUA_BITLIBNAME, luaopen_bit, 1);
+    lua_pop(state_, 1);
+    for (const char* name : {"loadstring",
+                             "getfenv",
+                             "setfenv",
+                             "newproxy",
+                             "gcinfo",
+                             "coroutine",
+                             "dofile",
                              "loadfile",
                              "load",
                              "collectgarbage",
@@ -179,7 +183,7 @@ int LuaConsole::traceback(lua_State* state) {
 }
 
 void LuaConsole::instructionHook(lua_State* state, lua_Debug*) {
-    auto* self = *static_cast<LuaConsole**>(lua_getextraspace(state));
+    auto* self = static_cast<LuaConsole*>(legacyLuaOwner(state));
     self->remainingInstructions_ -= 1000;
     if (self->remainingInstructions_ <= 0) {
         luaL_error(state, "Execution stopped: instruction limit exceeded");
@@ -230,6 +234,9 @@ void LuaConsole::beginBudget() {
         return;
     }
     remainingInstructions_ = 1000000;
+    // LuaJIT traces must never bypass the sandbox's instruction-count hook.
+    // CHECKHOOK also guards any previously recorded traces in this VM.
+    luaJIT_setmode(state_, 0, LUAJIT_MODE_ENGINE | LUAJIT_MODE_OFF);
     lua_sethook(state_, instructionHook, LUA_MASKCOUNT, 1000);
 }
 void LuaConsole::endBudget() {
@@ -237,6 +244,7 @@ void LuaConsole::endBudget() {
         return;
     }
     lua_sethook(state_, nullptr, 0, 0);
+    luaJIT_setmode(state_, 0, LUAJIT_MODE_ENGINE | LUAJIT_MODE_ON);
 }
 void LuaConsole::installScene() {
     if (world_ && state_) {
@@ -430,10 +438,11 @@ bool publicScriptMember(const char* name) {
     }
     // Lifecycle entry points cannot be spoofed through a function proxy.
     const char* reserved[]{
-        "onStart",        "onUpdate",     "onFixedUpdate", "onDestroy", "onGUI",  "self",   "wait",
-        "task",           "print",        "error",         "assert",    "pcall",  "xpcall", "load",
-        "collectgarbage", "setmetatable", "getmetatable",  "rawset",    "rawget", "next",   "pairs",
-        "ipairs",         "type",         "tostring",      "tonumber",  "select", "require"};
+        "onStart", "onUpdate",       "onFixedUpdate", "onDestroy",    "self",     "wait",
+        "task",    "print",          "error",         "assert",       "pcall",    "xpcall",
+        "load",    "collectgarbage", "setmetatable",  "getmetatable", "rawset",   "rawget",
+        "next",    "pairs",          "ipairs",        "type",         "tostring", "tonumber",
+        "select",  "require"};
     for (const auto* key : reserved) {
         if (std::strcmp(key, name) == 0) {
             return false;
@@ -578,7 +587,7 @@ int LuaConsole::namedTransfer(
     }
     // Self-state access can use the same Lua stack directly; nested external
     // calls into an executing state are rejected to prevent cyclic bridges.
-    const bool sameState = *static_cast<LuaConsole**>(lua_getextraspace(L)) == target;
+    const bool sameState = static_cast<LuaConsole*>(legacyLuaOwner(L)) == target;
     if (sameState && operation == 2) {
         rawScriptGlobal(L, member);
         if (!lua_isfunction(L, -1)) {

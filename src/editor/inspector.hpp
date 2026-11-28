@@ -19,12 +19,10 @@
 #include "materials/material_io.hpp"
 #include "models/mesh_lod.hpp"
 #include "models/model_asset.hpp"
-#include "particles/particle_io.hpp"
 #include "project/layers.hpp"
 #include "scene/scene_camera.hpp"
 #include "scripting/script_exports.hpp"
 #include <ImGuizmo.h>
-#include <SDL3/SDL.h>
 #include <cctype>
 #include <chrono>
 #include <cmath>

@@ -26,7 +26,7 @@ inline bool animationFunctionName(const std::string& name) {
         std::isdigit(static_cast<unsigned char>(name[0]))) {
         return false;
     }
-    return name != "onGUI" && name != "onStart" && name != "onUpdate" && name != "onFixedUpdate" &&
+    return name != "onStart" && name != "onUpdate" && name != "onFixedUpdate" &&
            name != "onDestroy";
 }
 struct AnimationClip {

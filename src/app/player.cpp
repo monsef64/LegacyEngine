@@ -22,7 +22,6 @@
 #include "scene/scene_camera.hpp"
 #include "scripting/game_services.hpp"
 #include "scripting/script_components.hpp"
-#include "ui/script_gui.hpp"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <chrono>
@@ -100,7 +99,6 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
     input.window = window;
     InputSettings bindings;
     bindings.load(assets, input);
-    ScriptGUI gui;
     SceneSurface surface;
 
     auto bindScripts = [&] {
@@ -219,9 +217,9 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             continue;
         }
         surface.resize(width, height);
-        gui.viewport(0, 0, float(logicalW), float(logicalH), width, height);
-        input.enabled = !gui.capturesKeyboard();
-        input.mouseEnabled = !gui.capturesMouse();
+
+        input.enabled = true;
+        input.mouseEnabled = true;
         input.beginFrame();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -233,10 +231,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
                 SDL_SetWindowFullscreen(window,
                                         !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
             }
-            const bool consumed = gui.event(event, window, true, input.mouseLocked);
-            if (!consumed) {
-                input.event(event);
-            }
+            input.event(event);
         }
         input.synchronizeKeyboard();
         levels.preload = [&](LevelSystem::Transition& prepared) {
@@ -249,7 +244,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             audio.clear();
             input.releaseMouse();
             LuaConsole::clearEvents();
-            gui.shutdown();
+
             world.restore(transition->level->world);
             source = transition->level->source;
             physics.reset();
@@ -406,7 +401,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
                           (std::uint64_t(camera.generation) << 32) | camera.index);
         }
         glBindFramebuffer(GL_FRAMEBUFFER, surface.framebuffer);
-        gui.render(window, width, height, true, assets.root);
+
         GameServices::finishFrame(surface.framebuffer, width, height);
         glDisable(GL_SCISSOR_TEST);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, surface.framebuffer);
@@ -421,7 +416,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
     global.shutdown();
     LuaConsole::clearEvents();
     input.releaseMouse();
-    gui.shutdown();
+
     audio.clear();
     TextureQuality::lifecycle(false);
 }

@@ -22,7 +22,6 @@ GLOBALS = {
 'onTriggerStay': 'function onTriggerStay(collider)\n    if collider then debug.log("Overlapping", collider.gameObject.layer) end\nend',
 'onTriggerExit': 'function onTriggerExit(collider)\n    debug.log(collider and collider.gameObject:getName() or "Destroyed collider", "left")\nend',
 'onStart': 'function onStart()\n    debug.log("Script started", self:getName())\nend',
-'onGUI': 'function onGUI()\n    GUI.beginWindow("HUD")\n    GUI.text("Hello")\n    GUI.endWindow()\nend',
 'onUpdate': 'function onUpdate(deltaTime)\n    self:translate(deltaTime, 0, 0)\nend',
 'onFixedUpdate': 'function onFixedUpdate(deltaTime)\n    debug.log("Fixed step", deltaTime)\nend',
 'onDestroy': 'function onDestroy()\n    debug.log("Script stopping")\nend',
@@ -219,58 +218,6 @@ def example(entry):
         return 'debug.log(tostring(getTextureQuality()))'
     if name == 'setTextureQuality':
         return 'function onStart()\n    setTextureQuality(1)\nend'
-    if owner == 'GUI':
-        calls = {
-         'beginWindow': 'GUI.text("Window contents")',
-         'endWindow': 'GUI.text("Window contents")',
-         'text': 'GUI.text("Hello, player!")',
-         'textWrapped': 'GUI.textWrapped("A longer message for the player.")',
-         'button': 'if GUI.button("Collect") then debug.log("Collected") end',
-         'smallButton': 'if GUI.smallButton("Reset") then debug.log("Reset") end',
-         'checkbox': 'enabled, changed = GUI.checkbox("Enabled", enabled)',
-         'sliderFloat': 'volume, changed = GUI.sliderFloat("Volume", volume, 0, 1)',
-         'sliderInt': 'count, changed = GUI.sliderInt("Count", count, 0, 10)',
-         'dragFloat': 'volume, changed = GUI.dragFloat("Value", volume, 0.1)',
-         'inputFloat': 'volume, changed = GUI.inputFloat("Value", volume)',
-         'inputInt': 'count, changed = GUI.inputInt("Count", count)',
-         'inputText': 'name, changed = GUI.inputText("Name", name)',
-         'colorEdit3': 'r, g, b, changed = GUI.colorEdit3("Color", r, g, b)',
-         'colorEdit4': 'r, g, b, a, changed = GUI.colorEdit4("Color", r, g, b, a)',
-         'separator': 'GUI.separator()',
-         'sameLine': 'GUI.text("Label"); GUI.sameLine(); GUI.button("Action")',
-         'spacing': 'GUI.spacing()',
-         'newLine': 'GUI.newLine()',
-         'progressBar': 'GUI.progressBar(0.75)',
-         'selectable': 'if GUI.selectable("Item", false) then debug.log("Selected") end',
-         'collapsingHeader': 'if GUI.collapsingHeader("Details") then GUI.text("More information") end',
-         'beginChild': 'GUI.beginChild("Content", 200, 100)\nGUI.text("Child contents")\nGUI.endChild()',
-         'endChild': 'GUI.beginChild("Content", 200, 100)\nGUI.text("Child contents")\nGUI.endChild()',
-         'beginGroup': 'GUI.beginGroup()\nGUI.text("Group")\nGUI.endGroup()',
-         'endGroup': 'GUI.beginGroup()\nGUI.text("Group")\nGUI.endGroup()',
-         'beginDisabled': 'GUI.beginDisabled(true)\nGUI.button("Unavailable")\nGUI.endDisabled()',
-         'endDisabled': 'GUI.beginDisabled(true)\nGUI.button("Unavailable")\nGUI.endDisabled()',
-         'pushID': 'GUI.pushID("item-1")\nGUI.button("Use")\nGUI.popID()',
-         'popID': 'GUI.pushID("item-1")\nGUI.button("Use")\nGUI.popID()',
-         'setNextWindowPos': 'GUI.text("Positioned window")',
-         'setNextWindowSize': 'GUI.text("Sized window")',
-         'setCursorPos': 'GUI.setCursorPos(20, 60)\nGUI.text("Positioned text")',
-         'getWindowSize': 'local w, h = GUI.getWindowSize()\nGUI.text(tostring(w) .. " x " .. tostring(h))',
-         'getContentRegionAvail': 'local w, h = GUI.getContentRegionAvail()\n'
-                                  'GUI.text(tostring(w) .. " available")',
-         'setNextItemWidth': 'GUI.setNextItemWidth(180)\nname = GUI.inputText("Name", name)',
-         'isItemHovered': 'GUI.button("Help")\n'
-                          'if GUI.isItemHovered() then GUI.setTooltip("A helpful hint") end',
-         'isItemActive': 'GUI.button("Hold")\nif GUI.isItemActive() then debug.log("Active") end',
-         'setTooltip': 'GUI.button("Help")\n'
-                       'if GUI.isItemHovered() then GUI.setTooltip("A helpful hint") end',
-         'bulletText': 'GUI.bulletText("Objective: find supplies")',
-         'getDisplaySize': 'local w, h = GUI.getDisplaySize()\n'
-                           'GUI.text(tostring(w) .. " x " .. tostring(h))'}
-        calls.update({'image': 'GUI.image("icon.png", 64, 64)', 'imageButton': 'GUI.imageButton("icon", "icon.png", 64, 64)', 'beginTable': 'if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then\nGUI.tableSetupColumn("Name")\nGUI.tableSetupColumn("Value")\nGUI.tableHeadersRow()\nGUI.tableNextRow()\nGUI.tableSetColumnIndex(0)\nGUI.text("Health")\nGUI.tableNextColumn()\nGUI.text("100")\nGUI.endTable()\nend', 'endTable': 'if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then\nGUI.tableSetupColumn("Name")\nGUI.tableSetupColumn("Value")\nGUI.tableHeadersRow()\nGUI.tableNextRow()\nGUI.tableSetColumnIndex(0)\nGUI.text("Health")\nGUI.tableNextColumn()\nGUI.text("100")\nGUI.endTable()\nend', 'tableNextRow': 'if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then\nGUI.tableSetupColumn("Name")\nGUI.tableSetupColumn("Value")\nGUI.tableHeadersRow()\nGUI.tableNextRow()\nGUI.tableSetColumnIndex(0)\nGUI.text("Health")\nGUI.tableNextColumn()\nGUI.text("100")\nGUI.endTable()\nend', 'tableHeadersRow': 'if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then\nGUI.tableSetupColumn("Name")\nGUI.tableSetupColumn("Value")\nGUI.tableHeadersRow()\nGUI.tableNextRow()\nGUI.tableSetColumnIndex(0)\nGUI.text("Health")\nGUI.tableNextColumn()\nGUI.text("100")\nGUI.endTable()\nend', 'tableNextColumn': 'if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then\nGUI.tableSetupColumn("Name")\nGUI.tableSetupColumn("Value")\nGUI.tableHeadersRow()\nGUI.tableNextRow()\nGUI.tableSetColumnIndex(0)\nGUI.text("Health")\nGUI.tableNextColumn()\nGUI.text("100")\nGUI.endTable()\nend', 'tableSetColumnIndex': 'if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then\nGUI.tableSetupColumn("Name")\nGUI.tableSetupColumn("Value")\nGUI.tableHeadersRow()\nGUI.tableNextRow()\nGUI.tableSetColumnIndex(0)\nGUI.text("Health")\nGUI.tableNextColumn()\nGUI.text("100")\nGUI.endTable()\nend', 'tableSetupColumn': 'if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then\nGUI.tableSetupColumn("Name")\nGUI.tableSetupColumn("Value")\nGUI.tableHeadersRow()\nGUI.tableNextRow()\nGUI.tableSetColumnIndex(0)\nGUI.text("Health")\nGUI.tableNextColumn()\nGUI.text("100")\nGUI.endTable()\nend', 'tableGetColumnIndex': 'if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then\nGUI.tableSetupColumn("Name")\nGUI.tableSetupColumn("Value")\nGUI.tableHeadersRow()\nGUI.tableNextRow()\nGUI.tableSetColumnIndex(0)\nGUI.text("Health")\nGUI.tableNextColumn()\nGUI.text("100")\nGUI.endTable()\nend', 'tableGetColumnCount': 'if GUI.beginTable("Stats", 2, GUI.TableFlags.Borders) then\nGUI.tableSetupColumn("Name")\nGUI.tableSetupColumn("Value")\nGUI.tableHeadersRow()\nGUI.tableNextRow()\nGUI.tableSetColumnIndex(0)\nGUI.text("Health")\nGUI.tableNextColumn()\nGUI.text("100")\nGUI.endTable()\nend', 'beginMenu': 'if GUI.beginMenu("Actions") then\nif GUI.menuItem("Save") then debug.log("Save") end\nGUI.endMenu()\nend', 'endMenu': 'if GUI.beginMenu("Actions") then\nif GUI.menuItem("Save") then debug.log("Save") end\nGUI.endMenu()\nend', 'beginMenuBar': 'if GUI.beginMenuBar() then\nif GUI.beginMenu("Actions") then\nif GUI.menuItem("Save") then debug.log("Save") end\nGUI.endMenu()\nend\nGUI.endMenuBar()\nend', 'endMenuBar': 'if GUI.beginMenuBar() then GUI.endMenuBar() end', 'menuItem': 'if GUI.beginMenu("Actions") then\nif GUI.menuItem("Save") then debug.log("Save") end\nGUI.endMenu()\nend', 'openPopup': 'if GUI.button("Open") then GUI.openPopup("Info") end\nif GUI.beginPopup("Info") then\nGUI.text("Information")\nif GUI.button("Close") then GUI.closeCurrentPopup() end\nGUI.endPopup()\nend', 'beginPopup': 'if GUI.button("Open") then GUI.openPopup("Info") end\nif GUI.beginPopup("Info") then\nGUI.text("Information")\nif GUI.button("Close") then GUI.closeCurrentPopup() end\nGUI.endPopup()\nend', 'beginPopupModal': 'if GUI.button("Open") then GUI.openPopup("Info") end\nif GUI.beginPopup("Info") then\nGUI.text("Information")\nif GUI.button("Close") then GUI.closeCurrentPopup() end\nGUI.endPopup()\nend', 'endPopup': 'if GUI.button("Open") then GUI.openPopup("Info") end\nif GUI.beginPopup("Info") then\nGUI.text("Information")\nif GUI.button("Close") then GUI.closeCurrentPopup() end\nGUI.endPopup()\nend', 'closeCurrentPopup': 'if GUI.button("Open") then GUI.openPopup("Info") end\nif GUI.beginPopup("Info") then\nGUI.text("Information")\nif GUI.button("Close") then GUI.closeCurrentPopup() end\nGUI.endPopup()\nend', 'beginCombo': 'if GUI.beginCombo("Choice", "First") then\nGUI.selectable("First")\nGUI.endCombo()\nend', 'endCombo': 'if GUI.beginCombo("Choice", "First") then\nGUI.selectable("First")\nGUI.endCombo()\nend', 'combo': 'local index, changed = GUI.combo("Choice", 1, {"First", "Second"})', 'radioButton': 'if GUI.radioButton("First", true) then debug.log("First") end', 'pushStyleColor': 'GUI.pushStyleColor(GUI.Col.Text, 1, 0.8, 0.2, 1)\nGUI.text("Gold")\nGUI.popStyleColor()', 'popStyleColor': 'GUI.pushStyleVar(GUI.StyleVar.Alpha, 0.8)\nGUI.text("Styled")\nGUI.popStyleVar()', 'popStyleVar': 'GUI.pushStyleVar(GUI.StyleVar.Alpha, 0.8)\nGUI.text("Styled")\nGUI.popStyleVar()', 'pushStyleVar': 'GUI.pushStyleVar(GUI.StyleVar.WindowPadding, 12, 12)\nGUI.text("Padded")\nGUI.popStyleVar()', 'pushFontSize': 'GUI.pushFontSize(24)\nGUI.text("Large")\nGUI.popFont()', 'popFont': 'GUI.pushFontSize(24)\nGUI.text("Large")\nGUI.popFont()', 'beginDragDropSource': 'GUI.button("Drag")\nif GUI.beginDragDropSource() then\nGUI.setDragDropPayload("item", "sword")\nGUI.text("Sword")\nGUI.endDragDropSource()\nend\nGUI.button("Drop")\nif GUI.beginDragDropTarget() then\nlocal value = GUI.acceptDragDropPayload("item")\nif value then debug.log(value) end\nGUI.endDragDropTarget()\nend', 'beginDragDropTarget': 'GUI.button("Drag")\nif GUI.beginDragDropSource() then\nGUI.setDragDropPayload("item", "sword")\nGUI.text("Sword")\nGUI.endDragDropSource()\nend\nGUI.button("Drop")\nif GUI.beginDragDropTarget() then\nlocal value = GUI.acceptDragDropPayload("item")\nif value then debug.log(value) end\nGUI.endDragDropTarget()\nend', 'endDragDropSource': 'GUI.button("Drag")\nif GUI.beginDragDropSource() then\nGUI.setDragDropPayload("item", "sword")\nGUI.text("Sword")\nGUI.endDragDropSource()\nend\nGUI.button("Drop")\nif GUI.beginDragDropTarget() then\nlocal value = GUI.acceptDragDropPayload("item")\nif value then debug.log(value) end\nGUI.endDragDropTarget()\nend', 'endDragDropTarget': 'GUI.button("Drag")\nif GUI.beginDragDropSource() then\nGUI.setDragDropPayload("item", "sword")\nGUI.text("Sword")\nGUI.endDragDropSource()\nend\nGUI.button("Drop")\nif GUI.beginDragDropTarget() then\nlocal value = GUI.acceptDragDropPayload("item")\nif value then debug.log(value) end\nGUI.endDragDropTarget()\nend', 'setDragDropPayload': 'GUI.button("Drag")\nif GUI.beginDragDropSource() then\nGUI.setDragDropPayload("item", "sword")\nGUI.text("Sword")\nGUI.endDragDropSource()\nend\nGUI.button("Drop")\nif GUI.beginDragDropTarget() then\nlocal value = GUI.acceptDragDropPayload("item")\nif value then debug.log(value) end\nGUI.endDragDropTarget()\nend', 'acceptDragDropPayload': 'GUI.button("Drag")\nif GUI.beginDragDropSource() then\nGUI.setDragDropPayload("item", "sword")\nGUI.text("Sword")\nGUI.endDragDropSource()\nend\nGUI.button("Drop")\nif GUI.beginDragDropTarget() then\nlocal value = GUI.acceptDragDropPayload("item")\nif value then debug.log(value) end\nGUI.endDragDropTarget()\nend', 'getMousePos': 'local x, y = GUI.getMousePos()\nGUI.text(tostring(x))', 'isMouseDown': 'if GUI.isMouseClicked(0) then debug.log("Click") end', 'isMouseClicked': 'if GUI.isMouseClicked(0) then debug.log("Click") end', 'isMouseReleased': 'if GUI.isMouseClicked(0) then debug.log("Click") end', 'isKeyDown': 'if GUI.isKeyDown("Space") then GUI.text("Space") end', 'isKeyReleased': 'if GUI.isKeyDown("Space") then GUI.text("Space") end', 'isKeyPressed': 'if GUI.isKeyPressed("Space") then debug.log("Space") end', 'drawLine': 'GUI.drawLine(20, 20, 100, 100, 1, 1, 1, 1, 2)', 'drawRect': 'GUI.drawRect(20, 20, 100, 60, 1, 1, 1, 1)', 'drawRectFilled': 'GUI.drawRect(20, 20, 100, 60, 1, 1, 1, 1)', 'drawCircle': 'GUI.drawCircle(80, 80, 30, 1, 0, 0, 1)', 'drawCircleFilled': 'GUI.drawCircle(80, 80, 30, 1, 0, 0, 1)', 'drawText': 'GUI.drawText(20, 20, "Hello", 1, 1, 1, 1)', 'drawTriangleFilled': 'GUI.drawTriangleFilled(20, 20, 60, 80, 100, 20, 1, 0, 0, 1)'})
-        setup = 'local enabled, changed = true, false\nlocal volume, count, name = 0.5, 1, \"Player\"\nlocal r, g, b, a = 1, 1, 1, 1\n'
-        before = '        GUI.setNextWindowPos(20, 20)\n' if name == 'setNextWindowPos' else '        GUI.setNextWindowSize(300, 200)\n' if name == 'setNextWindowSize' else ''
-        body = '\n'.join('        ' + line for line in calls[name].splitlines())
-        return setup + 'function onGUI()\n' + before + '        GUI.beginWindow(\"HUD\")\n' + body + '\n        GUI.endWindow()\nend'
     if owner == 'ColorFade':
         return f'local fade = fadeToColor(color.black)\nfade:{name}(1)'
     if owner == 'LegacyDebug':
@@ -375,7 +322,7 @@ independent spring/damper contacts. Anti-roll strength has been removed;
 `centerOfMassX/Y/Z` remain available without locking chassis pitch/roll.
 
 
-See [In-game GUI](game-ui.md) for the per-frame ImGui scripting API.
+
 """
 
 def render_reference():
@@ -428,7 +375,7 @@ def render_reference():
              '  script updates/events/waits. Parents propagate inactivity; another active script or the',
              '  Inspector can reactivate it. State persists in project/level saves and undo history.',
              '- `debug.error()` logs without throwing. Memory/instruction limits still apply.', '',
-             'The sandbox also exposes Lua 5.4 base, table, string, math and utf8 computation libraries.',
+             'The LuaJIT sandbox exposes base, table, string, math, bit and adapted utf8 computation libraries.',
              'It does not expose filesystem/process/module loading, coroutines, pcall/xpcall or the',
              'standard introspection debug library. Those standard computation-library APIs are not',
              'engine functions; this reference covers the engine-owned API.', '']
@@ -488,7 +435,7 @@ def render_reference():
               '    local skybox1 = GameObject.find("Skybox1")',
               '    local skybox2 = GameObject.find("Skybox2")',
               '    if skybox1 and skybox2 then fadeSkybox(skybox1, skybox2, 0.5) end', 'end', '```', '']
-    return '\n'.join(lines) + EXTRA_REFERENCE
+    return ('\n'.join(lines) + EXTRA_REFERENCE).rstrip() + '\n'
 
 
 if __name__ == '__main__':
