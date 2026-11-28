@@ -8,9 +8,8 @@ On Debian/Ubuntu, install the window/audio/OpenGL development dependencies used
 in [the engine workflow](../.github/workflows/release.yml). Then:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel 2
-ctest --test-dir build --output-on-failure
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake --build build --target LegacyEngine LegacyPlayer --parallel 2
 ./build/LegacyEngine
 ```
 
