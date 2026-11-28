@@ -169,3 +169,26 @@ These desktop/export checks have not been executed in the sandbox.
 - Repeat compile/link verification with Windows MinGW-w64 and an installed SDL3;
   the sandbox native build uses vendored SDL3. CMake dependency deprecation
   warnings alone do not indicate a compiler/linker failure.
+
+## Export player location and selectable file picker
+
+- Open an old project's Export.json with a stale or malformed `player` entry:
+  opening Export Game must ignore it and select the player beside this editor.
+  Browse/edit a different player, close and reopen: it must reset to the local
+  path. Move the editor/player together and repeat, including paths with spaces.
+- Keep a template picker open while closing/reopening Export Game or switching
+  projects; stale results must not override the new opening's default. Verify
+  export metadata/Debug Mode persistence, Save As and cross-platform overrides.
+- With old or absent editor preferences, verify Zenity is the Linux default.
+  Change Editor Settings > File picker to ImGui, restart, and verify it persists
+  in both the startup launcher and editor. Undo/redo the setting change.
+- Check New/Open/Save Project, multi-file and multi-folder import, extraction and
+  export icon/output/player browse in both modes. Check cancellation, overwrite
+  confirmation, paths with spaces/non-ASCII, filters and focus restoration.
+- Remove Zenity or use SDL without its dialog driver: the same request must open
+  the ImGui fallback and explain the error. Canceling a working native picker
+  must not open fallback. Existing ImGui dialogs must not switch mid-request.
+- Check Windows native dialogs and shutdown while a native callback is pending.
+  Callback state must outlive its originating tool without accessing a dead UI.
+
+These native-dialog/desktop checks have not been run in the sandbox.

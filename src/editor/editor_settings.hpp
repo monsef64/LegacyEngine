@@ -1,6 +1,7 @@
 #pragma once
 #include "editor/editor_palette.hpp"
 #include "editor/value_context.hpp"
+#include "platform/file_picker_settings.hpp"
 #include "scene/editor_grid.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -13,6 +14,7 @@
 struct EditorSettings {
     bool external = false, visible = false, alwaysShowColliders = false;
     int theme = 0;
+    int filePicker = 0;     // 0: Zenity/native (default), 1: ImGui
     int externalEditor = 0; // 0: VS Code, 1: Sublime Text 4
     float scrollZoomSpeed = 1.f;
     float raycastThickness = 2.f; // viewport pixels; editor gizmo only
@@ -81,7 +83,12 @@ struct EditorSettings {
             if (in >> editor) {
                 externalEditor = std::clamp(editor, 0, 1);
             }
+            int picker;
+            if (in >> picker) {
+                filePicker = std::clamp(picker, 0, 1);
+            }
         }
+        FilePickerSettings::backend = filePicker;
         if (ImGui::GetCurrentContext()) {
             applyEditorPalette(theme);
         }
@@ -90,13 +97,14 @@ struct EditorSettings {
         std::ostringstream out;
         out.precision(9);
         out << scrollZoomSpeed << ':' << raycastThickness << ':' << maxFps << ':' << autosaveSeconds
-            << ':' << externalEditor << ':' << external << theme << alwaysShowColliders
-            << grid.visible << ':' << grid.cells << ':' << grid.plane << ':' << grid.spacing << ':'
-            << grid.position.x << ':' << grid.position.y << ':' << grid.position.z << ':'
-            << grid.color.x << ':' << grid.color.y << ':' << grid.color.z;
+            << ':' << filePicker << ':' << externalEditor << ':' << external << theme
+            << alwaysShowColliders << grid.visible << ':' << grid.cells << ':' << grid.plane << ':'
+            << grid.spacing << ':' << grid.position.x << ':' << grid.position.y << ':'
+            << grid.position.z << ':' << grid.color.x << ':' << grid.color.y << ':' << grid.color.z;
         return out.str();
     }
     void save() {
+        FilePickerSettings::backend = filePicker;
         auto path = file();
         if (!path.empty()) {
             std::ofstream out(path);
@@ -106,7 +114,7 @@ struct EditorSettings {
                 << grid.color.x << ' ' << grid.color.y << ' ' << grid.color.z << '\n'
                 << autosaveSeconds << '\n'
                 << raycastThickness << ' ' << maxFps << ' ' << scrollZoomSpeed << ' '
-                << externalEditor;
+                << externalEditor << ' ' << filePicker;
         }
     }
     bool openSublime(const std::filesystem::path& folder,
@@ -239,6 +247,12 @@ struct EditorSettings {
                 applyEditorPalette(theme);
                 save();
             }
+            if (EditorValues::Combo(
+                    "File picker", &filePicker, "Zenity (native on Windows)\0ImGui\0")) {
+                save();
+            }
+            ImGui::TextWrapped(
+                "Zenity is the Linux default. If unavailable, the built-in ImGui picker opens instead. Changes apply to new dialogs.");
             if (EditorValues::Checkbox("Always Show Colliders", &alwaysShowColliders)) {
                 save();
             }

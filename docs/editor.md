@@ -791,11 +791,20 @@ children across reopening. Prefab links are still validated, so missing or corru
 templates can be reported. Explicit prefab saves remain the propagation point;
 loading a scene no longer silently replaces its saved instance state.
 
-## Built-in file and folder picker
+## File and folder picker
 
-Project Open/Save, asset file/folder import, archive extraction destinations and
-export icon/player/output-folder selection use an ImGui modal inside the editor.
-No SDL native dialog backend, Zenity or desktop portal is needed.
+**Editor Settings > File picker** selects **Zenity** (default on Linux) or the
+built-in **ImGui** picker. This editor-wide preference is remembered across
+restarts and applies to the startup launcher, Project Open/Save, asset file/folder
+import, archive extraction destinations and export browse buttons. Changes apply
+to new requests; an already-open dialog keeps its backend. On Windows/macOS the
+Zenity/native option uses the platform's native picker instead.
+
+Install `zenity` on Linux to use that backend. If it is missing or unsupported by
+SDL, the request falls back to ImGui with an explanation; cancellation is not an
+error and does not trigger fallback. The ImGui option needs no external dialog
+program or portal. Native dialogs provide their own navigation and selection UI.
+The following controls describe the ImGui option:
 
 - Enter an absolute directory (or a path relative to the current directory) and
   press Enter. Use Up, Refresh, or double-click a folder to navigate. Windows
@@ -825,7 +834,7 @@ Create menu or Hierarchy right-click menus to create objects.
 Normal startup opens a dedicated project launcher instead of an untitled editor.
 Use **New Project** (plus icon), **Open Project** (folder icon), or a recent-project
 card. New projects need a new file in their own project folder; existing Assets
-and Settings are protected from accidental reuse. The built-in picker supports
+and Settings are protected from accidental reuse. Both picker modes support
 folder creation and cancellation without leaving the launcher.
 
 The editor is revealed only after its saved current scene and referenced assets

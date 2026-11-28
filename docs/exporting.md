@@ -108,16 +108,21 @@ are rejected; dependency cycles are handled without packaging duplicate files.
 ## Remembered export information
 
 The Export Game window stores its fields per project in `Settings/Export.json`:
-game name, company, version, description, copyright, icon, output folder, native
-player template, start-scene selection, chunk size and Debug Mode. Edits save automatically
+game name, company, version, description, copyright, icon, output folder,
+start-scene selection, chunk size and Debug Mode. Edits save automatically
 (after a short typing delay or when editing ends), including when the window is
 closed. You do not need to export successfully just to retain this information.
 Project Save/Save As also carries the export fields to the destination project.
 Opening another project loads its own settings rather than retaining the previous
 project's metadata.
 
-Icon/output/player paths are machine-local paths: check them when moving a project
-between machines or operating systems. Existing output folders still cannot be
+Each time Export Game opens, **Native player template** is reset to
+`LegacyPlayer` (`LegacyPlayer.exe` on Windows) beside the running editor. Old saved
+player paths are ignored and new ones are not persisted. You can browse for a
+different template for the current opening (for example, another target OS), but
+reopening the window or switching projects restores the local template.
+Icon/output paths remain machine-local: check them when moving a project between
+machines or operating systems. Existing output folders still cannot be
 overwritten; choose a fresh destination for another export. `Current Scene` stays
 a relative selection, not a frozen scene name. A file chooser opened for an old
 project cannot overwrite the newly opened project's fields when its result arrives.

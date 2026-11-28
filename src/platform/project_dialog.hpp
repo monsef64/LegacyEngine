@@ -1,6 +1,7 @@
 #pragma once
 #include "editor/asset_icons.hpp"
 #include "models/model_import.hpp"
+#include "platform/file_picker_settings.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <array>
@@ -9,12 +10,14 @@
 #include <cstdio>
 #include <filesystem>
 #include <imgui.h>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
-// Main-thread ImGui picker. Keep the request/poll API used by editor consumers.
+// Selectable native/ImGui picker with one request/poll API for all editor consumers.
 class ProjectDialog {
   public:
     struct Filter {
@@ -67,6 +70,7 @@ class ProjectDialog {
         begin(false, folder, false, filters, count, {});
     }
     std::optional<Result> poll() {
+        pollNative();
         if (!result_) {
             return {};
         }
@@ -79,8 +83,11 @@ class ProjectDialog {
     // A picker remains drawable even if its originating tool window is closed.
     static void drawAll() {
         for (auto* picker : instances()) {
+            picker->pollNative();
             if (picker->busy_ && !picker->result_) {
-                picker->draw();
+                if (!picker->native_) {
+                    picker->draw();
+                }
                 break;
             }
         }
@@ -94,6 +101,97 @@ class ProjectDialog {
     struct OwnedFilter {
         std::string name, pattern;
     };
+    struct NativeRequest {
+        std::mutex mutex;
+        bool done = false;
+        Result result;
+        std::vector<OwnedFilter> owned;
+        std::vector<SDL_DialogFileFilter> filters;
+        std::string initial;
+    };
+    std::shared_ptr<NativeRequest> native_;
+    static void SDLCALL nativeComplete(void* userdata, const char* const* files, int) {
+        // Owns a shared request, never a ProjectDialog*. Safe if its tool/editor
+        // window was destroyed while the OS dialog was still outstanding.
+        std::unique_ptr<std::shared_ptr<NativeRequest>> token(
+            static_cast<std::shared_ptr<NativeRequest>*>(userdata));
+        auto request = *token;
+        std::lock_guard<std::mutex> lock(request->mutex);
+        try {
+            if (!files) {
+                request->result.error = SDL_GetError();
+            } else {
+                for (auto file = files; *file; ++file) {
+                    request->result.paths.emplace_back(*file);
+                }
+                if (!request->result.paths.empty()) {
+                    request->result.path = request->result.paths.front();
+                }
+            }
+        } catch (...) {
+            request->result.error = "Cannot read native file picker result";
+        }
+        if (!files && request->result.error.empty()) {
+            request->result.error = "Native file picker unavailable";
+        }
+        request->done = true;
+    }
+    void pollNative() {
+        if (!native_) {
+            return;
+        }
+        auto request = native_;
+        {
+            std::lock_guard<std::mutex> lock(request->mutex);
+            if (!request->done) {
+                return;
+            }
+            if (request->result.error.empty()) {
+                result_ = std::move(request->result);
+            } else {
+                // A compiled-out/missing Zenity driver must not strand users.
+                error_ = "Native picker unavailable; using ImGui. " + request->result.error;
+                opening_ = true;
+            }
+        }
+        native_.reset();
+    }
+    void beginNative() {
+        native_ = std::make_shared<NativeRequest>();
+        native_->result.saving = saving_;
+        native_->owned = filters_;
+        for (const auto& filter : native_->owned) {
+            native_->filters.push_back({filter.name.c_str(), filter.pattern.c_str()});
+        }
+        native_->initial = (saving_ ? directory_ / filename_.data() : directory_).string();
+        auto* token = new std::shared_ptr<NativeRequest>(native_);
+        auto* window = SDL_GetKeyboardFocus();
+        if (!window) {
+            window = SDL_GL_GetCurrentWindow();
+        }
+#ifdef __linux__
+        SDL_SetHintWithPriority(SDL_HINT_FILE_DIALOG_DRIVER, "zenity", SDL_HINT_OVERRIDE);
+#endif
+        if (folder_) {
+            SDL_ShowOpenFolderDialog(
+                nativeComplete, token, window, native_->initial.c_str(), multiple_);
+        } else if (saving_) {
+            SDL_ShowSaveFileDialog(nativeComplete,
+                                   token,
+                                   window,
+                                   native_->filters.data(),
+                                   int(native_->filters.size()),
+                                   native_->initial.c_str());
+        } else {
+            SDL_ShowOpenFileDialog(nativeComplete,
+                                   token,
+                                   window,
+                                   native_->filters.data(),
+                                   int(native_->filters.size()),
+                                   native_->initial.c_str(),
+                                   multiple_);
+        }
+    }
     bool busy_ = false, saving_ = false, folder_ = false, multiple_ = false;
     bool opening_ = false, overwrite_ = false;
     int filter_ = 0;
@@ -159,6 +257,9 @@ class ProjectDialog {
             text(filename_, "project.legacy");
         }
         refresh();
+        if (FilePickerSettings::backend == 0) {
+            beginNative();
+        }
     }
     bool matches(const std::filesystem::path& path) const {
         if (filters_.empty()) {
