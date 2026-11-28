@@ -12,6 +12,7 @@
 #include "navigation/navigation.hpp"
 #include "particles/particle_update.hpp"
 #include "physics/physics.hpp"
+#include "platform/player_debug_console.hpp"
 #include "prefabs/prefab.hpp"
 #include "project/game_export.hpp"
 #include "project/layers.hpp"
@@ -54,6 +55,7 @@ std::filesystem::path executablePath() {
 #endif
 }
 void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& package) {
+    PlayerDebugConsole debugConsole(window, package.metadata.value("debugMode", false));
     World world;
     const ProjectIO::Meshes meshes{renderer.createMesh(makeGrid(32, 1)),
                                    renderer.createMesh(makePlane(16, 16)),
@@ -174,6 +176,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         }
         const bool focused = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
         if (!focused && !GameServices::pendingQuit()) {
+            debugConsole.resetInput();
             LuaConsole::dispatchEvents();
             input.releaseMouse();
             input.clear();
@@ -218,11 +221,21 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         }
         surface.resize(width, height);
 
-        input.enabled = true;
-        input.mouseEnabled = true;
+        input.enabled = !debugConsole.visible();
+        input.mouseEnabled = !debugConsole.visible();
         input.beginFrame();
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
+            const bool wasConsoleOpen = debugConsole.visible();
+            if (debugConsole.event(event)) {
+                if (wasConsoleOpen != debugConsole.visible()) {
+                    input.releaseMouse();
+                    input.clear();
+                    input.enabled = !debugConsole.visible();
+                    input.mouseEnabled = !debugConsole.visible();
+                }
+                continue;
+            }
             if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
                 GameServices::requestQuit();
             }
@@ -233,6 +246,8 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
             }
             input.event(event);
         }
+        input.enabled = !debugConsole.visible();
+        input.mouseEnabled = !debugConsole.visible();
         input.synchronizeKeyboard();
         levels.preload = [&](LevelSystem::Transition& prepared) {
             renderer.setAssetRoot(assets.root);
@@ -402,6 +417,7 @@ void play(SDL_Window* window, Renderer& renderer, const GameExport::Mounted& pac
         }
         glBindFramebuffer(GL_FRAMEBUFFER, surface.framebuffer);
 
+        debugConsole.draw();
         GameServices::finishFrame(surface.framebuffer, width, height);
         glDisable(GL_SCISSOR_TEST);
         glBindFramebuffer(GL_READ_FRAMEBUFFER, surface.framebuffer);

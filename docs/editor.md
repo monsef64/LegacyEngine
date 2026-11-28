@@ -807,3 +807,31 @@ No SDL native dialog backend, Zenity or desktop portal is needed.
 - Project Save adds `.legacy` if no extension is given, and asks before replacing
   an existing file. Cancel or close the picker to leave the request unchanged.
 - Invalid paths and permission errors stay in the picker for correction.
+
+### Responsive Inspector fields
+
+Vector labels sit above equally sized X/Y/Z fields. Very narrow Inspectors stack
+the axes vertically; the layout is recalculated from the current panel/font size
+without saved table widths. Multi-object vector fields use the same layout.
+Color labels also sit above a full-width control; at very narrow widths use its
+swatch to open the full color picker instead of cramped numeric inputs. Existing
+whole-value copy/paste/reset and undo behavior is preserved.
+
+The Hierarchy's Create/Create child toolbar button is removed. Use the main
+Create menu or Hierarchy right-click menus to create objects.
+
+### Project launcher and load barrier
+
+Normal startup opens a dedicated project launcher instead of an untitled editor.
+Use **New Project** (plus icon), **Open Project** (folder icon), or a recent-project
+card. New projects need a new file in their own project folder; existing Assets
+and Settings are protected from accidental reuse. The built-in picker supports
+folder creation and cancellation without leaving the launcher.
+
+The editor is revealed only after its saved current scene and referenced assets
+have been prepared. A Loading screen replaces progressive first-open object and
+texture appearance. A failed startup open stays in the launcher; a failed later
+open keeps the previous editor world. Newly assigned scene assets also complete
+their first-use loading before drawing; very large assignments can pause a frame.
+Manual verification steps are recorded in `docs/manual/asset-streaming-and-cpu.md`
+in the source repository.

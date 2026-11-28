@@ -36,43 +36,7 @@ class Editor {
         EditorValues::SliderFloat("Placement rate", &foliageRate_, 1, 5000, "%.0f / sec");
         ImGui::TextWrapped(
             "Paint in Scene. Hold Shift to erase the selected prototype. Grass and trees are GPU-instanced cutouts, not GameObjects.");
-        if (!trees) {
-            ImGui::BeginDisabled(!allowSave);
-            if (ImGui::Button("Install 5 sample grass textures")) {
-                try {
-                    const char* names[]{"meadow", "dry", "fescue", "wild", "short"};
-                    writable(terrain);
-                    for (auto name : names) {
-                        std::string target = std::string("Terrain/Grass/") + name + ".png";
-                        auto source = std::filesystem::path(SDL_GetBasePath()) /
-                                      "data/terrain/grass" / (std::string(name) + ".png");
-                        if (!std::filesystem::exists(source)) {
-                            source = std::filesystem::path("data/terrain/grass") /
-                                     (std::string(name) + ".png");
-                        }
-                        auto dest = assets.resolve(target);
-                        std::filesystem::create_directories(dest.parent_path());
-                        if (!std::filesystem::exists(dest)) {
-                            std::filesystem::copy_file(source, dest);
-                        }
-                        bool exists = false;
-                        for (auto& p : terrain.data->grassTypes) {
-                            exists |= p.asset == target;
-                        }
-                        if (!exists && terrain.data->grassTypes.size() < 16) {
-                            FoliagePrototype p;
-                            p.asset = target;
-                            terrain.data->grassTypes.push_back(p);
-                        }
-                    }
-                    terrain.data->revision = nextRevision();
-                    error_.clear();
-                } catch (const std::exception& e) {
-                    error_ = e.what();
-                }
-            }
-            ImGui::EndDisabled();
-        }
+
         auto& types = trees ? terrain.data->treeTypes : terrain.data->grassTypes;
         if (types.size() < 16 &&
             ImGui::Button(trees ? "Add tree prototype" : "Add grass prototype")) {

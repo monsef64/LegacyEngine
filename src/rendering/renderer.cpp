@@ -1,5 +1,4 @@
 #include "rendering/renderer.hpp"
-#include "project/layers.hpp"
 #include "audio/audio_gizmo.hpp"
 #include "core/profiler.hpp"
 #include "core/worker_pool.hpp"
@@ -8,6 +7,7 @@
 #include "models/mesh_simplify.hpp"
 #include "models/model_asset.hpp"
 #include "physics/collider_debug.hpp"
+#include "project/layers.hpp"
 #include "rendering/shader_data.hpp"
 #include "scene/camera_gizmo.hpp"
 #include "scene/skybox_transition.hpp"
@@ -333,12 +333,12 @@ bool Renderer::preloadAssets(const std::set<std::string>& paths) {
             if (failedModels_.count(path)) {
                 throw std::runtime_error("Cannot preload model: " + path + ": " + modelError);
             }
-            if (!requestModel(path)) {
+            if (!requestModel(path, false)) {
                 ready = false;
             }
         } else if (!path.empty() && materialTexturePath(path)) {
             std::string error;
-            const auto texture = materialTextures_.get(materialAssets_, path, error);
+            const auto texture = materialTextures_.get(materialAssets_, path, error, false, false);
             if (!error.empty()) {
                 throw std::runtime_error("Cannot preload texture: " + path + ": " + error);
             }
@@ -390,7 +390,34 @@ void Renderer::pumpModels() {
         break; // At most one mesh upload per draw; never drain a completion burst.
     }
 }
-bool Renderer::requestModel(const std::string& path) {
+bool Renderer::requestModel(const std::string& path, bool waitForReady) {
+    if (queueModel(path)) {
+        return true;
+    }
+    if (!waitForReady) {
+        return false;
+    }
+    // Explicit loading screens still queue in parallel, but a newly referenced
+    // model during editing/runtime cannot render as a temporarily missing object.
+    const auto started = SDL_GetTicks();
+    while (!failedModels_.count(path)) {
+        const auto pending = pendingModels_.find(path);
+        if (pending != pendingModels_.end()) {
+            pending->second.wait();
+        }
+        pumpModels();
+        if (queueModel(path)) {
+            return true;
+        }
+        if (SDL_GetTicks() - started > 120000) {
+            modelError = "Model loading timed out: " + path;
+            return false;
+        }
+        SDL_Delay(1);
+    }
+    return false;
+}
+bool Renderer::queueModel(const std::string& path) {
     if (modelMeshes_.count(path)) {
         return true;
     }
@@ -817,7 +844,7 @@ void Renderer::draw(World& world,
                                             visibilityPreview ? &visibleBounds : nullptr);
     glEnable(GL_STENCIL_TEST);
     glStencilMask(0xff);
-    glStencilOp(GL_KEEP,GL_KEEP,GL_REPLACE);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
     terrainRenderer_.draw(
         world, materialAssets_, viewProjection, cameraPosition, litProgram_, lights_, &occlusion);
     glUseProgram(litProgram_);
@@ -987,7 +1014,7 @@ void Renderer::draw(World& world,
                 transparent.push_back(
                     {t, &r, std::move(material), dot(delta, delta), transparent.size()});
             } else {
-                glStencilFunc(GL_ALWAYS,LayerSettings::effective(world,e),0xff);
+                glStencilFunc(GL_ALWAYS, LayerSettings::effective(world, e), 0xff);
                 drawMesh(t, r, material);
             }
         });
@@ -996,7 +1023,7 @@ void Renderer::draw(World& world,
     foliage_.draw(world, materialAssets_, viewProjection, cameraPosition, skyAmbient);
     glDisable(GL_STENCIL_TEST);
     glStencilMask(0xff);
-    glStencilOp(GL_KEEP,GL_KEEP,GL_KEEP);
+    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
     decals_.draw(world, materialAssets_, viewProjection);
     std::sort(transparent.begin(), transparent.end(), [](const auto& a, const auto& b) {
         return a.distance == b.distance ? a.order < b.order : a.distance > b.distance;

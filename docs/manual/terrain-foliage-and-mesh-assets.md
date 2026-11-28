@@ -7,9 +7,9 @@ retains sculpt/paint/import controls. Grass and Trees paint GPU instances instea
 of creating one GameObject per placement.
 
 1. Select a Terrain and open Terrain tools.
-2. Choose Grass and click **Install 5 sample grass textures**. This copies the
-   bundled generated RGBA images into `Terrain/Grass` in the project's Assets and
-   adds prototypes without overwriting existing files. Choose a prototype.
+2. Import your own RGBA grass cutout into Assets. Choose Grass > Add grass
+   prototype, assign that texture, and select the prototype. Bundled sample grass
+   images and their install button are removed; existing project copies remain.
 3. For trees, import an OBJ/glTF/GLB model in Assets, choose Trees > Add tree prototype,
    and assign its `.mesh` root asset. Old `.lemesh` models are also supported.
 4. Enable Scene brush and paint with the left mouse button. Hold **Shift** to erase
@@ -19,11 +19,10 @@ of creating one GameObject per placement.
    from a brief stroke. Removing a prototype removes its instances.
 6. Save the `.terrain` asset in Edit mode. Foliage is included in terrain version 2;
    version 1 terrain files still load without foliage. Play edits are temporary,
-   and terrain saving/sample installation are disabled during Play.
+   and terrain saving is disabled during Play.
 
-The generated samples are meadow, dry, fescue, wild and short grass, each a 512x512
-RGBA cutout with real alpha. They are generated test textures, not photographs.
-Import your own transparent PNGs using Add grass prototype as needed.
+Bundled generated grass textures have been removed. Import your own transparent
+PNGs using Add grass prototype. Existing project-owned textures are not deleted.
 
 ## Rendering and limits
 
@@ -76,7 +75,7 @@ of the Scene camera.
 
 ## Manual verification
 
-- Paint/erase each grass sample and several user-provided tree models. Inspect
+- Paint/erase user-provided grass textures and several tree models. Inspect
   alpha edges, material parts, scale, height following, tint, wind and culling.
 - Verify instanced draw calls with a GPU capture; compare 1/100/1,000 placements
   and check that per-instance placement does not create Hierarchy objects.

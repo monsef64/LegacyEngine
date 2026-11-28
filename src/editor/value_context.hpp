@@ -209,7 +209,17 @@ inline bool Checkbox(const char* l, bool* v) {
 }
 inline bool ColorEdit3(const char* l, float* v, ImGuiColorEditFlags flags = 0) {
     ImGui::PushID(l);
-    bool changed = ImGui::ColorEdit3(l, v, flags | ImGuiColorEditFlags_NoOptions);
+    if (l[0] != '#' || l[1] != '#') {
+        ImGui::TextUnformatted(l);
+    }
+    // Labels no longer compete with channel inputs for a cached/default width.
+    // Very narrow panels expose channel editing through the color popup instead.
+    if (ImGui::GetContentRegionAvail().x < ImGui::GetFrameHeight() * 9.f) {
+        flags |= ImGuiColorEditFlags_NoInputs;
+    }
+    ImGui::SetNextItemWidth(-1.f);
+    bool changed = ImGui::ColorEdit3(
+        "##value", v, flags | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoOptions);
     changed |= context(v,
                        3,
                        0.f,
@@ -220,7 +230,17 @@ inline bool ColorEdit3(const char* l, float* v, ImGuiColorEditFlags flags = 0) {
 }
 inline bool ColorEdit4(const char* l, float* v, ImGuiColorEditFlags flags = 0) {
     ImGui::PushID(l);
-    bool changed = ImGui::ColorEdit4(l, v, flags | ImGuiColorEditFlags_NoOptions);
+    if (l[0] != '#' || l[1] != '#') {
+        ImGui::TextUnformatted(l);
+    }
+    // Labels no longer compete with channel inputs for a cached/default width.
+    // Very narrow panels expose channel editing through the color popup instead.
+    if (ImGui::GetContentRegionAvail().x < ImGui::GetFrameHeight() * 10.f) {
+        flags |= ImGuiColorEditFlags_NoInputs;
+    }
+    ImGui::SetNextItemWidth(-1.f);
+    bool changed = ImGui::ColorEdit4(
+        "##value", v, flags | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_NoOptions);
     changed |= context(v,
                        4,
                        0.f,

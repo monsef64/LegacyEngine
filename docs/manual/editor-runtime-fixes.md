@@ -124,3 +124,32 @@ on the affected build/system is still required.
   player. Scripted GUI contexts/scopes/subscribers must no longer be constructed.
 
 These desktop checks have not been run in the sandbox; no automated tests added.
+
+## Grass assets, Hierarchy, Inspector sizing and export console
+
+- In a clean package, verify no bundled data/terrain/grass sample images or
+  installation button remain. Import a custom grass texture and paint/erase it.
+  Existing projects with copied sample textures must still load/render them.
+- Verify the Hierarchy's Create/Create child button is gone; the main Create
+  menu and Hierarchy right-click creation menus must still work with undo.
+- Resize Inspector slowly from wide to narrow and back, including high-DPI/font
+  scaling and multi-selection. Vector axes should use equal available widths
+  and stack at narrow sizes without stale column sizing. Check values, tabbing,
+  drag edits, whole-vector copy/paste/reset, mixed values and undo/redo.
+- Color controls must fit the available width; narrow layouts use a swatch/popup
+  instead of cramped channels. Check RGB/RGBA, HDR, whole-color clipboard/reset
+  and undo after resizing. No channels may be lost or reset just by resizing.
+- Toggle Debug Mode in Export Game, close/reopen and switch projects; each
+  project's setting must persist independently (default off for old settings).
+- Export with Debug Mode on and off using the new player on Linux and Windows.
+  The backtick key must toggle the console only when enabled, with no repeat
+  flicker. Escape/title-bar close must work. Verify log clear/auto-scroll, script
+  info/warn/error output, long messages, and the bounded history.
+- With FPS/TPS and locked cursor, open/close the console, hold movement keys,
+  click/scroll inside it, alt-tab, resize, toggle fullscreen and switch levels.
+  Gameplay input must be suppressed while open with no stuck keys after close;
+  rendering/simulation/logging continue. Close the game with the console open.
+- Check disabled exports never initialize debug ImGui backends or capture logs,
+  and metadata without debugMode behaves as disabled. No Lua GUI API is restored.
+
+These desktop/export checks have not been executed in the sandbox.

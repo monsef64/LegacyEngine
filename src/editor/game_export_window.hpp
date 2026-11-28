@@ -18,7 +18,7 @@ class GameExportWindow {
     std::filesystem::path root_, pickerRoot_, jobRoot_;
     Json observed_, saved_;
     double editedAt_ = 0;
-    bool dirty_ = false;
+    bool dirty_ = false, debugMode_ = false;
     static std::filesystem::path settingsFile(const std::filesystem::path& root) {
         return (root.filename() == "Assets" ? root.parent_path() : root) / "Settings" /
                "Export.json";
@@ -34,7 +34,8 @@ class GameExportWindow {
                 {"output", output_},
                 {"player", player_},
                 {"startScene", scene_},
-                {"chunkMiB", chunkMiB_}};
+                {"chunkMiB", chunkMiB_},
+                {"debugMode", debugMode_}};
     }
     void saveSettings() {
         if (!dirty_ || root_.empty()) {
@@ -59,6 +60,7 @@ class GameExportWindow {
         std::snprintf(version_, sizeof(version_), "1.0.0");
         scene_.clear();
         chunkMiB_ = 16;
+        debugMode_ = false;
         error_.clear();
         status_.clear();
         dirty_ = false;
@@ -87,6 +89,7 @@ class GameExportWindow {
                            output = read("output", sizeof(output_)),
                            player = read("player", sizeof(player_)),
                            scene = read("startScene", 129);
+                const bool debugMode = j.value("debugMode", false);
                 const int chunk = j.value("chunkMiB", 16);
                 if (chunk < 1 || chunk > 64) {
                     throw std::runtime_error("Invalid export chunk size");
@@ -104,6 +107,7 @@ class GameExportWindow {
                 std::snprintf(player_, sizeof(player_), "%s", player.c_str());
                 scene_ = scene;
                 chunkMiB_ = chunk;
+                debugMode_ = debugMode;
             }
         } catch (const std::exception& e) {
             error_ = std::string("Cannot load export settings: ") + e.what();
@@ -235,6 +239,9 @@ class GameExportWindow {
             }
             ImGui::InputText("Native player template", player_, sizeof(player_));
             browse(3, "Browse##Player");
+            ImGui::Checkbox("Debug Mode", &debugMode_);
+            ImGui::TextWrapped(
+                "Debug exports allow the backtick (`) key to open a read-only log console.");
             ImGui::SliderInt("Chunk size (MiB)", &chunkMiB_, 1, 64);
             ImGui::TextWrapped(
                 "Assets are Zstandard-compressed on export, then authenticated/encrypted. Chunk size is before compression. Editor source assets are not changed. Use an updated native player template.");
@@ -249,6 +256,7 @@ class GameExportWindow {
                                                   icon_,
                                                   output_,
                                                   player_};
+                    settings.debugMode = debugMode_;
                     settings.chunkMiB = unsigned(chunkMiB_);
                     settings.startLevel = scene_.empty() ? levels.current() : scene_;
                     GameExport::validate(settings);

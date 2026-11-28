@@ -91,7 +91,7 @@ class Renderer {
             modelRevision_ = modelAssetRevision;
         }
         if (asynchronous) {
-            if (!requestModel(path)) {
+            if (!requestModel(path, false)) {
                 return false;
             }
             return meshBounds(modelMeshes_.at(path), low, high);
@@ -286,7 +286,8 @@ class Renderer {
     std::map<std::string, std::future<StreamedModel>> pendingModels_;
     std::map<std::string, std::chrono::steady_clock::time_point> failedModels_;
     void pumpModels();
-    bool requestModel(const std::string& path);
+    bool queueModel(const std::string& path);
+    bool requestModel(const std::string& path, bool waitForReady = true);
     MeshHandle cloneModelMesh(MeshHandle source);
     void clearModelCache();
     unsigned modelRevision_ = 0;
