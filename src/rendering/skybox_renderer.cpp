@@ -288,9 +288,8 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
         return true;
     }
     if (pending_.valid()) {
-        if (pending_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-            return true;
-        }
+        // Never reveal an empty sky while its first image is still decoding.
+        pending_.wait();
         try {
             auto decoded = pending_.get();
             dependencies_ = std::move(decoded.paths);
@@ -371,10 +370,15 @@ bool SkyboxRenderer::prepare(const Skybox& sky, const AssetManager& assets) {
     if (job) {
         pending_ = std::move(*job);
         signature_ = stamp;
+        return prepare(sky, assets);
     } else {
-        checked_ = {};
+        std::packaged_task<SkyboxDecoded()> task(
+            [sky, assets, key] { return decodeSkybox(sky, assets, key); });
+        pending_ = task.get_future();
+        task();
+        signature_ = stamp;
+        return prepare(sky, assets);
     }
-    return true;
 }
 void SkyboxRenderer::draw(const Skybox& sky,
                           const AssetManager& assets,

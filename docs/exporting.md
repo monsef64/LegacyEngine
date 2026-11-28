@@ -109,7 +109,7 @@ are rejected; dependency cycles are handled without packaging duplicate files.
 
 The Export Game window stores its fields per project in `Settings/Export.json`:
 game name, company, version, description, copyright, icon, output folder, native
-player template, start-scene selection and chunk size. Edits save automatically
+player template, start-scene selection, chunk size and Debug Mode. Edits save automatically
 (after a short typing delay or when editing ends), including when the window is
 closed. You do not need to export successfully just to retain this information.
 Project Save/Save As also carries the export fields to the destination project.
@@ -141,3 +141,21 @@ Compressed frame size/content and expanded chunk lengths are bounded and checked
 Project loading also avoids an intermediate JSON serialization/reparse and transfers
 fully staged ECS pools instead of cloning them twice. These remove redundant work;
 no fixed load-time speedup is promised without measuring a representative project.
+
+## Debug Mode and exported console
+
+**File > Export Game > Debug Mode** is off by default and is saved per project
+in `Settings/Export.json`. Enable it to include a read-only runtime log console
+in the exported game. Use an updated native player template when exporting.
+
+Press the backtick/grave key (the physical key below Escape on a US keyboard) to
+show or hide it; Escape or its close button also closes it. The game keeps
+simulating while the console is visible, but gameplay input is suppressed and
+the cursor is released. It shows SDL/engine and script log output, with Clear
+and Auto-scroll controls. Log retention is bounded to 512 messages, each capped
+at 8192 bytes; this is not a persistent log file or a crash reporter.
+
+The console cannot execute Lua or commands and does not restore the removed
+`GUI` scripting namespace or `onGUI` callback. Exports with Debug Mode disabled,
+and old packages without the flag, cannot open it. Build normal releases with
+Debug Mode off so internal script/log messages are not exposed through this UI.

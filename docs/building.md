@@ -276,3 +276,24 @@ callbacks/snippets disable tracing while their instruction hook is active, and
 the runtime is built with CHECKHOOK as an additional safeguard. This migration
 does not promise JIT acceleration for budgeted callbacks. See the
 [scripting migration notes](scripting.md#luajit-runtime-and-migration).
+
+## Lean Jolt build
+
+The static Jolt build excludes its debug renderer, built-in profiler, ObjectStream
+serialization/attribute metadata and C++ RTTI. LegacyEngine uses its own collider
+wireframes, frame profiler and JSON scene serialization; those remain available.
+Jolt's internal type registration and supported collision shapes remain intact.
+This is upstream feature configuration, not a maintained fork of Jolt.
+
+Optimized GNU/Clang builds keep function/data sections and linker garbage
+collection (`LEGACY_SMALL_RELEASE=ON`). `LEGACY_PHYSICS_LTO=ON` additionally enables
+supported IPO for Jolt in Release/MinSizeRel only. The rest of the editor does not
+use whole-program LTO, limiting compiler/linker memory requirements. Unsupported
+IPO toolchains fall back to the section-GC build; set
+`-DLEGACY_PHYSICS_LTO=OFF` to diagnose toolchain/linker issues. Use `-j1` on
+memory-limited systems. Windows builds continue to use MinGW-w64, not MSVC.
+
+Measure the **stripped executable**, not `libJolt.a`: LTO archives contain compiler
+IR and can grow even when the final executable shrinks. Release packaging already
+strips unneeded symbols. Keep the same compiler, configuration and strip options
+when comparing sizes; compressed archive size and Windows results will differ.

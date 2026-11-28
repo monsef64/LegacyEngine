@@ -1,4 +1,5 @@
 #include "editor/game_export_window.hpp"
+#include "editor/project_launcher.hpp"
 #include "editor/recent_projects.hpp"
 #include "editor/scene_picking.hpp"
 #include "effects/laser_update.hpp"
@@ -370,6 +371,151 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         // while imports need servicing; an idle unfocused engine still blocks normally.
         return browser.importing() ? SDL_WaitEventTimeout(&event, 100) : SDL_WaitEvent(&event);
     };
+    RecentProjects recentProjects;
+    // Decode/preload privately, then publish atomically. Failed project opens keep
+    // the current editor world (or launcher) instead of revealing partial objects.
+    auto openReadyProject = [&](const std::string& path, std::string& error) {
+        const auto oldRenderingSettings = renderingSettings;
+        try {
+            World loadedWorld;
+            OrbitCamera loadedCamera;
+            std::string source, assetDirectory;
+            if (!ProjectIO::load(path,
+                                 loadedWorld,
+                                 source,
+                                 loadedCamera,
+                                 projectMeshes,
+                                 error,
+                                 &assetDirectory)) {
+                return false;
+            }
+            AssetManager assets;
+            assets.root = assetDirectory.empty()
+                              ? existingProjectAssetsPath(path)
+                              : std::filesystem::absolute(path).parent_path() / assetDirectory;
+            std::filesystem::create_directories(assets.root);
+            LevelSystem stagedLevels(projectMeshes);
+            stagedLevels.setRoot(assets.root);
+            if (!stagedLevels.error.empty()) {
+                throw std::runtime_error(stagedLevels.error);
+            }
+            const auto sceneName = stagedLevels.current().empty() && !stagedLevels.names().empty()
+                                       ? stagedLevels.names().front()
+                                       : stagedLevels.current();
+            if (!sceneName.empty()) {
+                if (!ProjectIO::load(assets.resolve(LevelSystem::path(sceneName)).string(),
+                                     loadedWorld,
+                                     source,
+                                     loadedCamera,
+                                     projectMeshes,
+                                     error)) {
+                    return false;
+                }
+            }
+            renderingSettings.load(assets);
+            TextureQuality::lifecycle(false);
+            renderer.setAssetRoot(assets.root);
+            renderer.setShadowSettings(renderingSettings.shadows);
+            auto prepared = preloadBeforePlay(
+                assets,
+                projectMeshes,
+                ProjectIO::encode(loadedWorld, source, loadedCamera, projectMeshes),
+                renderer,
+                window);
+            // Warm first-use terrain/foliage, sky, materials and lightmaps into a
+            // private surface. Only the loading screen is presented, never this
+            // partial editor frame. Ordinary draws also wait on new asset misses.
+            {
+                SceneSurface warm;
+                warm.resize(128, 128);
+                glBindFramebuffer(GL_FRAMEBUFFER, warm.framebuffer);
+                glViewport(0, 0, warm.width, warm.height);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                updateHierarchy(prepared.level->world);
+                renderer.draw(prepared.level->world,
+                              prepared.level->camera.viewProjection(1),
+                              warm.width,
+                              warm.height,
+                              prepared.level->camera.position(),
+                              0,
+                              0,
+                              true);
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            }
+            audio.clear();
+            animations.clear();
+            componentScripts.stop();
+            scripts.shutdown();
+            input.releaseMouse();
+            world.adopt(std::move(prepared.level->world));
+            camera = prepared.level->camera;
+            embeddedLegacySource = prepared.level->source;
+            browser.setRoot(assets.root);
+            levels.setRoot(assets.root);
+            levels.commit(sceneName, false);
+            resetHierarchyExpansion();
+            scripts.resetRuntime();
+            scripts.setSource("");
+            browser.openedScript.clear();
+            scripts.setAssetContext("", {});
+            selectedEntity = {};
+            history = EditorHistory(world);
+            physics.reset();
+            clicking = false;
+            currentProject = path;
+            recentProjects.remember(path);
+            savedProjectState = projectContentState(world, embeddedLegacySource, camera);
+            projectDirty = false;
+            lastTicks = SDL_GetTicksNS();
+            lastAutosave = std::chrono::steady_clock::now();
+            return true;
+        } catch (const std::exception& e) {
+            renderingSettings = oldRenderingSettings;
+            TextureQuality::project = renderingSettings.textureQuality;
+            renderingSettings.apply();
+            renderer.setShadowSettings(renderingSettings.shadows);
+            renderer.setAssetRoot(browser.assets.root);
+            error = e.what();
+            return false;
+        }
+    };
+    if (!smokeTest &&
+        !launchProject(
+            window, recentProjects, [&](const ProjectDialog::Result& result, std::string& error) {
+                auto path = std::filesystem::path(result.path);
+                if (result.saving) {
+                    if (!path.has_extension()) {
+                        path += ".legacy";
+                    }
+                    try {
+                        if (std::filesystem::exists(path)) {
+                            throw std::runtime_error(
+                                "New Project requires a new file. Use Open Project for existing projects.");
+                        }
+                        const auto assetsPath = projectAssetsPath(path);
+                        if ((std::filesystem::exists(assetsPath) &&
+                             !std::filesystem::is_empty(assetsPath)) ||
+                            std::filesystem::exists(std::filesystem::absolute(path).parent_path() /
+                                                    "Settings")) {
+                            throw std::runtime_error(
+                                "Choose a new project folder, without existing Assets or Settings.");
+                        }
+                        std::filesystem::create_directories(assetsPath);
+                        if (!ProjectIO::save(
+                                path.string(), world, "", camera, projectMeshes, error)) {
+                            return false;
+                        }
+                    } catch (const std::exception& e) {
+                        error = e.what();
+                        return false;
+                    }
+                }
+                return openReadyProject(path.string(), error);
+            })) {
+        activeProfiler = nullptr;
+        sceneQuery = {};
+        return true;
+    }
     while (running) {
         GameServices::update(gameWindow ? gameWindow : window, playMode.active());
         if (playMode.active()) {
@@ -842,7 +988,6 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
         ImGui::NewFrame();
         assetPreviews.service(browser.assets, !playMode.active() && !browser.importing());
         ImGuizmo::BeginFrame();
-        static RecentProjects recentProjects;
         static bool confirmOpen = false, confirmExit = false;
         static std::string pendingRecent;
         static int continueAfterSave = 0;
@@ -1068,50 +1213,7 @@ static bool run(SDL_Window* window, Renderer& renderer, bool smokeTest) {
                         continueAfterSave = 0;
                     }
                 } else {
-                    std::string source, assetDirectory;
-                    World loadedWorld;
-                    OrbitCamera loadedCamera;
-                    if (ProjectIO::load(result->path,
-                                        loadedWorld,
-                                        source,
-                                        loadedCamera,
-                                        projectMeshes,
-                                        projectError,
-                                        &assetDirectory)) {
-                        audio.clear();
-                        componentScripts.stop();
-                        scripts.shutdown();
-                        world.adopt(std::move(loadedWorld));
-                        resetHierarchyExpansion();
-                        camera = loadedCamera;
-                        browser.setRoot(
-                            assetDirectory.empty()
-                                ? existingProjectAssetsPath(result->path)
-                                : std::filesystem::absolute(result->path).parent_path() /
-                                      assetDirectory);
-                        try {
-                            Prefabs::validateLinks(browser.assets, world, projectMeshes);
-                        } catch (const std::exception& e) {
-                            browser.assets.error = e.what();
-                        }
-                        levels.setRoot(browser.assets.root);
-                        if (!levels.current().empty()) {
-                            levels.load();
-                        }
-                        scripts.resetRuntime();
-                        scripts.setSource("");
-                        embeddedLegacySource = source;
-                        selectedEntity = {};
-                        history = EditorHistory(world);
-                        physics.reset();
-                        clicking = false;
-                        currentProject = result->path;
-                        recentProjects.remember(currentProject);
-                        savedProjectState =
-                            projectContentState(world, embeddedLegacySource, camera);
-                        projectDirty = false;
-                        lastAutosave = std::chrono::steady_clock::now();
-                    }
+                    openReadyProject(result->path, projectError);
                 }
             }
         }

@@ -117,7 +117,14 @@ set(BUILD_SHARED_LIBS OFF)
 set(GENERATE_DEBUG_SYMBOLS OFF CACHE BOOL "" FORCE)
 set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
 set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
-set(CPP_RTTI_ENABLED ON CACHE BOOL "" FORCE)
+# Engine collision overlays use our wireframes, not Jolt's debug renderer.
+# Scene serialization uses ProjectIO JSON, not Jolt ObjectStream.
+set(CPP_RTTI_ENABLED OFF CACHE BOOL "" FORCE)
+set(DEBUG_RENDERER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "" FORCE)
+set(DEBUG_RENDERER_IN_DISTRIBUTION OFF CACHE BOOL "" FORCE)
+set(PROFILER_IN_DEBUG_AND_RELEASE OFF CACHE BOOL "" FORCE)
+set(PROFILER_IN_DISTRIBUTION OFF CACHE BOOL "" FORCE)
+set(ENABLE_OBJECT_STREAM OFF CACHE BOOL "" FORCE)
 set(USE_SSE4_1 OFF CACHE BOOL "" FORCE)
 set(USE_SSE4_2 OFF CACHE BOOL "" FORCE)
 set(USE_F16C OFF CACHE BOOL "" FORCE)
@@ -134,6 +141,19 @@ FetchContent_Declare(jolt
   URL https://github.com/jrouwe/JoltPhysics/archive/refs/tags/v5.3.0.tar.gz
   SOURCE_SUBDIR Build)
 FetchContent_MakeAvailable(jolt)
+# Limit IPO to physics: whole-editor LTO is expensive on low-memory builders.
+option(LEGACY_PHYSICS_LTO "Link-time optimize static Jolt in optimized builds" ON)
+if(LEGACY_PHYSICS_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT LEGACY_IPO_SUPPORTED OUTPUT LEGACY_IPO_ERROR LANGUAGES CXX)
+  if(LEGACY_IPO_SUPPORTED)
+    set_target_properties(Jolt PROPERTIES
+      INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE
+      INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL TRUE)
+  else()
+    message(STATUS "Jolt IPO unavailable; section garbage collection remains enabled: ${LEGACY_IPO_ERROR}")
+  endif()
+endif()
 
 # --- Assimp: static OBJ, glTF and Half-Life MDL model import --------------------------
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)

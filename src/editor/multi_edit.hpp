@@ -92,10 +92,7 @@ LEGACY_BATCH_NOINLINE void field(World& world,
     if constexpr (std::is_same_v<V, bool>) {
         changed = ImGui::Checkbox(label, &edited);
     } else if constexpr (std::is_same_v<V, Vec3>) {
-        float v[]{edited.x, edited.y, edited.z};
-        changed = ImGui::DragFloat3(
-            label, v, .05f, minimum, maximum, "%.3f", ImGuiSliderFlags_AlwaysClamp);
-        edited = {v[0], v[1], v[2]};
+        changed = editVector(label, edited, .05f, minimum, maximum, C{}.*member);
     } else if constexpr (std::is_same_v<V, std::string>) {
         char buffer[4097];
         std::snprintf(buffer, sizeof(buffer), "%s", edited.c_str());

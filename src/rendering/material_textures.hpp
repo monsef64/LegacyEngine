@@ -71,5 +71,6 @@ class MaterialTextureCache {
     unsigned get(const AssetManager& assets,
                  const std::string& path,
                  std::string& error,
-                 bool fullResolution = false);
+                 bool fullResolution = false,
+                 bool waitForReady = true);
 };

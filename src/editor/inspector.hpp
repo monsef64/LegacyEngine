@@ -130,37 +130,25 @@ inline bool editVector(const char* label,
     EditorValues::setDefaultObject(v, resetValues, sizeof(v));
     bool changed = false;
     const char* axes[]{"X", "Y", "Z"};
-    const bool narrow = ImGui::GetContentRegionAvail().x < 340;
-    if (narrow) {
-        ImGui::TextUnformatted(label);
-        changed |= EditorValues::context(v, 3, minimum, maximum, "Vector values");
-    }
+    const float available = std::max(1.f, ImGui::GetContentRegionAvail().x);
+    const bool narrow =
+        available < 3.f * (ImGui::GetFrameHeight() * 3.5f + ImGui::GetStyle().ItemSpacing.x);
+    ImGui::TextUnformatted(label);
+    changed |= EditorValues::context(v, 3, minimum, maximum, "Vector values");
     if (ImGui::BeginTable("##Vector",
-                          narrow ? 2 : 4,
-                          ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoHostExtendX)) {
+                          narrow ? 2 : 3,
+                          ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_NoSavedSettings,
+                          ImVec2(available, 0))) {
         if (narrow) {
-            ImGui::TableSetupColumn("Axis", ImGuiTableColumnFlags_WidthFixed, 18);
+            ImGui::TableSetupColumn(
+                "Axis", ImGuiTableColumnFlags_WidthFixed, ImGui::CalcTextSize("X").x);
             ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
-        } else {
-            ImGui::TableSetupColumn("Label",
-                                    ImGuiTableColumnFlags_WidthFixed,
-                                    std::min(100.f, ImGui::GetContentRegionAvail().x * .25f));
-            for (int i = 0; i < 3; ++i) {
-                ImGui::TableSetupColumn(axes[i], ImGuiTableColumnFlags_WidthStretch);
-            }
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextUnformatted(label);
-            changed |= EditorValues::context(v, 3, minimum, maximum, "Vector values");
         }
         for (int i = 0; i < 3; ++i) {
-            if (narrow) {
+            if (narrow || i == 0) {
                 ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-            } else {
-                ImGui::TableSetColumnIndex(i + 1);
             }
+            ImGui::TableSetColumnIndex(narrow ? 0 : i);
             ImGui::AlignTextToFramePadding();
             ImGui::TextUnformatted(axes[i]);
             if (narrow) {
@@ -169,7 +157,7 @@ inline bool editVector(const char* label,
                 ImGui::SameLine();
             }
             ImGui::PushID(i);
-            ImGui::SetNextItemWidth(std::max(12.f, ImGui::GetContentRegionAvail().x));
+            ImGui::SetNextItemWidth(-1.f);
             changed |= EditorValues::DragFloat(
                 "##axis", &v[i], speed, minimum, maximum, "%.3f", ImGuiSliderFlags_AlwaysClamp);
             ImGui::PopID();

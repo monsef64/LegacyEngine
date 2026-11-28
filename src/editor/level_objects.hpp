@@ -399,24 +399,6 @@ inline bool drawLevelObjects(World& world,
             known.clear();
             expansionEpoch = hierarchyExpansionEpoch;
         }
-        if (createRequest) {
-            ImGui::BeginDisabled(!selectionEnabled);
-            if (ImGui::Button(world.alive(selected) ? "Create child..." : "Create...")) {
-                ImGui::OpenPopup("Hierarchy create");
-            }
-            if (ImGui::BeginPopup("Hierarchy create")) {
-                int item = drawCreateItems();
-                if (item >= 0) {
-                    *createRequest = item;
-                    collapsed.erase(hierarchyKey(selected));
-                    if (createParent) {
-                        *createParent = selected;
-                    }
-                }
-                ImGui::EndPopup();
-            }
-            ImGui::EndDisabled();
-        }
         static Entity renameTarget;
         static char renameName[256]{};
         static bool renameFocus = false;
