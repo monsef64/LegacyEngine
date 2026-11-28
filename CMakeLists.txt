@@ -272,6 +272,13 @@ if(WIN32)
   target_link_libraries(legacy_game_export PRIVATE bcrypt)
 endif()
 
+# Release test targets keep their own C assert() calls active with -UNDEBUG.
+# This must not implicitly turn on Jolt's header-only debug/assert paths when
+# physics.cpp is compiled against a Release Jolt without AssertFailed symbols.
+# Explicit USE_ASSERTS/JPH_ENABLE_ASSERTS still follows Jolt's public settings.
+set_property(SOURCE src/physics/physics.cpp APPEND PROPERTY COMPILE_DEFINITIONS
+  "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:JPH_NO_DEBUG>")
+
 # --- LegacyEngine -----------------------------------------------------------
 
 add_executable(LegacyEngine
@@ -328,7 +335,7 @@ include(CTest)
 if(BUILD_TESTING)
   add_executable(shape_tests tests/shapes.cpp src/rendering/mesh.cpp src/physics/physics.cpp)
   target_include_directories(shape_tests PRIVATE src)
-  target_link_libraries(shape_tests PRIVATE Jolt)
+  target_link_libraries(shape_tests PRIVATE Jolt legacy_json)
   add_test(NAME shapes COMMAND shape_tests)
 endif()
 
@@ -360,7 +367,7 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(lua_scene_tests tests/lua_scene.cpp src/physics/physics.cpp)
+  add_executable(lua_scene_tests tests/lua_scene.cpp src/physics/physics.cpp src/rendering/mesh.cpp)
   target_link_libraries(lua_scene_tests PRIVATE lua_console Jolt)
   add_test(NAME lua_scene COMMAND lua_scene_tests)
   set_tests_properties(lua_scene PROPERTIES TIMEOUT 15)
@@ -374,9 +381,9 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(editor_layout_tests tests/editor_layout.cpp src/physics/physics.cpp)
+  add_executable(editor_layout_tests tests/editor_layout.cpp src/physics/physics.cpp src/rendering/mesh.cpp)
   target_include_directories(editor_layout_tests PRIVATE src)
-  target_link_libraries(editor_layout_tests PRIVATE imguizmo Jolt)
+  target_link_libraries(editor_layout_tests PRIVATE imguizmo Jolt legacy_models)
   add_test(NAME editor_layout COMMAND editor_layout_tests)
 endif()
 
@@ -394,7 +401,7 @@ if(BUILD_TESTING)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(play_mode_tests tests/play_mode.cpp src/physics/physics.cpp)
+  add_executable(play_mode_tests tests/play_mode.cpp src/physics/physics.cpp src/rendering/mesh.cpp)
   target_include_directories(play_mode_tests PRIVATE src)
   target_link_libraries(play_mode_tests PRIVATE legacy_imgui Jolt)
   if(MSVC)
