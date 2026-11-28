@@ -18,7 +18,20 @@ class GameExportWindow {
     std::filesystem::path root_, pickerRoot_, jobRoot_;
     Json observed_, saved_;
     double editedAt_ = 0;
-    bool dirty_ = false, debugMode_ = false;
+    bool dirty_ = false, debugMode_ = false, wasVisible_ = false;
+    void useLocalPlayer() {
+        const char* base = SDL_GetBasePath();
+        if (!base) {
+            *player_ = 0;
+            return;
+        }
+#ifdef _WIN32
+        const auto file = std::filesystem::path(base) / "LegacyPlayer.exe";
+#else
+        const auto file = std::filesystem::path(base) / "LegacyPlayer";
+#endif
+        std::snprintf(player_, sizeof(player_), "%s", file.string().c_str());
+    }
     static std::filesystem::path settingsFile(const std::filesystem::path& root) {
         return (root.filename() == "Assets" ? root.parent_path() : root) / "Settings" /
                "Export.json";
@@ -32,7 +45,6 @@ class GameExportWindow {
                 {"copyright", copyright_},
                 {"icon", icon_},
                 {"output", output_},
-                {"player", player_},
                 {"startScene", scene_},
                 {"chunkMiB", chunkMiB_},
                 {"debugMode", debugMode_}};
@@ -87,7 +99,6 @@ class GameExportWindow {
                            copyright = read("copyright", sizeof(copyright_)),
                            icon = read("icon", sizeof(icon_)),
                            output = read("output", sizeof(output_)),
-                           player = read("player", sizeof(player_)),
                            scene = read("startScene", 129);
                 const bool debugMode = j.value("debugMode", false);
                 const int chunk = j.value("chunkMiB", 16);
@@ -104,7 +115,6 @@ class GameExportWindow {
                 std::snprintf(copyright_, sizeof(copyright_), "%s", copyright.c_str());
                 std::snprintf(icon_, sizeof(icon_), "%s", icon.c_str());
                 std::snprintf(output_, sizeof(output_), "%s", output.c_str());
-                std::snprintf(player_, sizeof(player_), "%s", player.c_str());
                 scene_ = scene;
                 chunkMiB_ = chunk;
                 debugMode_ = debugMode;
@@ -112,6 +122,7 @@ class GameExportWindow {
         } catch (const std::exception& e) {
             error_ = std::string("Cannot load export settings: ") + e.what();
         }
+        useLocalPlayer();
         saved_ = observed_ = settings();
     }
     void persistEdits(bool force = false) {
@@ -154,7 +165,12 @@ class GameExportWindow {
               const LevelSystem& levels,
               bool allowed) {
         loadSettings(assets);
-        if (auto result = picker_.poll(); result && pickerRoot_ == root_) {
+        if (visible && !wasVisible_) {
+            useLocalPlayer();
+            picking_ = 0; // Ignore stale template browse results from a previous opening.
+        }
+        wasVisible_ = visible;
+        if (auto result = picker_.poll(); result && picking_ != 0 && pickerRoot_ == root_) {
             if (!result->error.empty()) {
                 error_ = result->error;
             }
@@ -229,14 +245,6 @@ class GameExportWindow {
             browse(1, "Browse##Icon");
             ImGui::InputText("New output folder", output_, sizeof(output_));
             browse(2, "Browse##Output");
-            if (!*player_) {
-#ifdef _WIN32
-                const auto file = std::filesystem::path(SDL_GetBasePath()) / "LegacyPlayer.exe";
-#else
-                const auto file = std::filesystem::path(SDL_GetBasePath()) / "LegacyPlayer";
-#endif
-                std::snprintf(player_, sizeof(player_), "%s", file.string().c_str());
-            }
             ImGui::InputText("Native player template", player_, sizeof(player_));
             browse(3, "Browse##Player");
             ImGui::Checkbox("Debug Mode", &debugMode_);
@@ -299,6 +307,7 @@ class GameExportWindow {
             }
         }
         ImGui::End();
+        wasVisible_ = visible;
         persistEdits(!visible);
     }
 };

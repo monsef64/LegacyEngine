@@ -15,8 +15,10 @@ cmake --build build --target LegacyEngine LegacyPlayer --parallel 2
 
 Use `-DLEGACY_VENDORED_SDL=ON` to force a static vendored SDL build.
 A graphical session and an OpenGL 3.3-capable driver are required at runtime.
-File and folder selection uses the built-in ImGui picker; Zenity, desktop portals,
-and SDL file-dialog backend configuration are not required.
+File and folder selection defaults to Zenity on Linux (`zenity` must be installed)
+and the OS-native dialog on Windows/macOS. **Editor Settings > File picker** can
+switch to the built-in ImGui picker. If the native backend is unavailable, the
+request falls back to ImGui with an explanation; no portal is required.
 Linux CI builds on Ubuntu 24.04; check its run log for the resulting glibc requirement.
 Test compilation and CTest integration have been removed from the project.
 No test executables are generated, even when an old build cache has
